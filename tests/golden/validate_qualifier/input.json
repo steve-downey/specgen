@@ -1,0 +1,88 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §9's leakage checker, resolved half.",
+    "Hand-written (no Clang needed, so this runs on every lane) because the",
+    "one thing it needs from the front end is a list, not an analysis: which",
+    "namespace qualifiers survived the reference-resolved mapping. `foreign`",
+    "below is that list, exactly as `generate --emit-ir` emits it.",
+    "",
+    "`detail` is named in each kind of rendered fragment, so the contexts",
+    "differ as well as the messages: a synopsis -- which the roster half must",
+    "never be run over, and which is where the corpus's own case lands -- an",
+    "itemdecl, and an extracted *Equivalent to:* body. The body names it twice",
+    "and `cache_` twice, for one finding each: dedup is per name per fragment,",
+    "and it is the same dedup for both halves of the rule.",
+    "",
+    "The body is also where the two halves meet. `cache_` is invisible because",
+    "a roster says so; `detail` is invisible because the front end resolved it",
+    "outside the specification. Neither reason is reachable from the other, and",
+    "the fixits differ accordingly -- a namespace is not something an author can",
+    "mark `\\expos` or demote to prose.",
+    "",
+    "Two negative controls, both in the Remarks. `impl` is a foreign namespace",
+    "*and* a documented class, and a documented declaration outweighs a hidden",
+    "one whichever way the name is hidden -- so it stays silent. `move`",
+    "matches nothing at all, which is the case that keeps the check from",
+    "reporting every std name and every template parameter in sight."
+  ],
+  "foreign": [
+    { "name": "detail", "qualified": "demo::detail" },
+    { "name": "impl", "qualified": "demo::impl" }
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": {
+        "text": "class widget {\npublic:\n  detail::handle open();\n};",
+        "spans": []
+      },
+      "roster": [
+        { "name": "open", "disposition": "described", "section": "" },
+        { "name": "cache_", "disposition": "private", "section": "", "kind": "data" }
+      ]
+    },
+    {
+      "type": "synopsis",
+      "name": "impl",
+      "code": { "text": "struct impl {};", "spans": [] },
+      "roster": []
+    },
+    {
+      "type": "section",
+      "stable": "widget.mod",
+      "title": "Modifiers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "detail::handle open();", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [],
+                "equivalent": {
+                  "text": "cache_ = detail::make();\nreturn detail::open(cache_);",
+                  "spans": []
+                }
+              },
+              {
+                "kind": "remarks",
+                "paragraphs": [
+                  [
+                    { "t": "text", "text": "Equivalent to " },
+                    { "t": "code", "code": { "text": "impl::spin(move(x))", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

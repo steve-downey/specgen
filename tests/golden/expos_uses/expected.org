@@ -1,0 +1,48 @@
+#+begin_codeblock
+inline constexpr int @\exposidnc{limit}@ = 1; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<class T>
+concept @\exposidnc{enabled}@ = true; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+class counter {
+public:
+  // \ref{counter.obs}, observers
+  int get() const;
+  void bump();
+
+private:
+  int @\exposidnc{value}@ = 0; // exposition only
+};
+#+end_codeblock
+
+** Observers [counter.obs]
+
+#+begin_itemdecl
+int get() const;
+#+end_itemdecl
+
+/Returns/: Equivalent to:
+
+#+begin_codeblock
+return @\exposidnc{value}@;
+#+end_codeblock
+
+#+begin_itemdecl
+void bump();
+#+end_itemdecl
+
+/Mandates/: ~int~ models @@latex:\exposid{enabled}@@.
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+int exposed_limit = 2;
+if constexpr (@\exposidnc{enabled}@<int>)
+  @\exposidnc{value}@ = @\exposidnc{value}@ + @\exposidnc{limit}@ + exposed_limit;
+#+end_codeblock
+
+/Remarks/: Increments @@latex:\exposid{value}@@ in place.

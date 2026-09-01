@@ -1,0 +1,52 @@
+\begin{codeblock}
+class @\libglobal{widget}@ {
+public:
+  // \ref{widget.cons}, constructors
+  widget();
+  explicit widget(int value);
+
+  // \ref{widget.observers}, observers
+  bool empty() const;
+};
+\end{codeblock}
+
+\rSec3[widget.cons]{Constructors}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+widget();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding no value.
+\end{itemdescr}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+explicit widget(int value);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding \tcode{value}.
+\end{itemdescr}
+
+\rSec3[widget.observers]{Observers}
+
+\indexlibrarymember{empty}{widget}%
+\begin{itemdecl}
+bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+None.
+
+\pnum
+\returns
+\tcode{true} if the widget holds no value, \tcode{false} otherwise.
+\end{itemdescr}

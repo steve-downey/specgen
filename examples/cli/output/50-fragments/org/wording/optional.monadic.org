@@ -1,0 +1,9 @@
+** Monadic operations [optional.monadic]
+
+#+begin_itemdecl
+template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+#+end_itemdecl
+
+/Effects/: If ~*this~ contains a value, returns an optional holding the result of invoking ~f~ with the contained value; otherwise returns an empty optional.
+
+/Remarks/: The return type is ~remove_cvref_t<invoke_result_t<F, const T&>>~.

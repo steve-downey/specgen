@@ -1,0 +1,88 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §9's leakage checker at its *note*",
+    "severity -- an undocumented helper that appears only in bodies the tool",
+    "never renders. Hand-written IR, like its three siblings, because the rule",
+    "is Tier A: what the front end contributes is the `body_uses` list below,",
+    "and a list is as easy to write as to compute.",
+    "",
+    "Two positives, one per body, both hidden *functions* the roster says the",
+    "reader cannot see: `hard_reset` (an unmarked private member) and `clone`",
+    "(a `\\merge`d twin). `hard_reset` is used by two different bodies and is",
+    "reported twice -- once per body, since the finding is about the body, not",
+    "about the declaration (the private-data nudge's rule; a Note there too).",
+    "",
+    "`construct` is the control that costs the most to get wrong: it is an",
+    "`\\omit`ted function used by a body *and* named in the extracted",
+    "*Equivalent to:* body below. That makes it design §9's **error** case,",
+    "which check_leakage reports -- and §9's note clause says *only* in",
+    "non-extracted bodies, so this rule must stay silent about it. One finding",
+    "for `construct` in the expectation, not two.",
+    "",
+    "Three more controls that must stay silent:",
+    "",
+    "  - `size` is described, so a body calling it is a body calling the",
+    "    class's own public interface -- the ordinary case, and the loudest",
+    "    one if this rule got it wrong;",
+    "  - `cache_` is hidden private *data*, which design §6's nudge",
+    "    reports at its declaration instead. Reporting it here as well fired",
+    "    on eleven of the seventeen corpus headers; see check_unextracted_uses",
+    "    (validate.cpp) for the measurement. Nothing in this roster is marked",
+    "    `\\expos`, which is what keeps that §6 nudge itself silent here --",
+    "    it has its own golden, and one fixture should exercise one rule;",
+    "  - `tmp` is in no roster at all -- a local, a parameter or a `std::`",
+    "    name as far as anything downstream can tell, and the same silence",
+    "    the checker's roster half keeps for a name it does not recognize.",
+    "",
+    "Exit 1 (the validate default) comes from `construct`'s leakage Error, not",
+    "from anything this rule reports: its every finding is a Note.",
+    "validate.test.cpp pins the severity directly."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "optional",
+      "code": { "text": "template <class T>\nclass optional { ... };", "spans": [] },
+      "roster": [
+        { "name": "size", "disposition": "described", "section": "", "kind": "function" },
+        { "name": "reset", "disposition": "routed", "section": "optional.mod", "kind": "function" },
+        { "name": "cache_", "disposition": "private", "section": "", "kind": "data" },
+        { "name": "hard_reset", "disposition": "private", "section": "", "kind": "function" },
+        { "name": "clone", "disposition": "merged", "section": "", "kind": "function" },
+        { "name": "construct", "disposition": "omitted", "section": "", "kind": "function" }
+      ]
+    },
+    {
+      "type": "section",
+      "stable": "optional.mod",
+      "title": "Modifiers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void reset() noexcept;", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [],
+                "equivalent": { "text": "construct(T());", "spans": [] }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "body_uses": [
+    { "function": "optional::optional", "member": "cache_" },
+    { "function": "optional::optional", "member": "hard_reset" },
+    { "function": "optional::optional", "member": "size" },
+    { "function": "optional::optional", "member": "tmp" },
+    { "function": "optional::reset", "member": "clone" },
+    { "function": "optional::reset", "member": "construct" },
+    { "function": "optional::reset", "member": "hard_reset" }
+  ]
+}

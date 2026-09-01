@@ -1,0 +1,17 @@
+\indexlibrarymember{value_or}{optional}%
+\begin{itemdecl}
+template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\mandates
+\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_convertible_v<U, T>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
+\end{codeblock}
+\end{itemdescr}

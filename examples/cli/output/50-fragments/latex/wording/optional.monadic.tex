@@ -1,0 +1,16 @@
+\rSec3[optional.monadic]{Monadic operations}
+
+\indexlibrarymember{transform}{optional}%
+\begin{itemdecl}
+template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+If \tcode{*this} contains a value, returns an optional holding the result of invoking \tcode{f} with the contained value; otherwise returns an empty optional.
+
+\pnum
+\remarks
+The return type is \tcode{remove_cvref_t<invoke_result_t<F, const T&>>}.
+\end{itemdescr}

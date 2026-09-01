@@ -1,3 +1,4 @@
+# cmake/gcc-flags.cmake                                             -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 include_guard(GLOBAL)
@@ -45,3 +46,33 @@ set(CMAKE_CXX_FLAGS_GCOV
 )
 
 set(CMAKE_LINKER_FLAGS_GCOV "--coverage" CACHE STRING "Linker GCOV Flags" FORCE)
+
+# The standard floor is C++26 (decision cxx26-baseline), which needs a recent GCC (16) whose
+# libstdc++ is typically not on the system's default runtime search path. Embed
+# an rpath to the *compiler's own* libstdc++ directory, queried from the compiler
+# so it stays correct on any machine, so the built binaries run without a
+# hand-set LD_LIBRARY_PATH. Requires the including toolchain to set
+# CMAKE_CXX_COMPILER before this file; guarded so toolchains that include it
+# earlier simply skip the rpath rather than erroring.
+if(CMAKE_CXX_COMPILER)
+    execute_process(
+        COMMAND "${CMAKE_CXX_COMPILER}" -print-file-name=libstdc++.so
+        OUTPUT_VARIABLE _beman_libstdcxx
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    get_filename_component(_beman_libstdcxx_dir "${_beman_libstdcxx}" DIRECTORY)
+    if(_beman_libstdcxx_dir AND IS_DIRECTORY "${_beman_libstdcxx_dir}")
+        set(CMAKE_EXE_LINKER_FLAGS
+            "-Wl,-rpath,${_beman_libstdcxx_dir}"
+            CACHE STRING
+            "Executable linker flags"
+            FORCE
+        )
+        set(CMAKE_SHARED_LINKER_FLAGS
+            "-Wl,-rpath,${_beman_libstdcxx_dir}"
+            CACHE STRING
+            "Shared linker flags"
+            FORCE
+        )
+    endif()
+endif()

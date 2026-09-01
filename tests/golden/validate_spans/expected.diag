@@ -1,0 +1,1 @@
+specgen: outer/inner/itemdecl[0]: error: span 1 begins at 3, before span 0 ends at 5

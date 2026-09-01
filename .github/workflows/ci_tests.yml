@@ -17,186 +17,163 @@ concurrency:
 
 jobs:
   beman-submodule-check:
-    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-submodule-check.yml@1.7.4
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-submodule-check.yml@1.7.3
 
-  preset-test:
-    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-preset-test.yml@1.7.4
-    with:
-      matrix_config: >
-        [
-          {"preset": "gcc-debug", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"},
-          {"preset": "gcc-release", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"},
-          {"preset": "llvm-debug", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
-          {"preset": "llvm-release", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
-          {"preset": "appleclang-debug", "runner": "macos-latest"},
-          {"preset": "appleclang-release", "runner": "macos-latest"},
-          {"preset": "msvc-debug", "runner": "windows-latest"},
-          {"preset": "msvc-release", "runner": "windows-latest"}
-        ]
-
+  # specgen requires the Clang front end, and the beman containers do not ship
+  # LLVM's development packages -- the reusable beman workflows have no way to
+  # install one before configuring, which is why this matrix is written out
+  # here instead of delegating to them. Every lane pays the LLVM install; that
+  # is the cost of the tool having one configuration rather than two.
+  #
+  # Every lane runs in the beman gcc:16 container: its GCC 16 supplies both the
+  # gcc lanes' compiler and the libstdc++ every lane builds against, and the
+  # clang lanes' compiler comes from the same pinned LLVM release the front end
+  # links (the container images are Gentoo-based and carry no apt).
+  #
+  # The first lane's name is spelled out and must not be edited: it is the name
+  # branch protection knows, and renaming it strands the rule silently, leaving
+  # pull requests waiting forever on a check that never runs.
   build-and-test:
-    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-build-and-test.yml@1.7.4
-    with:
-      matrix_config: >
-        {
-          "gcc": [
-            { "versions": ["16"],
-              "tests": [
-                { "cxxversions": ["c++26"],
-                  "tests": [
-                    { "stdlibs": ["libstdc++"],
-                      "tests": [
-                        "Debug.Default", "Release.Default", "Release.TSan",
-                        "Release.MaxSan", "Debug.Werror",
-                        "Debug.Coverage", "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                },
-                { "cxxversions": ["c++23"],
-                  "tests": [
-                    { "stdlibs": ["libstdc++"],
-                      "tests": [
-                        "Release.Default", "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                },
-                { "cxxversions": ["c++20", "c++17"],
-                  "tests": [{ "stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            },
-            { "versions": ["15"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23"],
-                  "tests": [
-                    { "stdlibs": ["libstdc++"],
-                      "tests": [
-                        "Release.Default", "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                },
-                { "cxxversions": ["c++20", "c++17"],
-                  "tests": [{ "stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            },
-            { "versions": ["14", "13"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23", "c++20", "c++17"],
-                  "tests": [{ "stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            },
-            {
-              "versions": ["12", "11"],
-              "tests": [
-                { "cxxversions": ["c++23", "c++20", "c++17"],
-                  "tests": [{ "stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            }
-          ],
-          "clang": [
-            { "versions": ["22"],
-              "tests": [
-                {"cxxversions": ["c++26"],
-                  "tests": [
-                    { "stdlibs": ["libstdc++", "libc++"],
-                      "tests": [
-                        "Debug.Default", "Release.Default", "Release.TSan",
-                        "Release.MaxSan", "Debug.Werror",
-                        "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                },
-                { "cxxversions": ["c++23"],
-                  "tests": [
-                    { "stdlibs": ["libstdc++", "libc++"],
-                      "tests": [
-                        "Release.Default", "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                },
-                { "cxxversions": ["c++20", "c++17"],
-                  "tests": [
-                    {"stdlibs": ["libstdc++", "libc++"], "tests": ["Release.Default"]}
-                  ]
-                }
-              ]
-            },
-            { "versions": ["21", "20", "19"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23", "c++20", "c++17"],
-                  "tests": [
-                    {"stdlibs": ["libstdc++", "libc++"], "tests": ["Release.Default"]}
-                  ]
-                }
-              ]
-            },
-            { "versions": ["18"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23", "c++20", "c++17"],
-                  "tests": [{"stdlibs": ["libc++"], "tests": ["Release.Default"]}]
-                },
-                { "cxxversions": ["c++23", "c++20", "c++17"],
-                  "tests": [{"stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            },
-            { "versions": ["17"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23", "c++20", "c++17"],
-                  "tests": [{"stdlibs": ["libc++"], "tests": ["Release.Default"]}]
-                },
-                { "cxxversions": ["c++20", "c++17"],
-                  "tests": [{"stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            }
-          ],
-          "appleclang": [
-            { "versions": ["latest"],
-              "tests": [
-                { "cxxversions": ["c++26", "c++23", "c++20", "c++17"],
-                  "tests": [{ "stdlibs": ["libc++"], "tests": ["Release.Default"]}]
-                }
-              ]
-            }
-          ],
-          "msvc": [
-            { "versions": ["latest"],
-              "tests": [
-                { "cxxversions": ["c++23"],
-                  "tests": [
-                    { "stdlibs": ["stl"],
-                      "tests": [
-                        "Debug.Default", "Release.Default", "Release.MaxSan",
-                        "Debug.-DBEMAN_SPECGEN_USE_MODULES=On"
-                      ]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
+    name: ${{ matrix.lane.name }}
+    runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.lane.optional }}
+    strategy:
+      fail-fast: false
+      matrix:
+        lane:
+          - name: Clang front-end tier (Tier B)
+            preset: gcc-release
+            args: ""
+            optional: false
+          - name: Clang front-end tier (Tier B, Debug+MaxSan)
+            preset: gcc-debug
+            args: "-DBEMAN_BUILDSYS_SANITIZER=MaxSan"
+            optional: false
+          - name: GCC 16 Debug
+            preset: gcc-debug
+            args: ""
+            optional: false
+          - name: GCC 16 Release TSan
+            preset: gcc-release
+            args: "-DBEMAN_BUILDSYS_SANITIZER=TSan"
+            optional: false
+          - name: GCC 16 Debug Werror
+            preset: gcc-debug
+            args: "-DCMAKE_CXX_FLAGS=-Werror"
+            optional: false
+          - name: GCC 16 Debug modules
+            preset: gcc-debug
+            args: "-DBEMAN_SPECGEN_USE_MODULES=ON"
+            optional: true
+          - name: Clang Release
+            preset: llvm-release
+            args: ""
+            optional: false
+          - name: Clang Debug MaxSan
+            preset: llvm-debug
+            args: "-DBEMAN_BUILDSYS_SANITIZER=MaxSan"
+            optional: false
+    container:
+      image: ghcr.io/bemanproject/infra-containers-gcc:16
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-  vcpkg-ci:
-    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-vcpkg-ci.yml@1.7.4
-    with:
-      port_name: beman-specgen
-      feature_combinations: |
-        [
-          {"features": {}},
-          {"features": {"modules": true}}
-        ]
+      # The official release binaries ship the CMake package configs, the
+      # compiler the clang lanes use, and a shared libclang-cpp; LLVM itself is
+      # static in that distribution, but libclang-cpp re-exports the LLVM
+      # symbols, so a libLLVM.so shim pointing at it satisfies the front end's
+      # `clang-cpp LLVM` link on this layout too. The symlinks into /usr/lib64
+      # put both on the default linker and loader paths.
+      - name: Install LLVM/Clang 22 (dev)
+        run: |
+          set -eux
+          mkdir -p /opt/llvm22
+          curl -sSL \
+            https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz \
+            | tar -xJ -C /opt/llvm22 --strip-components=1
+          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libclang-cpp.so.22.1
+          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libLLVM.so
+          ln -s /opt/llvm22/bin/clang /usr/local/bin/clang
+          ln -s /opt/llvm22/bin/clang++ /usr/local/bin/clang++
+          test -f /opt/llvm22/lib/cmake/clang/ClangConfig.cmake
+
+      - name: Configure
+        run: >
+          cmake --preset ${{ matrix.lane.preset }}
+          -DClang_DIR=/opt/llvm22/lib/cmake/clang
+          ${{ matrix.lane.args }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.lane.preset }}
+
+      - name: Test
+        run: ctest --preset ${{ matrix.lane.preset }} --output-on-failure
+
+  # Coverage. gcovr's Coveralls output is produced here and published as an
+  # artifact; the upload to coveralls.io is *not* wired, because this repository
+  # pins every third-party action to a verified SHA and the one that would do it
+  # has never appeared here. Adding a pinned coverallsapp/github-action step
+  # after the report is built is all the README's coverage badge needs.
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/bemanproject/infra-containers-gcc:16
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Same install as the build lanes; the container already ships gcovr.
+      - name: Install LLVM/Clang 22 (dev)
+        run: |
+          set -eux
+          mkdir -p /opt/llvm22
+          curl -sSL \
+            https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz \
+            | tar -xJ -C /opt/llvm22 --strip-components=1
+          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libclang-cpp.so.22.1
+          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libLLVM.so
+          test -f /opt/llvm22/lib/cmake/clang/ClangConfig.cmake
+
+      # The coverage flags go on the preset rather than through the Makefile's
+      # Gcov configuration, so this lane configures the same way every other
+      # lane does and shares their failure modes rather than inventing new ones.
+      - name: Configure
+        run: >
+          cmake --preset gcc-debug
+          -DClang_DIR=/opt/llvm22/lib/cmake/clang
+          "-DCMAKE_CXX_FLAGS=--coverage -fprofile-abs-path"
+          "-DCMAKE_EXE_LINKER_FLAGS=--coverage"
+
+      - name: Build
+        run: cmake --build --preset gcc-debug
+
+      - name: Test
+        run: ctest --preset gcc-debug --output-on-failure
+
+      # The same filter the checked-in gcovr config uses, spelled out rather
+      # than read from the generated file, whose paths are absolute to the tree
+      # that configured it.
+      # gcovr's coveralls output reads the commit from git, and git refuses a
+      # repository whose files it considers dubiously owned -- which is what a
+      # container running as root sees after a checkout. Cheaper to allow it
+      # than to debug the report step's failure later.
+      - name: Report
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gcovr --root . \
+            --filter '.*/include/beman/specgen/.*' \
+            --coveralls coverage.json --coveralls-pretty \
+            --print-summary
+
+      - name: Publish the report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: coverage.json
 
   create-issue-when-fault:
-    needs: [preset-test, build-and-test]
+    needs: [build-and-test, coverage]
     if: failure() && github.event_name == 'schedule'
-    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.4
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.3

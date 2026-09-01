@@ -1,0 +1,14 @@
+#+begin_itemdecl
+template<class U> constexpr explicit(@\seebelow@) optional(const optional<U>& rhs);
+#+end_itemdecl
+
+/Constraints/:
+
+- ~is_constructible_v<T, const U&>~ is ~true~,
+- ~is_constructible_v<T, optional<U>&>~ is ~false~,
+- ~is_constructible_v<T, optional<U>>~ is ~false~,
+- ~is_convertible_v<optional<U>&, T>~ is ~false~.
+
+/Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+
+/Remarks/: The expression inside ~explicit~ is equivalent to ~!is_convertible_v<const U&, T>~, see ([optional.general]).

@@ -1,0 +1,76 @@
+\rSec3[optional.ctor]{Constructors}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+constexpr optional() noexcept;
+constexpr optional(nullopt_t) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+\tcode{*this} does not contain a value.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+constexpr optional(const optional& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_trivially_copy_constructible_v<T>} is \tcode{false}.
+
+\pnum
+\effects
+If \tcode{rhs} contains a value, direct-non-list-initializes the contained value with \tcode{*rhs}.
+
+\pnum
+\ensures
+\tcode{has_value()} is equal to \tcode{rhs.has_value()}.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_constructible_v<T, Args...>} is \tcode{true}.
+
+\pnum
+\effects
+Direct-non-list-initializes the contained value with \tcode{std::forward<Args>(args)...}.
+
+\pnum
+\ensures
+\tcode{has_value()} is \tcode{true}.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class U>
+constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_constructible_v<T, const U&>} is \tcode{true},
+\item \tcode{is_convertible_v<U, T>} is \tcode{true},
+\item \tcode{is_same_v<T, U>} is \tcode{false},
+\item \tcode{is_constructible_v<T, optional<U>>} is \tcode{false}.
+\end{itemize}
+
+\pnum
+\effects
+If \tcode{rhs} contains a value, direct-non-list-initializes the contained value with \tcode{*rhs}.
+
+\pnum
+\ensures
+\tcode{has_value()} is equal to \tcode{rhs.has_value()}.
+\end{itemdescr}

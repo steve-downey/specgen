@@ -1,0 +1,15 @@
+[0] COMMENT // tests/corpus/spec_widget.hpp                                    -*-C++-*-
+[137] COMMENT // Hand-curated corpus header (decision hermetic-corpus). A Beman-style shape
+[960] DECL CXXRecord widget
+[989] COMMENT // \ref{widget.cons}, constructors
+[1075] COMMENT // \ref{widget.observers}, observers
+[1172] COMMENT // \rSec3[widget.cons]{Constructors}
+[1210] COMMENT //! \effects Constructs a `widget` holding no value.
+[1263] DECL CXXConstructor widget
+[1296] COMMENT //! \effects Constructs a `widget` holding `value`.
+[1348] DECL CXXConstructor widget
+[1394] COMMENT // \rSec3[widget.observers]{Observers}
+[1434] COMMENT //! \effects None.
+[1522] DECL CXXMethod empty
+[1576] COMMENT // namespace demo
+[1602] COMMENT // BEMAN_SPECGEN_CORPUS_SPEC_WIDGET_HPP

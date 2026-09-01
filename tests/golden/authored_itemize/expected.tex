@@ -1,0 +1,29 @@
+\begin{codeblock}
+class @\libglobal{widget}@ {
+public:
+  // \ref{widget.mod}, modifiers
+  void configure(int mode);
+};
+\end{codeblock}
+
+\rSec3[widget.mod]{Modifiers}
+
+\indexlibrarymember{configure}{widget}%
+\begin{itemdecl}
+void configure(int mode);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+All of the following are true:
+\begin{itemize}
+\item \tcode{mode >= 0},
+\item \tcode{mode <= 2}, and
+\item \tcode{mode} denotes a supported mode as specified in \iref{external.mode.requirements}.
+\end{itemize}
+
+\pnum
+\effects
+Configures the widget.
+\end{itemdescr}

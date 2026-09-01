@@ -1,0 +1,6 @@
+spec_diagnostics.hpp:63: warning: duplicate \effects element; both kept
+spec_diagnostics.hpp:81: note: \effects appears after \remarks; output is canonicalized
+spec_diagnostics.hpp:85: error: unknown tag \effect
+spec_diagnostics.hpp:88: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
+spec_diagnostics.hpp:90: warning: malformed \rSec marker: expected '{' (comment offset 26)
+spec_diagnostics.hpp:94: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}

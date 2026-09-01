@@ -1,6 +1,7 @@
+# examples/CMakeLists.txt                                          -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-set(ALL_EXAMPLES todo)
+set(ALL_EXAMPLES emit_ir)
 message("Examples to be built: ${ALL_EXAMPLES}")
 
 foreach(example ${ALL_EXAMPLES})

@@ -1,0 +1,1 @@
+specgen: optional::optional/body: note: `hard_reset` is used by this body but is not a documented entity (an unmarked private member); no wording names it, so nothing leaks yet: mark it `\expos` before giving this body an `\effects-equiv`, or leave it as machinery the description does not name

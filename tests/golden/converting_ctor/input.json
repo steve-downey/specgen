@@ -1,0 +1,85 @@
+{
+  "_comment": [
+    "The converting constructor from [optional.ctor]: a long Constraints list",
+    "that must render as an itemize, and a see-below span in the signature.",
+    "Byte range 37..45 of the signature covers the SEEBELOW sentinel."
+  ],
+  "nodes": [
+    {
+      "type": "item",
+      "decl": {
+        "signatures": [
+          {
+            "text": "template<class U> constexpr explicit(SEEBELOW) optional(const optional<U>& rhs);",
+            "spans": [
+              { "begin": 37, "end": 45, "kind": "seebelow", "payload": "" }
+            ]
+          }
+        ],
+        "index": [
+          { "kind": "member", "name": "optional", "parent": "optional" }
+        ]
+      },
+      "descr": {
+        "elements": [
+          {
+            "kind": "constraints",
+            "paragraphs": [],
+            "itemize": [
+              [
+                { "t": "code", "code": { "text": "is_constructible_v<T, const U&>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "true", "spans": [] } },
+                { "t": "text", "text": "," }
+              ],
+              [
+                { "t": "code", "code": { "text": "is_constructible_v<T, optional<U>&>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "false", "spans": [] } },
+                { "t": "text", "text": "," }
+              ],
+              [
+                { "t": "code", "code": { "text": "is_constructible_v<T, optional<U>>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "false", "spans": [] } },
+                { "t": "text", "text": "," }
+              ],
+              [
+                { "t": "code", "code": { "text": "is_convertible_v<optional<U>&, T>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "false", "spans": [] } },
+                { "t": "text", "text": "." }
+              ]
+            ]
+          },
+          {
+            "kind": "effects",
+            "paragraphs": [
+              [
+                { "t": "text", "text": "If " },
+                { "t": "code", "code": { "text": "rhs", "spans": [] } },
+                { "t": "text", "text": " contains a value, direct-non-list-initializes the contained value with " },
+                { "t": "code", "code": { "text": "*rhs", "spans": [] } },
+                { "t": "text", "text": "." }
+              ]
+            ]
+          },
+          {
+            "kind": "remarks",
+            "paragraphs": [
+              [
+                { "t": "text", "text": "The expression inside " },
+                { "t": "code", "code": { "text": "explicit", "spans": [] } },
+                { "t": "text", "text": " is equivalent to " },
+                { "t": "code", "code": { "text": "!is_convertible_v<const U&, T>", "spans": [] } },
+                { "t": "text", "text": ", see " },
+                { "t": "ref", "stable": "optional.general" },
+                { "t": "text", "text": "." }
+              ]
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

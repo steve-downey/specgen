@@ -1,0 +1,19 @@
+** Modifiers [optional.mod]
+
+#+begin_itemdecl
+constexpr void reset() noexcept;
+#+end_itemdecl
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+@\exposidnc{engaged}@ = false;
+#+end_codeblock
+
+/Postconditions/: ~has_value()~ is ~false~.
+
+#+begin_itemdecl
+friend constexpr bool operator==(const optional& x, const optional& y);
+#+end_itemdecl
+
+/Returns/: ~true~ if both operands are disengaged, or both are engaged with equal contained values.

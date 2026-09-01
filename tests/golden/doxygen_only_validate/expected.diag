@@ -1,0 +1,4 @@
+specgen: gadget/synopsis: error: `gadget` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: gadget/synopsis: error: `gadget` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: gadget/synopsis: error: `empty` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: gadget/synopsis: error: `value` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted

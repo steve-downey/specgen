@@ -1,0 +1,1 @@
+{"nodes":[{"type":"synopsis","name":"","code":{"text":"namespace std {\n  template<class T> struct hash;\n  template<class T> struct hash<optional<T>>;\n}","spans":[]},"roster":[]}],"foreign":[],"body_uses":[]}

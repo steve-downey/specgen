@@ -1,0 +1,57 @@
+{
+  "_comment": [
+    "Validate-mode golden: a synopsis `\\ref` group header naming a",
+    "stable name that is not a section in the document. Hand-written (no",
+    "Clang needed, so this runs on every lane), because what the rule reads",
+    "-- a SpanKind::Ref span's payload -- is already in the IR; the rule",
+    "just compares that payload against the document's section set.",
+    "",
+    "`gadget`'s synopsis carries two Ref spans, the shape an out-of-line",
+    "definition's group header produces (`Disposition::Described`, so",
+    "check_coverage's Routed-only rule does not see either of them): one",
+    "names `gadget.a`, a real section below, and must stay silent; the other",
+    "names `gadget.b`, which no `\\rSec` opens, and must be the sole finding.",
+    "",
+    "`widget`'s synopsis is the negative control -- a second class whose one",
+    "Ref span resolves -- so the golden does not pass merely because nothing",
+    "in the document ever resolves."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "gadget",
+      "code": {
+        "text": "class gadget {\npublic:\n  // [gadget.a], alpha\n  int a() const;\n  // [gadget.b], beta\n  int b() const;\n};",
+        "spans": [
+          { "begin": 28, "end": 38, "kind": "ref", "payload": "gadget.a" },
+          { "begin": 68, "end": 78, "kind": "ref", "payload": "gadget.b" }
+        ]
+      },
+      "roster": [
+        { "name": "a", "disposition": "described", "section": "" },
+        { "name": "b", "disposition": "described", "section": "" }
+      ]
+    },
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": {
+        "text": "class widget {\npublic:\n  // [widget.obs], observers\n  int get() const;\n};",
+        "spans": [{ "begin": 28, "end": 40, "kind": "ref", "payload": "widget.obs" }]
+      },
+      "roster": [{ "name": "get", "disposition": "described", "section": "" }]
+    },
+    {
+      "type": "section",
+      "stable": "gadget.a",
+      "title": "Alpha",
+      "children": []
+    },
+    {
+      "type": "section",
+      "stable": "widget.obs",
+      "title": "Observers",
+      "children": []
+    }
+  ]
+}

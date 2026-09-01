@@ -1,0 +1,6 @@
+specgen: optional/synopsis: error: `hard_reset` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: optional.mod/itemdecl[1]: error: `cache_` is used in wording but is not a documented entity (an unmarked private member): mark it `\expos`, rewrite the wording in documented terms, or demote it to authored prose
+specgen: optional.mod/effects-equiv: error: `hard_reset` is used in wording but is not a documented entity (declared but never described): mark it `\expos`, rewrite the wording in documented terms, or demote it to authored prose
+specgen: optional.mod/ensures: error: `scratch` is used in wording but is not a documented entity (`\omit`ted): mark it `\expos`, rewrite the wording in documented terms, or demote it to authored prose
+specgen: optional.mod/remarks: error: `clone` is used in wording but is not a documented entity (a `\merge`d twin): mark it `\expos`, rewrite the wording in documented terms, or demote it to authored prose
+specgen: paragraph: error: `cache_` is used in wording but is not a documented entity (an unmarked private member): mark it `\expos`, rewrite the wording in documented terms, or demote it to authored prose

@@ -1,0 +1,9 @@
+** Verbatim item declarations [verbatim.itemdecl]
+
+#+begin_itemdecl
+struct nullopt_t {@\seebelow@};
+
+inline constexpr nullopt_t nullopt(@\unspec@);
+#+end_itemdecl
+
+/Remarks/: The type represents the no-value state.

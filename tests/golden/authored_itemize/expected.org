@@ -1,0 +1,21 @@
+#+begin_codeblock
+class widget {
+public:
+  // \ref{widget.mod}, modifiers
+  void configure(int mode);
+};
+#+end_codeblock
+
+** Modifiers [widget.mod]
+
+#+begin_itemdecl
+void configure(int mode);
+#+end_itemdecl
+
+/Constraints/: All of the following are true:
+
+- ~mode >= 0~,
+- ~mode <= 2~, and
+- ~mode~ denotes a supported mode as specified in ([external.mode.requirements]).
+
+/Effects/: Configures the widget.

@@ -1,0 +1,30 @@
+\rSec3[optional.mod]{Modifiers}
+
+\indexlibrarymember{reset}{optional}%
+\begin{itemdecl}
+constexpr void reset() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+@\exposidnc{engaged}@ = false;
+\end{codeblock}
+
+\pnum
+\ensures
+\tcode{has_value()} is \tcode{false}.
+\end{itemdescr}
+
+\indexlibraryglobal{operator==}%
+\begin{itemdecl}
+friend constexpr bool operator==(const optional& x, const optional& y);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true} if both operands are disengaged, or both are engaged with equal contained values.
+\end{itemdescr}

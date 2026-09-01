@@ -1,0 +1,44 @@
+** Constructors [optional.ctor]
+
+#+begin_itemdecl
+constexpr optional() noexcept;
+constexpr optional(nullopt_t) noexcept;
+#+end_itemdecl
+
+/Postconditions/: ~*this~ does not contain a value.
+
+#+begin_itemdecl
+constexpr optional(const optional& rhs);
+#+end_itemdecl
+
+/Constraints/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_trivially_copy_constructible_v<T>~ is ~false~.
+
+/Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+
+/Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.
+
+#+begin_itemdecl
+template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+#+end_itemdecl
+
+/Constraints/: ~is_constructible_v<T, Args...>~ is ~true~.
+
+/Effects/: Direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+
+/Postconditions/: ~has_value()~ is ~true~.
+
+#+begin_itemdecl
+template<class U>
+constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+#+end_itemdecl
+
+/Constraints/:
+
+- ~is_constructible_v<T, const U&>~ is ~true~,
+- ~is_convertible_v<U, T>~ is ~true~,
+- ~is_same_v<T, U>~ is ~false~,
+- ~is_constructible_v<T, optional<U>>~ is ~false~.
+
+/Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+
+/Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.

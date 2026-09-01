@@ -1,0 +1,44 @@
+{
+  "_comment": [
+    "Validate-mode golden: a nested section so context prefixing must",
+    "compose through two levels; one well-formed synopsis (empty span",
+    "table); one item whose one signature carries an overlapping span pair",
+    "(second span begins at 3, before the first span ends at 5)."
+  ],
+  "nodes": [
+    {
+      "type": "section",
+      "stable": "outer",
+      "title": "Outer",
+      "children": [
+        {
+          "type": "section",
+          "stable": "inner",
+          "title": "Inner",
+          "children": [
+            {
+              "type": "synopsis",
+              "code": { "text": "void f();", "spans": [] }
+            },
+            {
+              "type": "item",
+              "decl": {
+                "signatures": [
+                  {
+                    "text": "void g(int x, int y);",
+                    "spans": [
+                      { "begin": 0, "end": 5, "kind": "exposid", "payload": "a" },
+                      { "begin": 3, "end": 6, "kind": "exposid", "payload": "b" }
+                    ]
+                  }
+                ],
+                "index": []
+              },
+              "descr": { "elements": [] }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3 @@
+specgen: gadget/synopsis: error: `scratch` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: gadget.cons/mandates: warning: the authored mandates duplicates the derived `is_copy_constructible_v<int>` conjunct
+specgen: widget.cons/constraints: warning: the authored constraints contradicts the derived `copyable<T>` conjunct (derived `true`, authored `false`)

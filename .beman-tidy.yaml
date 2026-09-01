@@ -5,14 +5,63 @@
 # https://github.com/bemanproject/beman-tidy/blob/main/README.md
 
 disabled_rules:
-  # TODO: Enable once README.md documents which WG21 papers this library implements (see readme.implements).
+  # specgen is tooling, not a library proposing a standard facility
+  # (decision tool-not-library). It
+  # therefore has neither an Implements paper nor a meaningful Compiler
+  # Explorer trunk-version example.
   - readme.implements
-  # TODO: Enable once a trunk version is deployed on Compiler Explorer with nightyclone mode (see release.godbolt_trunk_version).
   - release.godbolt_trunk_version
-  # TODO: Enable once the main library target is built unconditionally by default. The modules toggle currently chooses STATIC vs INTERFACE via conditional add_library.
-  - cmake.default
-  # TODO: Enable once module builds no longer rely on target_compile_features PUBLIC (needs separate design; removing it today breaks module support).
-  - cmake.passive_targets
 ignored_paths:
   - infra/
+  # Build trees, tool virtualenvs, and scratch space are not project content;
+  # without these, vendored dependency docs (Catch2, cmake, clang-format)
+  # dominate the report.
+  - .build/
+  - build/
+  - .venv/
+  - scratchpad/
+  # The org export toolchain's package cache. `make examples-md`
+  # downloads org-transclusion, ox-gfm and htmlize into .emacs.d/elpa-<emacs
+  # version>/, and one of them ships a README.org that reads as a misplaced
+  # paper file. Ignored as a directory rather than by name because the version
+  # is part of the path and this matcher has no wildcards; it is a tool
+  # environment for building the docs, the same kind of thing as .venv/.
+  - .emacs.d/
+  # The install tree. `make install` populates it with CMake's own
+  # generated package files, which carry no SPDX header and are not ours to
+  # give one.
+  - .install/
+  # The install test's own build tree. installtest/ itself is project
+  # content and stays checked; only what CMake generates under it is ignored.
+  - installtest/.build/
+  # Vendored via git subtree (decision subtree-consumption). Consumed
+  # header-only from
+  # its own include path; local edits are forbidden, so it is not project
+  # content the Beman Standard should be checked against.
   - vendor/
+  # The foundation divergence log (decision subtree-consumption) lives
+  # beside the ported
+  # code it tracks, deliberately. It is a usage-experience feedback channel to
+  # the sibling repos, not project documentation or a paper, so the
+  # directory.docs/directory.papers root-file restriction does not apply — the
+  # same reasoning already applied to AGENTS.md/CLAUDE.md above.
+  - include/beman/specgen/foundation/DIVERGENCES.md
+  # The issue bodies actually filed upstream, kept next to
+  # the log that produced them for the same reason and under the same
+  # exemption.
+  - include/beman/specgen/foundation/UPSTREAM-ISSUES.md
+  # Golden fixtures are renderer output compared byte for byte, so they can
+  # carry no added license header, and their .tex files are test data rather
+  # than papers.
+  - tests/golden/
+  # Captured example output, for exactly the reason above and with the
+  # same force: these files are compared byte for byte against those goldens,
+  # so a license header could not be added to them even in principle. The
+  # scripts that produce them, in examples/cli/ itself, stay checked.
+  - examples/cli/output/
+  # Agent guidance, deliberately at the repository root: AGENTS.md is the
+  # cross-tool convention and CLAUDE.md imports it so Claude Code auto-loads it.
+  # These are tooling instructions, not project documentation or papers, so the
+  # directory.docs/directory.papers root-file restriction does not apply.
+  - AGENTS.md
+  - CLAUDE.md

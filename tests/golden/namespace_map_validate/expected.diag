@@ -1,0 +1,1 @@
+specgen: holder/synopsis: error: `detail` appears in rendered output but is not a documented entity (a namespace qualifier resolving to `demo::detail`): rewrite the name in documented terms, or move the entity it names into the specified namespace

@@ -1,0 +1,166 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §5.2's Mandates/Constraints drift",
+    "check, over hand-written IR (no Clang needed, so this runs on every",
+    "lane).",
+    "",
+    "`gadget`'s copy constructor carries an authored `\\mandates` and a",
+    "derived Mandates conjunct asserting the same thing -- the duplicate",
+    "case. `widget`'s constructor template carries a derived Constraints",
+    "conjunct (`copyable<T>` is `true`) contradicted by authored prose",
+    "reading `false` -- the contradict case.",
+    "",
+    "Three negative controls, which must stay silent alongside those two:",
+    "`gadget`'s destructor is a derived Mandates element with no authored",
+    "twin at all; `widget`'s second constructor is an authored Constraints",
+    "element that names a different subject than its derived twin; and",
+    "`gadget`'s own roster carries one genuinely undocumented member",
+    "(`scratch`), included so this fixture has an Error-severity finding --",
+    "run-golden.cmake's MODE validate requires exit code 1, and the drift",
+    "check alone never produces one (design §5.2: \"validator warns\").",
+    "",
+    "The `conjuncts` field on each authored replacement is the suppressed",
+    "derivation's pre-join list (frontend.cpp); it is",
+    "what lets the check point at the specific assert rather than a joined",
+    "sentence with no conjunct boundaries left in it."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "gadget",
+      "code": { "text": "class gadget { ... };", "spans": [] },
+      "roster": [{ "name": "scratch", "disposition": "undocumented", "section": "" }]
+    },
+    {
+      "type": "section",
+      "stable": "gadget.cons",
+      "title": "Constructors",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "gadget(const gadget&);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "mandates",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "is_copy_constructible_v<int>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ],
+                "conjuncts": [
+                  [
+                    { "t": "code", "code": { "text": "is_copy_constructible_v<int>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "~gadget();", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "mandates",
+                "derived": true,
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "is_nothrow_destructible_v<int>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ],
+                "conjuncts": [
+                  [
+                    { "t": "code", "code": { "text": "is_nothrow_destructible_v<int>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "stable": "widget.cons",
+      "title": "Constructors",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "template<class T> widget(T);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "constraints",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "copyable<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "false", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ],
+                "conjuncts": [
+                  [
+                    { "t": "code", "code": { "text": "copyable<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "widget(int);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "constraints",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "is_default_constructible_v<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ],
+                "conjuncts": [
+                  [
+                    { "t": "code", "code": { "text": "copyable<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

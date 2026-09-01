@@ -1,0 +1,3 @@
+specgen: widget/synopsis: error: `resize` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
+specgen: widget/synopsis: error: the description of `reserve` is routed to [widget.nowhere], which is not a section in this document
+specgen: widget/synopsis: error: the description of `shrink` is routed to no section: it is written in the class body under no `\ref` group and carries no `\at`

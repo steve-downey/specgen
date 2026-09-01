@@ -1,0 +1,250 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §5.4's noexcept ↔ *Throws:*",
+    "cross-check, over hand-written IR (no Clang needed, so this runs on",
+    "every lane).",
+    "",
+    "Two positives. `has_value` is declared `noexcept` and carries an",
+    "authored `\\throws` saying it throws -- the contradiction. `reset` is",
+    "declared `noexcept` and carries a `\\throws` reading `Nothing.` --",
+    "true, but already said by the signature, and not something the draft",
+    "writes.",
+    "",
+    "Both are Warnings, and this case is registered with EXPECT_EXIT 0 to",
+    "pin that: an Error makes `render --validate` skip rendering, so the",
+    "answer to a wrong *Throws:* paragraph would be no wording at all.",
+    "",
+    "There is no reverse-direction case here because there is no reverse",
+    "direction: a *Throws:* reading `Nothing` on a signature that is *not*",
+    "`noexcept` is correct and common, since the Lakos Rule keeps a",
+    "narrow-contract function un-`noexcept` so that checking its",
+    "precondition and throwing stays in bounds. `front` below is that",
+    "shape, as a control.",
+    "",
+    "Seven negative controls, which must stay silent alongside those two:",
+    "`value` is not `noexcept` at all, so its `\\throws` is ordinary;",
+    "`front` is the Lakos-Rule shape just described -- narrow contract, not",
+    "`noexcept`, `\\throws Nothing.`;",
+    "`swap`'s specification is conditional, so it may throw; `at`'s two",
+    "grouped overloads disagree, and the authored wording may be describing",
+    "the one that can throw; `probe`'s only `noexcept` belongs to a",
+    "function-pointer parameter, inside the parameter list rather than on",
+    "the function; `risky` is `noexcept(false)`, which says it may throw;",
+    "and `clear` is `noexcept(true)` with no `\\throws` at all.",
+    "",
+    "`clear`'s sibling `flush` is the `noexcept(true)` positive: the spelling",
+    "has to read the same as bare `noexcept`, which only a case pairing it",
+    "with a contradicting `\\throws` can show."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": { "text": "template<class T> class widget { ... };", "spans": [] },
+      "roster": []
+    },
+    {
+      "type": "section",
+      "stable": "widget.observe",
+      "title": "Observers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr bool has_value() const noexcept;", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "bad_widget_access", "spans": [] } },
+                    { "t": "text", "text": " if " },
+                    { "t": "code", "code": { "text": "*this", "spans": [] } },
+                    { "t": "text", "text": " does not contain a value." }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr T& value();", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "bad_widget_access", "spans": [] } },
+                    { "t": "text", "text": " if " },
+                    { "t": "code", "code": { "text": "*this", "spans": [] } },
+                    { "t": "text", "text": " does not contain a value." }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr const T& front() const;", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "expects",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "*this", "spans": [] } },
+                    { "t": "text", "text": " contains a value." }
+                  ]
+                ]
+              },
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Nothing." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [
+              { "text": "constexpr const T& at(size_t i) const;", "spans": [] },
+              { "text": "constexpr const T& at(size_t i, nothrow_t) const noexcept;", "spans": [] }
+            ],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "out_of_range", "spans": [] } },
+                    { "t": "text", "text": " if " },
+                    { "t": "code", "code": { "text": "i", "spans": [] } },
+                    { "t": "text", "text": " is out of range." }
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "stable": "widget.mod",
+      "title": "Modifiers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void reset() noexcept;", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [[{ "t": "text", "text": "Destroys the contained value, if any." }]]
+              },
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Nothing." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [
+              { "text": "constexpr void swap(widget& other) noexcept(is_nothrow_swappable_v<T>);", "spans": [] }
+            ],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Any exception thrown by swapping the contained values." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void probe(void (*p)() noexcept);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Any exception thrown by " }, { "t": "code", "code": { "text": "p", "spans": [] } }, { "t": "text", "text": "." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void risky() noexcept(false);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Any exception thrown by the contained value's destructor." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void clear() noexcept(true);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [[{ "t": "text", "text": "Equivalent to " }, { "t": "code", "code": { "text": "reset()", "spans": [] } }, { "t": "text", "text": "." }]]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "constexpr void flush() noexcept(true);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "throws",
+                "paragraphs": [[{ "t": "text", "text": "Any exception thrown by the underlying sink." }]]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

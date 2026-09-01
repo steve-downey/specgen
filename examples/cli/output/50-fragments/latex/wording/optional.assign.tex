@@ -1,0 +1,24 @@
+\rSec3[optional.assign]{Assignment}
+
+\indexlibrarymember{emplace}{optional}%
+\begin{itemdecl}
+template<class... Args> constexpr T& emplace(Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\mandates
+\tcode{is_constructible_v<T, Args...>} is \tcode{true}.
+
+\pnum
+\effects
+Destroys any contained value, then direct-non-list-initializes the contained value with \tcode{std::forward<Args>(args)...}.
+
+\pnum
+\ensures
+\tcode{has_value()} is \tcode{true}.
+
+\pnum
+\returns
+A reference to the new contained value.
+\end{itemdescr}

@@ -1,0 +1,23 @@
+\indexlibrarymember{optional}{optional}%
+\begin{itemdecl}
+template<class U> constexpr explicit(@\seebelow@) optional(const optional<U>& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_constructible_v<T, const U&>} is \tcode{true},
+\item \tcode{is_constructible_v<T, optional<U>&>} is \tcode{false},
+\item \tcode{is_constructible_v<T, optional<U>>} is \tcode{false},
+\item \tcode{is_convertible_v<optional<U>&, T>} is \tcode{false}.
+\end{itemize}
+
+\pnum
+\effects
+If \tcode{rhs} contains a value, direct-non-list-initializes the contained value with \tcode{*rhs}.
+
+\pnum
+\remarks
+The expression inside \tcode{explicit} is equivalent to \tcode{!is_convertible_v<const U&, T>}, see \iref{optional.general}.
+\end{itemdescr}

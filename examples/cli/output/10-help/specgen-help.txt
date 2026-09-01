@@ -1,0 +1,56 @@
+usage: specgen <command> [options]
+
+commands:
+  render      render IR JSON to wording fragments
+  generate    render a C++ header to wording fragments
+  dump-decls  print a header's decl/comment interleave (debug)
+
+dump-decls options:
+  <header>                  the header to parse
+  --compile-commands <dir>  read compile flags for <header> from <dir>'s
+                             compile_commands.json
+  --no-compile-commands     suppress the search for a compile_commands.json
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
+  -- <clang args>...        pass these to Clang verbatim instead of consulting
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
+
+generate options:
+  <header>                  the header to parse
+  --emit-ir                 build the document-tree skeleton (design §3.2)
+                             and emit it as IR JSON, instead of the default
+                             smoke-check message
+  -o, --output <file>       write here instead of standard output
+                             (--emit-ir only)
+  --compile-commands <dir>  read compile flags for <header> from <dir>'s
+                             compile_commands.json
+  --no-compile-commands     suppress the search for a compile_commands.json
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
+  -- <clang args>...        pass these to Clang verbatim instead of consulting
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
+
+render options:
+  --from-ir <file>    IR JSON to read; "-" for standard input (required)
+  --backend <name>    latex (default), mpark, or org
+  --validate          run the wording validators before rendering; a finding
+                       at error severity aborts the render (exit 1) instead
+  --paper             wrap the fragment in an `::: add` editing-instruction div
+                       and number its paragraphs as added (mpark only)
+  --split <dir>       write one fragment per top-level section into <dir>,
+                       named from its stable name (optional.ctor.tex), and
+                       list the paths written on standard output
+  --root <name>       name the fragment holding the nodes outside every
+                       section (--split only); derived from the sections'
+                       common stable-name prefix when omitted
+  -o, --output <file> write here instead of standard output
+
+general:
+  -h, --help          show this message
+  --version           show the version

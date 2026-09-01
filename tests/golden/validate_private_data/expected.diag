@@ -1,0 +1,1 @@
+specgen: optional/synopsis: note: `engaged_` is unmarked private data in a class that marks other members `\expos`, so it is dropped from the synopsis: mark it `\expos` too if the wording describes this class's state in terms of it

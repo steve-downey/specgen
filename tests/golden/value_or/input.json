@@ -1,0 +1,45 @@
+{
+  "nodes": [
+    {
+      "type": "item",
+      "decl": {
+        "signatures": [
+          {
+            "text": "template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;",
+            "spans": []
+          }
+        ],
+        "index": [
+          { "kind": "member", "name": "value_or", "parent": "optional" }
+        ]
+      },
+      "descr": {
+        "elements": [
+          {
+            "kind": "mandates",
+            "paragraphs": [
+              [
+                { "t": "code", "code": { "text": "is_copy_constructible_v<T>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "true", "spans": [] } },
+                { "t": "text", "text": " and " },
+                { "t": "code", "code": { "text": "is_convertible_v<U, T>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "true", "spans": [] } },
+                { "t": "text", "text": "." }
+              ]
+            ]
+          },
+          {
+            "kind": "effects",
+            "paragraphs": [],
+            "equivalent": {
+              "text": "return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));",
+              "spans": []
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+#+begin_itemdecl
+template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;
+#+end_itemdecl
+
+/Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
+#+end_codeblock

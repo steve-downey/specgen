@@ -1,0 +1,58 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §6's unmarked-private-data nudge,",
+    "over hand-written IR (no Clang needed, so this runs on every lane).",
+    "",
+    "`optional` is the positive: it marks `value_` `\\expos` and leaves",
+    "`engaged_` -- state of the same kind, in the same class -- unmarked.",
+    "That inconsistency is the signal, not the bare absence of a mark: see",
+    "check_private_data (validate.cpp) for why the rule is narrower than",
+    "§6's literal text; a measurement over the corpus headers is the",
+    "evidence that decided it.",
+    "",
+    "Four negative controls, which must stay silent:",
+    "",
+    "  - `widget` has unmarked private data (`data_`) and marks nothing",
+    "    `\\expos` at all -- the shape ten of the fifteen corpus headers",
+    "    have, where the member is filler no wording names. This is the",
+    "    control the literal reading of §6 would report.",
+    "  - `optional`'s `hard_reset` is an unmarked private *function* in the",
+    "    very class that trips the nudge; §6 omits it silently.",
+    "  - `optional`'s `size_` is private data that is nonetheless described,",
+    "    so the reader can see it and there is nothing to nudge about.",
+    "  - `handle` marks its only data member `\\expos`, leaving no unmarked",
+    "    data behind -- a class that got it right.",
+    "",
+    "Every finding here is a Note, so `--validate` exits 0 and still renders;",
+    "EXPECT_EXIT 0 pins that, as it does for validate_noexcept_throws.",
+    "",
+    "`kind` is a field on each roster entry: `function` (the default, so",
+    "an entry omitting the key reports nothing) or `data`. It is a separate",
+    "axis from `disposition`, which is why it is a separate key."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "optional",
+      "code": { "text": "template<class T> class optional { ... };", "spans": [] },
+      "roster": [
+        { "name": "value_", "disposition": "expos", "section": "", "kind": "data" },
+        { "name": "engaged_", "disposition": "private", "section": "", "kind": "data" },
+        { "name": "hard_reset", "disposition": "private", "section": "", "kind": "function" },
+        { "name": "size_", "disposition": "described", "section": "", "kind": "data" }
+      ]
+    },
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": { "text": "class widget { ... };", "spans": [] },
+      "roster": [{ "name": "data_", "disposition": "private", "section": "", "kind": "data" }]
+    },
+    {
+      "type": "synopsis",
+      "name": "handle",
+      "code": { "text": "class handle { ... };", "spans": [] },
+      "roster": [{ "name": "fd_", "disposition": "expos", "section": "", "kind": "data" }]
+    }
+  ]
+}

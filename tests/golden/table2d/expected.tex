@@ -1,0 +1,36 @@
+\begin{codeblock}
+class @\libglobal{optional}@ {
+public:
+  // \ref{optional.assign}, assignment
+  optional& operator=(const optional& rhs);
+
+private:
+  int @\exposidnc{val}@ = 0; // exposition only
+};
+\end{codeblock}
+
+\rSec3[optional.assign]{Assignment}
+
+\indexlibrarymember{operator=}{optional}%
+\begin{itemdecl}
+optional& operator=(const optional& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+See the following table.
+\begin{lib2dtab2}{\tcode{optional::operator=(const optional\&)} effects}{optional.assign.copy}
+{\tcode{*this} contains a value}
+{\tcode{*this} does not contain a value}
+
+\rowhdr{\tcode{rhs} contains a value} &
+assigns the value of \tcode{rhs} to \exposid{val}. &
+direct-non-list-initializes \exposid{val} from \tcode{rhs}. \\
+\rowsep
+
+\rowhdr{\tcode{rhs} does not contain a value} &
+destroys \exposid{val}. &
+no effect. \\
+\end{lib2dtab2}
+\end{itemdescr}

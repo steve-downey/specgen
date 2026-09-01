@@ -1,0 +1,50 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §9's coverage invariant, both",
+    "directions, over a hand-written roster (no Clang needed, so this runs on",
+    "every lane).",
+    "",
+    "`widget`'s roster carries one entry per accounted-for disposition, which",
+    "must all stay silent, plus the three the validator reports: an",
+    "`undocumented` declaration (direction 1), a `routed` entry naming a",
+    "section this document does not open, and a `routed` entry naming nothing",
+    "at all (both direction 2).",
+    "",
+    "`gadget` is a second synopsis whose roster is clean, and whose `routed`",
+    "entry resolves against the one section below -- the negative control for",
+    "direction 2, and the reason a synopsis carries its class name: neither",
+    "synopsis sits inside a section, so the class name is all that",
+    "distinguishes `widget/synopsis` from `gadget/synopsis` in the output."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": { "text": "class widget { ... };", "spans": [] },
+      "roster": [
+        { "name": "widget", "disposition": "described", "section": "" },
+        { "name": "empty", "disposition": "routed", "section": "widget.obs" },
+        { "name": "clone", "disposition": "merged", "section": "" },
+        { "name": "scratch", "disposition": "omitted", "section": "" },
+        { "name": "operator=", "disposition": "defaulted", "section": "" },
+        { "name": "value_", "disposition": "expos", "section": "" },
+        { "name": "cache_", "disposition": "private", "section": "" },
+        { "name": "resize", "disposition": "undocumented", "section": "" },
+        { "name": "reserve", "disposition": "routed", "section": "widget.nowhere" },
+        { "name": "shrink", "disposition": "routed", "section": "" }
+      ]
+    },
+    {
+      "type": "synopsis",
+      "name": "gadget",
+      "code": { "text": "class gadget { ... };", "spans": [] },
+      "roster": [{ "name": "ready", "disposition": "routed", "section": "widget.obs" }]
+    },
+    {
+      "type": "section",
+      "stable": "widget.obs",
+      "title": "Observers",
+      "children": []
+    }
+  ]
+}

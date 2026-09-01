@@ -1,0 +1,3 @@
+specgen: widget.observe/throws: warning: `constexpr bool has_value() const noexcept;` is declared `noexcept`, but the authored throws says it throws: correct the wording, or take `noexcept` off the declaration
+specgen: widget.mod/throws: warning: `constexpr void reset() noexcept;` is declared `noexcept`, so the authored throws saying `Nothing` adds nothing: drop the element
+specgen: widget.mod/throws: warning: `constexpr void flush() noexcept(true);` is declared `noexcept`, but the authored throws says it throws: correct the wording, or take `noexcept` off the declaration

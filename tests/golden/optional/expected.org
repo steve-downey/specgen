@@ -1,0 +1,171 @@
+#+begin_codeblock
+struct nullopt_t {};
+#+end_codeblock
+
+#+begin_codeblock
+struct in_place_t {
+  explicit in_place_t() = default;
+};
+#+end_codeblock
+
+#+begin_codeblock
+template<class T>
+class optional {
+public:
+  using value_type = T;
+
+  // \ref{optional.ctor}, constructors
+  constexpr optional() noexcept;
+  constexpr optional(nullopt_t) noexcept;
+
+  constexpr optional(const optional& rhs)
+    requires is_copy_constructible_v<T> && (!is_trivially_copy_constructible_v<T>);
+
+  template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args)
+    requires is_constructible_v<T, Args...>;
+
+  template<class U>
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
+    requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
+             (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+
+  // \ref{optional.assign}, assignment
+  template<class... Args> constexpr T& emplace(Args&&... args);
+
+  // \ref{optional.observe}, observers
+  constexpr bool has_value() const noexcept;
+  constexpr const T& operator*() const&;
+
+  template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+
+  // \ref{optional.monadic}, monadic operations
+  template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+
+  // \ref{optional.mod}, modifiers
+  constexpr void reset() noexcept;
+
+  friend constexpr bool operator==(const optional& x, const optional& y);
+
+private:
+  T @\exposidnc{value}@;            // exposition only
+  bool @\exposidnc{engaged}@ = false; // exposition only
+};
+#+end_codeblock
+
+** Constructors [optional.ctor]
+
+#+begin_itemdecl
+constexpr optional() noexcept;
+constexpr optional(nullopt_t) noexcept;
+#+end_itemdecl
+
+/Postconditions/: ~*this~ does not contain a value.
+
+#+begin_itemdecl
+constexpr optional(const optional& rhs);
+#+end_itemdecl
+
+/Constraints/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_trivially_copy_constructible_v<T>~ is ~false~.
+
+/Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+
+/Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.
+
+#+begin_itemdecl
+template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+#+end_itemdecl
+
+/Constraints/: ~is_constructible_v<T, Args...>~ is ~true~.
+
+/Effects/: Direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+
+/Postconditions/: ~has_value()~ is ~true~.
+
+#+begin_itemdecl
+template<class U>
+constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+#+end_itemdecl
+
+/Constraints/:
+
+- ~is_constructible_v<T, const U&>~ is ~true~,
+- ~is_convertible_v<U, T>~ is ~true~,
+- ~is_same_v<T, U>~ is ~false~,
+- ~is_constructible_v<T, optional<U>>~ is ~false~.
+
+/Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+
+/Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.
+
+** Assignment [optional.assign]
+
+#+begin_itemdecl
+template<class... Args> constexpr T& emplace(Args&&... args);
+#+end_itemdecl
+
+/Mandates/: ~is_constructible_v<T, Args...>~ is ~true~.
+
+/Effects/: Destroys any contained value, then direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+
+/Postconditions/: ~has_value()~ is ~true~.
+
+/Returns/: A reference to the new contained value.
+
+** Observers [optional.observe]
+
+#+begin_itemdecl
+constexpr bool has_value() const noexcept;
+#+end_itemdecl
+
+/Returns/: ~true~ if and only if ~*this~ contains a value.
+
+#+begin_itemdecl
+constexpr const T& operator*() const&;
+#+end_itemdecl
+
+/Hardened preconditions/: ~*this~ contains a value.
+
+/Returns/: A reference to the contained value.
+
+#+begin_itemdecl
+template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+#+end_itemdecl
+
+/Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
+#+end_codeblock
+
+** Monadic operations [optional.monadic]
+
+#+begin_itemdecl
+template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+#+end_itemdecl
+
+/Effects/: If ~*this~ contains a value, returns an optional holding the result of invoking ~f~ with the contained value; otherwise returns an empty optional.
+
+/Remarks/: The return type is ~remove_cvref_t<invoke_result_t<F, const T&>>~.
+
+** Modifiers [optional.mod]
+
+#+begin_itemdecl
+constexpr void reset() noexcept;
+#+end_itemdecl
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+@\exposidnc{engaged}@ = false;
+#+end_codeblock
+
+/Postconditions/: ~has_value()~ is ~false~.
+
+#+begin_itemdecl
+friend constexpr bool operator==(const optional& x, const optional& y);
+#+end_itemdecl
+
+/Returns/: ~true~ if both operands are disengaged, or both are engaged with equal contained values.

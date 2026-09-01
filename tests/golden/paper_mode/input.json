@@ -1,0 +1,86 @@
+{
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "gadget",
+      "code": {
+        "text": "class gadget {\npublic:\n  constexpr bool ready() const noexcept;\n};",
+        "spans": []
+      },
+      "roster": []
+    },
+    {
+      "type": "section",
+      "stable": "gadget.observe",
+      "title": "Observers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [
+              { "text": "constexpr bool ready() const noexcept;", "spans": [] }
+            ],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "constraints",
+                "paragraphs": [],
+                "itemize": [
+                  [
+                    { "t": "code", "code": { "text": "is_copy_constructible_v<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "," }
+                  ],
+                  [
+                    { "t": "code", "code": { "text": "is_move_constructible_v<T>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ]
+              },
+              {
+                "kind": "returns",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": " if and only if the gadget is ready." }
+                  ],
+                  [
+                    { "t": "text", "text": "A second paragraph, so the added numbering has to advance." }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        { "type": "para", "content": [ { "t": "text", "text": "A free paragraph closing the subclause." } ] }
+      ]
+    },
+    {
+      "type": "section",
+      "stable": "gadget.mod",
+      "title": "Modifiers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [ { "text": "constexpr void reset() noexcept;", "spans": [] } ],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [ [ { "t": "text", "text": "Resets the gadget." } ] ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

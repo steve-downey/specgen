@@ -1,0 +1,45 @@
+\rSec3[optional.observe]{Observers}
+
+\indexlibrarymember{has_value}{optional}%
+\begin{itemdecl}
+constexpr bool has_value() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true} if and only if \tcode{*this} contains a value.
+\end{itemdescr}
+
+\indexlibrarymember{operator*}{optional}%
+\begin{itemdecl}
+constexpr const T& operator*() const&;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\hardexpects
+\tcode{*this} contains a value.
+
+\pnum
+\returns
+A reference to the contained value.
+\end{itemdescr}
+
+\indexlibrarymember{value_or}{optional}%
+\begin{itemdecl}
+template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\mandates
+\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_convertible_v<U, T>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
+\end{codeblock}
+\end{itemdescr}

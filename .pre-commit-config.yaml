@@ -14,14 +14,14 @@ repos:
     # This brings in a portable version of clang-format.
     # See also: https://github.com/ssciwr/clang-format-wheel
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v22.1.8
+    rev: v22.1.5
     hooks:
     - id: clang-format
       types_or: [c++, c]
 
     # CMake linting and formatting
   - repo: https://github.com/BlankSpruce/gersemi-pre-commit
-    rev: 0.28.0
+    rev: 0.27.6
     hooks:
     - id: gersemi
       name: CMake linting
@@ -29,20 +29,42 @@ repos:
 
     # Markdown linting
     # Config file: .markdownlint.yaml
-    # Commented out to disable this by default. Uncomment to enable markdown linting.
-  # - repo: https://github.com/igorshubovych/markdownlint-cli
-  #   rev: v0.42.0
-  #   hooks:
-  #   - id: markdownlint
+    # vendor/ and infra/ are git subtrees -- local edits are forbidden
+    # (decision subtree-consumption), so their markdown is not ours to
+    # reformat.
+    #
+    # Caveat on how this was verified: the documents were cleaned and checked
+    # with markdownlint-*cli2*, not with the markdownlint-cli this hook runs
+    # (cli 0.42.0 will not install on the dev box's Node, and pre-commit could
+    # not fetch the hook there either). Both read .markdownlint.yaml -- probed,
+    # not assumed: a 100-character line does not trip MD013, so the file's
+    # line_length: 119 is in effect rather than the built-in 80. cli2 also
+    # carries the *newer* markdownlint engine (0.41 vs ~0.35), so it applies a
+    # superset of the rules; a clean cli2 run should stay clean under cli, not
+    # the other way round. The pre-commit CI job is what actually proves this
+    # hook installs and passes.
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.42.0
+    hooks:
+      - id: markdownlint
+        # tests/golden/ is excluded because the mpark backend makes `.md` a
+        # golden extension. A golden is generated output compared byte
+        # for byte, and its shape is dictated by the mpark/wg21 framework's
+        # syntax rather than by prose style -- so a prose linter has no
+        # standing over it, and an autofix would silently break every case it
+        # touched. examples/cli/output/ and docs/examples.md are the same kind
+        # of thing: captured renderer output compared byte for byte, and the
+        # org export built from it.
+        exclude: ^(vendor|infra|tests/golden|examples/cli/output)/|^docs/examples\.md$
 
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.3
+    rev: v2.4.2
     hooks:
       - id: codespell
 
     # Beman Standard checking via beman-tidy
   - repo: https://github.com/bemanproject/beman-tidy
-    rev: v0.5.4
+    rev: v0.5.2
     hooks:
     - id: beman-tidy
 

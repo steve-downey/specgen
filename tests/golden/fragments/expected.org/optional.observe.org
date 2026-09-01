@@ -1,0 +1,27 @@
+** Observers [optional.observe]
+
+#+begin_itemdecl
+constexpr bool has_value() const noexcept;
+#+end_itemdecl
+
+/Returns/: ~true~ if and only if ~*this~ contains a value.
+
+#+begin_itemdecl
+constexpr const T& operator*() const&;
+#+end_itemdecl
+
+/Hardened preconditions/: ~*this~ contains a value.
+
+/Returns/: A reference to the contained value.
+
+#+begin_itemdecl
+template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+#+end_itemdecl
+
+/Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
+#+end_codeblock

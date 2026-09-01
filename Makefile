@@ -9,6 +9,14 @@ BUILD_DIR?=.build
 DEST?=$(INSTALL_PREFIX)
 CMAKE_FLAGS?=
 
+# Where to find LLVM/Clang's CMake package. specgen requires the front end,
+# and find_package asks for BEMAN_SPECGEN_LLVM_VERSION (22.1), so it
+# picks that LLVM even next to a newer one. This is a search hint, not an
+# override: an LLVM whose version does not match the request is rejected, so
+# building against a different one means moving the pin too, e.g.
+# `make CMAKE_FLAGS=-DBEMAN_SPECGEN_LLVM_VERSION=23.0 CLANG_DIR=/usr/lib/llvm-23/lib/cmake/clang`.
+CLANG_DIR?=/usr/lib/llvm-22/lib/cmake/clang
+
 
 PYEXECPATH ?= $(shell which python3.13 || which python3.12 || which python3.11 || which python3.10 || which python3.9 || which python3.8 || which python3)
 PYTHON ?= $(notdir $(PYEXECPATH))
@@ -19,6 +27,7 @@ PYEXEC := $(UV) run python
 MARKER=.initialized.venv.stamp
 
 PRE_COMMIT := $(UV) run pre-commit
+EMACS ?= $(shell command -v emacs 2> /dev/null)
 
 TARGETS := test clean all ctest
 
@@ -81,8 +90,10 @@ define run_cmake =
 	-DCMAKE_C_COMPILER_LAUNCHER=ccache \
 	-DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
 	-DCMAKE_TOOLCHAIN_FILE=$(_toolchain) \
+	-DClang_DIR=$(CLANG_DIR) \
     $(_args) \
 	$(_cmake_args) \
+	$(CMAKE_FLAGS) \
 	$(CURDIR)
 endef
 
@@ -104,22 +115,49 @@ compile_commands.json: ## symlink the current compile commands db
 		ln -sf $(_build_path)/compile_commands.json ; \
 	fi
 
-TARGET:=all
-.PHONY: TARGET
+# Which target `compile` builds. Honoured, not decorative: the build line
+# below passes it through, so `make TARGET=goldens compile` builds only the
+# goldens rather than everything. Note that `make goldens` needs no TARGET=
+# at all -- the .DEFAULT rule at the bottom passes any unknown goal straight
+# through to cmake.
+TARGET?=all
 
 .PHONY: compile
 compile: $(_build_path)/CMakeCache.txt
 compile: compile_commands.json
-compile:  ## Compile the project
-	$(CMAKE) --build $(_build_path)  --config $(CONFIG) --target all -- -k 0
+compile:  ## Compile the project ($(TARGET) by default; TARGET= to pick one)
+	$(CMAKE) --build $(_build_path)  --config $(CONFIG) --target $(TARGET) -- -k 0
 
 .PHONY: compile-headers
 compile-headers: $(_build_path)/CMakeCache.txt ## Compile the headers
 	 $(CMAKE) --build $(_build_path)  --config $(CONFIG) --target all_verify_interface_header_sets -- -k 0
 
+# No --component: the components this project actually creates are
+# `specgen_Runtime` (the driver) and `specgen_Development` (the library,
+# headers and CMake package), both derived by beman-install-library.cmake
+# stripping `beman.` from `beman.specgen`. A `--component beman.specgen` here
+# would name no component at all, and `cmake --install` treats an unknown
+# component as an empty one, so that target would exit 0 and install nothing.
 .PHONY: install
 install: $(_build_path)/CMakeCache.txt compile ## Install the project
-	$(CMAKE) --install $(_build_path) --config $(CONFIG) --component beman.specgen --verbose
+	$(CMAKE) --install $(_build_path) --config $(CONFIG) --verbose
+
+# The configuration to ship, and the one `testinstall` runs against.
+# RelWithDebInfo rather than Release: optimized, but it keeps the debug info
+# that makes a failure in an installed binary diagnosable. The default CONFIG
+# stays Asan for day-to-day work, and an Asan build is the wrong thing to
+# install -- the sanitizer writes to stderr, which would corrupt captured
+# example output, and a sanitized static library imposes Asan on every
+# consumer that links it.
+RELEASE_CONFIG?=RelWithDebInfo
+
+.PHONY: release
+release: ## Build the release (RelWithDebInfo) binaries
+	$(MAKE) CONFIG=$(RELEASE_CONFIG) compile
+
+.PHONY: install-release
+install-release: ## Install the release (RelWithDebInfo) build
+	$(MAKE) CONFIG=$(RELEASE_CONFIG) install
 
 .PHONY: clean-install
 clean-install:
@@ -230,12 +268,85 @@ mrdocs: ## Build the docs with Doxygen
 	cd docs && NO_COLOR=1 mrdocs mrdocs.yml 2>&1 | sed 's/\x1b\[[0-9;]*m//g'
 	find docs/adoc -name '*.adoc' | xargs asciidoctor
 
+ORGFILES := $(wildcard docs/*.org)
+EXAMPLE_ORGFILES := docs/examples.org
+
+docs/%.html : docs/%.org
+	@test -n "$(EMACS)" || { echo "emacs not found; install emacs or set EMACS"; exit 1; }
+	$(EMACS) --init-directory=.emacs.d/ \
+		--batch --load .emacs.d/init.el \
+		--eval "(setq enable-local-variables :all)" \
+		--visit $< \
+		--eval "(org-transclusion-mode t)" \
+		--eval "(org-export-to-file 'html \"$(abspath $@)\")"
+	echo $@ : \\ > $@.deps
+	echo "  $<" \\ >> $@.deps
+	sed -n "s#^.*\[\[file:\([^]:]*\)\(::[^]]*\)\?\]\].*\$$#$(dir $<)\1#p" < $< | sort -u | xargs printf "  %s \\\\\\n" >> $@.deps
+
+$(ORGFILES:%.org=%.html.deps):
+
+-include $(ORGFILES:%.org=%.html.deps)
+
+docs/examples.md : docs/examples.org
+	@test -n "$(EMACS)" || { echo "emacs not found; install emacs or set EMACS"; exit 1; }
+	$(EMACS) --init-directory=.emacs.d/ \
+		--batch --load .emacs.d/init.el \
+		-f package-initialize \
+		--eval "(setq enable-local-variables :all)" \
+		--visit $< \
+		--eval "(org-transclusion-mode t)" \
+		--eval "(require 'ox-gfm)" \
+		--eval "(org-export-to-file 'gfm \"$(abspath $@)\")"
+	echo $@ : \\ > $@.deps
+	echo "  $<" \\ >> $@.deps
+	sed -n "s#^.*\[\[file:\([^]:]*\)\(::[^]]*\)\?\]\].*\$$#$(dir $<)\1#p" < $< | sort -u | xargs printf "  %s \\\\\\n" >> $@.deps
+
+$(EXAMPLE_ORGFILES:.org=.md.deps):
+
+-include $(EXAMPLE_ORGFILES:.org=.md.deps)
+
+.PHONY: examples-md
+examples-md: $(EXAMPLE_ORGFILES:.org=.md) ## Convert docs/examples.org to GFM markdown
+
+.PHONY: examples-html
+examples-html: docs/examples.html ## Export docs/examples.org to HTML
+
+# The live document runs its own commands during the export, so the tool has to
+# be installed before the export starts. An order-only prerequisite: the page
+# depends on the tool existing, not on its timestamp, so a rebuilt binary does
+# not by itself make the page stale.
+docs/examples-live.html: | install-release
+
+.PHONY: examples-live-html
+examples-live-html: docs/examples-live.html ## Export the live document, running its commands
+
+.PHONY: clean-org-deps
+clean-org-deps:
+	-rm -f $(ORGFILES:%.org=%.html.deps) $(EXAMPLE_ORGFILES:.org=.md.deps)
+clean: clean-org-deps
+
+.PHONY: clean-org-html
+clean-org-html:
+	-rm -f $(ORGFILES:%.org=%.html)
+clean: clean-org-html
+
+.PHONY: clean-emacs.d
+clean-emacs.d:
+	-rm -rf .emacs.d/elpa* .emacs.d/eln-cache
+realclean: clean-emacs.d
+
+# Runs against the release install rather than the default Asan one, so the
+# thing tested is the thing shipped. installtest/ is a standalone consumer
+# project: it is configured against the install prefix and knows nothing about
+# this build tree.
 .PHONY: testinstall
-testinstall: install
-testinstall: ## Test the installed package
-	mkdir -p installtest
-	$(CMAKE) -S installtest -B installtest/.build
-	$(CMAKE) --build  installtest/.build --target test
+testinstall: install-release
+testinstall: ## Test the installed package with a standalone consumer
+	$(CMAKE) -S installtest -B installtest/.build \
+		-DCMAKE_TOOLCHAIN_FILE=$(_toolchain) \
+		-DCMAKE_PREFIX_PATH=$(abspath $(INSTALL_PREFIX))
+	$(CMAKE) --build installtest/.build
+	$(CTEST) --test-dir installtest/.build --output-on-failure
 
 .PHONY: clean-testinstall
 clean-testinstall:

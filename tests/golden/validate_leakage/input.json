@@ -1,0 +1,113 @@
+{
+  "_comment": [
+    "Validate-mode golden: design §9's leakage checker, over a",
+    "hand-written roster (no Clang needed, so this runs on every lane).",
+    "",
+    "`optional`'s roster carries one entry per *visible* disposition -- each",
+    "of which must stay silent wherever the wording names it -- plus the four",
+    "invisible ones the checker reports: an unmarked private member, an",
+    "`\\omit`ted one, a `\\merge`d twin, and one declared but never described.",
+    "",
+    "The wording below names each of them in a different kind of fragment, so",
+    "the contexts differ as well as the messages: an itemdecl, an extracted",
+    "*Equivalent to:* body (§9's headline case), backticked prose, an",
+    "itemized condition, and a class-general free paragraph.",
+    "",
+    "`nullopt_t` is the negative control that costs the most to get wrong. It",
+    "is a documented class whose *constructor* is `\\omit`ted, so its roster",
+    "carries an invisible entry sharing the class's own name -- naming the",
+    "type in an itemdecl must stay silent. `hard_reset` appearing twice in one",
+    "body is the other control: one finding, at its first appearance.",
+    "",
+    "`engaged` (an `\\expos` member) and `size` (described) are named in the",
+    "same fragments as the leaks, so a run that reported them would show up",
+    "here rather than in a corpus regeneration.",
+    "",
+    "`hard_reset` draws a coverage finding as well as a leakage one, and that",
+    "is the point rather than noise: `undocumented` is the one disposition",
+    "both rules report, because a declaration that is never described is both",
+    "unaccounted for (direction 1) and invisible to a reader who meets its",
+    "name in an *Equivalent to:* body."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "optional",
+      "code": { "text": "template <class T>\nclass optional { ... };", "spans": [] },
+      "roster": [
+        { "name": "size", "disposition": "described", "section": "" },
+        { "name": "reset", "disposition": "routed", "section": "optional.mod" },
+        { "name": "operator=", "disposition": "defaulted", "section": "" },
+        { "name": "engaged", "disposition": "expos", "section": "" },
+        { "name": "cache_", "disposition": "private", "section": "" },
+        { "name": "scratch", "disposition": "omitted", "section": "" },
+        { "name": "clone", "disposition": "merged", "section": "" },
+        { "name": "hard_reset", "disposition": "undocumented", "section": "" }
+      ]
+    },
+    {
+      "type": "synopsis",
+      "name": "nullopt_t",
+      "code": { "text": "struct nullopt_t {};", "spans": [] },
+      "roster": [{ "name": "nullopt_t", "disposition": "omitted", "section": "" }]
+    },
+    {
+      "type": "section",
+      "stable": "optional.mod",
+      "title": "Modifiers",
+      "children": [
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [
+              { "text": "constexpr optional(nullopt_t) noexcept;", "spans": [] },
+              { "text": "constexpr void reset(cache_& c) noexcept;", "spans": [] }
+            ],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "effects",
+                "paragraphs": [],
+                "equivalent": {
+                  "text": "hard_reset();\nengaged = false;\nhard_reset();",
+                  "spans": []
+                }
+              },
+              {
+                "kind": "ensures",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "size()", "spans": [] } },
+                    { "t": "text", "text": " is zero and " },
+                    { "t": "code", "code": { "text": "scratch", "spans": [] } },
+                    { "t": "text", "text": " is released" }
+                  ]
+                ]
+              },
+              {
+                "kind": "remarks",
+                "paragraphs": [],
+                "itemize": [
+                  [
+                    { "t": "code", "code": { "text": "clone", "spans": [] } },
+                    { "t": "text", "text": " is not called" }
+                  ]
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "para",
+      "content": [
+        { "t": "text", "text": "Every operation leaves " },
+        { "t": "code", "code": { "text": "cache_", "spans": [] } },
+        { "t": "text", "text": " unspecified." }
+      ]
+    }
+  ]
+}

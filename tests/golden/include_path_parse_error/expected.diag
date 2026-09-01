@@ -1,0 +1,4 @@
+spec_include.hpp:23:10: fatal error: 'specgen_acid/widget_traits.hpp' file not found
+   23 | #include <specgen_acid/widget_traits.hpp>
+      |          ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+specgen: Clang reported an error parsing 'spec_include.hpp'; the parse is incomplete, so the wording generated from it would be unreliable

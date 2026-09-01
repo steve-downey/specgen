@@ -1,11 +1,15 @@
+# cmake/gcc-16-toolchain.cmake                                      -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 include_guard(GLOBAL)
 
-include("${CMAKE_CURRENT_LIST_DIR}/gcc-flags.cmake")
-
+# Set the compiler before including gcc-flags.cmake so its libstdc++ rpath logic
+# can query this compiler.
 set(CMAKE_C_COMPILER gcc-16)
 set(CMAKE_CXX_COMPILER g++-16)
+
+include("${CMAKE_CURRENT_LIST_DIR}/gcc-flags.cmake")
+
 set(GCOV_EXECUTABLE "gcov-16" CACHE STRING "GCOV executable" FORCE)
 
 set(CMAKE_CXX_FLAGS_ASAN

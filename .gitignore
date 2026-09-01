@@ -21,6 +21,14 @@
 /.build/
 /.install/
 /.update-submodules
+/.emacs.d/elpa*/
+/.emacs.d/eln-cache/
+/.emacs.d/custom.el
+/docs/*.html.deps
+/docs/examples.md.deps
+/docs/examples.html
+/docs/examples-live.html
+/docs/examples-live.html.deps
 
 # uv lock file (generated, not committed)
 /uv.lock
@@ -30,3 +38,7 @@
 
 # Claude Code local settings
 /.claude/
+scratchpad/
+
+# the standalone install-test consumer's build tree
+/installtest/.build/

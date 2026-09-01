@@ -1,0 +1,25 @@
+#+begin_codeblock
+class optional {
+public:
+  // \ref{optional.assign}, assignment
+  optional& operator=(const optional& rhs);
+
+private:
+  int @\exposidnc{val}@ = 0; // exposition only
+};
+#+end_codeblock
+
+** Assignment [optional.assign]
+
+#+begin_itemdecl
+optional& operator=(const optional& rhs);
+#+end_itemdecl
+
+/Effects/: See the following table.
+
+#+name: optional.assign.copy
+#+caption: ~optional::operator=(const optional&)~ effects
+| | ~*this~ contains a value | ~*this~ does not contain a value |
+|-
+| ~rhs~ contains a value | assigns the value of ~rhs~ to @@latex:\exposid{val}@@. | direct-non-list-initializes @@latex:\exposid{val}@@ from ~rhs~. |
+| ~rhs~ does not contain a value | destroys @@latex:\exposid{val}@@. | no effect. |

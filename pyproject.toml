@@ -13,3 +13,13 @@ dev = [
     "gcovr>=8.6",
     "pre-commit>=4.5.1",
 ]
+
+# codespell flags "noes" (the plural of "no") and the deliberately truncated
+# regression spelling "defaul" (a Clang-synthesized `= default` body spliced
+# as source would print `= defaul;;`; the sources and tests spell out that
+# exact wrong text). Both words are used correctly where they appear, so they
+# are allowed here rather than the prose rewritten. Note that codespell's
+# argument parser rejects an empty ignore-words-list outright; a non-empty
+# value is what it wants.
+[tool.codespell]
+ignore-words-list = "defaul,noes"
