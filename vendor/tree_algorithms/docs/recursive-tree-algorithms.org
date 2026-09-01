@@ -1,0 +1,552 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:nil arch:headline author:t
+#+options: broken-links:nil c:nil creator:nil d:(not "LOGBOOK") date:t e:t
+#+options: email:nil f:t inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
+#+options: tasks:t tex:t timestamp:t title:t toc:nil todo:t |:t
+#+options: html5-fancy:t
+#+TITLE: Recursive Tree Algorithms in C++
+#+AUTHOR: Steve Downey
+#+EMAIL: sdowney@gmail.com
+#+LANGUAGE: en
+#+SELECT_TAGS: export
+#+EXCLUDE_TAGS: noexport
+#+SUBTITLE: From Expression Trees to fold_fix, unfold_fix, and refold
+#+DATE: {{{modification-time(%Y-%m-%d, VC)}}}
+#+STARTUP: showall
+#+OPTIONS: html-link-use-abs-url:nil html-postamble:nil html-preamble:t
+#+OPTIONS: html-scripts:n html-style:nil html5-fancy:nil tex:t
+#+HTML_DOCTYPE: xhtml-strict
+#+HTML_CONTAINER: div
+#+BIBLIOGRAPHY: ./references.bib
+
+#+begin_abstract
+Expression trees without inheritance or virtual functions, and the generic verbs that consume, build, and fuse them: ~fold_fix~, ~unfold_fix~, and ~refold~ over fixed-point trees; ~fold_with~ and ~unfold_with~ over trees in their own representations; ~fold_map~ for the elementwise queries.
+The algebra answers /how to combine/; the recursion scheme answers /how to recurse/; they never tangle.
+This is the library behind ~beman::tree_algorithms~.
+#+end_abstract
+
+* Building an Expression Tree in 20 Lines
+
+I want to build expression trees, evaluate them, and do it without inheritance or virtual functions.
+
+One utility first: ~Box<A>~, a small owning pointer with deep-copy value semantics.
+It exists to break a cycle in the type system, described below; nothing about it is tree-specific.
+
+#+transclude: [[file:../examples/fixpoint_tree_example.cpp::ec8e7f28-10c3-43ea-bfa9-a54f4c63ef9c]]  :lines 2- :src cpp :end "ec8e7f28-10c3-43ea-bfa9-a54f4c63ef9c end"
+
+Now, here is the entire type system for an expression tree.
+The full self-contained example is in [[orgit-file:examples/fixpoint_tree_example.cpp][=examples/fixpoint_tree_example.cpp=]].
+[[https://godbolt.org][Paste it into Compiler Explorer]] --- it compiles with any C++23 toolchain.
+
+#+transclude: [[file:../examples/fixpoint_tree_example.cpp::3959d7ab-f1fa-4fd7-b2b9-886a1f7610a2]]  :lines 2- :src cpp :end "3959d7ab-f1fa-4fd7-b2b9-886a1f7610a2 end"
+
+That is it.
+A ~Fix<ExprF>~ value /is/ a tree node, and every node is a [[https://en.cppreference.com/w/cpp/utility/variant][=std::variant=]] of constant, addition, or multiplication.
+No CRTP, no base classes.
+
+A handful of helpers let me build and evaluate trees:
+
+#+transclude: [[file:../examples/fixpoint_tree_example.cpp::02640f07-f080-4eec-bd90-b414fabd4b7b]]  :lines 2- :src cpp :end "02640f07-f080-4eec-bd90-b414fabd4b7b end"
+
+Build ~(1 + 2) * 3~ and evaluate it:
+
+#+transclude: [[file:../examples/fixpoint_tree_example.cpp::2526ec45-2e52-4b56-aab0-1034b078a459]]  :lines 2- :src cpp :end "2526ec45-2e52-4b56-aab0-1034b078a459 end"
+
+That ~eval~ object handles one layer.
+Constants return their value.
+Additions add children that are already integers.
+Multiplications multiply children that are already integers.
+It does not recurse.
+
+The snippet above supplies the recursion locally, with a hand-rolled ~fold_eval~ that walks the tree and calls ~eval~ at each layer.
+The library generalizes exactly that pattern into a function called ~fold_fix~.
+First, the pieces.
+
+* The Pieces
+
+The Compiler Explorer example above is self-contained but simplified.
+The repository version lives in [[orgit-file:include/beman/tree_algorithms/expression.hpp][=include/beman/tree_algorithms/expression.hpp=]], inside namespace ~beman::tree_algorithms~, and uses the same names --- ~Const~, ~Add~, ~Mul~, ~int~ values.
+The difference is not the types; it is that the repository version registers its ~fmap~ where the generic algorithms can find it.
+From here on I show the repository code, with namespace qualifications elided.
+
+** The Non-Recursive Functor
+
+The key idea is that ~ExprF~ does not refer to itself.
+It is parameterized on a type ~A~ that fills the recursive positions.
+This is the F-algebra pattern: separate the recursive structure from the shape of one layer [cite:@milewski2013falgebras] [cite:@milewski2017falgebras] [cite:@niebler2013falgebras].
+
+From [[orgit-file:include/beman/tree_algorithms/expression.hpp][=include/beman/tree_algorithms/expression.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::085bb189-a48e-4262-aefd-b64f8755e959]]  :lines 2- :src cpp :end "085bb189-a48e-4262-aefd-b64f8755e959 end"
+
+When ~A~ is ~int~, an ~ExprF<int>~ is one layer where children are already numbers.
+When ~A~ is the full tree type, children are subtrees.
+
+This parameterization is the whole trick.
+
+** Box: Breaking Infinite Instantiation
+
+A ~variant~ cannot directly contain itself.
+~ExprF<Fix<ExprF>>~ with a ~Fix<ExprF>~ member by value would require the compiler to instantiate an infinitely large type.
+~Box<A>~ wraps the recursive position in an owning pointer, adding one indirection that breaks the cycle.
+
+The library ships a hand-rolled ~Box~, not [[https://en.cppreference.com/w/cpp/memory/indirect][=std::indirect=]].
+From [[orgit-file:include/beman/tree_algorithms/box.hpp][=include/beman/tree_algorithms/box.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/box.hpp::a1f81cb9-ebb3-4872-9549-03ca140c61b2]]  :lines 2- :src cpp :end "a1f81cb9-ebb3-4872-9549-03ca140c61b2 end"
+
+#+transclude: [[file:../include/beman/tree_algorithms/box.hpp::45a64b08-8217-4baf-b19b-146434de1e44]]  :lines 2- :src cpp :end "45a64b08-8217-4baf-b19b-146434de1e44 end"
+
+Copying a ~Box<A>~ deep-copies the wrapped value.
+This is exactly what is wanted here --- trees are values.
+
+Why hand-rolled?
+~std::indirect~ ([[https://wg21.link/P3019][P3019]], C++26) has the right semantics for this job, modulo two details.
+First, its explicit default constructor blocks use in aggregate-initialised containers, and the default-constructed state allocates; ~Box~ is nullable by default, so it sits in constexpr-friendly storage without wasteful default allocations.
+Second, depending on ~std::indirect~ would raise the library's floor to C++26 library support, and this library targets C++23.
+~Box~ uses raw ~new~/~delete~, which are constexpr for transient allocations since C++20, so the whole tree machinery works in constant evaluation today.
+Treat ~Box~ as an exposition-level implementation detail; ~std::indirect~ is the plausible future spelling.
+
+** Fix: Tying the Recursive Knot
+
+~Fix<F>~ is the type-level fixed-point combinator.
+A ~Fix<F>~ /is/ an ~F~ whose recursive positions are filled with ~Fix<F>~.
+Milewski [cite:@milewski2013falgebras] [cite:@milewski2017falgebras] develops this idea from first principles via category theory.
+
+From [[orgit-file:include/beman/tree_algorithms/fix.hpp][=include/beman/tree_algorithms/fix.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/fix.hpp::57d4bd6e-c8c7-4806-afd3-2e42aec8ae27]]  :lines 2- :src cpp :end "57d4bd6e-c8c7-4806-afd3-2e42aec8ae27 end"
+
+The type equation is $\mathit{Fix}\langle F \rangle \cong F\langle \mathit{Fix}\langle F \rangle \rangle$.
+That isomorphism is witnessed by two trivial functions:
+
+#+transclude: [[file:../include/beman/tree_algorithms/fix.hpp::53775b7e-8a78-4b79-885b-046f6232d7a3]]  :lines 2- :src cpp :end "53775b7e-8a78-4b79-885b-046f6232d7a3 end"
+
+~wrap_fix~ packs one layer into the fixed-point wrapper.
+~unwrap_fix~ exposes the layer inside.
+Both exist to make the type system happy, not to do work.
+
+~Fix<ExprF>~ is the tree type.
+~unwrap_fix~ on any tree node gives back the ~variant~ for that node.
+
+*** Composition, not inheritance
+
+Niebler [cite:@niebler2013falgebras] translates this pattern to C++ using inheritance:
+
+# NOTE: illustrative non-repo code (Niebler's formulation, deliberately not what we ship); do not transclude
+#+begin_src C++
+template <template <typename> class F>
+struct Fix : F<Fix<F>> {};   // is-a
+#+end_src
+
+That makes ~Fix<F>~ a subclass of ~F<Fix<F>>~, so unwrapping is just an upcast and no explicit ~inner~ member is needed.
+The isorecursive equation is satisfied, but the is-a relationship is stronger than necessary.
+Inheritance implies substitutability: any code expecting an ~F<Fix<F>>~ would accept a ~Fix<F>~.
+That is not a property the math requires, and it can create ambiguity in overload resolution or template instantiation.
+
+The composition approach here --- a single data member ~inner~ of type ~F<Fix<F>>~ --- says only what is true: a ~Fix<F>~ /contains/ an ~F<Fix<F>>~.
+The isomorphism is still fully explicit through ~wrap_fix~ and ~unwrap_fix~.
+The wrapping and unwrapping are zero cost.
+Nothing stronger than has-a is implied.
+
+** fmap: Lifting a Function Over One Layer
+
+Given a function ~A \to B~, ~fmap~ applies it at every recursive position inside one ~ExprF<A>~ layer, producing an ~ExprF<B>~.
+
+The library finds the right ~fmap~ through a typeclass object.
+Each concept has a variable template that maps a type to an object providing all operations for that concept.
+I described this pattern in more detail in [[https://sdowney.org/posts/index.php/2024/05/19/concept-maps-using-c23-library-tech/][Concept Maps Using C++23 Library Tech]] and [[https://sdowney.org/posts/index.php/2023/12/24/some-informal-remarks-towards-a-new-theory-of-trait-customization/][Some Informal Remarks Towards a New Theory of Trait Customization]].
+
+From [[orgit-file:include/beman/tree_algorithms/functor.hpp][=include/beman/tree_algorithms/functor.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/functor.hpp::5cdef435-de62-4973-91f4-a56dbef659f3]]  :lines 2- :src cpp :end "5cdef435-de62-4973-91f4-a56dbef659f3 end"
+
+Default: ~false_type~.
+No instance.
+A type opts in by specializing the template.
+
+Here is the instance for ~ExprF~, from [[orgit-file:include/beman/tree_algorithms/expression.hpp][=include/beman/tree_algorithms/expression.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::a052ddcb-f05b-41c9-85bf-4c443ab438b7]]  :lines 2- :src cpp :end "a052ddcb-f05b-41c9-85bf-4c443ab438b7 end"
+
+The specialization is three lines at the bottom.
+No inheritance from the data type, no central registry, no modification to the ~variant~ definition.
+The instance lives alongside the functor it describes, and any code that can see the specialization can dispatch through it.
+
+Constants have no recursive positions, so ~fn~ is never called --- the value copies across.
+Add and Mul apply ~fn~ to both children.
+
+This is the only place in the system that knows the /shape/ of ~ExprF~.
+Everything else --- ~fold_fix~, ~unfold_fix~, ~refold~ --- is generic over any functor that provides an ~fmap~.
+That separation is deliberate.
+
+** Smart Constructors
+
+Building a tree by hand with ~wrap_fix~ and ~make_box~ is noisy.
+Smart constructors hide the ceremony.
+
+Also in [[orgit-file:include/beman/tree_algorithms/expression.hpp][=expression.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::d0f9b5a2-363f-49ca-9a37-bfb0e6c9ff50]]  :lines 2- :src cpp :end "d0f9b5a2-363f-49ca-9a37-bfb0e6c9ff50 end"
+
+Now ~(1 + 2) * 3~ reads naturally:
+
+#+transclude: [[file:../tests/beman/tree_algorithms/expression.test.cpp::5033568c-a02f-44b0-964b-7076ebb06d43]]  :lines 2- :src cpp :end "5033568c-a02f-44b0-964b-7076ebb06d43 end"
+
+* Recursion Schemes: Separating Recursion from Business Logic
+
+** What Is an F-Algebra?
+
+An F-algebra is a function that consumes one layer of the functor /after the recursive positions have already been processed/.
+That is the important part.
+
+For evaluation, the algebra type is ~ExprF<int> \to int~.
+The children are already integers.
+The algebra just combines them.
+
+From [[orgit-file:include/beman/tree_algorithms/expression.hpp][=include/beman/tree_algorithms/expression.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::bbf73c10-b63e-434a-91f1-d1a3a7c23b96]]  :lines 2- :src cpp :end "bbf73c10-b63e-434a-91f1-d1a3a7c23b96 end"
+
+Not recursive.
+Does not know or care how deep the tree is.
+Handles exactly one layer.
+~fold_fix~ supplies the recursion.
+
+** fold_fix: The Generic Fold
+
+~fold_fix~ applies the algebra bottom-up.
+At each node it maps the recursive fold over the children (via ~fmap~), then applies the algebra to the resulting layer.
+
+The primary form takes the functor's ~fmap~ explicitly as a parameter.
+From [[orgit-file:include/beman/tree_algorithms/recursion_schemes.hpp][=include/beman/tree_algorithms/recursion_schemes.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes.hpp::6859fdfc-3e1c-4d8a-9375-521df52ff499]]  :lines 2- :src cpp :end "6859fdfc-3e1c-4d8a-9375-521df52ff499 end"
+
+The result type is a leading explicit template parameter because C++ cannot infer a fold's carrier through the recursive calls the way Haskell infers types.
+Note the ~constexpr~: the whole pipeline --- ~Box~ allocation included --- works in constant evaluation.
+
+*** How it unfolds
+
+The algebra is written to handle ~ExprF<Result>~ --- a layer where every child position already holds a finished ~Result~, not a subtree.
+~fold_fix~ is the mechanism that makes that true before handing control to the algebra.
+
+*Depth 0 --- a leaf.*
+Consider ~const_node(42)~.
+~unwrap_fix~ reveals ~Const<Expr>{42}~.
+~fmap~ is asked to apply the recursive function at every child position of ~Const~ --- but ~Const~ has no child positions.
+So ~fmap~ produces ~Const<int>{42}~ immediately, without calling ~fold_fix~ at all.
+The algebra receives ~Const<int>{42}~ and returns ~42~.
+
+The algebra handles the base case.
+~fold_fix~ never has to treat leaves as a special case --- the algebra's own structure does it.
+
+*Depth 1 --- one addition of two leaves.*
+Consider ~add_node(const_node(1), const_node(2))~.
+~unwrap_fix~ reveals ~Add<Expr>{left, right}~ where both children are ~const_node~ nodes.
+~fmap~ calls ~fold_fix~ on each child.
+Each child is a leaf (depth 0 above), so each call returns an ~int~ without further recursion.
+~fmap~ produces ~Add<int>{1, 2}~.
+The algebra adds them and returns ~3~.
+
+*Depth 2 --- a multiplication whose children are each an addition.*
+Consider ~mul_node(add_node(...), add_node(...))~.
+~fmap~ calls ~fold_fix~ on each child.
+Each child is a depth-1 tree (case above), so each call recurses one more level and returns an ~int~.
+~fmap~ produces ~Mul<int>{...}~.
+The algebra multiplies and returns the result.
+
+The pattern is always the same: ~fmap~ calls ~fold_fix~ on every child, each of those calls handles a strictly shallower subtree, and then the algebra handles exactly one layer of already-evaluated children.
+The recursion has nothing to do with algebra composition; it mirrors the finite structure of the tree.
+There is no "infinite" descent --- the tree is finite, so ~fold_fix~ always reaches leaves, and the algebra handles them without further recursion.
+
+This is not like composing a function with itself indefinitely (~sin(sin(sin(...)))~, which never terminates).
+~fold_fix~ recurses into structure that is already present and finite.
+The depth of the call stack is exactly the depth of the tree, not an approximation of infinity.
+
+*** The lookup overload
+
+In practice you rarely want to write the ~fmap~ argument at every call site.
+A second overload drops it and resolves ~fmap~ through ~functor_typeclass~ lookup instead.
+The bridge is one function, from [[orgit-file:include/beman/tree_algorithms/recursion_schemes_lookup.hpp][=include/beman/tree_algorithms/recursion_schemes_lookup.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes_lookup.hpp::f6936d93-a4aa-4e85-afd1-092d4bbb1ba1]]  :lines 2- :src cpp :end "f6936d93-a4aa-4e85-afd1-092d4bbb1ba1 end"
+
+~layer_fmap~ looks up the Functor instance for the concrete layer type and applies it.
+A layer type without an instance fails at compile time, at the lookup, with a diagnostic that names the missing specialization.
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes_lookup.hpp::d4f69d2f-787b-4741-ae82-971f0ff36b9e]]  :lines 2- :src cpp :end "d4f69d2f-787b-4741-ae82-971f0ff36b9e end"
+
+The lookup overloads live in a separate convenience header.
+The primary explicit-~fmap~ verbs do not depend on the lookup machinery at all; the explicit form remains available as the escape hatch when you want to substitute a different ~fmap~ at one call site.
+
+Evaluation is one line:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::66235297-8e2a-4610-b6a4-a3f2a8837fb0]]  :lines 2- :src cpp :end "66235297-8e2a-4610-b6a4-a3f2a8837fb0 end"
+
+Because everything is ~constexpr~, the test suite evaluates ~eval~ inside a ~static_assert~ --- the tree is built, folded, and torn down at compile time.
+
+** A Different Algebra, A Different Result
+
+The payoff: a new operation on the tree is just a new algebra.
+The test suite defines ~print_algebra~, an ~ExprF<std::string> \to std::string~ function shaped exactly like ~eval_algebra~ above, except it builds a parenthesized string instead of an int.
+No new recursion code.
+
+From [[orgit-file:tests/beman/tree_algorithms/expression.test.cpp][=tests/beman/tree_algorithms/expression.test.cpp=]]:
+
+#+transclude: [[file:../tests/beman/tree_algorithms/expression.test.cpp::c1858641-8184-4907-ad06-14744a4ac1d2]]  :lines 2- :src cpp :end "c1858641-8184-4907-ad06-14744a4ac1d2 end"
+
+Same tree.
+Same ~fold_fix~.
+Same ~fmap~.
+Different algebra, different result type.
+
+The algebra answers /how to combine/.
+The recursion scheme answers /how to recurse/.
+They never tangle.
+That separation is the point.
+
+** unfold_fix: Building a Tree from a Seed
+
+~fold_fix~ tears a tree down.
+~unfold_fix~ builds one up.
+
+A coalgebra is a function ~a \to F\langle a \rangle~ --- it takes a seed and produces one layer of the functor with seeds at the recursive positions.
+~unfold_fix~ applies the coalgebra repeatedly, expanding seeds until the tree is fully built.
+
+From [[orgit-file:include/beman/tree_algorithms/recursion_schemes_lookup.hpp][=include/beman/tree_algorithms/recursion_schemes_lookup.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes_lookup.hpp::2df7f7e0-ee8b-42b6-a0a8-1dfed05c8230]]  :lines 2- :src cpp :end "2df7f7e0-ee8b-42b6-a0a8-1dfed05c8230 end"
+
+Same structure as ~fold_fix~, inverted.
+The coalgebra generates the layer; ~fmap~ recurses into the seeds; ~wrap_fix~ closes it.
+(An explicit-~fmap~ overload exists in parallel, exactly as for ~fold_fix~.)
+
+Building a Peano natural number from an ~int~, using the ~NatF~ functor that ships alongside ~ExprF~:
+
+#+transclude: [[file:../include/beman/tree_algorithms/functors.hpp::7970dd71-b5dd-4fa0-8e80-735a26833b65]]  :lines 2- :src cpp :end "7970dd71-b5dd-4fa0-8e80-735a26833b65 end"
+
+Alongside ~make_zero~/~make_succ~ smart constructors, the header ships two converters built on the two verbs seen so far: ~nat_from_int~ unfolds an ~int~ into a ~Nat~ with an inline coalgebra, and ~nat_to_int~ folds a ~Nat~ back down by counting ~Succ~ layers.
+
+#+transclude: [[file:../include/beman/tree_algorithms/functors.hpp::f419286e-ec56-4291-9f09-d5528685805f]]  :lines 2- :src cpp :end "f419286e-ec56-4291-9f09-d5528685805f end"
+
+The coalgebra inside ~nat_from_int~ handles one layer.
+~unfold_fix~ supplies the recursion.
+Same separation, other direction.
+
+** refold: Fold Without Building the Tree
+
+Sometimes I want to unfold a seed and immediately fold the result.
+~refold~ fuses both passes into one --- no intermediate ~Fix<F>~ is ever allocated.
+
+From [[orgit-file:include/beman/tree_algorithms/recursion_schemes_lookup.hpp][=include/beman/tree_algorithms/recursion_schemes_lookup.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes_lookup.hpp::c75161e3-1aad-4549-86cc-1dc40d6623c8]]  :lines 2- :src cpp :end "c75161e3-1aad-4549-86cc-1dc40d6623c8 end"
+
+Compare with ~fold_fix~: where ~fold_fix~ calls ~unwrap_fix~ to get a layer from an existing tree, ~refold~ calls the coalgebra to generate it.
+~fold_fix~ recurses into ~Fix<F>~ children; ~refold~ recurses into seeds.
+The algebra is the same.
+
+The equivalence is:
+
+#+begin_src
+fold_fix<Result>(algebra, unfold_fix<F>(coalgebra, seed))
+    == refold<Result, F>(algebra, coalgebra, seed)
+#+end_src
+
+Same answer, no intermediate tree.
+The test suite checks this for every input size.
+
+** A Note on Names
+
+The traditional names for these three schemes --- catamorphism, anamorphism, hylomorphism --- are precise, but they are jargon that most C++ programmers have no reason to know.
+The Haskell [[https://hackage.haskell.org/package/data-fix-0.3.4/docs/Data-Fix.html][=data-fix=]] library (0.3.4) reached the same conclusion and deprecated ~cata~, ~ana~, and ~hylo~ in favor of descriptive names.
+I followed that lead.
+
+| Traditional | This library  | data-fix      |
+|-------------+---------------+---------------|
+| cata        | ~fold_fix~    | ~foldFix~     |
+| ana         | ~unfold_fix~  | ~unfoldFix~   |
+| hylo        | ~refold~      | ~refold~      |
+
+The functions have no jargon aliases.
+
+** The Engineering Reality of the Abstraction
+
+Everything above isolates recursion from business logic: you write the shape of one layer and the evaluation of one node, and ~fold_fix~ supplies the traversal.
+That separation is real, and so are its costs.
+This library deliberately chooses value semantics --- layers are held and passed by value, ~Box~ deep-copies, and no sharing or memoization pass tries to claw the copies back --- so it is worth being explicit about where the bill arrives: at compile time, and in what the optimizer must do for you at run time.
+
+The first cost is compile-time latency.
+C++ has no true higher-kinded types, so the ~fmap~ that ~fold_fix~ depends on is emulated with template machinery: the compiler must instantiate the base functor at each carrier type, prove each instantiation well-formed, and do so recursively as the scheme threads results back up through the structure.
+Each individual instantiation is cheap; the concern is the aggregate.
+Across a large codebase --- many translation units, orchestrated by a build system coordinating a large dependency graph --- the overhead of instantiating these deeply nested template structures can measurably degrade build latency.
+# MEASURE: quantify instantiation counts and wall-clock compile cost for a representative ExprF/fold_fix TU against beman.tree_algorithms (e.g. -ftime-trace); the source essay asserts the tax but reports no numbers.
+
+The second cost is code generation.
+A hand-written ~std::visit~ over a recursive ~std::variant~ compiles down to a highly optimized jump table or switch --- O(1) dispatch per node, with the traversal loop visible to the optimizer as ordinary code.
+A recursion scheme instead hands the optimizer a stack of generic components --- the scheme, the ~fmap~, the algebra, and the ~Box~ unwrapping between layers --- and relies entirely on inlining to fuse them back into that same loop.
+When inlining succeeds, the abstraction can be free.
+When the nesting pushes past the compiler's inlining thresholds, it is not: the residue is bloated object code and runtime pointer-chasing through the indirections that ~Box~ introduces.
+# MEASURE: compare generated code size and per-node evaluation cost of fold_fix versus a hand-rolled std::visit walker on the same ExprF, at -O2, for beman.tree_algorithms; the jump-table-versus-inlining contrast comes from the source essay and has not been re-measured here.
+
+So when is it worth paying?
+The costs above are concentrated in the traversal machinery --- ~Fix~, ~Box~, ~fmap~, and the schemes --- and that machinery is precisely the part of the code that does not change.
+The algebras, which carry the business logic, are small, non-recursive, and cheap to compile.
+The amortization strategy follows directly: keep the machinery in stable, rarely-recompiled headers behind a settled interface, and let the frequently-edited code consist of algebras.
+Then the template-instantiation tax is paid when the machinery changes --- rarely --- while the everyday edit-compile loop touches only code that compiles like any other small function object.
+A codebase that edits its tree-walking logic often and its tree shapes rarely gets the good end of this trade; one that constantly invents new recursive shapes pays the tax repeatedly.
+
+Finally, the horizon.
+The visitation half of this story --- destructuring a sum type without ~std::visit~ boilerplate --- is also being pursued in the core language, in the pattern-matching lineage of P1371 ("Pattern Matching") and its successor P2688 ("Pattern Matching: match Expression").
+As of this writing neither has landed: pattern matching did not make C++26, and P2688 remains under Evolution Working Group review targeting a later standard.
+When a ~match~ expression does arrive, it will replace the per-node dispatch --- the ~std::get_if~ chains inside an algebra --- but not the traversal: something must still fold results up through the recursive structure.
+A library design should degrade gracefully into that world, and this one does: algebras written against the base functor become shorter and clearer under language pattern matching, while ~fold_fix~ keeps supplying exactly the part the language will still not provide.
+Until then, the recursion schemes eliminate visitor boilerplate by library means alone --- provided the build-time costs above can be amortized as described.
+
+* Adapting an Existing Binary Tree
+
+Everything so far started from trees born as ~Fix<F>~.
+The point of the verbs, though, is that they are not tied to that representation: an existing binary tree --- whatever pointers or nodes it uses internally --- can participate by presenting one layer at a time as a base functor and registering an ~fmap~ for that layer.
+The algebra, the verbs, and the call site stay exactly the same; only the adapter knows how the tree is really stored.
+
+Suppose the tree already exists: a persistent ~BinaryTree<T>~, ported here unchanged, that stores a value at every node and holds its children by ~shared_ptr~, with a null pointer marking an absent child.
+~BinaryTreeF<T, A>~ is the base functor that presents one layer of it: a value plus two nullable ~Box<A>~ children, mirroring the tree's nullable ~shared_ptr~ children one for one.
+
+From [[orgit-file:include/beman/tree_algorithms/binary_tree.hpp][=include/beman/tree_algorithms/binary_tree.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/binary_tree.hpp::27aeff53-a371-43b6-9037-135d5d008c26]]  :lines 2- :src cpp :end "27aeff53-a371-43b6-9037-135d5d008c26 end"
+
+Registering a Functor instance for ~BinaryTreeF<T, A>~ is the same three-part pattern already seen for ~ExprF~ --- an ~fmap~ primitive, a ~Functor~-derived map, and a ~functor_typeclass~ specialization --- so ~fold_fix~, ~unfold_fix~, and ~refold~ all work over it without any change to the verbs:
+
+#+transclude: [[file:../include/beman/tree_algorithms/binary_tree.hpp::91fef612-39b5-4424-8ab5-7d8c80997e2c]]  :lines 2- :src cpp :end "91fef612-39b5-4424-8ab5-7d8c80997e2c end"
+
+Two conversions bridge the representations: ~to_fix~ walks the ~shared_ptr~ tree layer by layer into ~Fix~ form, and ~from_fix~ walks it back --- ~from_fix~ is itself a fold, its algebra doing nothing more than reassembling one ~BinaryTree~ node from children that ~fold_fix~ has already rebuilt:
+
+#+transclude: [[file:../include/beman/tree_algorithms/binary_tree.hpp::a7ed3ac1-4c61-4ae4-a633-f26216a39ac5]]  :lines 2- :src cpp :end "a7ed3ac1-4c61-4ae4-a633-f26216a39ac5 end"
+
+Put together: build a ~BinaryTree<int>~ with its own factory functions, adapt it with ~to_fix~, fold it with the identical ~fold_fix~ used for expressions throughout this article, and round-trip it back with ~from_fix~.
+Only the adapter knows the tree is really a ~shared_ptr~ structure; the algebra and the call site never do.
+
+#+transclude: [[file:../examples/binary_tree_adapt.cpp::fba6bbba-6cd8-4f4f-ba18-b584cf672a79]]  :lines 2- :src cpp :end "fba6bbba-6cd8-4f4f-ba18-b584cf672a79 end"
+
+* Trees You Don't Own: fold_with and unfold_with
+
+~to_fix~ works.
+It is also a dodge.
+Conversion copies the whole tree into ~Fix~ form before any algebra runs, and "convert your tree to our form first" is a weak answer if the point of generic verbs is to serve representations users already have.
+And some trees cannot take that road at all: a tree holding its children by ~unique_ptr~ is move-only, and a copy-based conversion pipeline has nothing to grab.
+
+The direct verbs close the gap with one more explicit callable each.
+A /projection/ exposes one layer of the tree as a base-functor value --- ~project : Tree \to F<Handle>~ --- where the child handles are whatever the projection itself accepts.
+Raw pointers into the existing structure work; nothing is copied beyond one layer at a time.
+
+From [[orgit-file:include/beman/tree_algorithms/recursion_schemes.hpp][=include/beman/tree_algorithms/recursion_schemes.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes.hpp::6c596985-e990-4808-a504-2b651c34cebc]]  :lines 2- :src cpp :end "6c596985-e990-4808-a504-2b651c34cebc end"
+
+Compare with ~fold_fix~: where ~fold_fix~ calls ~unwrap_fix~ to get a layer, ~fold_with~ calls the projection you handed it.
+That is the whole difference.
+~fold_fix~ is the degenerate case whose projection is ~unwrap_fix~, and the test suite pins that equivalence in a ~static_assert~.
+
+Here is a tree I pointedly do not own: a ~Node~ with ~unique_ptr~ children, written the way everyone writes them.
+Three ingredients adapt it --- a layer struct, an ~fmap~ for that layer, and the projection.
+From [[orgit-file:examples/nonce_tree_direct.cpp][=examples/nonce_tree_direct.cpp=]]:
+
+#+transclude: [[file:../examples/nonce_tree_direct.cpp::04e450a4-3614-4f09-a185-1835f935673a]]  :lines 2- :src cpp :end "04e450a4-3614-4f09-a185-1835f935673a end"
+
+~fold_with~ runs over the ~unique_ptr~ spine in place.
+The dual verb builds in place: ~unfold_with~ takes an /embedding/ --- ~embed : F<Tree> \to Tree~, reconstructing one layer of the user's representation ---
+
+#+transclude: [[file:../include/beman/tree_algorithms/recursion_schemes.hpp::d160af7b-9a3c-4593-b8f5-fc1ff0404b37]]  :lines 2- :src cpp :end "d160af7b-9a3c-4593-b8f5-fc1ff0404b37 end"
+
+--- and the example uses it to grow a balanced search tree over a range directly into ~unique_ptr~ nodes, a move-only carrier no conversion pipeline could produce.
+No ~Fix~ is materialized in either direction.
+Both verbs are ~refold~ in disguise: the projection is a coalgebra, the embedding is an algebra, and the fusion does the rest.
+
+* The Elementwise Fold: fold_map
+
+The structural verbs consume a layer at a time.
+Most everyday queries never see a layer; they see elements.
+Length, sums, renderings, any/all --- each maps every element to some result type and combines the results with an associative operation that has an identity.
+That verb is ~fold_map~, and the everyday spelling is four arguments.
+From [[orgit-file:include/beman/tree_algorithms/fold_map_lookup.hpp][=include/beman/tree_algorithms/fold_map_lookup.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/fold_map_lookup.hpp::e4beac7f-257b-4f2d-bfff-6b3b5daf61ad]]  :lines 2- :src cpp :end "e4beac7f-257b-4f2d-bfff-6b3b5daf61ad end"
+
+The name is the cross-language consensus --- ~foldMap~ in Haskell's [[https://hackage.haskell.org/package/base/docs/Data-Foldable.html][=Data.Foldable=]], in Cats, in PureScript: map, then fold.
+
+Why not ~std::ranges::fold_left~?
+Because ~fold_left~ folds ranges, and a tree is not a range.
+Flattening a tree into an iteration order to fold it costs an intermediate sequence and discards exactly the structure that made it a tree.
+~fold_map~ folds the tree where it stands.
+And because combine is required to be associative with a two-sided identity, the result is independent of how the tree happens to be bracketed --- the same element sequence held in two differently shaped trees folds to the same answer.
+Monoid associativity /is/ shape-independence.
+That is what licenses a representation to rebalance behind your back, and the fringe tree's tests pin it by folding one sequence in two shapes.
+
+The per-representation ingredient is the layer fold: the callable that folds one layer's mapped elements together with the already-folded child results, in the representation's contractual order.
+What counts as an element is also the instance's choice.
+The expression tree's elements are its constants:
+
+#+transclude: [[file:../include/beman/tree_algorithms/expression.hpp::8f25579d-443a-4685-b3af-01f8103f6863]]  :lines 2- :src cpp :end "8f25579d-443a-4685-b3af-01f8103f6863 end"
+
+Summing the constants of ~(1 + 2) * 3~ by ~fold_map~ gives 6.
+Evaluating it by ~fold_fix~ gives 9.
+One fixture, both verbs, and the elementwise/structural distinction is visible in the values.
+
+There is no new machinery underneath.
+~fold_map~ over a fixed-point tree /is/ ~fold_fix~ with an algebra that combines one layer through the supplied operations, and ~fold_map~ over a projected tree /is/ ~fold_with~ with the same algebra.
+The derivation is the implementation.
+And the derivations continue downstream: ~fold_left~ falls out of ~fold_map~ by mapping each element to a "feed me to the accumulator" step and composing the steps left to right --- the same route Haskell takes from ~foldMap~ to ~foldl~ through ~Dual~ and ~Endo~ --- which [[orgit-file:examples/sequence_algorithms.cpp][=examples/sequence_algorithms.cpp=]] demonstrates over the fringe tree.
+One primitive, a family of everyday folds.
+
+* Not Every Tree Has an In-Order
+
+Note what the layer fold was /not/ told: the traversal order.
+That is deliberate, and a rose tree is the reason.
+
+~Fix~ and ~Box~ are not binary-tree machinery.
+A rose (multiway) tree --- a value and any number of children, Haskell's [[https://hackage.haskell.org/package/containers/docs/Data-Tree.html][=Data.Tree=]] --- is one more base functor.
+From [[orgit-file:include/beman/tree_algorithms/rose_tree.hpp][=include/beman/tree_algorithms/rose_tree.hpp=]]:
+
+#+transclude: [[file:../include/beman/tree_algorithms/rose_tree.hpp::8f0e2d0a-5c1f-4be4-9f1e-3b7a8c92d461]]  :lines 2- :src cpp :end "8f0e2d0a-5c1f-4be4-9f1e-3b7a8c92d461 end"
+
+No ~Box~ this time: ~std::vector~ supports incomplete element types and already owns through indirection, so the knot ties with no extra plumbing.
+~RoseTreeFix<T>~ is not a conversion target; it is the representation.
+The same ~fold_fix~, ~unfold_fix~, and ~fold_map~ run over it unchanged.
+
+But with a variable number of children there is no "between the children" position.
+In-order traversal does not exist for this shape.
+In-order is a /binary/ tree's contract, not a property of trees --- which is exactly why the generic ~fold_map~ leaves order to each layer's registered fold instead of imposing one:
+
+#+transclude: [[file:../include/beman/tree_algorithms/rose_tree.hpp::4b9d17f2-30a5-4e1c-b8d4-7f52a6c3e08d]]  :lines 2- :src cpp :end "4b9d17f2-30a5-4e1c-b8d4-7f52a6c3e08d end"
+
+The test suite makes the point concrete: the same ~fold_map~ call over the same three values yields ~"123"~ through the binary layer (in-order, its contract) and ~"213"~ through the rose layer (pre-order, its contract).
+Neither is wrong.
+There is no generic in-order to be right about.
+Pre-order and post-order generalize --- every layer has a before-children moment and an after-children moment.
+In-order does not.
+
+* The Bigger Picture
+
+This fixpoint expression tree is the simplest tree in the repository.
+It exists to demonstrate the pattern cleanly.
+
+The repository now exercises the verbs over five recursive representations: the expression tree, the ~shared_ptr~ binary tree (by conversion and directly), the move-only nonce tree, the rose tree, and a fringe tree with cached measures --- values at the leaves, O(1) concatenation by structural sharing, served directly with no ~Fix~ form at all.
+There is also a full working binary search tree built on ~Fix~ itself, in [[orgit-file:examples/search_tree_on_fix.cpp][=examples/search_tree_on_fix.cpp=]]: ~unfold_fix~ builds it balanced from a sorted range, ~fold_map~ flattens it back out sorted, and insert, contains, and erase are plain structural recursion over ~wrap_fix~ and ~unwrap_fix~.
+Search prunes; folds visit everything; ~Fix~ does not take ordinary recursion away.
+An algorithm written against the verbs does not change when the representation changes.
+That is the payoff.
+
+~Fix~ ties the knot.
+~fold_fix~ folds bottom-up.
+~unfold_fix~ builds a tree from a seed.
+~refold~ folds without materializing the tree.
+~fold_with~ and ~unfold_with~ do the same over a tree in its own representation.
+~fold_map~ folds the elements and derives the everyday queries.
+
+There is more to say --- Traversable rebuilds a tree inside an Applicative context so a validation either succeeds everywhere or returns nothing [cite:@gibbons2006iterator] [cite:@mcbride2008applicative], and sequence-shaped trees admit a whole vocabulary of algorithms that never see a shape at all, only the element sequence ([[orgit-file:examples/sequence_algorithms.cpp][=examples/sequence_algorithms.cpp=]] is the preview).
+Those build on exactly the machinery shown here, and they get their own article.
+
+Once you see it here, you see it everywhere.
+
+#+print_bibliography:

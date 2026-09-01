@@ -1,0 +1,169 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+name: Continuous Integration Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '41 19 * * 1'
+
+concurrency:
+  group: ${{format('{0}:{1}', github.repository, github.ref)}}
+  cancel-in-progress: true
+
+jobs:
+  beman-submodule-check:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-submodule-check.yml@1.7.3
+
+  preset-test:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-preset-test.yml@1.7.3
+    with:
+      matrix_config: >
+        [
+          {"preset": "gcc-debug", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"},
+          {"preset": "gcc-release", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"},
+          {"preset": "llvm-debug", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
+          {"preset": "llvm-release", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
+          {"preset": "appleclang-debug", "runner": "macos-latest"},
+          {"preset": "appleclang-release", "runner": "macos-latest"},
+          {"preset": "msvc-debug", "runner": "windows-latest"},
+          {"preset": "msvc-release", "runner": "windows-latest"}
+        ]
+
+  # Toolchain floor: the library is C++23 and requires deducing-this
+  # ("this auto&&" explicit object parameters), so the minimum supported
+  # compilers are gcc-14 and clang-18. C++26 is exercised by the advisory
+  # (allowed-to-fail) job below, not by the required matrix.
+  build-and-test:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-build-and-test.yml@1.7.3
+    with:
+      matrix_config: >
+        {
+          "gcc": [
+            { "versions": ["16"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [
+                    { "stdlibs": ["libstdc++"],
+                      "tests": [
+                        "Debug.Default", "Release.Default", "Release.TSan",
+                        "Release.MaxSan", "Debug.Werror",
+                        "Debug.Coverage", "Debug.-DBEMAN_TREE_ALGORITHMS_USE_MODULES=On"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            { "versions": ["15"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [
+                    { "stdlibs": ["libstdc++"],
+                      "tests": [
+                        "Release.Default", "Debug.-DBEMAN_TREE_ALGORITHMS_USE_MODULES=On"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            { "versions": ["14"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [{ "stdlibs": ["libstdc++"], "tests": ["Release.Default"]}]
+                }
+              ]
+            }
+          ],
+          "clang": [
+            { "versions": ["22"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [
+                    { "stdlibs": ["libstdc++", "libc++"],
+                      "tests": [
+                        "Debug.Default", "Release.Default", "Release.TSan",
+                        "Release.MaxSan", "Debug.Werror",
+                        "Debug.-DBEMAN_TREE_ALGORITHMS_USE_MODULES=On"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            { "versions": ["21", "20", "19", "18"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [
+                    {"stdlibs": ["libstdc++", "libc++"], "tests": ["Release.Default"]}
+                  ]
+                }
+              ]
+            }
+          ],
+          "appleclang": [
+            { "versions": ["latest"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [{ "stdlibs": ["libc++"], "tests": ["Release.Default"]}]
+                }
+              ]
+            }
+          ],
+          "msvc": [
+            { "versions": ["latest"],
+              "tests": [
+                { "cxxversions": ["c++23"],
+                  "tests": [
+                    { "stdlibs": ["stl"],
+                      "tests": [
+                        "Debug.Default", "Release.Default", "Release.MaxSan",
+                        "Debug.-DBEMAN_TREE_ALGORITHMS_USE_MODULES=On"
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+
+  # Advisory (allowed-to-fail) forward-compatibility check: build and test
+  # with -std=c++26 on the newest gcc in the matrix. Failures here do not
+  # fail CI.
+  advisory-cpp26:
+    name: "advisory-cpp26 (gcc, C++26, allowed to fail)"
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container: ghcr.io/bemanproject/infra-containers-gcc:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Configure (C++26)
+        run: cmake --preset gcc-release -DCMAKE_CXX_STANDARD=26
+      - name: Build
+        run: cmake --build --preset gcc-release
+      - name: Test
+        run: ctest --preset gcc-release
+
+  vcpkg-ci:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-vcpkg-ci.yml@1.7.3
+    with:
+      port_name: beman-tree-algorithms
+      feature_combinations: |
+        [
+          {"features": {}},
+          {"features": {"modules": true}}
+        ]
+
+  create-issue-when-fault:
+    needs: [preset-test, build-and-test]
+    if: failure() && github.event_name == 'schedule'
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.3

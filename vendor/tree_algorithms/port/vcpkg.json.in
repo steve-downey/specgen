@@ -1,0 +1,22 @@
+{
+  "name": "beman-tree-algorithms",
+  "version-semver": "@VERSION@",
+  "description": "Recursive tree algorithms: fold_fix, unfold_fix, refold over fixed-point trees",
+  "homepage": "https://github.com/bemanproject/tree_algorithms",
+  "license": "Apache-2.0 WITH LLVM-exception",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "modules": {
+      "description": "Provide beman.tree_algorithms as a C++ module"
+    }
+  }
+}

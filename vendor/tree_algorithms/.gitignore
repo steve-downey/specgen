@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+/.cache
+/compile_commands.json
+/build
+
+# ignore emacs temp files
+*~
+\#*\#
+
+# ignore vscode settings
+.vscode
+
+# ignore vim swap files
+.swp
+
+# ignore merge/patch backup files
+.orig
+
+# build artifacts from Makefile workflow
+/.build/
+/.install/
+/.update-submodules
+
+# uv lock file (generated, not committed)
+/uv.lock
+
+# Python virtual environment
+.venv/
+
+# Claude Code local settings
+/.claude/
