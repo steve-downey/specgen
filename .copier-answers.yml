@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# Standard answers and internal state managed by Copier
+_commit: 63f5ec4
+_src_path: https://github.com/steve-downey/exemplar.git
+description: Spec Generator
+maintainer: steve-downey
+minimum_cpp_build_version: '26'
+paper: PnnnnRr
+project_name: specgen
+unit_test_library: catch2
+# Hidden variables manually tracked because 'when: false' omits them from _copier_answers
+generating_exemplar: false
+owner: "bemanproject"
+ci_tests_cron: "8 18 * * 2"
+pre_commit_update_cron: "37 15 * * 5"
