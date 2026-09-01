@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# Standard answers and internal state managed by Copier
+_commit: v2.4.1-15-g36aecbf
+_src_path: gh:steve-downey/exemplar
+description: 'Recursive tree algorithms: fold_fix, unfold_fix, refold over fixed-point
+    trees'
+maintainer: steve-downey
+minimum_cpp_build_version: '23'
+paper: DnnnnR0
+project_name: tree_algorithms
+unit_test_library: catch2
+# Hidden variables manually tracked because 'when: false' omits them from _copier_answers
+generating_exemplar: false
+owner: "bemanproject"
+ci_tests_cron: "41 19 * * 1"
+pre_commit_update_cron: "24 5 * * 2"

@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO bemanproject/tree_algorithms
+    REF "v@VERSION@"
+    SHA512 @SHA512@
+    HEAD_REF main
+)
+
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        modules   BEMAN_TREE_ALGORITHMS_USE_MODULES
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DBEMAN_TREE_ALGORITHMS_BUILD_TESTS=OFF
+        -DBEMAN_TREE_ALGORITHMS_BUILD_EXAMPLES=OFF
+)
+
+vcpkg_cmake_install()
+
+vcpkg_cmake_config_fixup(
+    PACKAGE_NAME beman.tree_algorithms
+    CONFIG_PATH lib/cmake/beman.tree_algorithms
+)
+
+if(NOT "modules" IN_LIST FEATURES)
+    file(
+        REMOVE_RECURSE
+        "${CURRENT_PACKAGES_DIR}/debug"
+        "${CURRENT_PACKAGES_DIR}/lib"
+    )
+endif()
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE")

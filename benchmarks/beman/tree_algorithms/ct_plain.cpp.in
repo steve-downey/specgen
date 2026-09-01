@@ -1,0 +1,81 @@
+// benchmarks/beman/tree_algorithms/ct_plain.cpp.in                  -*-C++-*-
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+// Compile-time control for ct_fix.cpp.in: the same constexpr workload —
+// build a balanced binary tree of @BENCH_N@ nodes and fold it to a sum —
+// written by hand with no library at all. A plain recursive struct, a
+// minimal owning pointer, ordinary recursion. No Fix, no Box, no functor
+// typeclass, no recursion verbs.
+//
+// This is the number Fix is measured against. If ct_fix compiles in
+// about the same time as ct_plain at each size, then the Fix operator
+// costs essentially nothing at compile time beyond the constexpr
+// evaluation any tree of that size would cost anyway — which is the
+// whole point of the comparison.
+
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+
+namespace {
+
+constexpr std::size_t kNodes = @BENCH_N@;
+
+// A minimal move-only owning pointer — just enough to give a recursive
+// struct constexpr-capable children without pulling in the library's Box.
+template <typename T>
+struct OwnBox {
+    T* ptr = nullptr;
+
+    constexpr OwnBox() = default;
+    constexpr explicit OwnBox(T* p) : ptr(p) {}
+    constexpr OwnBox(const OwnBox&)                    = delete;
+    constexpr auto operator=(const OwnBox&) -> OwnBox& = delete;
+    constexpr OwnBox(OwnBox&& other) noexcept : ptr(std::exchange(other.ptr, nullptr)) {}
+    constexpr auto operator=(OwnBox&& other) noexcept -> OwnBox& {
+        if (this != &other) {
+            delete ptr;
+            ptr = std::exchange(other.ptr, nullptr);
+        }
+        return *this;
+    }
+    constexpr ~OwnBox() { delete ptr; }
+};
+
+struct Node {
+    std::int64_t  value;
+    OwnBox<Node>  left;
+    OwnBox<Node>  right;
+};
+
+constexpr auto build(std::size_t lo, std::size_t hi) -> Node {
+    std::size_t mid = lo + (hi - lo) / 2;
+    Node        n{static_cast<std::int64_t>(mid), {}, {}};
+    if (mid > lo) {
+        n.left = OwnBox<Node>(new Node(build(lo, mid)));
+    }
+    if (hi > mid + 1) {
+        n.right = OwnBox<Node>(new Node(build(mid + 1, hi)));
+    }
+    return n;
+}
+
+constexpr auto sum(const Node& n) -> std::int64_t {
+    std::int64_t total = n.value;
+    if (n.left.ptr) {
+        total += sum(*n.left.ptr);
+    }
+    if (n.right.ptr) {
+        total += sum(*n.right.ptr);
+    }
+    return total;
+}
+
+constexpr auto build_and_sum() -> std::int64_t { return sum(build(0, kNodes)); }
+
+static_assert(build_and_sum() ==
+              static_cast<std::int64_t>(kNodes) * (static_cast<std::int64_t>(kNodes) - 1) / 2);
+
+} // namespace
+
+int main() { return 0; }
