@@ -2,138 +2,65 @@
 SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 -->
 
-# Development
+# Contributing to beman.specgen
 
-## Configure and Build the Project Using CMake Presets
+Start with [docs/building.md](docs/building.md), which holds the authoritative build, lint, and verification
+commands, and [docs/CODING_RULES.md](docs/CODING_RULES.md), which decides whether a diff is acceptable. The design reference is
+[docs/architecture.md](docs/architecture.md), and settled rationale lives in [docs/decisions/](docs/decisions/).
 
-The simplest way of configuring and building the project is to use [CMake
-Presets](https://cmake.org/cmake/help/latest/manual/cmake-presets.7.html). Appropriate
-presets for major compilers have been included by default.  You can use `cmake
---list-presets=workflow` to see all available presets.
+## Requirements
 
-Here is an example of invoking the `gcc-debug` preset:
+- GCC 16 (libstdc++ with C++26 support)
+- LLVM/Clang development packages matching the pinned version (`BEMAN_SPECGEN_LLVM_VERSION`, default `22.1`)
+- CMake 3.30 or later and `uv` (the repository wraps CMake in `uv run`)
+- Catch2 3 for the test suite (fetched automatically, or provided by vcpkg)
 
-```shell
-cmake --workflow --preset gcc-debug
-```
-
-Generally, there are two kinds of presets, `debug` and `release`.
-
-The `debug` presets are designed to aid development, so they have debuginfo and sanitizers
-enabled.
-
-> [!NOTE]
->
-> The sanitizers that are enabled vary from compiler to compiler.  See the toolchain files
-> under ([`infra/cmake`](infra/cmake/)) to determine the exact configuration used for each
-> preset.
-
-The `release` presets are designed for production use, and
-consequently have the highest optimization turned on (e.g. `O3`).
-
-## Configure and Build Manually
-
-If the presets are not suitable for your use case, a traditional CMake invocation will
-provide more configurability.
-
-To configure, build and test the project manually, you can run this set of commands. Note
-that this requires GoogleTest to be installed.
+## Configure, build, and test with CMake presets
 
 ```bash
-cmake \
-  -B build \
-  -S . \
-  -DCMAKE_CXX_STANDARD=26 \
-  # Your extra arguments here.
-cmake --build build
-ctest --test-dir build
+uv run cmake --preset gcc-release
+uv run cmake --build --preset gcc-release
+uv run ctest --preset gcc-release
 ```
 
-> [!IMPORTANT]
->
-> Beman projects are [passive projects](
-> https://github.com/bemanproject/beman/blob/main/docs/beman_standard.md#cmakepassive_projects),
-> so you need to specify the C++ version via `CMAKE_CXX_STANDARD` when manually
-> configuring the project.
+The presets are `{gcc,llvm,appleclang,msvc}-{debug,release}`; each writes to `build/<preset>/`. The debug
+presets configure the MaxSan sanitizer set. For an LLVM installed off the default search path, pass
+`-DClang_DIR=<prefix>/lib/cmake/clang`; a `Clang_DIR` whose version does not match the pin is rejected
+(see [docs/decisions/llvm-toolchain-pin.md](docs/decisions/llvm-toolchain-pin.md)).
 
-## Dependency Management
+## The Makefile workflow
 
-### vcpkg
+`make` drives a Ninja Multi-Config tree with `RelWithDebInfo`, `Debug`, `Tsan`, `Asan`, and `Gcov`
+configurations (default `CONFIG=Asan`). Useful targets: `make compile`, `make ctest`, `make lint`,
+`make coverage`, `make release`, `make install-release` (installs `.install/bin/specgen`, which the
+example scripts assume), and `make testinstall`. See [docs/building.md](docs/building.md) for the details
+and gotchas — including that the first `make lint` run may reformat files and then fail; re-add and re-run.
 
-The best way to install the project's dependencies is to use the vcpkg workflow.
+## Dependency management
 
-To do so, make sure vcpkg is installed and `VCPKG_ROOT` is defined in your environment,
-then specify
-`-DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"`. Vcpkg will handle
-the project's dependencies, including GoogleTest.
+Catch2 is the only test dependency. The default path fetches it with CMake `FetchContent`, pinned by
+`lockfile.json`. With vcpkg on `PATH`, the Makefile switches to the vcpkg toolchain and the custom triplet in
+`cmake/x64-linux-custom.cmake` instead.
 
-Example commands:
+## Project-specific configure switches
 
-```shell
-cmake \
-  -B build \
-  -S . \
-  -DCMAKE_CXX_STANDARD=17 \
-  -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
-cmake --build build
-ctest --test-dir build
-```
+| Option | Default | Effect |
+| ------ | ------- | ------ |
+| `BEMAN_SPECGEN_BUILD_TESTS` | `ON` | Build the Catch2 suites, golden cases, and example checks |
+| `BEMAN_SPECGEN_BUILD_EXAMPLES` | `ON` | Build the compiled examples |
+| `BEMAN_SPECGEN_BUILD_TOOLS` | `ON` | Build the `specgen` driver |
+| `BEMAN_SPECGEN_USE_MODULES` | `OFF` | Also build the experimental C++ modules lane |
+| `BEMAN_SPECGEN_LLVM_VERSION` | `22.1` | The LLVM/Clang version `find_package(Clang)` must match |
 
-The file `./vcpkg.json` configures the list of dependencies that will be configured by
-vcpkg.
+## Before you push
 
-### FetchContent
-
-Instead of installing the project's dependencies via a package manager, you can optionally
-configure beman.specgen to fetch them automatically via CMake FetchContent.
-
-To do so, specify
-`-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake`. This will
-bring in GoogleTest automatically along with any other dependency the project may require.
-
-Example commands:
-
-```shell
-cmake \
-  -B build \
-  -S . \
-  -DCMAKE_CXX_STANDARD=26 \
-  -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake
-cmake --build build
-ctest --test-dir build
-```
-
-The file `./lockfile.json` configures the list of dependencies and versions that will be
-acquired by FetchContent.
-
-## Project-specific configure arguments
-
-Project-specific options are prefixed with `BEMAN_SPECGEN`.
-You can see the list of available options with:
+Run the full suite and the linters; both must be clean:
 
 ```bash
-cmake -LH -S . -B build | grep "BEMAN_SPECGEN" -C 2
+uv run ctest --preset gcc-release
+make lint
 ```
 
-<details>
-
-<summary>Some project-specific configure arguments</summary>
-
-### `BEMAN_SPECGEN_BUILD_TESTS`
-
-Enable building tests and test infrastructure. Default: `ON`.
-Values: `{ ON, OFF }`.
-
-### `BEMAN_SPECGEN_BUILD_EXAMPLES`
-
-Enable building examples. Default: `ON`. Values: `{ ON, OFF }`.
-
-### `BEMAN_SPECGEN_INSTALL_CONFIG_FILE_PACKAGE`
-
-Enable installing the CMake config file package. Default: `ON`.
-Values: `{ ON, OFF }`.
-
-This is required so that users of `beman.specgen` can use
-`find_package(beman.specgen)` to locate the library.
-
-</details>
+A change to a corpus header (`tests/corpus/*.hpp`) usually moves golden files — regenerate them with the
+build's driver rather than editing goldens by hand, and re-run `examples/cli/run-all.sh` from a
+non-sanitizer build when a captured example output is affected.

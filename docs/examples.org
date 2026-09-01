@@ -1,0 +1,201 @@
+#+OPTIONS: broken-links:nil c:nil creator:nil d:(not "LOGBOOK") date:nil e:t
+#+OPTIONS: ':nil *:t -:t ::t <:t H:4 \n:nil ^:nil arch:headline author:nil
+#+OPTIONS: email:nil f:t inline:t num:nil p:nil pri:nil prop:nil stat:t tags:t
+#+OPTIONS: tasks:t tex:t timestamp:nil title:t toc:t todo:t |:t
+#+TITLE: specgen CLI Examples
+#+LANGUAGE: en
+#+STARTUP: showall
+
+#+begin_export md
+<!-- markdownlint-disable -->
+#+end_export
+
+Every command below is a script in [[file:../examples/cli][=examples/cli/=]], and every output below is what that script printed.
+Both are transcluded from the repository, so neither is retyped here and neither can drift from the other without a test noticing.
+
+To run them you need the binary.
+=make install-release= puts it at =.install/bin/specgen=, which is where the scripts look; set =SPECGEN= to point them somewhere else, such as a build tree.
+There is no build of specgen without the Clang front end — the executable is only produced when =BEMAN_SPECGEN_ENABLE_CLANG= is on — so every command here works on any binary you have.
+
+#+begin_src sh
+make install-release          # or: export SPECGEN=<build tree>/tools/specgen/specgen
+examples/cli/run-all.sh       # re-capture everything shown below
+#+end_src
+
+=run-all.sh= rewrites the checked-in output, and =ctest -R examples.= checks it.
+Most of those checks compare a captured file against the golden suite, which already pins that golden to what specgen printed; the rest re-run a script and compare what comes out.
+So the output here is not an illustration of what specgen does. It is what specgen did.
+
+* CLI Coverage
+:PROPERTIES:
+:CUSTOM_ID: cli-coverage
+:END:
+
+| Command or option | Example section |
+|-------------------+-----------------|
+| =--help= | General command information |
+| =generate --emit-ir= | Minimal header to IR |
+| =--no-compile-commands= | Minimal header to IR |
+| =-o=, =--output= | Minimal header to IR, Larger header example |
+| =-- <clang args>...= | Explicit include path |
+| =--compile-commands <dir>= | Explicit include path |
+| =dump-decls= | Declaration interleave |
+| =render --from-ir <file>= | Render-only IR examples |
+| =render --from-ir -= | Minimal header to IR |
+| =--backend latex=, =mpark=, =org= | Render-only IR examples |
+| =--validate= | Validation |
+| =--paper= | Mpark paper mode |
+| =--split=, =--root= | Fragment output |
+
+* General Command Information
+:PROPERTIES:
+:CUSTOM_ID: general-command-information
+:END:
+
+#+transclude: [[file:../examples/cli/10-help.sh]] :src sh
+
+Every command takes =--help=, and all four print the same usage text, so one of them is shown here.
+
+#+transclude: [[file:../examples/cli/output/10-help/specgen-help.txt]] :src text
+
+* Minimal Header To IR
+:PROPERTIES:
+:CUSTOM_ID: minimal-header-to-ir
+:END:
+
+The smallest useful header example is =spec_widget.hpp=.
+It has class synopsis groups, two sections, attached out-of-line definitions, and ordinary description elements.
+Small, but enough.
+
+#+transclude: [[file:../tests/corpus/spec_widget.hpp]] :src cpp
+
+#+transclude: [[file:../examples/cli/20-widget-ir.sh]] :src sh
+
+The IR lands in =widget.json=; it is the same document the golden suite pins, so it is checked rather than shown.
+The second command is the whole pipeline without an intermediate file:
+
+#+transclude: [[file:../examples/cli/output/20-widget-ir/widget-piped.tex]] :src latex
+
+* Render-Only IR Examples
+:PROPERTIES:
+:CUSTOM_ID: render-only-ir-examples
+:END:
+
+These render the small hand-written =value_or= IR fixture.
+It is useful for backend comparison because the input is identical and only the serializer changes.
+
+#+transclude: [[file:../tests/golden/value_or/input.json]] :src json
+
+#+transclude: [[file:../examples/cli/30-render-backends.sh]] :src sh
+
+Draft LaTeX:
+
+#+transclude: [[file:../examples/cli/output/30-render-backends/value_or.tex]] :src latex
+
+mpark/wg21 markdown:
+
+#+transclude: [[file:../examples/cli/output/30-render-backends/value_or.md]] :src markdown
+
+org, for the =wg21org= exporter:
+
+#+transclude: [[file:../examples/cli/output/30-render-backends/value_or.org]] :src org
+
+* Mpark Paper Mode
+:PROPERTIES:
+:CUSTOM_ID: mpark-paper-mode
+:END:
+
+Paper mode is mpark-only.
+It wraps the fragment in an editing-instruction div and numbers added paragraphs as =x=, =x+1=, and so on.
+
+#+transclude: [[file:../examples/cli/40-paper-mode.sh]] :src sh
+
+#+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.md]] :src markdown
+
+* Fragment Output
+:PROPERTIES:
+:CUSTOM_ID: fragment-output
+:END:
+
+=--split= writes one file per top-level stable-name section and prints a manifest in document order.
+The same IR goes through all three backends; only the extension and the rendered syntax differ.
+Consumers should use the manifest, in document order.
+
+#+transclude: [[file:../examples/cli/50-fragments.sh]] :src sh
+
+The org run names its root fragment explicitly, which is why its manifest opens with =optional.syn.org= where the other two derive =optional= from the sections' common prefix:
+
+#+transclude: [[file:../examples/cli/output/50-fragments/org/manifest]] :src text
+
+One fragment from each backend, the same section three ways:
+
+#+transclude: [[file:../examples/cli/output/50-fragments/latex/wording/optional.ctor.tex]] :src latex
+
+#+transclude: [[file:../examples/cli/output/50-fragments/mpark/wording/optional.ctor.md]] :src markdown
+
+#+transclude: [[file:../examples/cli/output/50-fragments/org/wording/optional.syn.org]] :src org
+
+* Validation
+:PROPERTIES:
+:CUSTOM_ID: validation
+:END:
+
+Validators run in the normal render path.
+
+#+transclude: [[file:../examples/cli/60-validate.sh]] :src sh
+
+A clean document renders as usual and says nothing.
+A finding at error severity is reported on standard error, the render is skipped, and the exit status is 1 — which is why the script has to catch it rather than let it abort:
+
+#+transclude: [[file:../examples/cli/output/60-validate/coverage.diag]] :src text
+
+=generate= reports its own findings while still emitting IR for the header it parsed:
+
+#+transclude: [[file:../examples/cli/65-diagnostics.sh]] :src sh
+
+#+transclude: [[file:../examples/cli/output/65-diagnostics/diagnostics.diag]] :src text
+
+* Explicit Include Path
+:PROPERTIES:
+:CUSTOM_ID: explicit-include-path
+:END:
+
+A header that includes another needs an include directory, and there are two ways to say so: after a bare =--=, or in a compilation database.
+
+#+transclude: [[file:../examples/cli/70-include-path.sh]] :src sh
+
+Both produce the same IR, byte for byte, and both are compared against the same golden.
+A difference between them would be a real difference rather than two files that merely happen to agree.
+
+* Declaration Interleave
+:PROPERTIES:
+:CUSTOM_ID: declaration-interleave
+:END:
+
+=dump-decls= prints the declaration/comment event stream the front end builds the document from.
+Useful when a section is empty and should not be.
+
+#+transclude: [[file:../examples/cli/80-dump-decls.sh]] :src sh
+
+#+transclude: [[file:../examples/cli/output/80-dump-decls/widget-decls.txt]] :src text
+
+* Larger Header Example
+:PROPERTIES:
+:CUSTOM_ID: larger-header-example
+:END:
+
+=spec_optional.hpp= is the acid-test-shaped corpus header.
+It exercises the realistic document path: sections, overload grouping, derived constraints and mandates, extracted equivalent-to bodies, exposition-only state, hidden friends, =\seebelow=, and backend differences.
+Most bugs show up here first.
+
+#+transclude: [[file:../tests/corpus/spec_optional.hpp]] :src cpp
+
+#+transclude: [[file:../examples/cli/90-optional.sh]] :src sh
+
+The markdown below is rendered from the IR the command above generated, not from a checked-in fixture — and both halves match their goldens, which is what says the generated IR and the checked-in IR are the same bytes.
+
+#+transclude: [[file:../examples/cli/output/90-optional/optional.md]] :src markdown
+
+# Local Variables:
+# org-html-htmlize-output-type: css
+# End:

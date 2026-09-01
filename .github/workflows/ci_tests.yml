@@ -36,7 +36,6 @@ jobs:
   build-and-test:
     name: ${{ matrix.lane.name }}
     runs-on: ubuntu-latest
-    continue-on-error: ${{ matrix.lane.optional }}
     strategy:
       fail-fast: false
       matrix:
@@ -44,35 +43,24 @@ jobs:
           - name: Clang front-end tier (Tier B)
             preset: gcc-release
             args: ""
-            optional: false
           - name: Clang front-end tier (Tier B, Debug+MaxSan)
             preset: gcc-debug
             args: "-DBEMAN_BUILDSYS_SANITIZER=MaxSan"
-            optional: false
           - name: GCC 16 Debug
             preset: gcc-debug
             args: ""
-            optional: false
           - name: GCC 16 Release TSan
             preset: gcc-release
             args: "-DBEMAN_BUILDSYS_SANITIZER=TSan"
-            optional: false
           - name: GCC 16 Debug Werror
             preset: gcc-debug
             args: "-DCMAKE_CXX_FLAGS=-Werror"
-            optional: false
-          - name: GCC 16 Debug modules
-            preset: gcc-debug
-            args: "-DBEMAN_SPECGEN_USE_MODULES=ON"
-            optional: true
           - name: Clang Release
             preset: llvm-release
             args: ""
-            optional: false
           - name: Clang Debug MaxSan
             preset: llvm-debug
             args: "-DBEMAN_BUILDSYS_SANITIZER=MaxSan"
-            optional: false
     container:
       image: ghcr.io/bemanproject/infra-containers-gcc:16
     steps:

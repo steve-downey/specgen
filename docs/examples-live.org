@@ -1,0 +1,95 @@
+#+OPTIONS: broken-links:nil c:nil creator:nil d:(not "LOGBOOK") date:nil e:t
+#+OPTIONS: ':nil *:t -:t ::t <:t H:4 \n:nil ^:nil arch:headline author:nil
+#+OPTIONS: email:nil f:t inline:t num:nil p:nil pri:nil prop:nil stat:t tags:t
+#+OPTIONS: tasks:t tex:t timestamp:nil title:t toc:t todo:t |:t
+#+TITLE: specgen, Live
+#+LANGUAGE: en
+#+STARTUP: showall
+#+PROPERTY: header-args:sh :results output :exports both :dir .. :prologue "SPECGEN=${SPECGEN:-$PWD/.install/bin/specgen}"
+
+#+begin_export md
+<!-- markdownlint-disable -->
+#+end_export
+
+The commands below run when this document is exported, and the output under each one is what the binary printed during that export.
+Nothing here is checked in.
+If you are reading the exported page, every result on it was produced by the copy of specgen that was installed at the time it was built.
+
+That is the whole difference from the [[file:examples.org][examples document]], which shows captured output and checks it against the test suite.
+This file has no captured output to check.
+Its guarantee is narrower and more direct: the page cannot be stale, because building the page is running the commands.
+
+Build it with:
+
+#+begin_src sh :eval never
+make examples-live-html
+#+end_src
+
+That installs the tool first, so the commands below have something to run.
+
+* Which specgen
+:PROPERTIES:
+:CUSTOM_ID: which-specgen
+:END:
+
+The scripts and this document both take =SPECGEN= from the environment and fall back to the installed binary.
+
+#+begin_src sh
+"$SPECGEN" --version
+#+end_src
+
+* A header, end to end
+:PROPERTIES:
+:CUSTOM_ID: a-header-end-to-end
+:END:
+
+The generate side reads a header and emits IR; the render side turns IR into wording.
+Neither step needs a file between them.
+
+#+begin_src sh
+"$SPECGEN" generate --emit-ir tests/corpus/spec_widget.hpp --no-compile-commands |
+  "$SPECGEN" render --from-ir - --backend latex
+#+end_src
+
+* One document, three backends
+:PROPERTIES:
+:CUSTOM_ID: one-document-three-backends
+:END:
+
+The same IR, rendered as mpark/wg21 markdown.
+Only the serializer changed.
+
+#+begin_src sh
+"$SPECGEN" generate --emit-ir tests/corpus/spec_widget.hpp --no-compile-commands |
+  "$SPECGEN" render --from-ir - --backend mpark
+#+end_src
+
+And as org, for the =wg21org= exporter:
+
+#+begin_src sh
+"$SPECGEN" generate --emit-ir tests/corpus/spec_widget.hpp --no-compile-commands |
+  "$SPECGEN" render --from-ir - --backend org
+#+end_src
+
+* When something is wrong
+:PROPERTIES:
+:CUSTOM_ID: when-something-is-wrong
+:END:
+
+=--validate= reports on standard error and, for a finding at error severity, skips the render and exits 1.
+The command has to tolerate that exit status, or exporting this page would fail here.
+
+#+begin_src sh
+"$SPECGEN" render --from-ir tests/golden/validate_coverage/input.json --validate 2>&1 || true
+#+end_src
+
+=generate= reports its own findings while still emitting IR for the header it parsed:
+
+#+begin_src sh
+cd tests/corpus &&
+  "$SPECGEN" generate --emit-ir spec_diagnostics.hpp --no-compile-commands -o /dev/null 2>&1 || true
+#+end_src
+
+# Local Variables:
+# org-html-htmlize-output-type: css
+# End:
