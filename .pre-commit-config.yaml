@@ -46,4 +46,4 @@ repos:
     hooks:
     - id: beman-tidy
 
-exclude: 'infra/|port/'
+exclude: 'infra/|port/|vendor/'

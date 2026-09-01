@@ -15,3 +15,4 @@ disabled_rules:
   - cmake.passive_targets
 ignored_paths:
   - infra/
+  - vendor/
