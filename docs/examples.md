@@ -461,7 +461,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 
 mpark/wg21 markdown:
 
-```markdown
+````markdown
 ::: wording
 
 ```cpp
@@ -477,7 +477,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 ```
 
 :::
-```
+````
 
 org, for the `wg21org` exporter:
 
@@ -520,7 +520,7 @@ cd "$REPO_ROOT"
     -o "$OUT/paper-mode.md"
 ```
 
-```markdown
+````markdown
 ::: add
 
 ```cpp
@@ -564,7 +564,7 @@ constexpr void reset() noexcept;
 :::
 
 :::
-```
+````
 
 
 <a id="fragment-output"></a>
@@ -703,7 +703,7 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 \end{itemdescr}
 ```
 
-```markdown
+````markdown
 ::: wording
 
 ## Constructors [optional.ctor]{- .sref} {-}
@@ -752,7 +752,7 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 [#]{.pnum} *Postconditions*: `has_value()` is equal to `rhs.has_value()`.
 
 :::
-```
+````
 
 ```org
 #+begin_codeblock
@@ -1257,7 +1257,7 @@ cd "$REPO_ROOT"
 
 The markdown below is rendered from the IR the command above generated, not from a checked-in fixture — and both halves match their goldens, which is what says the generated IR and the checked-in IR are the same bytes.
 
-```markdown
+````markdown
 ```cpp
 struct nullopt_t {};
 ```
@@ -1449,4 +1449,4 @@ friend constexpr bool operator==(const optional& x, const optional& y);
 [#]{.pnum} *Returns*: `true` if both operands are disengaged, or both are engaged with equal contained values.
 
 :::
-```
+````

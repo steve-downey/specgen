@@ -40,4 +40,24 @@
 (setq org-startup-folded nil)
 (setq org-startup-truncated nil)
 
+;; ox-gfm always fences a source block with three backticks. The transcluded
+;; mpark outputs are markdown that carries its own ``` fences, so the outer
+;; block closed at the first inner fence and the rest of the output spilled
+;; into the document as prose. CommonMark lets a fence be any run of three or
+;; more backticks and closes it only with a run at least that long, so size
+;; each fence to one more than the longest run its body contains.
+(defun specgen--gfm-src-block (src-block _contents info)
+  "Transcode SRC-BLOCK to GFM with a fence longer than any run it contains."
+  (let* ((lang (org-element-property :language src-block))
+         (code (org-export-format-code-default src-block info))
+         (longest 0)
+         (start 0))
+    (while (string-match "`+" code start)
+      (setq longest (max longest (- (match-end 0) (match-beginning 0)))
+            start (match-end 0)))
+    (let ((fence (make-string (max 3 (1+ longest)) ?`)))
+      (concat fence lang "\n" code fence))))
+
+(advice-add 'org-gfm-src-block :override #'specgen--gfm-src-block)
+
 ;;; init.el ends here
