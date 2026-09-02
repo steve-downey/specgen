@@ -81,10 +81,13 @@ itself is staged: collection produces a stream of typed document events (structu
 declarations, docblocks, diagnostics) which later stages consume to build the document
 ([document-build-stages](decisions/document-build-stages.md)).
 
-The driver (`specgen`) exposes the pipeline directly: `generate <header> [--emit-ir]` runs the
-front end; `render --from-ir - --backend {latex,mpark,org}` serializes an IR document;
-`render --validate` runs the validators (§9); `render --split <dir> [--root <name>]` writes the
-fragment set (§8); `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
+The driver (`specgen`) exposes the pipeline directly: `generate <header>` runs the front end
+and the backends in one pass, with the IR never leaving the process; `generate --emit-ir`
+stops at the IR and serializes it; `render --from-ir - --backend {latex,mpark,org}` picks that
+serialized document back up. `--backend`, `--validate` (§9), `--paper` and
+`--split <dir> [--root <name>]` (§8) mean the same thing on both rendering commands, which
+share one back half, so single-pass wording equals two-pass wording byte for byte;
+`dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
 
 ## 3. Front end (Clang)
@@ -638,8 +641,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
     input renders to one expected file per backend.
   - `MODE=validate` — stderr compared, exit 1 required unless `EXPECT_EXIT` says otherwise.
   - `MODE=generate` — run the front end over a corpus header; each case also registers a
-    `.roundtrip` sibling (emit → parse → emit) and a `.validate` sibling running
-    `render --validate` over the checked-in `expected.json`.
+    `.roundtrip` sibling (emit → parse → emit), a `.validate` sibling running
+    `render --validate` over the checked-in `expected.json`, and a `.singlepass` sibling
+    (`run-single-pass.cmake`) demanding that `generate <header>` render the same bytes
+    `render --from-ir <expected.json>` does — the single-pass path against the two-pass one,
+    with no third golden to maintain.
   - `MODE=diagnose` — a header's build-time stderr compared, run from the header's own
     directory so printed paths are relative.
   - `MODE=split` — the driver runs **twice** from a scratch directory with a relative
@@ -747,11 +753,13 @@ The build assembles the tool from these components, each following the shared CM
   `build_document`, `attach_function`, `collect_inclass_items`, `extract_synopsis`, the
   `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets,
   `format_and_recover` (the §3.6 sentinel pipeline), `draft_format_style()`.
-- **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate`, `render` (`--from-ir`,
-  `--backend`, `--validate`, `--split`/`--root`, `--paper`), `dump-decls`.
-- **Golden harness** — `tests/golden/`, `tests/golden/run-golden.cmake`. The §10 modes:
-  render (per backend), validate, generate (with `.roundtrip`/`.validate` siblings),
-  diagnose, split.
+- **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
+  single-pass render), `render` (`--from-ir`), the wording options both share
+  (`--backend`, `--validate`, `--split`/`--root`, `--paper`) in `emit_wording`, and
+  `dump-decls`.
+- **Golden harness** — `tests/golden/`, `tests/golden/run-golden.cmake`,
+  `tests/golden/run-single-pass.cmake`. The §10 modes: render (per backend), validate,
+  generate (with `.roundtrip`/`.validate`/`.singlepass` siblings), diagnose, split.
 - **Corpus** — `tests/corpus/*.hpp`. The hermetic fixture headers of §10, one per feature
   area (markers, constraints, mandates, in-class members, expos, seebelow, namespaces, equiv
   bodies, conditional compilation, Doxygen, aliases, verbatim blocks, indexes, empty ref

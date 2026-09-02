@@ -33,6 +33,13 @@ split along the IR boundary (see [ir-boundary](ir-boundary.md)):
 - `render` remains core **code**: the backends, validators and the fragment
   split are testable at the library level without touching Clang, which is the
   seam the IR names — but it is not a separate build configuration.
+- The split is about *Clang at run time*, not about a file the pipeline must
+  pass through: `generate` without `--emit-ir` runs the front end and a backend
+  in one pass, with the IR staying in memory. Both commands share one back half
+  (`emit_wording` in the driver), so the wording is byte-identical either way —
+  each generate-mode golden's `.singlepass` sibling demands exactly that.
+  `--emit-ir` remains how the IR is *serialized*, for a consumer that will
+  render it later or elsewhere.
 - The driver is built only where the front end is, so all four of its
   subcommand help texts are the same in every build; there are no stub
   subcommands that differ by build flavor.

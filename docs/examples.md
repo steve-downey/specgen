@@ -30,6 +30,7 @@ examples/cli/run-all.sh       # re-capture everything shown below
 | Command or option                 | Example section                             |
 |--------------------------------- |------------------------------------------- |
 | `--help`                          | General command information                 |
+| `generate <header>` (single pass) | Minimal header to IR                        |
 | `generate --emit-ir`              | Minimal header to IR                        |
 | `--no-compile-commands`           | Minimal header to IR                        |
 | `-o`, `--output`                  | Minimal header to IR, Larger header example |
@@ -89,12 +90,24 @@ dump-decls options:
 			     option parsing
 
 generate options:
-  <header>                  the header to parse
-  --emit-ir                 build the document-tree skeleton (design §3.2)
-			     and emit it as IR JSON, instead of the default
-			     smoke-check message
+  <header>                  the header to parse; with none, parse a stock
+			     snippet as a link-proving smoke check
+  --emit-ir                 emit the document tree (design §3.2) as IR JSON
+			     for a later `render --from-ir`, instead of
+			     rendering wording here
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+			     finding at error severity aborts the render
+			     (exit 1) instead
+  --paper                   wrap the fragment in an `::: add` editing-instruction
+			     div and number its paragraphs as added (mpark only)
+  --split <dir>             write one fragment per top-level section into <dir>,
+			     named from its stable name (optional.ctor.tex), and
+			     list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+			     section (--split only); derived from the sections'
+			     common stable-name prefix when omitted
   -o, --output <file>       write here instead of standard output
-			     (--emit-ir only)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
 			     compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -190,8 +203,10 @@ bool widget::empty() const { return value_ == 0; }
 # examples/cli/20-widget-ir.sh                                        -*-sh-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# The smallest useful header, spec_widget.hpp, to IR -- and the same IR piped
-# straight into a renderer. `--no-compile-commands` is not decoration: the
+# The smallest useful header, spec_widget.hpp: to IR, to wording in one pass,
+# and to the same wording the two-process way with the IR on a pipe.
+#
+# `--no-compile-commands` is not decoration: the
 # repository keeps a gitignored compile_commands.json symlink at its root and
 # `generate` probes for one by default, so without this the parse would depend
 # on whether a build happens to be configured. It is also exactly what the
@@ -207,13 +222,80 @@ cd "$REPO_ROOT"
     --no-compile-commands \
     -o "$OUT/widget.json"
 
-# Generate and render in one pass, without an intermediate file.
+# Header to wording in a single pass: the IR stays inside the process and is
+# never written down.
+"$SPECGEN" generate tests/corpus/spec_widget.hpp \
+    --no-compile-commands \
+    --backend latex \
+    -o "$OUT/widget.tex"
+
+# The same wording the long way round, as two processes with the IR passed
+# between them on a pipe. Byte for byte the file above.
 "$SPECGEN" generate --emit-ir tests/corpus/spec_widget.hpp --no-compile-commands |
     "$SPECGEN" render --from-ir - --backend latex \
 	-o "$OUT/widget-piped.tex"
 ```
 
-The IR lands in `widget.json`; it is the same document the golden suite pins, so it is checked rather than shown. The second command is the whole pipeline without an intermediate file:
+The IR lands in `widget.json`; it is the same document the golden suite pins, so it is checked rather than shown.
+
+The second command is the whole pipeline in one process. `generate` without `--emit-ir` runs the front end and a backend in a single pass: the IR is built, validated if asked, rendered, and never written down.
+
+```latex
+\begin{codeblock}
+class @\libglobal{widget}@ {
+public:
+  // \ref{widget.cons}, constructors
+  widget();
+  explicit widget(int value);
+
+  // \ref{widget.observers}, observers
+  bool empty() const;
+};
+\end{codeblock}
+
+\rSec3[widget.cons]{Constructors}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+widget();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding no value.
+\end{itemdescr}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+explicit widget(int value);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding \tcode{value}.
+\end{itemdescr}
+
+\rSec3[widget.observers]{Observers}
+
+\indexlibrarymember{empty}{widget}%
+\begin{itemdecl}
+bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+None.
+
+\pnum
+\returns
+\tcode{true} if the widget holds no value, \tcode{false} otherwise.
+\end{itemdescr}
+```
+
+The third command is the same wording reached the long way, as two processes with the IR passed between them on a pipe. It is byte for byte the file above — `render` and `generate` share the half of the driver that turns a document into wording, so there is nowhere for the two routes to differ:
 
 ```latex
 \begin{codeblock}

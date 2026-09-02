@@ -39,7 +39,7 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-That run reports **579 tests**. The count goes stale the moment a ctest case is
+That run reports **608 tests**. The count goes stale the moment a ctest case is
 added; whoever adds one updates this number here in the same change.
 
 The full preset list is `{gcc, llvm, appleclang, msvc}` × `{debug, release}`;
@@ -109,10 +109,20 @@ publishes the report as an artifact; nothing uploads to an external service.
 The fastest way to eyeball a change:
 
 ```sh
+specgen generate <header.hpp>
+```
+
+That is the single pass: front end and backends in one process, with the IR never
+serialized. To see the IR itself, or to render on a machine without Clang, split it
+in two:
+
+```sh
 specgen generate --emit-ir <header.hpp> | specgen render --from-ir -
 ```
 
 Every generate-mode golden must also round-trip: `specgen render --from-ir
-<expected.json>` exits 0. `make goldens` regenerates the golden files wholesale; a
-non-empty `git diff --stat tests/golden/` afterwards is a finding to report, never
-an edit to the golden.
+<expected.json>` exits 0. Each one additionally has a `.singlepass` sibling
+requiring the one-command form above to print exactly what the two-command form
+does. `make goldens` regenerates the golden files wholesale; a non-empty
+`git diff --stat tests/golden/` afterwards is a finding to report, never an edit
+to the golden.

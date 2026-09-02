@@ -34,6 +34,7 @@ So the output here is not an illustration of what specgen does. It is what specg
 | Command or option | Example section |
 |-------------------+-----------------|
 | =--help= | General command information |
+| =generate <header>= (single pass) | Minimal header to IR |
 | =generate --emit-ir= | Minimal header to IR |
 | =--no-compile-commands= | Minimal header to IR |
 | =-o=, =--output= | Minimal header to IR, Larger header example |
@@ -72,7 +73,14 @@ Small, but enough.
 #+transclude: [[file:../examples/cli/20-widget-ir.sh]] :src sh
 
 The IR lands in =widget.json=; it is the same document the golden suite pins, so it is checked rather than shown.
-The second command is the whole pipeline without an intermediate file:
+
+The second command is the whole pipeline in one process.
+=generate= without =--emit-ir= runs the front end and a backend in a single pass: the IR is built, validated if asked, rendered, and never written down.
+
+#+transclude: [[file:../examples/cli/output/20-widget-ir/widget.tex]] :src latex
+
+The third command is the same wording reached the long way, as two processes with the IR passed between them on a pipe.
+It is byte for byte the file above — =render= and =generate= share the half of the driver that turns a document into wording, so there is nowhere for the two routes to differ:
 
 #+transclude: [[file:../examples/cli/output/20-widget-ir/widget-piped.tex]] :src latex
 

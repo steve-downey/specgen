@@ -193,6 +193,32 @@ function(specgen_add_golden case)
                 $<TARGET_FILE:specgen> render --from-ir "${expected}" -o
                 "${CMAKE_CURRENT_BINARY_DIR}/${case}.roundtrip.tex"
         )
+        # The `.singlepass` sibling: `generate <header>` renders through the
+        # backends without the IR ever becoming a file, so its wording must be
+        # the bytes `render --from-ir <expected.json>` produces. There is no
+        # third golden to keep -- the comparison is against this run's render of
+        # the checked-in IR, which golden.<case> already pins.
+        set(single_pass_args
+            "-DSPECGEN=$<TARGET_FILE:specgen>"
+            "-DHEADER=${ARG_INPUT}"
+            "-DIR=${expected}"
+            "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/${case}.singlepass"
+        )
+        if(ARG_EXTRA_ARGS)
+            list(APPEND single_pass_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
+        endif()
+        if(ARG_COMPILE_COMMANDS_DIR)
+            list(
+                APPEND single_pass_args
+                "-DCOMPILE_COMMANDS_DIR=${ARG_COMPILE_COMMANDS_DIR}"
+            )
+        endif()
+        add_test(
+            NAME golden.${case}.singlepass
+            COMMAND
+                ${CMAKE_COMMAND} ${single_pass_args} -P
+                "${CMAKE_CURRENT_SOURCE_DIR}/run-single-pass.cmake"
+        )
         if(NOT ARG_NO_VALIDATE)
             add_test(
                 NAME golden.${case}.validate

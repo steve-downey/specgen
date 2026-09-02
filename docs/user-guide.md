@@ -42,32 +42,51 @@ configured with `/usr/local`.
 
 ## Generate and render
 
-A normal end-to-end invocation writes IR first, validates it, then renders it:
+The shortest end-to-end invocation is one command. `generate` parses the
+header, builds the document, validates it, and renders it in a single pass; the
+IR stays in memory and is never written anywhere:
+
+```sh
+specgen generate header.hpp --validate --backend latex -o wording.tex -- -Iinclude
+```
+
+The same work splits into two commands when the IR itself is wanted — to store
+it, to inspect it, or to render it later on a machine with no Clang:
 
 ```sh
 specgen generate --emit-ir header.hpp -o wording.json -- -Iinclude
 specgen render --from-ir wording.json --validate --backend latex -o wording.tex
 ```
 
-Standard input can connect the two commands without a temporary file:
+Standard input can connect those two without a temporary file:
 
 ```sh
 specgen generate --emit-ir header.hpp -- -Iinclude |
   specgen render --from-ir - --validate --backend latex
 ```
 
+All three produce the same wording, byte for byte; the golden suite's
+`.singlepass` cases pin that for every corpus header.
+
 Its supported generation path is:
 
 ```text
-specgen generate <header> --emit-ir
+specgen generate <header> [--emit-ir]
+                 [--backend latex|mpark|org]
+                 [--validate] [--paper]
+                 [--split <dir> [--root <name>]]
                  [-o <file>]
                  [--compile-commands <dir> | --no-compile-commands]
                  [-- <clang arguments>...]
 ```
 
-`--emit-ir` emits the complete JSON document. Without it, `generate` runs only
-the front-end link probe; it does not produce wording. `-o` and `--output`
-apply to the `--emit-ir` path and otherwise output goes to standard output.
+Without `--emit-ir`, `generate` renders wording, and `--backend`, `--validate`,
+`--paper`, `--split` and `--root` mean exactly what they mean for `render`.
+`--emit-ir` emits the complete JSON document instead and stops before the
+backends, so it rejects those five options rather than ignoring them. `-o` and
+`--output` name the destination either way; otherwise output goes to standard
+output. With no header at all, `generate` parses a stock snippet as a
+front-end link probe and produces no wording.
 
 Compilation arguments have this precedence:
 
@@ -313,7 +332,7 @@ unrecognized draft-style headings. These diagnostics describe markup on a
 successfully parsed header, so even an error does not prevent IR emission or
 change `generate`'s successful exit status. Always inspect standard error.
 
-`render --validate` prints findings as `specgen: <context>: <severity>:
+`--validate` prints findings as `specgen: <context>: <severity>:
 <message>`. Notes and warnings are printed and rendering continues. If any
 finding has error severity, every finding is printed, rendering is skipped,
 and the command exits 1.
@@ -322,9 +341,11 @@ and the command exits 1.
 
 - Successful `generate`, `render`, and `dump-decls` invocations exit 0.
 - Command-line usage errors and unavailable Clang-only commands exit 2.
-- `generate --emit-ir` exits 1 when the header cannot be read, Clang cannot
-  build an AST, Clang reports a parse error, or output cannot be written. It
-  never emits plausible partial wording after a C++ parse failure.
+- `generate` exits 1 when the header cannot be read, Clang cannot build an AST,
+  Clang reports a parse error, or output cannot be written. It never emits
+  plausible partial wording after a C++ parse failure. Rendering without
+  `--emit-ir` adds `render`'s own failures: fragment errors and, under
+  `--validate`, error-severity findings.
 - `render` exits 1 on unreadable or invalid JSON, output failures, fragment
   errors, or error-severity validation findings.
 - `dump-decls` is diagnostic by design: after a recoverable Clang parse error

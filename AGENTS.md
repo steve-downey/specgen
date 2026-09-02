@@ -21,7 +21,7 @@ targeting draft-LaTeX / mpark-wg21 / org backends. It is a tool, not a library
 
 ## Build & verify (details in docs/building.md)
 
-One preset, one configuration, 579 tests:
+One preset, one configuration, 608 tests:
 
 `uv run cmake --preset gcc-release && uv run cmake --build --preset gcc-release && uv run ctest --preset gcc-release`
 
@@ -39,8 +39,11 @@ Gotchas that bite:
 - Corpus headers (`tests/corpus/*.hpp`) are clang-format-controlled, so
   regenerate goldens after one is reformatted; and golden diagnostics pin
   `file:line`, so edits that add or remove corpus lines move expected files.
-- End-to-end smoke: `specgen generate --emit-ir <corpus.hpp> | specgen render --from-ir -`.
-- `generate` reports docblock findings on stderr and still emits IR on an
+- End-to-end smoke: `specgen generate <corpus.hpp>` (single pass, no IR on
+  disk), or `specgen generate --emit-ir <corpus.hpp> | specgen render --from-ir -`
+  when the IR itself is wanted. The two must agree byte for byte; every
+  generate-mode golden's `.singlepass` sibling says so.
+- `generate` reports docblock findings on stderr and still produces output on an
   Error; read stderr instead of trusting the exit code.
 - The test count above goes stale the moment a ctest case is added; update it
   here **and** in `docs/building.md` together.
