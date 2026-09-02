@@ -176,7 +176,8 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   a group containing only declarations in an inactive preprocessor branch is out of scope for
   this rule.
 - **Direct class-scope `static_assert`s are general wording.** They are removed from the
-  class synopsis regardless of access; their conditions become an adjacent paragraph per §5.2. Assertions in a nested class belong to that nested class.
+  class synopsis regardless of access; their conditions become an adjacent paragraph per §5.2.
+  Assertions in a nested class belong to that nested class.
 - **Anonymous structs/unions are transparent for exposition-only fields.** The author marks
   the real nested field `\expos`; specgen ignores Clang's implicit injected projections, keeps
   the anonymous wrapper, rewrites the field and its uses, removes unmarked alternatives, and

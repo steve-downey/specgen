@@ -5,8 +5,9 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 # Contributing to beman.specgen
 
 Start with [docs/building.md](docs/building.md), which holds the authoritative build, lint, and verification
-commands, and [docs/CODING_RULES.md](docs/CODING_RULES.md), which decides whether a diff is acceptable. The design reference is
-[docs/architecture.md](docs/architecture.md), and settled rationale lives in [docs/decisions/](docs/decisions/).
+commands, and [docs/CODING_RULES.md](docs/CODING_RULES.md), which decides whether a diff is acceptable. The
+design reference is [docs/architecture.md](docs/architecture.md), and settled rationale lives in
+[docs/decisions/](docs/decisions/).
 
 ## Requirements
 
