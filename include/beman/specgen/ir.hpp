@@ -106,19 +106,19 @@ struct Table2DRow {
 };
 
 struct Table2D {
-    std::string             stable_name;
-    Paragraph               caption;
-    Paragraph               column1;
-    Paragraph               column2;
-    std::vector<Table2DRow> rows;
+    std::string             stable_name = {};
+    Paragraph               caption     = {};
+    Paragraph               column1     = {};
+    Paragraph               column2     = {};
+    std::vector<Table2DRow> rows        = {};
 };
 
 struct DescriptionElement {
     ElementKind                 kind = ElementKind::Effects;
-    std::vector<Paragraph>      paragraphs; // prose (possibly empty)
-    std::optional<Itemize>      itemize;    // enumerated conditions
-    std::optional<Table2D>      table;      // authored two-dimensional table
-    std::optional<EquivalentTo> equivalent; // "Equivalent to:" code
+    std::vector<Paragraph>      paragraphs;      // prose (possibly empty)
+    std::optional<Itemize>      itemize;         // enumerated conditions
+    std::optional<Table2D>      table      = {}; // authored two-dimensional table
+    std::optional<EquivalentTo> equivalent = {}; // "Equivalent to:" code
     // Produced by derive_constraints/derive_mandates (design §5.2)
     // rather than authored in a docblock. `conjuncts` -- one paragraph per
     // derived conjunct, before conjuncts::render_into folds them into
@@ -126,8 +126,8 @@ struct DescriptionElement {
     // shape as `Synopsis::roster`: every renderer ignores it, and it
     // exists so the drift validator can point at the specific conjunct
     // instead of a joined sentence with no conjunct boundaries left in it.
-    bool                   derived = false;
-    std::vector<Paragraph> conjuncts;
+    bool                   derived   = false;
+    std::vector<Paragraph> conjuncts = {};
 };
 
 // --- items -----------------------------------------------------------------
@@ -222,8 +222,8 @@ std::optional<MemberKind> member_kind_from_name(std::string_view);
 struct SynopsisEntry {
     std::string name;
     Disposition disposition = Disposition::Described;
-    std::string section; // Routed entries only; "" means routed to nowhere
-    MemberKind  kind = MemberKind::Function;
+    std::string section     = {}; // Routed entries only; "" means routed to nowhere
+    MemberKind  kind        = MemberKind::Function;
 };
 
 struct Synopsis {
@@ -232,7 +232,7 @@ struct Synopsis {
     // ordinarily sits at the top level, outside every `\rSec`, so there is no
     // section path to locate it by. Empty for a hand-written synopsis that
     // does not name one.
-    std::string                name;
+    std::string                name = {};
     CodeText                   code;
     std::vector<SynopsisEntry> roster; // empty for a forward declaration
 };
@@ -290,13 +290,13 @@ struct Document {
     // qualifier is a fact about the header, not about the one place it was
     // written: the check that reads it reports each *occurrence* in rendered
     // output, and locating those is a text match the validator already does.
-    std::vector<ForeignNamespace> foreign_namespaces;
+    std::vector<ForeignNamespace> foreign_namespaces = {};
     // The same validator-only side channel one more time, and
     // document-level for the same reason `foreign_namespaces` is — no node
     // owns a body the tool did not render, so there is nowhere else to hang
     // it. Sorted and deduplicated by (function, member) where the front end
     // builds it, so the emitted IR does not depend on decl visitation order.
-    std::vector<BodyUse> unextracted_uses;
+    std::vector<BodyUse> unextracted_uses = {};
 };
 
 // --- serialization (--emit-ir) --------------------------------------------

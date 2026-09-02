@@ -66,11 +66,12 @@ constexpr auto fmap = [](const auto& fn, const auto& layer) {
     return out;
 };
 
-// A small fixed tree:            1
-//                              / | \
-//                             2  3  4
-//                                |
-//                                5
+/* A small fixed tree:            1
+                                / | \
+                               2  3  4
+                                  |
+                                  5
+*/
 const Rose sample{1, {Rose{2, {}}, Rose{3, {Rose{5, {}}}}, Rose{4, {}}}};
 
 } // namespace

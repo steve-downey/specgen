@@ -33,12 +33,28 @@ TEST_CASE("traverse - sequence collects values when all succeed") {
     CHECK(r.value() == std::vector<int>{1, 2, 3});
 }
 
+// GCC 15 and 16 at -O3 -- and only there: -O2, every sanitizer configuration,
+// and GCC 14 are all quiet -- peel this loop over a vector whose three elements
+// they know, and then report sequence()'s push_back as reading the int payload
+// of the element that holds the error. The has_value() check in front of it
+// makes that read unreachable; what the optimizer lost is the correlation
+// between an expected's discriminant and which union member is live. The
+// diagnostic is attributed to the caller, not to traverse.hpp, so the caller is
+// the only place it can be turned off -- a pragma around sequence() itself does
+// not reach it.
+#if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
 TEST_CASE("traverse - sequence returns the first error") {
     const std::vector<E> xs{E{1}, std::unexpected(std::string{"boom"}), E{3}};
     const auto           r = sequence(xs);
     REQUIRE_FALSE(r.has_value());
     CHECK(r.error() == "boom");
 }
+#if defined(__GNUC__) && !defined(__clang__)
+    #pragma GCC diagnostic pop
+#endif
 
 TEST_CASE("traverse - maps and collects when every element succeeds") {
     const std::vector<int> xs{1, 2, 3};

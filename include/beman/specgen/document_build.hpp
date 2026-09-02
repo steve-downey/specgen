@@ -165,12 +165,12 @@ struct SynopsisDecl {
     unsigned                     offset = 0;
     beman::specgen::ir::Synopsis synopsis;
     std::vector<PendingItem>     pending;
-    std::vector<Diagnostic>      diagnostics;
+    std::vector<Diagnostic>      diagnostics = {};
     // Direct class-scope static_asserts (design §5.2) become one
     // general-subclause paragraph adjacent to the class synopsis. This is a
     // sibling IR node rather than synopsis metadata, so every backend renders
     // it through the existing FreeParagraph case.
-    std::optional<beman::specgen::ir::FreeParagraph> general;
+    std::optional<beman::specgen::ir::FreeParagraph> general = {};
 };
 
 // An out-of-line function definition's SpecItem (design §3.3), keyed by its
@@ -206,9 +206,9 @@ struct ItemDecl {
     unsigned                     placement_key = 0;
     bool                         wants_join    = false;
     beman::specgen::ir::SpecItem item;
-    std::vector<Diagnostic>      diagnostics;
-    std::optional<std::string>   group_id;
-    std::optional<std::string>   also_target;
+    std::vector<Diagnostic>      diagnostics   = {};
+    std::optional<std::string>   group_id      = {};
+    std::optional<std::string>   also_target   = {};
     unsigned                     grouping_line = 0;
 };
 
@@ -249,9 +249,9 @@ using DocEvent = std::variant<SectionOpen, SynopsisDecl, ItemDecl, Ignored>;
 struct GroupCandidate {
     unsigned                   key = 0;
     beman::specgen::ir::Node   node;
-    bool                       wants_join = false;
-    std::optional<std::string> group_id;
-    std::optional<std::string> also_target;
+    bool                       wants_join    = false;
+    std::optional<std::string> group_id      = {};
+    std::optional<std::string> also_target   = {};
     unsigned                   grouping_line = 0;
 };
 

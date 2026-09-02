@@ -54,18 +54,18 @@ struct Table2DRow {
 
 struct Table2D {
     std::string             stable_name;
-    ProseParagraph          caption;
-    ProseParagraph          column1;
-    ProseParagraph          column2;
-    std::vector<Table2DRow> rows;
+    ProseParagraph          caption = {};
+    ProseParagraph          column1 = {};
+    ProseParagraph          column2 = {};
+    std::vector<Table2DRow> rows    = {};
 };
 
 struct Element {
-    ir::ElementKind             kind = ir::ElementKind::Effects;
-    std::vector<ProseParagraph> paragraphs;
-    std::vector<ProseParagraph> items; // authored \item entries, in source order
-    std::optional<Table2D>      table;
-    int                         line = 0; // line of the tag
+    ir::ElementKind             kind       = ir::ElementKind::Effects;
+    std::vector<ProseParagraph> paragraphs = {};
+    std::vector<ProseParagraph> items      = {}; // authored \item entries, in source order
+    std::optional<Table2D>      table      = {};
+    int                         line       = 0; // line of the tag
 };
 
 // The marker registry (design §4; decision marker-registry): one row per marker
@@ -102,7 +102,7 @@ struct MarkerInfo {
     bool Markers::* flag                   = nullptr; // nullptr when the marker has no dedicated flag (\at).
     bool (*set_arg)(Markers&, std::string) = nullptr; // nullptr when the marker takes no argument text.
     MarkerArity      arity                 = MarkerArity::Flag;
-    std::string_view missing_arg_error; // used only when arity == RestRequired and the text is empty.
+    std::string_view missing_arg_error     = {}; // used only when arity == RestRequired and the text is empty.
 };
 
 // clang-format off

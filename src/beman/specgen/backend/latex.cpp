@@ -46,20 +46,20 @@ using beman::specgen::foundation::overloaded;
 
 // --- span substitution: the shared substrate's escape hooks ---------------
 
-// The two escape functions this backend plugs into
-// `common::render_code_spans` live in `backend/common.hpp` as
-// `draft_span_prose`/`draft_span_codeblock`, and the sharing is not tidying:
-// the org backend emits the *same* bytes,
+// The escape function this backend plugs into `common::render_code_spans`
+// lives in `backend/common.hpp` as `draft_span_codeblock`, and the sharing is
+// not tidying: the org backend emits the *same* bytes,
 // because its `#+begin_codeblock`/`#+begin_itemdecl` special blocks export to
 // the draft's own listings environments. Two backends writing one convention
 // have to write it once, or the second silently drifts from the first.
+// The prose half of the pair, `draft_span_prose`, is reached only through
+// `common::draft_code_inline` (and through `draft_span_codeblock` itself),
+// so this backend never names it.
 // The shared header says the rest.
 using common::draft_span_codeblock;
-using common::draft_span_prose;
 
 // Code text is the author's own tokens; it is never re-escaped. Only the
 // spans are substituted, via the shared substrate (backend/common.hpp).
-std::string render_code_prose(const ir::CodeText& code) { return common::render_code_spans(code, draft_span_prose); }
 std::string render_code_codeblock(const ir::CodeText& code) {
     return common::render_code_spans(code, draft_span_codeblock);
 }
