@@ -425,6 +425,9 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   Conditions use the same top-level `&&` flattening and phrasing as member
   Mandates; messages are stripped. The assertions themselves are omitted from
   the synopsis (§3.4). Assertions in a nested class belong to that class instead.
+- An authored `\mandates` in the class definition's *own* docblock replaces
+  that paragraph and inherits its conjuncts, the same replacement rule and the
+  same validator-only drift evidence a member's authored Mandates gets.
 
 ### 5.3 Conjunct rendering
 
@@ -459,6 +462,7 @@ function un-`noexcept` even when it visibly never throws.
 | In-class type alias with markup | yes | routed itemdecl; `\also` groups an adjacent alias |
 | In-class type alias, unmarked | yes (synopsis-only) | none; absent from roster |
 | Direct class-scope `static_assert` | removed | one adjacent general paragraph (§5.2) |
+| Documented record/class-template *definition* | yes | its own description, beside the synopsis, with no itemdecl |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
@@ -473,6 +477,21 @@ adjacent aliases group with `\also`. Bare `\seebelow` masks the complete RHS as 
 alias-only `\impdef` masks it as *implementation-defined*, and the two never combine (§4.3).
 Marked aliases have `MemberKind::Alias` roster entries; unmarked aliases remain synopsis-only
 and absent from the roster.
+
+A class or class-template **definition**'s own docblock describes the *type*. Its
+description elements become a **description-only item** — an ItemDescr carrying no
+ItemDecl — placed immediately after the class synopsis and after the derived
+class-scope paragraph of §5.2, in the same frame and at the same placement key, so
+the three stay together through the placement sort and through a `--split`. It is an
+ordinary `SpecItem` node with an empty `signatures` list rather than a new node kind:
+that is what puts the class's own prose through the span, table, leakage and drift
+checks every other description already goes through, where a Synopsis deliberately is
+*not* a wording site. Backends emit no itemdecl block for it (§8), grouping never
+treats it as an `\also` primary or follower (it has no signatures to group), and §9
+rejects an item carrying neither signatures nor elements the way it rejects an empty
+synopsis. `\verbatim-itemdecl` and the `*-equiv` extraction markers are Errors on a
+class definition: the first has `\verbatim-synopsis` as its class-level counterpart,
+and the second needs a function body to extract.
 
 A documented record or class-template declaration the header never defines (an undefined
 primary — the normal way to write an algebra whose operations a model must register) is an
@@ -628,7 +647,7 @@ driver. Consequences:
 
 ## 9. Validation
 
-`render --validate` runs seven checks over an IR document. An Error makes validation skip
+`render --validate` runs eight checks over an IR document. An Error makes validation skip
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
 
@@ -680,6 +699,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    longer produces one (a record declaration that defines nothing becomes an ordinary
    itemdecl, or no node at all — §6), so a finding here means hand-written IR or a front-end
    regression.
+8. **Empty item** (Error): a SpecItem carrying neither signatures nor description elements.
+   An item with no signatures is legitimate — a class's own description (§6) is exactly that —
+   and one with no description is the ordinary undescribed itemdecl; carrying neither renders
+   as nothing at all, which is the same silent drop as the check above in the shape that
+   leaves no blank box to notice it by.
 
 ## 10. Testing strategy
 

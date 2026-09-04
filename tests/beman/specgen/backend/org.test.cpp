@@ -261,9 +261,11 @@ TEST_CASE("org - a multi-paragraph element repeats neither label nor number") {
     effects.kind = ElementKind::Effects;
     effects.paragraphs.push_back({TextInline{"First."}});
     effects.paragraphs.push_back({TextInline{"Second."}});
+    item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string expected = R"(#+begin_itemdecl
+int f();
 #+end_itemdecl
 
 /Effects/: First.
@@ -278,9 +280,11 @@ TEST_CASE("org - an itemize with no lead-in prose carries the label") {
     DescriptionElement constraints;
     constraints.kind    = ElementKind::Constraints;
     constraints.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(constraints));
 
     const std::string expected = R"(#+begin_itemdecl
+int f();
 #+end_itemdecl
 
 /Constraints/:
@@ -386,6 +390,18 @@ TEST_CASE("org - a decl with no description emits only its itemdecl") {
     item.decl.signatures.push_back({"int f();", {}});
 
     CHECK(org::render_to_string(item) == "#+begin_itemdecl\nint f();\n#+end_itemdecl\n");
+}
+
+TEST_CASE("org - a description with no declaration emits no itemdecl block") {
+    // A class's own wording (design §6): an itemdescr with no itemdecl. An
+    // empty itemdecl block would be the blank box design §9 rejects on a
+    // synopsis.
+    SpecItem item;
+    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.find("itemdecl") == std::string::npos);
+    CHECK(out == "/Remarks/: A defined class's own description.\n");
 }
 
 TEST_CASE("org - index entries are dropped") {

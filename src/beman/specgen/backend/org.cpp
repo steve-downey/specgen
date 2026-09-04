@@ -273,11 +273,18 @@ std::string render_item(const ir::SpecItem& item) {
     // fragment has none to build. Note this is a *policy* about papers rather
     // than about the target: unlike mpark, this backend could emit the macro
     // and have it work, since the draft's index machinery is loaded.
-    std::string out = "#+begin_itemdecl\n";
-    out += item.decl.signatures |
-           std::views::transform([](const ir::CodeText& sig) { return render_code(sig) + '\n'; }) | std::views::join |
-           std::ranges::to<std::string>();
-    out += "#+end_itemdecl\n";
+    // No signatures means a description with no itemdecl -- a class's own
+    // wording (design §6), which the draft writes as bare paragraphs in a
+    // general subclause. An empty itemdecl block would be the same blank box
+    // design §9 rejects on a synopsis.
+    std::string out;
+    if (!item.decl.signatures.empty()) {
+        out = "#+begin_itemdecl\n";
+        out += item.decl.signatures |
+               std::views::transform([](const ir::CodeText& sig) { return render_code(sig) + '\n'; }) |
+               std::views::join | std::ranges::to<std::string>();
+        out += "#+end_itemdecl\n";
+    }
 
     if (item.descr.elements.empty())
         return out;
@@ -289,7 +296,8 @@ std::string render_item(const ir::SpecItem& item) {
         std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
         std::ranges::to<std::vector>();
 
-    out += '\n';
+    if (!out.empty())
+        out += '\n';
     out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
     return out;
 }

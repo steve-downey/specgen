@@ -252,11 +252,17 @@ std::string render_item(const ir::SpecItem& item) {
     std::string out =
         item.decl.index | std::views::transform(render_index) | std::views::join | std::ranges::to<std::string>();
 
-    out += "\\begin{itemdecl}\n";
-    out += item.decl.signatures |
-           std::views::transform([](const ir::CodeText& sig) { return render_code_codeblock(sig) + '\n'; }) |
-           std::views::join | std::ranges::to<std::string>();
-    out += "\\end{itemdecl}\n";
+    // No signatures means a description with no itemdecl -- a class's own
+    // wording (design §6), which the draft writes as bare paragraphs in a
+    // general subclause. An empty `itemdecl` environment would be the same
+    // blank box design §9 rejects on a synopsis.
+    if (!item.decl.signatures.empty()) {
+        out += "\\begin{itemdecl}\n";
+        out += item.decl.signatures |
+               std::views::transform([](const ir::CodeText& sig) { return render_code_codeblock(sig) + '\n'; }) |
+               std::views::join | std::ranges::to<std::string>();
+        out += "\\end{itemdecl}\n";
+    }
 
     if (item.descr.elements.empty())
         return out;
@@ -268,7 +274,9 @@ std::string render_item(const ir::SpecItem& item) {
         std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
         std::ranges::to<std::vector>();
 
-    out += "\n\\begin{itemdescr}\n";
+    if (!out.empty())
+        out += '\n';
+    out += "\\begin{itemdescr}\n";
     out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
     out += "\\end{itemdescr}\n";
     return out;

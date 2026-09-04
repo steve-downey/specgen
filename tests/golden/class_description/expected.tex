@@ -1,0 +1,65 @@
+\begin{codeblock}
+struct @\libglobal{tag}@ {};
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A defined record's own description.
+\end{itemdescr}
+
+\begin{codeblock}
+template<class T>
+struct @\libglobal{checked}@ {};
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+\mandates
+\tcode{T} is a type this facility accepts.
+
+\pnum
+\remarks
+Instantiating \tcode{checked} registers nothing; it only constrains.
+\end{itemdescr}
+
+\begin{codeblock}
+template<class T>
+struct @\libglobal{probe}@ {};
+\end{codeblock}
+
+\pnum
+A program that instantiates \tcode{probe<T>} is ill-formed unless \tcode{acceptable_v<T>} is \tcode{true}.
+
+\begin{itemdescr}
+\pnum
+\remarks
+The derived paragraph above states the requirement; this says what the type is for.
+\end{itemdescr}
+
+\begin{codeblock}
+template<class T>
+struct @\libglobal{box}@ {
+  // \ref{box.mem}, member types
+  using type = T;
+};
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A \tcode{box} is a distinct type for each \tcode{T}; two \tcode{box} types with different \tcode{T} never compare equal.
+\end{itemdescr}
+
+\rSec3[box.mem]{Member types}
+
+\indexlibrarymember{type}{box}%
+\begin{itemdecl}
+using type = T;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The contained type.
+\end{itemdescr}

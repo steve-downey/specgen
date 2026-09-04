@@ -95,6 +95,24 @@ TEST_CASE("validate - an empty synopsis is reported at Severity::Error with its 
     CHECK(diags.front().message.find("empty code block") != std::string::npos);
 }
 
+TEST_CASE("validate - an item with neither declaration nor description is reported at Severity::Error") {
+    ir::Node          node  = ir::SpecItem{};
+    const Diagnostics diags = validate(node);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Error);
+    CHECK(diags.front().context == "item");
+    CHECK(diags.front().message.find("neither a declaration nor a description") != std::string::npos);
+}
+
+TEST_CASE("validate - an item with a description and no declaration is a class's own wording, not a finding") {
+    // Design §6: a class's description is an itemdescr with no itemdecl.
+    ir::SpecItem item;
+    item.descr.elements.push_back(
+        ir::DescriptionElement{ir::ElementKind::Remarks, {{ir::TextInline{"Its own description."}}}, {}});
+    ir::Node node = std::move(item);
+    CHECK(validate(node).empty());
+}
+
 // --- each malformed-span kind ----------------------------------------------
 
 TEST_CASE("validate - an inverted span is reported at Severity::Error with its context") {

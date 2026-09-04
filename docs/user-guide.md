@@ -198,8 +198,18 @@ subclause like any other. Declaring in class and defining out of line remains
 the recommended style (the definition's lexical position is what places its
 wording), but it is not required for a clean synopsis.
 
+A class or class-template definition's own docblock describes the *type*. Its
+description elements are rendered immediately after the class synopsis, with no
+item declaration of their own — the shape the draft uses for a class's general
+subclause. An authored `\mandates` there replaces the paragraph derived from the
+class's direct `static_assert`s. `\verbatim-itemdecl` and the `*-equiv`
+extraction markers are errors on a class definition: the first has
+`\verbatim-synopsis` as its class-level counterpart, and the second needs a
+function body to extract.
+
 A docblock documents the declaration that follows it. Wording comes from class
-and class-template definitions (a synopsis plus routed members), documented
+and class-template definitions (a synopsis, the class's own description, and
+routed members), documented
 function *definitions*, documented in-class type aliases, and — at namespace
 scope — documented aliases, alias templates, variables, variable templates,
 concepts, and record declarations the header never defines (an undefined

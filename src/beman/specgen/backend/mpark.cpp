@@ -272,11 +272,18 @@ std::string render_item(const ir::SpecItem& item) {
     // Index entries are dropped (design §8: "draft backend expands, others
     // drop"). `\indexlibrarymember` builds the draft's own index; a paper
     // fragment has no index to build.
-    std::string out = "```cpp\n";
-    out += item.decl.signatures |
-           std::views::transform([](const ir::CodeText& sig) { return render_code(sig) + '\n'; }) | std::views::join |
-           std::ranges::to<std::string>();
-    out += "```\n";
+    // An item with no signatures is a description with no itemdecl -- a
+    // class's own wording (design §6), which the draft writes as bare
+    // paragraphs in a general subclause. Emitting the fence for it would
+    // produce the empty code block design §9 rejects on a synopsis.
+    std::string out;
+    if (!item.decl.signatures.empty()) {
+        out = "```cpp\n";
+        out += item.decl.signatures |
+               std::views::transform([](const ir::CodeText& sig) { return render_code(sig) + '\n'; }) |
+               std::views::join | std::ranges::to<std::string>();
+        out += "```\n";
+    }
 
     if (item.descr.elements.empty())
         return out;
@@ -288,7 +295,8 @@ std::string render_item(const ir::SpecItem& item) {
         std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
         std::ranges::to<std::vector>();
 
-    out += '\n';
+    if (!out.empty())
+        out += '\n';
     out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
     return out;
 }

@@ -556,6 +556,19 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary"
 )
 
+# A class or class-template *definition*'s own docblock (design §6, issue
+# #18): its description elements travel beside the synopsis as a
+# description-only item, an authored `\mandates` replaces the derived
+# class-scope paragraph and inherits its conjuncts, and a routed member's own
+# item is unaffected. The distinct case name leaves `class_description` free
+# for the backend renderings below; all consume one checked-in expected.json.
+specgen_add_golden(
+    class_description_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_description.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/class_description"
+)
+
 # Documented namespace-scope aliases, alias templates, variables, variable
 # templates, and concepts are ordinary wording items; adjacent aliases group
 # with \also, `\impdef` masks an alias RHS at namespace scope exactly as in
@@ -970,6 +983,25 @@ specgen_add_golden(
     undefined_primary
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary/expected.json"
+)
+
+# The class-description IR rendered through every backend: a class's own
+# wording is a description with no itemdecl, so each backend emits its
+# description blocks with no code block, itemdecl environment or itemdecl
+# drawer around nothing.
+specgen_add_golden(
+    class_description
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_description/expected.json"
+)
+specgen_add_golden(
+    class_description
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_description/expected.json"
+)
+specgen_add_golden(
+    class_description
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_description/expected.json"
 )
 
 # The namespace-entity IR rendered through every backend: aliases, variable

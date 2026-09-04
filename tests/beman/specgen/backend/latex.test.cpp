@@ -262,6 +262,18 @@ TEST_CASE("latex - a decl with no description emits no itemdescr") {
     CHECK(out.find("\\end{itemdecl}") != std::string::npos);
 }
 
+TEST_CASE("latex - a description with no declaration emits no itemdecl") {
+    // A class's own wording (design §6): an itemdescr with no itemdecl. An
+    // empty `itemdecl` environment would be the blank box design §9 rejects
+    // on a synopsis.
+    SpecItem item;
+    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.find("itemdecl") == std::string::npos);
+    CHECK(out == "\\begin{itemdescr}\n\\pnum\n\\remarks\nA defined class's own description.\n\\end{itemdescr}\n");
+}
+
 TEST_CASE("latex - index entry kinds") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});

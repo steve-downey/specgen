@@ -351,6 +351,16 @@ TEST_CASE("mpark - a decl with no description emits only its fence") {
           "::: wording\n\n```cpp\noptional(const optional&) = default;\n```\n\n:::\n");
 }
 
+TEST_CASE("mpark - a description with no declaration emits no fence") {
+    // A class's own wording (design §6): an itemdescr with no itemdecl. The
+    // fence would be the empty code block design §9 rejects on a synopsis.
+    SpecItem item;
+    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+
+    CHECK(mpark::render_to_string(item) ==
+          "::: wording\n\n[#]{.pnum} *Remarks*: A defined class's own description.\n\n:::\n");
+}
+
 TEST_CASE("mpark - index entries are dropped") {
     SpecItem item;
     item.decl.signatures.push_back(
