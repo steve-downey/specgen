@@ -306,11 +306,19 @@ An `\also` block should contain no description elements. `\group` and
 - `\freestanding` and `\freestanding-deleted` add the corresponding literal
   draft comment to a function declaration in the class synopsis.
 - `\verbatim-synopsis` is terminal. All following decorated lines form one
-  exact, span-free synopsis without C++ parsing or formatting.
+  exact, span-free synopsis without C++ parsing or formatting. Written as a
+  class definition's own docblock (no blank line before the class), the
+  authored text *replaces* the extracted synopsis while the class's members,
+  roster, and routing are processed as usual; detached, the block stands
+  alone as an anonymous synopsis.
 - `\verbatim-itemdecl` is terminal. Authored elements before it remain the
   item description; all following decorated lines form one exact, span-free
   item declaration. Multiple declaration lines are not split, parsed,
-  formatted, indexed, or interpreted as draft markup.
+  formatted, indexed, or interpreted as draft markup. Written as a
+  declaration's own docblock, the authored text *replaces* that
+  declaration's extracted item declaration — the item appears once; a
+  detached block stands alone, and pairs with `\omit`/`\merge` on the real
+  declaration when one exists (as the hash-specialization pattern does).
 
 ## Validation and diagnostics
 

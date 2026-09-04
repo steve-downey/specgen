@@ -861,6 +861,44 @@ record_suppression_diagnostics(const clang::Decl* decl, const clang::SourceManag
     return docblock_diagnostics(rc, *start, parsed.diags, sm);
 }
 
+// A record definition docblock's `\verbatim-synopsis` payload (design §4.3,
+// issue #4): authored synopsis text that replaces extraction, while the
+// class's members, roster, and derived wording are still collected as usual.
+// The block's findings ride along — classify() suppresses the comment's own
+// RawItem for an attached verbatim block, so this is where they reach the
+// driver. An ordinary record docblock returns nothing and changes nothing.
+struct RecordVerbatim {
+    std::optional<std::string>                              synopsis;
+    std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
+};
+
+RecordVerbatim record_verbatim_synopsis(const clang::Decl* decl, const clang::SourceManager& sm) {
+    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    if (rc == nullptr)
+        return {};
+    const llvm::StringRef            raw   = rc->getRawText(sm);
+    const std::optional<std::size_t> start = docblock_start(raw);
+    if (!start)
+        return {};
+
+    const grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
+    if (!parsed.block.markers.verbatim_synopsis && !parsed.block.verbatim_itemdecl)
+        return {};
+
+    RecordVerbatim out;
+    out.diagnostics = docblock_diagnostics(rc, *start, parsed.diags, sm);
+    if (parsed.block.verbatim_itemdecl) {
+        const std::vector<grammar::Diagnostic> invalid{
+            {beman::specgen::Severity::Error,
+             0,
+             "\\verbatim-itemdecl applies to a declaration; a class definition takes \\verbatim-synopsis"}};
+        out.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
+    }
+    if (parsed.block.markers.verbatim_synopsis)
+        out.synopsis = parsed.block.verbatim_synopsis.value_or("");
+    return out;
+}
+
 // One text edit against the extracted synopsis substring, in absolute
 // main-file byte offsets (translated to offsets relative to the class span
 // just before being applied — see extract_synopsis).
@@ -2822,6 +2860,11 @@ struct AttachedItem {
     // siblings.
     unsigned inclass_offset = 0;
     unsigned grouping_line  = 0; // first line of the docblock carrying grouping metadata
+    // \verbatim-itemdecl payload (design §4.3, issue #4): exact, span-free
+    // text that *replaces* the extracted declaration — the attach path that
+    // would extract one uses this instead when it is engaged, and classify()
+    // suppresses the comment's own standalone node so the item appears once.
+    std::optional<std::string> verbatim_itemdecl = {};
 };
 
 // Parse and lower `decl`'s own `//!` docblock into `attached` — descr,
@@ -2849,6 +2892,14 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
     attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
     attached.item.descr                = std::move(lowered.descr);
     attached.directives                = std::move(lowered.directives);
+    attached.verbatim_itemdecl         = pr.block.verbatim_itemdecl;
+    if (attached.directives.verbatim_synopsis && attached.grouping_line > 0)
+        // The synopsis form belongs on a class definition; on anything an
+        // AttachedItem renders it would vanish silently, and silence is the
+        // failure mode issue #1 taught this file to refuse.
+        attached.diagnostics.push_back({beman::specgen::Severity::Error,
+                                        attached.grouping_line,
+                                        "\\verbatim-synopsis applies to a class or class template definition"});
 }
 
 // Build the AttachedItem for one function, given the decl its markup/body/
@@ -2901,11 +2952,19 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
             // document_build::group_items (pipeline stages 1/3), which have
             // the tree context this function does not. \describe/\at/\merge
             // act on in-class-defined members and remain unread here.
-            attached.item.descr = std::move(lowered.descr);
-            attached.directives = std::move(lowered.directives);
+            attached.item.descr        = std::move(lowered.descr);
+            attached.directives        = std::move(lowered.directives);
+            attached.verbatim_itemdecl = pr.block.verbatim_itemdecl;
             if (attached.directives.impdef) {
                 const std::vector<grammar::Diagnostic> invalid{
                     {beman::specgen::Severity::Error, 0, "\\impdef applies only to type aliases"}};
+                attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
+            }
+            if (attached.directives.verbatim_synopsis) {
+                const std::vector<grammar::Diagnostic> invalid{
+                    {beman::specgen::Severity::Error,
+                     0,
+                     "\\verbatim-synopsis applies to a class or class template definition"}};
                 attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
             }
         }
@@ -2914,18 +2973,24 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     // Itemdecl: the in-class declaration's own text (design §3.3), one
     // signature per SpecItem here — `\also` grouping appends further
     // signatures onto a group's primary in document_build::group_items, not
-    // here. Default
+    // here. A `\verbatim-itemdecl` payload replaces the extraction whole
+    // (design §4.3, issue #4): exact, span-free authored text, so none of the
+    // seebelow/requires-stripping machinery applies to it. Otherwise, default
     // (no `\constraints-in-decl`): the requires-clause is stripped, since it
     // is derived into a Constraints element below instead (design §5.1).
     const bool strip_requires = !attached.directives.constraints_in_decl;
-    attached.item.decl.signatures.push_back(extract_itemdecl(decl_form,
-                                                             sm,
-                                                             lang_opts,
-                                                             strip_requires,
-                                                             ns_drop_set,
-                                                             expos_set,
-                                                             friend_begin,
-                                                             seebelow_target(attached.directives)));
+    if (attached.verbatim_itemdecl) {
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    } else {
+        attached.item.decl.signatures.push_back(extract_itemdecl(decl_form,
+                                                                 sm,
+                                                                 lang_opts,
+                                                                 strip_requires,
+                                                                 ns_drop_set,
+                                                                 expos_set,
+                                                                 friend_begin,
+                                                                 seebelow_target(attached.directives)));
+    }
 
     // The declaration kind determines the draft index form without
     // inspecting its formatted spelling. Use decl_form -- the declaration the
@@ -3004,8 +3069,11 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
         attached.diagnostics.push_back(
             {beman::specgen::Severity::Error, attached.grouping_line, "a type alias accepts only bare \\seebelow"});
 
-    attached.item.decl.signatures.push_back(
-        extract_alias_itemdecl(alias, sm, lang_opts, ns_drop_set, expos_set, alias_mask(attached.directives), head));
+    if (attached.verbatim_itemdecl)
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    else
+        attached.item.decl.signatures.push_back(extract_alias_itemdecl(
+            alias, sm, lang_opts, ns_drop_set, expos_set, alias_mask(attached.directives), head));
     if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext())) {
         attached.item.decl.index.push_back(
             {ir::IndexKind::Member, alias->getNameAsString(), record->getNameAsString()});
@@ -3040,14 +3108,17 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
     attach_docblock(attached, decl, sm);
 
     const llvm::StringRef tag = record->getKindName();
-    attached.item.decl.signatures.push_back(
-        extract_freestanding_declaration(decl,
-                                         sm,
-                                         lang_opts,
-                                         ns_drop_set,
-                                         expos_set,
-                                         /*exposition=*/false,
-                                         std::string_view(tag.data(), tag.size())));
+    if (attached.verbatim_itemdecl)
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    else
+        attached.item.decl.signatures.push_back(
+            extract_freestanding_declaration(decl,
+                                             sm,
+                                             lang_opts,
+                                             ns_drop_set,
+                                             expos_set,
+                                             /*exposition=*/false,
+                                             std::string_view(tag.data(), tag.size())));
     return attached;
 }
 
@@ -3066,8 +3137,11 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     attach_docblock(attached, decl, sm);
-    attached.item.decl.signatures.push_back(
-        extract_freestanding_declaration(decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false));
+    if (attached.verbatim_itemdecl)
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    else
+        attached.item.decl.signatures.push_back(
+            extract_freestanding_declaration(decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false));
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
@@ -4120,6 +4194,18 @@ classify_record_declaration(const clang::NamedDecl*                          dec
     return item_decl_event(attach_record_declaration(decl, record, sm, lang_opts, ns_drop_set, expos_set));
 }
 
+// The main-file byte ranges of raw comments some processed declaration
+// consumed as its own docblock (top-level decls and class members alike).
+// classify() consults this for a comment carrying a verbatim marker: attached,
+// the block belongs to its declaration's event, and the comment's own RawItem
+// must not become a second node (issue #4).
+using AttachedCommentRanges = std::vector<std::pair<unsigned, unsigned>>;
+
+bool is_attached_comment(unsigned offset, const AttachedCommentRanges& ranges) {
+    return std::ranges::any_of(
+        ranges, [offset](const auto& range) { return offset >= range.first && offset <= range.second; });
+}
+
 db::DocEvent classify(const RawItem&                                   ev,
                       const clang::SourceManager&                      sm,
                       const clang::LangOptions&                        lang_opts,
@@ -4128,7 +4214,8 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const SeeBelowMap&                               seebelow_map,
                       const FreestandingMap&                           freestanding_map,
                       const std::set<std::string>&                     ns_drop_set,
-                      const SkippedRanges&                             skipped) {
+                      const SkippedRanges&                             skipped,
+                      const AttachedCommentRanges&                     attached_comments) {
     namespace ir = beman::specgen::ir;
 
     if (ev.decl == nullptr) {
@@ -4136,11 +4223,24 @@ db::DocEvent classify(const RawItem&                                   ev,
             ev.comment_text.find("\\verbatim-itemdecl") != std::string::npos) {
             const std::optional<std::size_t> start = docblock_start(ev.comment_text);
             if (start) {
-                const std::string_view markup     = std::string_view(ev.comment_text).substr(*start);
-                grammar::ParseResult   parsed     = grammar::parse_docblock(markup);
-                const unsigned         first_line = sm.getLineNumber(sm.getMainFileID(), ev.offset) +
-                                                    static_cast<unsigned>(std::ranges::count(
-                                                        std::string_view(ev.comment_text).substr(0, *start), '\n'));
+                const std::string_view markup = std::string_view(ev.comment_text).substr(*start);
+                grammar::ParseResult   parsed = grammar::parse_docblock(markup);
+                // Attached to a declaration — and not `\omit`/`\merge`d away
+                // there — the block is that declaration's own docblock: the
+                // declaration's event substitutes the authored text and
+                // reports the block's findings, and a second, standalone
+                // node here was the duplication (issue #4). An
+                // `\omit`/`\merge`d declaration contributes no node of its
+                // own, so for that pairing the standalone node still speaks,
+                // exactly as it does for a detached block whose entity is
+                // never declared (spec_verbatim_record_merge.hpp).
+                if ((parsed.block.verbatim_itemdecl || parsed.block.markers.verbatim_synopsis) &&
+                    is_attached_comment(ev.offset, attached_comments) && !parsed.block.markers.omit &&
+                    !parsed.block.markers.merge)
+                    return db::Ignored{};
+                const unsigned first_line = sm.getLineNumber(sm.getMainFileID(), ev.offset) +
+                                            static_cast<unsigned>(std::ranges::count(
+                                                std::string_view(ev.comment_text).substr(0, *start), '\n'));
                 std::vector<db::Diagnostic> diagnostics =
                     parsed.diags | std::views::transform([first_line](const grammar::Diagnostic& diagnostic) {
                         const unsigned line =
@@ -4255,11 +4355,20 @@ db::DocEvent classify(const RawItem&                                   ev,
             return classify_record_declaration(record, record, sm, lang_opts, ns_drop_set, expos_set);
         if (auto diagnostics = record_suppression_diagnostics(record, sm))
             return db::Ignored{std::move(*diagnostics)};
+        // An attached \verbatim-synopsis replaces the extracted synopsis text
+        // (design §4.3, issue #4) — authored, span-free — while members,
+        // roster, and derived class wording are collected exactly as for an
+        // extracted one.
+        RecordVerbatim   verbatim = record_verbatim_synopsis(record, sm);
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = record->getNameAsString();
+        out.diagnostics   = std::move(verbatim.diagnostics);
         out.synopsis.code =
-            extract_synopsis(record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
+            verbatim.synopsis
+                ? ir::CodeText{std::move(*verbatim.synopsis), {}}
+                : extract_synopsis(
+                      record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
         collect_inclass_items(record, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
         // After collection: the roster reads the routed sections
         // collect_inclass_items just decided.
@@ -4276,11 +4385,24 @@ db::DocEvent classify(const RawItem&                                   ev,
             return classify_record_declaration(tmpl, templated, sm, lang_opts, ns_drop_set, expos_set);
         if (auto diagnostics = record_suppression_diagnostics(tmpl, sm))
             return db::Ignored{std::move(*diagnostics)};
+        // Same attached-\verbatim-synopsis substitution as the plain-record
+        // arm above; the docblock is looked up on the ClassTemplateDecl, the
+        // decl the arm's other docblock reads use.
+        RecordVerbatim   verbatim = record_verbatim_synopsis(tmpl, sm);
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = templated->getNameAsString();
-        out.synopsis.code = extract_synopsis(
-            templated, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, tmpl);
+        out.diagnostics   = std::move(verbatim.diagnostics);
+        out.synopsis.code = verbatim.synopsis ? ir::CodeText{std::move(*verbatim.synopsis), {}}
+                                              : extract_synopsis(templated,
+                                                                 sm,
+                                                                 lang_opts,
+                                                                 omit_set,
+                                                                 expos_set,
+                                                                 seebelow_map,
+                                                                 freestanding_map,
+                                                                 ns_drop_set,
+                                                                 tmpl);
         collect_inclass_items(templated, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
         // Build the roster before grouping so every alias offset still
         // identifies its own routed declaration, including an \also follower.
@@ -4783,6 +4905,34 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
     const SkippedRanges                             skipped          = collect_skipped_ranges(*parsed.ast);
 
+    // The docblock ranges some declaration consumed — top-level decls and
+    // class members alike, since every comment in the file becomes a RawItem
+    // below. classify() consults this for a comment carrying a verbatim
+    // marker: attached, the declaration's own event substitutes the authored
+    // text, and the comment's standalone node was the duplication (issue #4).
+    AttachedCommentRanges attached_comments;
+    const auto            note_attached_docblock = [&](const clang::Decl* decl) {
+        const clang::RawComment* rc = ctx.getRawCommentForDeclNoCache(decl);
+        if (rc == nullptr || !is_docblock_comment(rc->getRawText(sm)))
+            return;
+        const auto [begin_file, begin] = sm.getDecomposedLoc(rc->getBeginLoc());
+        const auto [end_file, end]     = sm.getDecomposedLoc(rc->getEndLoc());
+        if (begin_file == main_file && end_file == main_file)
+            attached_comments.emplace_back(begin, end);
+    };
+    // substrate generic algorithm: a for_each-shaped walk driving
+    // note_attached_docblock's side effect, over the same decls-plus-members
+    // shape the build_omit_set pre-pass walks.
+    for (const clang::Decl* decl : decls) {
+        note_attached_docblock(decl);
+        if (const clang::CXXRecordDecl* record = as_record_decl(decl);
+            record != nullptr && record->isThisDeclarationADefinition())
+            // substrate generic algorithm: the same side-effecting walk, one
+            // level down — a class's members feed the same collector.
+            for (const RealRecordMember& member : real_record_members(record))
+                note_attached_docblock(member.decl);
+    }
+
     std::vector<RawItem> raw_items;
     raw_items.reserve(decls.size());
     raw_items.append_range(decls | std::views::transform([&sm](clang::Decl* decl) {
@@ -4816,8 +4966,16 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // no header-shaped IR node or backend path is needed.
     std::vector<db::DocEvent> events;
     const auto                classify_one = [&](const RawItem& item) {
-        return classify(
-            item, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, skipped);
+        return classify(item,
+                        sm,
+                        lang_opts,
+                        omit_set,
+                        expos_set,
+                        seebelow_map,
+                        freestanding_map,
+                        ns_drop_set,
+                        skipped,
+                        attached_comments);
     };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
         events.push_back(db::Ignored{{db::Diagnostic{
