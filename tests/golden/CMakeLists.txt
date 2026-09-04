@@ -328,6 +328,18 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/validate_coverage/input.json"
 )
 
+# Validate-mode case: the empty-synopsis backstop. A Synopsis whose code
+# is empty renders as an empty fenced code block, so it is an Error; the
+# front end no longer produces one (a record declaration that defines
+# nothing becomes an itemdecl or no node at all), which is exactly why the
+# check is pinned over hand-written IR — the only channel that can still
+# reach it, and the one a front-end regression would reopen.
+specgen_add_golden(
+    validate_empty_synopsis
+    MODE validate
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/validate_empty_synopsis/input.json"
+)
+
 # Validate-mode case: design §9's leakage checker, over the same
 # hand-written roster channel — each invisible disposition named in a
 # different kind of wording fragment, against the visible ones named
@@ -516,6 +528,20 @@ specgen_add_golden(
     aliases
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_aliases.hpp"
+)
+
+# A documented record declaration the header never defines is an ordinary
+# itemdecl (an undefined class-template primary — never an empty code
+# block); adjacent primaries group with \also, and a forward declaration of
+# a class defined below, an undocumented never-defined declaration, and an
+# `\omit`ted one all contribute nothing. The distinct case name leaves
+# `undefined_primary` free for the backend renderings below; all consume one
+# checked-in expected.json.
+specgen_add_golden(
+    undefined_primary_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_undefined_primary.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary"
 )
 
 # Constraints derivation (design §5.1) — a trailing requires-clause
@@ -841,6 +867,24 @@ specgen_add_golden(
     authored_itemize
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/authored_itemize/expected.json"
+)
+
+# The undefined-primary IR rendered through every backend: the declaration
+# itself as the itemdecl block, the draft's template-head line break kept,
+# and no empty code block anywhere.
+specgen_add_golden(
+    undefined_primary
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary/expected.json"
+)
+specgen_add_golden(
+    undefined_primary
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary/expected.json"
+)
+specgen_add_golden(
+    undefined_primary
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate

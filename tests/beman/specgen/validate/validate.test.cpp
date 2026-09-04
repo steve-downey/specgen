@@ -86,6 +86,15 @@ TEST_CASE("validate - a FreeParagraph is the monoid identity") {
     CHECK(validate(node).empty());
 }
 
+TEST_CASE("validate - an empty synopsis is reported at Severity::Error with its context") {
+    ir::Node          node  = ir::Synopsis{.name = "widget", .code = {"", {}}, .roster = {}};
+    const Diagnostics diags = validate(node);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Error);
+    CHECK(diags.front().context == "widget/synopsis");
+    CHECK(diags.front().message.find("empty code block") != std::string::npos);
+}
+
 // --- each malformed-span kind ----------------------------------------------
 
 TEST_CASE("validate - an inverted span is reported at Severity::Error with its context") {

@@ -1,0 +1,27 @@
+** Undefined primaries [undef.primary]
+
+#+begin_itemdecl
+template<class L, class R>
+struct join;
+#+end_itemdecl
+
+/Remarks/: A program may specialize ~join~ for cv-unqualified program-defined types.
+
+#+begin_itemdecl
+template<class T>
+struct bottom;
+template<class T>
+struct unit;
+#+end_itemdecl
+
+/Remarks/: Registration points for the bottom element.
+
+#+begin_itemdecl
+struct bottom_tag;
+#+end_itemdecl
+
+/Remarks/: An undefined primary with a non-template head.
+
+#+begin_codeblock
+struct registry {};
+#+end_codeblock

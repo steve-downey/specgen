@@ -1,0 +1,39 @@
+\rSec3[undef.primary]{Undefined primaries}
+
+\begin{itemdecl}
+template<class L, class R>
+struct join;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A program may specialize \tcode{join} for cv-unqualified program-defined types.
+\end{itemdescr}
+
+\begin{itemdecl}
+template<class T>
+struct bottom;
+template<class T>
+struct unit;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+Registration points for the bottom element.
+\end{itemdescr}
+
+\begin{itemdecl}
+struct bottom_tag;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+An undefined primary with a non-template head.
+\end{itemdescr}
+
+\begin{codeblock}
+struct @\libglobal{registry}@ {};
+\end{codeblock}
