@@ -609,6 +609,16 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_mandates.hpp"
 )
 
+# A `\rSec` title clang-format wrapped across two plain `//` lines parses
+# whole: the section opens with the joined title and its routed member
+# validates. The corpus line is deliberately longer than the format column
+# limit, so the formatter itself keeps the wrap this case exists to survive.
+specgen_add_golden(
+    rsec_wrapped
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_rsec_wrapped.hpp"
+)
+
 # Private-member elision leaves neither a stray leading `public:` (a
 # struct's default access is already public) nor a silent invisible-name
 # use: the surviving `using type = raw;` names the elided private alias,

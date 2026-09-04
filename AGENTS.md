@@ -21,7 +21,7 @@ targeting draft-LaTeX / mpark-wg21 / org backends. It is a tool, not a library
 
 ## Build & verify (details in docs/building.md)
 
-One preset, one configuration, 641 tests:
+One preset, one configuration, 645 tests:
 
 `uv run cmake --preset gcc-release && uv run cmake --build --preset gcc-release && uv run ctest --preset gcc-release`
 

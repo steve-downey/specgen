@@ -4657,6 +4657,45 @@ std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string
     return std::nullopt;
 }
 
+// Join a clang-format-wrapped `{title}` (issue #8): each newline, together
+// with the continuation line's indentation and `//` decoration, reads as one
+// space, so `{Accumulating applicative instance for\n// expected}` yields
+// the title exactly as authored before the formatter wrapped it.
+std::string unwrap_title(std::string_view title) {
+    std::string out;
+    out.reserve(title.size());
+    std::size_t pos = 0;
+    // substrate generic algorithm: a scan whose newline case consumes a
+    // variable-length run (trailing blanks behind, indentation, decoration,
+    // and leading blanks ahead) and emits a single joiner.
+    while (pos < title.size()) {
+        if (title[pos] != '\n') {
+            out.push_back(title[pos]);
+            ++pos;
+            continue;
+        }
+        // substrate generic algorithm: trim the joiner's left side in place.
+        while (!out.empty() && (out.back() == ' ' || out.back() == '\t' || out.back() == '\r'))
+            out.pop_back();
+        ++pos;
+        // substrate generic algorithm: skip the continuation's indentation.
+        while (pos < title.size() && (title[pos] == ' ' || title[pos] == '\t'))
+            ++pos;
+        if (pos + 1 < title.size() && title[pos] == '/' && title[pos + 1] == '/') {
+            pos += 2;
+            if (pos < title.size() && (title[pos] == '/' || title[pos] == '!'))
+                ++pos;
+            // substrate generic algorithm: skip the blanks after the
+            // decoration.
+            while (pos < title.size() && (title[pos] == ' ' || title[pos] == '\t'))
+                ++pos;
+        }
+        if (!out.empty() && pos < title.size())
+            out.push_back(' ');
+    }
+    return out;
+}
+
 } // namespace
 
 parse::parse_result<SectionHeader> parse_rsec(std::string_view raw) {
@@ -4676,7 +4715,12 @@ parse::parse_result<SectionHeader> parse_rsec(std::string_view raw) {
         parse::lift2(depth_and_stable,
                      parse::sequence_right(blanks(), bracketed('{', '}', "expected '{'", "expected '}'")),
                      [](std::pair<int, std::string> depth_stable, std::string title) {
-                         return SectionHeader{depth_stable.first, std::move(depth_stable.second), std::move(title)};
+                         // The braced content may span physical lines when a
+                         // formatter wrapped a long title (issue #8) — the
+                         // comment splitter keeps such continuations in one
+                         // item — so the value joins them back into the
+                         // authored title.
+                         return SectionHeader{depth_stable.first, std::move(depth_stable.second), unwrap_title(title)};
                      });
 
     return header(parse::cursor{raw});
@@ -4712,11 +4756,40 @@ void append_rsec_comment_items(std::vector<RawItem>& out, unsigned raw_begin, st
                                       raw.substr(chunk_begin, line_begin - chunk_begin)});
             }
 
-            const std::size_t after_line = newline == std::string::npos ? raw.size() : newline + 1;
+            std::size_t after_line = newline == std::string::npos ? raw.size() : newline + 1;
+            // A formatter-wrapped `{title}` continues on the following plain
+            // `//` lines (issue #8): while the brace is still open, extend
+            // this item through each adjacent draft-form continuation — never
+            // a `///`/`//!` line or another `\rSec` — so parse_rsec sees the
+            // whole marker. A title the RawComment never closes stays
+            // unterminated and draws the malformed-\rSec warning as before.
+            const auto title_open = [&raw, line_begin](std::size_t end) {
+                const std::string_view text(raw.data() + line_begin, end - line_begin);
+                const std::size_t      open = text.find('{');
+                return open != std::string_view::npos && text.find('}', open) == std::string_view::npos;
+            };
+            // substrate generic algorithm: the same offset-preserving line
+            // scan as the outer loop, consuming continuations until the
+            // title closes or the run of plain `//` lines ends.
+            while (after_line < raw.size() && title_open(after_line)) {
+                const std::size_t next_newline = raw.find('\n', after_line);
+                const std::size_t next_end     = next_newline == std::string::npos ? raw.size() : next_newline;
+                std::string_view  next(raw.data() + after_line, next_end - after_line);
+                const std::size_t lead = next.find_first_not_of(" \t");
+                if (lead == std::string_view::npos)
+                    break;
+                next.remove_prefix(lead);
+                if (!next.starts_with("//") || next.starts_with("///") || next.starts_with("//!") ||
+                    rsec_tag_recognized(next))
+                    break;
+                after_line = next_newline == std::string::npos ? raw.size() : next_newline + 1;
+            }
             out.push_back(RawItem{raw_begin + static_cast<unsigned>(line_begin),
                                   nullptr,
                                   raw.substr(line_begin, after_line - line_begin)});
             chunk_begin = after_line;
+            line_begin  = after_line;
+            continue;
         }
 
         if (newline == std::string::npos)
