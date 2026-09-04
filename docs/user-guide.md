@@ -188,6 +188,12 @@ members to the section with the matching stable name:
 
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
+An in-class member definition is reduced to a declaration in the synopsis — a
+body is never synopsis content — and the member is described in its own
+subclause like any other. Declaring in class and defining out of line remains
+the recommended style (the definition's lexical position is what places its
+wording), but it is not required for a clean synopsis.
+
 A docblock documents the declaration that follows it. Wording comes from class
 and class-template definitions (a synopsis plus routed members), documented
 function *definitions*, documented in-class type aliases, and — at namespace

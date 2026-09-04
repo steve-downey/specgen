@@ -165,7 +165,12 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   Clang-synthesized body is not mistaken for source**: an explicitly defaulted special member
   can gain a synthetic `CompoundStmt` after ODR-use, with a source range covering only the
   final `t` in `default`, so extraction tests `isDefaulted()`/`isDeleted()` before splicing a
-  reported body (otherwise `= default;` becomes `= defaul;;`).
+  reported body (otherwise `= default;` becomes `= defaul;;`). **No edit is emitted inside a
+  removed or spliced range**: the qualifier/expos/comment edit sources all filter against
+  those spans, because the descending-offset apply loop would otherwise apply the inner edit
+  first and its overlap watermark would suppress the removal — which is how a body naming a
+  droppable qualifier once survived into the synopsis while its unqualified twin spliced
+  cleanly.
 - Strip docblocks/markup comments and Doxygen comments; keep draft-form comments (`\ref`,
   `see~\ref`).
 - **An empty class-scope `\ref` group is not printed.** A group header is retained only when
