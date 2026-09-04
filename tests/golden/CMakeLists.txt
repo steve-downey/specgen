@@ -791,10 +791,7 @@ specgen_add_golden(
 # The documented-but-unsupported backstop: a docblock on an entity kind that
 # produces no wording is an Error rather than a silent drop (a documented
 # enum; a documented function declaration, whose markup belongs at the
-# definition), while `\omit`, `\expos`, and plain absence of markup stay
-# quiet. Pinning the `\expos` alias template's silence is deliberate — when
-# alias templates join the exposition-only candidate set, this golden is
-# where the behavior change becomes visible.
+# definition), while `\omit` and plain absence of markup stay quiet.
 specgen_add_golden(
     unsupported_kinds
     MODE diagnose

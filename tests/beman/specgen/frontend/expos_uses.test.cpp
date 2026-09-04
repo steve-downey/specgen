@@ -110,7 +110,15 @@ TEST_CASE("build_document - Equivalent-to bodies resolve namespace exposition us
     CHECK(variable->code.spans.front().payload == "limit");
 
     REQUIRE(observers != nullptr);
-    REQUIRE(observers->children.size() == 2);
+    REQUIRE(observers->children.size() == 3);
+    // The third child is apply_in_context: its parameter is written
+    // `detail::traverse_context_t<int>` and must render as the exposid
+    // spelling with the qualifier dropped — the type-use half of §3.5.
+    const auto&         apply      = std::get<ir::SpecItem>(observers->children[2]);
+    const ir::CodeText& apply_decl = apply.decl.signatures.front();
+    CHECK(apply_decl.text.contains("traverse-context-t<int> context"));
+    CHECK_FALSE(apply_decl.text.contains("detail::"));
+    CHECK(std::ranges::count(apply_decl.spans, std::string("traverse-context-t"), &ir::Span::payload) == 1);
     const auto& bump = std::get<ir::SpecItem>(observers->children[1]);
     const auto  effects =
         std::ranges::find(bump.descr.elements, ir::ElementKind::Effects, &ir::DescriptionElement::kind);
