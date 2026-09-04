@@ -36,7 +36,7 @@ Add the selected directory to `PATH` or invoke the executable there.
 
 `make install` installs the executable as `.install/bin/specgen` (with the
 library, headers and CMake package beside it), and that path is the one the
-examples assume. `INSTALL_PREFIX` selects a different prefix. Installing from
+examples assume. `PREFIX` selects a different prefix. Installing from
 the preset build tree needs an explicit `--prefix`, because that tree is
 configured with `/usr/local`.
 

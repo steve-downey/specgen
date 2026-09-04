@@ -4,9 +4,8 @@
 
 NO_COLOR=1
 
-INSTALL_PREFIX?=.install/
+PREFIX?=.install/
 BUILD_DIR?=.build
-DEST?=$(INSTALL_PREFIX)
 CMAKE_FLAGS?=
 
 # Where to find LLVM/Clang's CMake package. specgen requires the front end,
@@ -83,7 +82,7 @@ define run_cmake =
 	$(CMAKE) \
 	-G "Ninja Multi-Config" \
 	-DCMAKE_CONFIGURATION_TYPES=$(_configuration_types) \
-	-DCMAKE_INSTALL_PREFIX=$(abspath $(INSTALL_PREFIX)) \
+	-DCMAKE_INSTALL_PREFIX=$(abspath $(PREFIX)) \
 	-DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
 	-DCMAKE_PREFIX_PATH=$(CURDIR)/infra/cmake \
 	-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=$(_cmake_top_level) \
@@ -138,17 +137,22 @@ compile-headers: $(_build_path)/CMakeCache.txt ## Compile the headers
 # stripping `beman.` from `beman.specgen`. A `--component beman.specgen` here
 # would name no component at all, and `cmake --install` treats an unknown
 # component as an empty one, so that target would exit 0 and install nothing.
-.PHONY: install
-install: $(_build_path)/CMakeCache.txt compile ## Install the project
-	$(CMAKE) --install $(_build_path) --config $(CONFIG) --verbose
-
-# The configuration to ship, and the one `testinstall` runs against.
-# RelWithDebInfo rather than Release: optimized, but it keeps the debug info
-# that makes a failure in an installed binary diagnosable. The default CONFIG
-# stays Asan for day-to-day work, and an Asan build is the wrong thing to
+#
+# CONFIG defaults to Asan for day-to-day work, but Asan is the wrong thing to
 # install -- the sanitizer writes to stderr, which would corrupt captured
 # example output, and a sanitized static library imposes Asan on every
-# consumer that links it.
+# consumer that links it. So `install` pins its own CONFIG to RelWithDebInfo
+# rather than inheriting the global default; that override also reaches the
+# `compile` prerequisite, so the two stay in sync without a separate release
+# build step.
+install: CONFIG=$(RELEASE_CONFIG)
+.PHONY: install
+install: $(_build_path)/CMakeCache.txt compile ## Install the project (RelWithDebInfo; CONFIG= to override)
+	$(CMAKE) --install $(_build_path) --config $(CONFIG) --verbose
+
+# The configuration to ship, and the one `install` and `testinstall` run
+# against. RelWithDebInfo rather than Release: optimized, but it keeps the
+# debug info that makes a failure in an installed binary diagnosable.
 RELEASE_CONFIG?=RelWithDebInfo
 
 .PHONY: release
@@ -344,7 +348,7 @@ testinstall: install-release
 testinstall: ## Test the installed package with a standalone consumer
 	$(CMAKE) -S installtest -B installtest/.build \
 		-DCMAKE_TOOLCHAIN_FILE=$(_toolchain) \
-		-DCMAKE_PREFIX_PATH=$(abspath $(INSTALL_PREFIX))
+		-DCMAKE_PREFIX_PATH=$(abspath $(PREFIX))
 	$(CMAKE) --build installtest/.build
 	$(CTEST) --test-dir installtest/.build --output-on-failure
 

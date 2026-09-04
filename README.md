@@ -82,7 +82,7 @@ Set `BEMAN_SPECGEN_BUILD_TESTS=OFF` to omit the test suite.
 
 The preset build writes the executable to `build/gcc-release/tools/specgen/specgen`.
 `make install` installs it as `.install/bin/specgen`, the location the examples assume.
-`INSTALL_PREFIX` selects another prefix.
+`PREFIX` selects another prefix.
 Installing from the preset tree needs an explicit `--prefix`; that tree is configured with `/usr/local`.
 Invoke either binary directly or add its directory to `PATH`.
 

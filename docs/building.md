@@ -67,8 +67,9 @@ reports the same test count the preset lane does.
   to install: the sanitizer writes to stderr, which corrupts byte-compared captured
   output, and a sanitized static library imposes Asan on every consumer that links
   it.
-- `make install` places the driver at **`.install/bin/specgen`** (`INSTALL_PREFIX`
-  selects another prefix). That is the well-known location the examples and the live
+- `make install` places the driver at **`.install/bin/specgen`** (`PREFIX`
+  selects another prefix), always as a RelWithDebInfo build regardless of the
+  ambient `CONFIG`. That is the well-known location the examples and the live
   example document assume; every script honours a `$SPECGEN` override, so a preset
   build (`build/gcc-release/tools/specgen/specgen`) works without installing.
 - The install components are `specgen_Runtime` and `specgen_Development`. Beware
