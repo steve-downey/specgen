@@ -1,0 +1,1 @@
+specgen: lifted/synopsis: error: `raw` is named in the synopsis but is not a visible declaration (an unmarked private member): mark it `\expos` so it can be named, or mask the declaration that names it (bare `\seebelow`, or `\impdef` on an alias)

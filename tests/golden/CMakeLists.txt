@@ -609,6 +609,19 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_mandates.hpp"
 )
 
+# Private-member elision leaves neither a stray leading `public:` (a
+# struct's default access is already public) nor a silent invisible-name
+# use: the surviving `using type = raw;` names the elided private alias,
+# and the leak is the fixture. NO_VALIDATE for the same reason
+# namespace_map takes it; `private_alias_validate` (below the Clang gate)
+# pins the finding and its fixit.
+specgen_add_golden(
+    private_alias
+    MODE generate
+    NO_VALIDATE
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_private_alias.hpp"
+)
+
 # An in-class body is never synopsis content, whether or not it names an
 # entity the drop set rewrites — the qualifier edit inside the body used to
 # suppress the body splice through the overlap watermark, keeping the
@@ -993,6 +1006,17 @@ specgen_add_golden(
     foreign_include_validate
     MODE validate
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/foreign_include/expected.json"
+)
+
+# `spec_private_alias.hpp`'s standing finding, read off its own generate
+# golden the same way `namespace_map_validate` reads its header's — and
+# registered after the Clang-gated block for the same regeneration-ordering
+# reason: the surviving `using type = raw;` names the elided private alias,
+# the synopsis-side hidden-name check's one non-double-reporting case.
+specgen_add_golden(
+    private_alias_validate
+    MODE validate
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/private_alias/expected.json"
 )
 
 # `spec_optional.hpp`'s standing note, read off its own generate golden

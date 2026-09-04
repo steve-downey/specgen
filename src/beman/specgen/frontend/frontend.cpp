@@ -1548,12 +1548,19 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // Access-specifier labels (design §6): a `private:`/`protected:` label whose
     // whole section is omitted is itself removed, so the synopsis carries no
     // empty exposition section. Tracked here, resolved after the member walk.
+    // `anything_before` records whether any member had rendered when the
+    // label was reached: in a struct or union, a `public:` label with nothing
+    // rendered before it says nothing once the preceding private section is
+    // elided — default member access is already public — and used to survive
+    // as a stray leading label (issue #7).
     struct AccessLabel {
         const clang::Decl*     decl;
         clang::AccessSpecifier access;
-        bool                   survivor = false;
+        bool                   survivor        = false;
+        bool                   anything_before = false;
     };
     std::vector<AccessLabel>   labels;
+    bool                       member_shown  = false; // any member rendered so far, label-independent
     long                       current_label = -1;
     std::optional<std::size_t> current_group;
     std::size_t                next_group   = 0;
@@ -1573,6 +1580,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         }
     };
     const auto mark_survivor = [&] {
+        member_shown = true;
         if (current_label >= 0)
             labels[static_cast<std::size_t>(current_label)].survivor = true;
         if (current_group)
@@ -1600,7 +1608,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         if (!member->isImplicit() && member->getBeginLoc().isValid())
             open_groups_before(sm.getDecomposedLoc(member->getBeginLoc()).second);
         if (const auto* access = llvm::dyn_cast<clang::AccessSpecDecl>(member)) {
-            labels.push_back(AccessLabel{member, access->getAccess()});
+            labels.push_back(AccessLabel{member, access->getAccess(), false, member_shown});
             current_label = static_cast<long>(labels.size()) - 1;
             continue;
         }
@@ -1675,6 +1683,12 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             // with an ExposId span and cannot be nested in CodeText.
             if (!has_docblock(alias, sm) && !expos_set.contains(alias->getCanonicalDecl()))
                 add_library_index(alias, record->getNameAsString());
+            // An `\expos` alias renders like exposition-only data: exposid
+            // name, `// exposition only` tail, and its uses elsewhere in the
+            // class rewritten by the expos-use pass — the fixit the private
+            // `using type = raw;` leakage error offers (issue #7).
+            if (const auto it = expos_set.find(alias->getCanonicalDecl()); it != expos_set.end())
+                add_exposid(alias, it->second);
             if (const auto mask = alias_mask(docblock_directives(alias, sm))) {
                 if (const auto range = alias_rhs_source_range(alias, sm, lang_opts)) {
                     const unsigned begin = sm.getDecomposedLoc(range->getBegin()).second;
@@ -1764,9 +1778,16 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     open_groups_before(class_end);
     finish_group();
 
-    // Drop `private:`/`protected:` labels whose entire section was omitted.
-    const auto orphaned_label = [](const AccessLabel& label) {
-        return !label.survivor && (label.access == clang::AS_private || label.access == clang::AS_protected);
+    // Drop `private:`/`protected:` labels whose entire section was omitted —
+    // and, in a struct or union, a `public:` label with nothing rendered
+    // before it: default member access is already public there, so once the
+    // preceding private section is elided the label says nothing (issue #7).
+    // In a class the leading `public:` stays, as every draft class synopsis
+    // writes it.
+    const auto orphaned_label = [&record](const AccessLabel& label) {
+        if (!label.survivor && (label.access == clang::AS_private || label.access == clang::AS_protected))
+            return true;
+        return label.access == clang::AS_public && !record->isClass() && !label.anything_before;
     };
     // substrate generic algorithm: the filtering is real (views::filter,
     // above), but what remains is a call into the same omit_line fold the
@@ -3348,6 +3369,11 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             previous_was_routed_alias    = false;
             if (!has_docblock(alias, sm))
                 continue;
+            // An `\expos` alias is exposition, not a routed wording item:
+            // it renders in the synopsis under its exposid name, and its
+            // roster entry is Expos, the same treatment expos data gets.
+            if (expos_set.contains(alias->getCanonicalDecl()))
+                continue;
 
             AttachedItem attached = attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set);
             diagnostics.append_range(std::move(attached.diagnostics));
@@ -3506,7 +3532,12 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         const clang::FunctionDecl* fn    = member_function_or_template(member);
         const clang::NamedDecl*    named = fn;
         const auto*                alias = llvm::dyn_cast<clang::TypeAliasDecl>(member);
-        if (alias != nullptr && !has_docblock(alias, sm))
+        // An unmarked alias is synopsis-only (design §6) — except a *private*
+        // one, whose synopsis line is dropped: that one enters the roster as
+        // Private, so the leakage checker can see a surviving declaration
+        // naming it (`using type = raw;` naming the elided `raw`, issue #7) —
+        // the same visibility question unmarked private data already answers.
+        if (alias != nullptr && !has_docblock(alias, sm) && !real_member.effectively_private)
             continue;
         if (named == nullptr)
             named = alias;
@@ -3622,12 +3653,15 @@ std::set<const clang::Decl*> build_omit_set(const std::vector<clang::Decl*>& dec
     return omit;
 }
 
-// A member's exposition-only name candidate: a data member or method,
-// including the underlying method of a FunctionTemplateDecl. Hidden friends
+// A member's exposition-only name candidate: a data member, a type alias, or
+// a method, including the underlying method of a FunctionTemplateDecl.
+// Hidden friends
 // remain namespace functions rather than class exposition members.
 const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
     if (const auto* fd = llvm::dyn_cast<clang::FieldDecl>(member))
         return fd;
+    if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(member))
+        return alias;
     if (const auto* md = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(member_function_or_template(member)))
         return md;
     return nullptr;

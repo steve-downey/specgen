@@ -448,7 +448,8 @@ function un-`noexcept` even when it visibly never throws.
 | In-class def (compiler bug) | yes | yes, markup in-class, `\at` if needed |
 | Marked in-class function template | yes (unless `\merge`/`\omit`) | yes, ordinary member path |
 | Private fn, unmarked | omitted, silent | — |
-| Private fn/data, `\expos` | yes, exposid + `// exposition only` | as referenced |
+| Private fn/data/alias, `\expos` | yes, exposid + `// exposition only` | as referenced |
+| Private alias, unmarked | omitted; rostered Private, so naming it elsewhere is a leak | — |
 | Private member fn template, `\expos` | yes, exposid + `// exposition only` | as referenced; calls become expos uses |
 | Field in anonymous struct/union, `\expos` | wrapper + exposed field; unmarked alternatives dropped | as referenced |
 | Private data, unmarked | omitted | diagnostic nudge ("state not marked \expos") |
@@ -640,10 +641,14 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      backticked prose naming a member the reader cannot see (e.g. an extracted body calling a
      private `hard_reset()`).
    - **Error** for an unresolved implementation-namespace qualifier anywhere in rendered
-     output: wording, itemdecl, and (uniquely to this clause) a **synopsis**. A finding
+     output: wording, itemdecl, and a **synopsis**. A finding
      requires an actual qualifier occurrence: a bare English word matching a recorded foreign
      namespace is silent; only that identifier followed by `::` reports. (Hidden roster-name
-     checks still inspect every identifier occurrence.)
+     checks still inspect every identifier occurrence.) In a synopsis the roster half runs
+     for exactly one hidden disposition, **Private** — an unmarked private member's own
+     declaration is unconditionally dropped there, so an occurrence of its name is a
+     surviving declaration reaching for it (`using type = raw;` naming the elided private
+     alias) and cannot be the self-report a `\merge`d or `\omit`ted name would be.
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any
@@ -702,12 +707,13 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
   reproducible anywhere. Corpus headers are clang-format-controlled, and their formatting is
   part of the extracted output, so goldens are regenerated after a header is reformatted.
   Every corpus header must satisfy the §9 coverage invariant and, by convention, validate
-  clean, with three standing findings, each **pinned rather than skipped**:
+  clean, with four standing findings, each **pinned rather than skipped**:
   - `spec_namespace.hpp` is the fixture for a foreign qualifier surviving at all; it is
     registered `NO_VALIDATE` and its Error is pinned by its own validate golden. That is the
     opt-out to reuse if another header ever needs one; pin the diagnostic, never just skip
     the case. `spec_foreign_include.hpp` takes the same opt-out for the qualifier whose
-    namespace is declared in an included header rather than the main file.
+    namespace is declared in an included header rather than the main file, and
+    `spec_private_alias.hpp` for a synopsis declaration naming an elided private alias.
   - `spec_optional.hpp`'s default constructor calls the undocumented `hard_reset()`, and a
     validate golden pins the resulting Note. It needs no `NO_VALIDATE`: a Note leaves the
     exit code at 0.

@@ -475,16 +475,30 @@ Diagnostics check_leakage(const std::string& context, const ir::CodeText& code, 
     return report_leaks(context, code, [&visible](const IdentifierRun& run) { return leak_message(run, visible); });
 }
 
-// A synopsis, against the qualifier resolution only. The roster half must not
-// run here: a synopsis is where names are *declared*, so a `\merge`d twin --
-// invisible, and in the synopsis text by construction -- would be reported at
-// its own declaration in every class that has one. A surviving qualifier has
-// no such double life; it is wrong in the synopsis for exactly the reason it
+// A synopsis, against the qualifier resolution plus the one hidden
+// disposition that cannot double-report there: Private. The full roster half
+// must not run here: a synopsis is where names are *declared*, so a `\merge`d
+// twin -- invisible, and its name in the synopsis text by construction --
+// would be reported at its own declaration in every class that has one. An
+// unmarked private member has no such double life: its declaration is dropped
+// from the synopsis unconditionally (design §6), so an occurrence of its name
+// there is a *surviving* declaration reaching for it -- `using type = raw;`
+// naming the elided private alias (issue #7), published wording that will not
+// compile if copied. A surviving qualifier has
+// no such double life either; it is wrong in the synopsis for exactly the reason it
 // is wrong in an *Equivalent to:* body, and `spec_namespace.hpp` is where it
 // happens to land.
 Diagnostics
 check_synopsis_leakage(const std::string& context, const ir::CodeText& code, const NameVisibility& visible) {
-    return report_leaks(context, code, [&visible](const IdentifierRun& run) { return foreign_message(run, visible); });
+    return report_leaks(context, code, [&visible](const IdentifierRun& run) -> std::optional<std::string> {
+        if (!visible.documented.contains(run.name) && visible.hidden.contains(run.name) &&
+            visible.hidden.at(run.name).disposition == ir::Disposition::Private)
+            return "`" + run.name + "` is named in the synopsis but is not a visible declaration (" +
+                   std::string(invisibility_reason(ir::Disposition::Private)) +
+                   "): mark it `\\expos` so it can be named, or mask the declaration that names it (bare "
+                   "`\\seebelow`, or `\\impdef` on an alias)";
+        return foreign_message(run, visible);
+    });
 }
 
 // Every `CodeText` a paragraph renders as code -- the backticked spans that
