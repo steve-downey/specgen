@@ -99,7 +99,12 @@ share one back half, so single-pass wording equals two-pass wording byte for byt
   fixed-args path.
 - Process only decls whose location is in the main file.
 - Comments retrieved via the raw comment list; markup attachment via
-  `getRawCommentForDeclNoCache`.
+  `getRawCommentForDeclNoCache`, looked up through the *described template* when the decl
+  has one. Clang anchors comment search for a template decl at its `template` keyword but
+  for the templated decl at its name, and rejects any comment separated from the anchor by
+  one of `;{}#@` — which a requires-expression in a template-head constraint places between
+  the header and the name, so a lookup through the templated decl would silently lose the
+  docblock (issue #20).
 - The preprocessor's **skipped ranges are recorded** during the parse, so extraction (§4.2)
   can resolve conditional compilation down to the branch Clang selected.
 

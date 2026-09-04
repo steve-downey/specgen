@@ -813,13 +813,29 @@ docblock_diagnostics(const clang::RawComment*                rc,
            std::ranges::to<std::vector<beman::specgen::document_build::Diagnostic>>();
 }
 
+// The raw comment attached to `decl`, looked up through its described
+// template when it has one. Clang anchors comment search for a
+// RedeclarableTemplateDecl at its `template` keyword but for the templated
+// decl at its *name*, and rejects any candidate comment separated from the
+// anchor by one of `;{}#@` (ASTContext::getRawCommentForDeclNoCacheImpl). A
+// requires-expression in a template-head constraint —
+// `requires requires(T t) { ... }` — puts all three between the header and
+// the name, so a lookup through the templated decl silently loses the
+// docblock that the template decl still finds (issue #20). The described
+// template is also the decl clang's own comment machinery documents
+// (adjustDeclToTemplate).
+const clang::RawComment* attached_raw_comment(const clang::Decl* decl) {
+    const clang::TemplateDecl* described = decl->getDescribedTemplate();
+    return decl->getASTContext().getRawCommentForDeclNoCache(described != nullptr ? described : decl);
+}
+
 // Does `decl` carry a `//!`/`/*!` docblock of its own? The two-step the
 // attach path and the roster both need before trusting a raw comment:
-// getRawCommentForDeclNoCache attaches whatever comment immediately precedes
+// attached_raw_comment yields whatever comment immediately precedes
 // the decl, which may well be a draft-form `\ref`/`\rSec` line that belongs to
 // the synopsis rather than markup for this entity.
 bool has_docblock(const clang::Decl* decl, const clang::SourceManager& sm) {
-    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    const clang::RawComment* rc = attached_raw_comment(decl);
     return rc != nullptr && is_docblock_comment(rc->getRawText(sm));
 }
 
@@ -830,7 +846,7 @@ bool has_docblock(const clang::Decl* decl, const clang::SourceManager& sm) {
 // attach path. Takes any Decl so it serves data members (`\expos`) as well as
 // functions.
 beman::specgen::lowering::ItemDirectives docblock_directives(const clang::Decl* decl, const clang::SourceManager& sm) {
-    if (const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl)) {
+    if (const clang::RawComment* rc = attached_raw_comment(decl)) {
         const llvm::StringRef raw = rc->getRawText(sm);
         if (const std::optional<std::size_t> start = docblock_start(raw))
             return beman::specgen::lowering::lower(
@@ -846,7 +862,7 @@ beman::specgen::lowering::ItemDirectives docblock_directives(const clang::Decl* 
 // while preserving every finding from the marker's own docblock.
 std::optional<std::vector<beman::specgen::document_build::Diagnostic>>
 record_suppression_diagnostics(const clang::Decl* decl, const clang::SourceManager& sm) {
-    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    const clang::RawComment* rc = attached_raw_comment(decl);
     if (rc == nullptr)
         return std::nullopt;
     const llvm::StringRef            raw   = rc->getRawText(sm);
@@ -880,7 +896,7 @@ struct RecordDocblock {
 };
 
 RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManager& sm) {
-    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    const clang::RawComment* rc = attached_raw_comment(decl);
     if (rc == nullptr)
         return {};
     const llvm::StringRef            raw   = rc->getRawText(sm);
@@ -2990,7 +3006,7 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
     namespace grammar  = beman::specgen::grammar;
     namespace lowering = beman::specgen::lowering;
 
-    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    const clang::RawComment* rc = attached_raw_comment(decl);
     if (rc == nullptr)
         return;
     const llvm::StringRef            raw      = rc->getRawText(sm);
@@ -3041,13 +3057,13 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
         sm.getDecomposedLoc(friend_begin.isValid() ? friend_begin : decl_form->getBeginLoc()).second;
 
     // Descr: the definition's own `//!` docblock, if it has one.
-    // getRawCommentForDeclNoCache attaches the immediately preceding comment;
+    // attached_raw_comment yields the immediately preceding comment;
     // is_docblock_comment guards against picking up a draft-form `\ref`/
     // `\rSec` comment that happens to sit just above the definition. Read
     // ahead of the itemdecl (below) because `\constraints-in-decl`, carried
     // on `attached.directives`, decides whether the requires-clause is
     // stripped from it.
-    if (const clang::RawComment* rc = def->getASTContext().getRawCommentForDeclNoCache(def)) {
+    if (const clang::RawComment* rc = attached_raw_comment(def)) {
         const llvm::StringRef            raw      = rc->getRawText(sm);
         const std::optional<std::size_t> start    = docblock_start(raw);
         const llvm::StringRef            raw_text = start ? raw.substr(*start) : llvm::StringRef{};
@@ -4038,7 +4054,7 @@ class BodyMemberCollector : public clang::RecursiveASTVisitor<BodyMemberCollecto
 bool has_unextracted_body(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
     if (fn == nullptr || !fn->isThisDeclarationADefinition() || fn->getBody() == nullptr)
         return false;
-    const clang::RawComment* rc = fn->getASTContext().getRawCommentForDeclNoCache(fn);
+    const clang::RawComment* rc = attached_raw_comment(fn);
     if (rc == nullptr)
         return false;
     const llvm::StringRef raw = rc->getRawText(sm);
@@ -5112,7 +5128,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // text, and the comment's standalone node was the duplication (issue #4).
     AttachedCommentRanges attached_comments;
     const auto            note_attached_docblock = [&](const clang::Decl* decl) {
-        const clang::RawComment* rc = ctx.getRawCommentForDeclNoCache(decl);
+        const clang::RawComment* rc = attached_raw_comment(decl);
         if (rc == nullptr || !is_docblock_comment(rc->getRawText(sm)))
             return;
         const auto [begin_file, begin] = sm.getDecomposedLoc(rc->getBeginLoc());
