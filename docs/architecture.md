@@ -446,6 +446,9 @@ function un-`noexcept` even when it visibly never throws.
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
+| Documented namespace alias/alias template | — | yes, alias masking rules apply; `\also` groups |
+| Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
+| Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock
 becomes an ordinary itemdecl in the nearest `\ref` section (or the section named by `\at`);
@@ -461,6 +464,16 @@ template head kept on its own line, and adjacent primaries group with `\also`. A
 declaration whose entity is defined elsewhere in the header, or an undocumented never-defined
 one, contributes nothing — in particular never an empty Synopsis, whose rendering was an
 empty code block (§9's empty-synopsis check keeps it that way).
+
+Documented namespace-scope aliases, alias templates, variables, variable templates, and
+concepts are likewise ordinary wording items, extracted whole through their semicolon with
+constraint and initializer kept, the way the draft writes them ([concept.same],
+[tuple.helper]); the alias kinds carry the in-class alias masking rules (`\impdef`, bare
+`\seebelow`) and group with `\also`. `\expos` on the candidate kinds still takes the
+standalone-synopsis path above instead. And the backstop for everything else: a docblock on
+an entity kind that produces no wording — an enum, a deduction guide, or a function
+*declaration*, whose markup belongs at the definition — is an Error from `generate` rather
+than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is deliberate.
 
 ## 7. Intermediate representation
 

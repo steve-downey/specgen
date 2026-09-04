@@ -1,0 +1,2 @@
+spec_unsupported_kinds.hpp:16: error: a documented Enum produces no wording: unsupported entity kind
+spec_unsupported_kinds.hpp:19: error: a documented function declaration produces no wording; markup belongs at the definition, which places a function's wording (design §3.3)

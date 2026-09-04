@@ -188,6 +188,15 @@ members to the section with the matching stable name:
 
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
+A docblock documents the declaration that follows it. Wording comes from class
+and class-template definitions (a synopsis plus routed members), documented
+function *definitions*, documented in-class type aliases, and — at namespace
+scope — documented aliases, alias templates, variables, variable templates,
+concepts, and record declarations the header never defines (an undefined
+class-template primary renders as its own declaration). A docblock on any
+other entity kind, or on a function declaration rather than its definition,
+is reported as an error: it would otherwise produce no wording, silently.
+
 ## Description elements
 
 A specgen docblock contains only the elements that apply. The complete element
@@ -327,8 +336,10 @@ Run `render --validate` in the normal authoring loop. Validation checks:
 
 Docblock and source-structure diagnostics are printed by `generate` as
 `<header>:<line>: <severity>: <message>`. Examples include element-order notes,
-duplicate-element warnings, unknown-tag errors, malformed `\rSec` markers, and
-unrecognized draft-style headings. These diagnostics describe markup on a
+duplicate-element warnings, unknown-tag errors, malformed `\rSec` markers,
+unrecognized draft-style headings, and errors for a docblock on an entity kind
+that produces no wording (an enum, or a function declaration whose markup
+belongs at the definition). These diagnostics describe markup on a
 successfully parsed header, so even an error does not prevent IR emission or
 change `generate`'s successful exit status. Always inspect standard error.
 

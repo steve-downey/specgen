@@ -1,0 +1,70 @@
+\rSec3[demo.vocab]{Vocabulary}
+
+\indexlibraryglobal{id_t}%
+\begin{itemdecl}
+template<class T> using id_t = T;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The identity alias.
+\end{itemdescr}
+
+\indexlibraryglobal{value_t}%
+\indexlibraryglobal{size_type}%
+\begin{itemdecl}
+using value_t = int;
+using size_type = unsigned long;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The value aliases.
+\end{itemdescr}
+
+\indexlibraryglobal{token_t}%
+\begin{itemdecl}
+using token_t = @\impdef@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The token type is implementation-defined.
+\end{itemdescr}
+
+\indexlibraryglobal{flag_v}%
+\begin{itemdecl}
+template<class T> inline constexpr bool flag_v = false;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+\tcode{flag_v<T>} is \tcode{false} unless a program specializes it.
+\end{itemdescr}
+
+\indexlibraryglobal{max_links}%
+\begin{itemdecl}
+inline constexpr int max_links = 8;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The registration limit.
+\end{itemdescr}
+
+\indexlibraryglobal{usable}%
+\begin{itemdecl}
+template<class T>
+concept usable = requires { typename T::type; };
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A type is usable if it names a member type.
+\end{itemdescr}

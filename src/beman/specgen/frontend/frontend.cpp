@@ -2056,22 +2056,26 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     return format_and_recover(std::move(text), sentinels);
 }
 
-// A documented in-class type alias is an ordinary itemdecl. The declaration
+// A documented type alias is an ordinary itemdecl. The declaration
 // itself is the AST-backed extraction range, while the TypeLoc identifies the
-// RHS well enough for a dominant implementation-detail substitution.
+// RHS well enough for a dominant implementation-detail substitution. `head`
+// is the enclosing TypeAliasTemplateDecl for a namespace-scope alias
+// template, so the extraction starts at `template` rather than `using` —
+// the same range-head override extract_synopsis takes for a class template.
 beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl*                      alias,
                                                     const clang::SourceManager&                      sm,
                                                     const clang::LangOptions&                        lang_opts,
                                                     const std::set<std::string>&                     ns_drop_set,
                                                     const std::map<const clang::Decl*, std::string>& expos_set,
-                                                    std::optional<AliasMask>                         mask) {
+                                                    std::optional<AliasMask>                         mask,
+                                                    const clang::Decl*                               head = nullptr) {
     namespace ir = beman::specgen::ir;
 
-    const unsigned decl_begin = sm.getDecomposedLoc(alias->getBeginLoc()).second;
-    std::string    text =
-        clang::Lexer::getSourceText(
-            clang::CharSourceRange::getTokenRange(alias->getBeginLoc(), alias->getEndLoc()), sm, lang_opts)
-            .str();
+    const clang::SourceLocation begin_loc  = head != nullptr ? head->getBeginLoc() : alias->getBeginLoc();
+    const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
+    std::string                 text       = clang::Lexer::getSourceText(
+                                                 clang::CharSourceRange::getTokenRange(begin_loc, alias->getEndLoc()), sm, lang_opts)
+                                                 .str();
     text += ';';
 
     std::map<std::string, SpanInfo> sentinels;
@@ -2793,6 +2797,33 @@ struct AttachedItem {
     unsigned grouping_line  = 0; // first line of the docblock carrying grouping metadata
 };
 
+// Parse and lower `decl`'s own `//!` docblock into `attached` — descr,
+// directives, diagnostics, and the grouping line — if it carries one. The
+// shared front half of the attach_* functions whose markup and itemdecl come
+// off one decl (attach_alias, attach_record_declaration,
+// attach_namespace_entity). attach_function keeps its own copy inline: its
+// markup decl and itemdecl decl differ, and it reads the directives
+// mid-flight to decide requires-clause stripping.
+void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clang::SourceManager& sm) {
+    namespace grammar  = beman::specgen::grammar;
+    namespace lowering = beman::specgen::lowering;
+
+    const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
+    if (rc == nullptr)
+        return;
+    const llvm::StringRef            raw      = rc->getRawText(sm);
+    const std::optional<std::size_t> start    = docblock_start(raw);
+    const llvm::StringRef            raw_text = start ? raw.substr(*start) : llvm::StringRef{};
+    if (raw_text.empty())
+        return;
+    attached.grouping_line = sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(*start)));
+    const grammar::ParseResult pr      = grammar::parse_docblock(raw_text.str());
+    lowering::Lowered          lowered = lowering::lower(pr.block);
+    attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
+    attached.item.descr                = std::move(lowered.descr);
+    attached.directives                = std::move(lowered.directives);
+}
+
 // Build the AttachedItem for one function, given the decl its markup/body/
 // derivations come from (`def`) and the decl its itemdecl *text* comes from
 // (`decl_form`). For an out-of-line definition those differ — markup at the
@@ -2925,42 +2956,34 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     return attached;
 }
 
+// `head` is the enclosing TypeAliasTemplateDecl for a namespace-scope alias
+// template — the decl the docblock hangs off and the extraction range starts
+// at; null for a plain alias, in class or out.
 AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias,
                           const clang::SourceManager&                      sm,
                           const clang::LangOptions&                        lang_opts,
                           const std::set<std::string>&                     ns_drop_set,
-                          const std::map<const clang::Decl*, std::string>& expos_set) {
-    namespace grammar  = beman::specgen::grammar;
-    namespace lowering = beman::specgen::lowering;
+                          const std::map<const clang::Decl*, std::string>& expos_set,
+                          const clang::TypeAliasTemplateDecl*              head = nullptr) {
+    const clang::Decl* anchor = head != nullptr ? static_cast<const clang::Decl*>(head) : alias;
 
     AttachedItem attached;
-    attached.inclass_offset = sm.getDecomposedLoc(alias->getBeginLoc()).second;
+    attached.inclass_offset = sm.getDecomposedLoc(anchor->getBeginLoc()).second;
 
-    if (const clang::RawComment* rc = alias->getASTContext().getRawCommentForDeclNoCache(alias)) {
-        const llvm::StringRef            raw      = rc->getRawText(sm);
-        const std::optional<std::size_t> start    = docblock_start(raw);
-        const llvm::StringRef            raw_text = start ? raw.substr(*start) : llvm::StringRef{};
-        if (!raw_text.empty()) {
-            attached.grouping_line =
-                sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(*start)));
-            const grammar::ParseResult pr      = grammar::parse_docblock(raw_text.str());
-            lowering::Lowered          lowered = lowering::lower(pr.block);
-            attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
-            attached.item.descr                = std::move(lowered.descr);
-            attached.directives                = std::move(lowered.directives);
-            if (attached.directives.seebelow_target) {
-                const std::vector<grammar::Diagnostic> invalid{
-                    {beman::specgen::Severity::Error, 0, "a type alias accepts only bare \\seebelow"}};
-                attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
-            }
-        }
-    }
+    attach_docblock(attached, anchor, sm);
+    if (attached.directives.seebelow_target && attached.grouping_line > 0)
+        // Positioned at the docblock's first line, the same place
+        // docblock_diagnostics puts a line-0 grammar finding.
+        attached.diagnostics.push_back(
+            {beman::specgen::Severity::Error, attached.grouping_line, "a type alias accepts only bare \\seebelow"});
 
     attached.item.decl.signatures.push_back(
-        extract_alias_itemdecl(alias, sm, lang_opts, ns_drop_set, expos_set, alias_mask(attached.directives)));
+        extract_alias_itemdecl(alias, sm, lang_opts, ns_drop_set, expos_set, alias_mask(attached.directives), head));
     if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext())) {
         attached.item.decl.index.push_back(
             {ir::IndexKind::Member, alias->getNameAsString(), record->getNameAsString()});
+    } else if (alias->getDeclContext()->isFileContext()) {
+        attached.item.decl.index.push_back({ir::IndexKind::Global, alias->getNameAsString(), {}});
     }
     rewrite_prose_expos(attached.item.descr,
                         expos_spellings(llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext()), expos_set));
@@ -2985,26 +3008,9 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                        const clang::LangOptions&                        lang_opts,
                                        const std::set<std::string>&                     ns_drop_set,
                                        const std::map<const clang::Decl*, std::string>& expos_set) {
-    namespace grammar  = beman::specgen::grammar;
-    namespace lowering = beman::specgen::lowering;
-
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-
-    if (const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl)) {
-        const llvm::StringRef            raw      = rc->getRawText(sm);
-        const std::optional<std::size_t> start    = docblock_start(raw);
-        const llvm::StringRef            raw_text = start ? raw.substr(*start) : llvm::StringRef{};
-        if (!raw_text.empty()) {
-            attached.grouping_line =
-                sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(*start)));
-            const grammar::ParseResult pr      = grammar::parse_docblock(raw_text.str());
-            lowering::Lowered          lowered = lowering::lower(pr.block);
-            attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
-            attached.item.descr                = std::move(lowered.descr);
-            attached.directives                = std::move(lowered.directives);
-        }
-    }
+    attach_docblock(attached, decl, sm);
 
     const llvm::StringRef tag = record->getKindName();
     attached.item.decl.signatures.push_back(
@@ -3015,6 +3021,27 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                          expos_set,
                                          /*exposition=*/false,
                                          std::string_view(tag.data(), tag.size())));
+    return attached;
+}
+
+// Build the AttachedItem for a documented namespace-scope concept, variable,
+// or variable template (design §6): like the record declaration above, the
+// declaration *is* the wording — extracted whole through its semicolon,
+// constraint and initializer kept, the way the draft writes them
+// ([concept.same], [tuple.helper]). Aliases go through attach_alias instead,
+// which owns the alias masking rules; either way the item indexes as a
+// library global, the way a documented free function does.
+AttachedItem attach_namespace_entity(const clang::NamedDecl*                          decl,
+                                     const clang::SourceManager&                      sm,
+                                     const clang::LangOptions&                        lang_opts,
+                                     const std::set<std::string>&                     ns_drop_set,
+                                     const std::map<const clang::Decl*, std::string>& expos_set) {
+    AttachedItem attached;
+    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attach_docblock(attached, decl, sm);
+    attached.item.decl.signatures.push_back(
+        extract_freestanding_declaration(decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false));
+    attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
 
@@ -3485,6 +3512,22 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
         return true;
     const auto* variable = llvm::dyn_cast<clang::VarDecl>(decl);
     return variable != nullptr && variable->getDeclContext()->isFileContext();
+}
+
+// The documented-wording counterpart: the namespace-owned entity kinds whose
+// docblock makes them ordinary wording items (design §6) rather than
+// `\expos` standalone synopses — alias templates and aliases join the
+// candidate set above, since an alias has no exposition-only form yet. The
+// isFileContext guard excludes the out-of-line definition of a class's own
+// member (a static data member, a member variable template), whose wording
+// belongs to its class.
+const clang::NamedDecl* as_namespace_entity(const clang::Decl* decl) {
+    const bool entity_kind = llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
+                             llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::TypeAliasDecl>(decl) ||
+                             llvm::isa<clang::VarDecl>(decl);
+    if (!entity_kind || !decl->getDeclContext()->isFileContext())
+        return nullptr;
+    return llvm::cast<clang::NamedDecl>(decl);
 }
 
 // The exposition-only members (design §4.3/§3.5): canonical member decl →
@@ -4147,6 +4190,29 @@ db::DocEvent classify(const RawItem&                                   ev,
         return out;
     }
 
+    // A documented namespace-scope alias (template), variable (template), or
+    // concept is an ordinary wording item (design §6): the declaration
+    // itself is the itemdecl and the docblock's description follows, the
+    // way [concept.same] and [tuple.helper] write them. Marked `\expos` it
+    // takes the standalone-synopsis arm above instead; undocumented it stays
+    // absent, like every other unannotated entity. Aliases route through
+    // attach_alias, whose masking rules (`\seebelow`/`\impdef`) and grouping
+    // apply at namespace scope exactly as they do in a class body. The
+    // `!expos` guard is for the alias kinds only — they are not standalone-
+    // synopsis candidates yet, so an `\expos`-marked alias keeps its
+    // omit-like silence here rather than rendering as an itemdecl under its
+    // source name (every other marked kind is in the expos set and took the
+    // arm above).
+    if (const clang::NamedDecl* entity = as_namespace_entity(ev.decl);
+        entity != nullptr && has_docblock(ev.decl, sm) && !docblock_directives(ev.decl, sm).expos) {
+        if (const auto* alias_tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(entity))
+            return item_decl_event(
+                attach_alias(alias_tmpl->getTemplatedDecl(), sm, lang_opts, ns_drop_set, expos_set, alias_tmpl));
+        if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(entity))
+            return item_decl_event(attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set));
+        return item_decl_event(attach_namespace_entity(entity, sm, lang_opts, ns_drop_set, expos_set));
+    }
+
     // A class/struct/union definition heads a synopsis; every other top-level
     // decl (free function, out-of-line member definition, variable, ...) is a
     // spec item. A defined class gets its synopsis text extracted (design
@@ -4209,13 +4275,37 @@ db::DocEvent classify(const RawItem&                                   ev,
     // SpecItem, is_function_def == false) can neither join nor act as a group
     // primary.
     AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped);
-    if (!attached.is_function_def)
-        // A non-function top-level decl — a namespace-scope variable
-        // template, concept, type alias, etc. — gets no itemdescr of its own
-        // (only class synopses and out-of-line function definitions become
-        // nodes). Emitting an empty SpecItem here produced stray empty
-        // itemdecl blocks in the output.
+    if (!attached.is_function_def) {
+        // A top-level decl no arm above turned into a node. Undocumented,
+        // that is the ordinary fate of an unannotated entity (design §6),
+        // and it stays silent. *Documented*, it means authored wording is
+        // about to be dropped, and dropping it silently is the failure mode
+        // a vocabulary header suffers worst — the header validates clean
+        // while its descriptions vanish. An `\omit`/`\merge`/`\expos` marker
+        // is the author asking for no itemdescr; anything else is an Error
+        // naming the kind, so an unsupported entity kind is loud the first
+        // time someone documents one.
+        if (has_docblock(ev.decl, sm)) {
+            const beman::specgen::lowering::ItemDirectives dirs = docblock_directives(ev.decl, sm);
+            if (!dirs.omit && !dirs.merge && !dirs.expos) {
+                const unsigned line = sm.getLineNumber(sm.getMainFileID(), ev.offset);
+                // A documented function *declaration* is the one shape here
+                // with a better answer than "unsupported": the markup
+                // belongs at the definition, which is what places a
+                // function's wording (design §3.3). A deduction guide is a
+                // FunctionDecl that can never have one, so it stays with the
+                // unsupported-kind report.
+                const clang::FunctionDecl* fn = as_out_of_line_function(ev.decl);
+                std::string message = fn != nullptr && !llvm::isa<clang::CXXDeductionGuideDecl>(fn)
+                                          ? "a documented function declaration produces no wording; markup belongs at "
+                                            "the definition, which places a function's wording (design §3.3)"
+                                          : std::format("a documented {} produces no wording: unsupported entity kind",
+                                                        ev.decl->getDeclKindName());
+                return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Error, line, std::move(message)}}};
+            }
+        }
         return db::Ignored{};
+    }
     return item_decl_event(std::move(attached));
 }
 

@@ -544,6 +544,19 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary"
 )
 
+# Documented namespace-scope aliases, alias templates, variables, variable
+# templates, and concepts are ordinary wording items; adjacent aliases group
+# with \also, `\impdef` masks an alias RHS at namespace scope exactly as in
+# a class body, and unannotated/`\omit`ted entities stay absent. The distinct
+# case name leaves `namespace_entities` free for the backend renderings
+# below; all consume one checked-in expected.json.
+specgen_add_golden(
+    namespace_entities_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_namespace_entities.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities"
+)
+
 # Constraints derivation (design §5.1) — a trailing requires-clause
 # with a concept-id, two plain traits, and a parenthesized negation,
 # derived into an itemize (past the sentence threshold) and stripped from
@@ -775,6 +788,19 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_diagnostics.hpp"
 )
 
+# The documented-but-unsupported backstop: a docblock on an entity kind that
+# produces no wording is an Error rather than a silent drop (a documented
+# enum; a documented function declaration, whose markup belongs at the
+# definition), while `\omit`, `\expos`, and plain absence of markup stay
+# quiet. Pinning the `\expos` alias template's silence is deliberate — when
+# alias templates join the exposition-only candidate set, this golden is
+# where the behavior change becomes visible.
+specgen_add_golden(
+    unsupported_kinds
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_unsupported_kinds.hpp"
+)
+
 # `///` and `/** */` are Doxygen's, and specgen reads neither.
 # `spec_doxygen.hpp` puts both at every position a real header does; the
 # IR is where the two halves of the gate are visible at once. Nothing
@@ -885,6 +911,25 @@ specgen_add_golden(
     undefined_primary
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undefined_primary/expected.json"
+)
+
+# The namespace-entity IR rendered through every backend: aliases, variable
+# templates, and concepts as itemdecls, with the draft FormatStyle deciding
+# the line shape (short alias and variable templates one-lined, concepts
+# broken before `concept`).
+specgen_add_golden(
+    namespace_entities
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities/expected.json"
+)
+specgen_add_golden(
+    namespace_entities
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities/expected.json"
+)
+specgen_add_golden(
+    namespace_entities
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate
