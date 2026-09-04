@@ -351,7 +351,9 @@ The markers are enumerated in a single registry shared by the grammar and the fr
 - `\verbatim-synopsis` — terminal escape hatch for synopsis content that cannot
   be code (e.g., the `std::hash` specializations block). **Terminal means terminal**: every
   decorated line after the marker is exact synopsis code: the grammar does not parse it as
-  prose or tags, and the front end does not parse or format it as C++. A standalone block
+  prose or tags, and the front end does not parse or format it as C++. Written as a class
+  definition's own docblock, the payload *replaces* the extracted synopsis text while the
+  class's members, roster, and derived wording are collected as usual; a standalone block
   becomes an ordinary anonymous synopsis, so all three backends render it through their
   normal code-block path. Nothing meant to remain markup can follow the payload in the same
   docblock.
@@ -360,7 +362,10 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   every following decorated line becomes one span-free signature, preserving
   line breaks and bytes without C++ parsing, formatting, index inference, or
   interpretation of draft markup; draft markup such as `@\seebelow@` in the payload is
-  intentionally backend-raw. Multiple declarations in one payload are not split.
+  intentionally backend-raw. Multiple declarations in one payload are not split. Written as
+  a declaration's own docblock, the payload *replaces* that declaration's extracted
+  itemdecl — the item appears once, never as authored *and* parsed copies; a detached block
+  still stands alone, pairing with `\omit`/`\merge` on a real declaration when one exists.
 - `\freestanding` — emit the literal `// freestanding` synopsis comment.
 - `\freestanding-deleted` — emit the distinct `// freestanding-deleted`
   synopsis comment used for facilities that a freestanding implementation

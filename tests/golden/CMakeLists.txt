@@ -474,6 +474,18 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_verbatim_record_merge.hpp"
 )
 
+# A verbatim docblock *attached* to its declaration replaces the extracted
+# form — one node, the authored one, never both (the duplication was the
+# authored copy from the comment event plus the parsed copy from the decl
+# event). `\verbatim-synopsis` keeps the class's members, roster, and
+# routing; `\verbatim-itemdecl` masks the implementation spelling the
+# extraction would have leaked.
+specgen_add_golden(
+    verbatim_attached
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_verbatim_attached.hpp"
+)
+
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
 specgen_add_golden(
