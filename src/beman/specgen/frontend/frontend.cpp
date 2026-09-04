@@ -605,6 +605,25 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
+    // Type uses, for the exposition-only alias kinds: a plain alias is
+    // written as a TypedefTypeLoc and an alias-template-id as a
+    // TemplateSpecializationTypeLoc whose template name resolves to the
+    // TypeAliasTemplateDecl — the same canonical decl the expos set keys.
+    // Both carry their own qualifier loc on this LLVM, so a qualified
+    // `detail::traverse_context_t<int>` drops its qualifier per use exactly
+    // like the expression cases above.
+    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc tl) {
+        add(tl.getDecl(), clang::SourceRange(tl.getNameLoc()), tl.getQualifierLoc());
+        return true;
+    }
+
+    bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc tl) {
+        add(tl.getTypePtr()->getTemplateName().getAsTemplateDecl(),
+            clang::SourceRange(tl.getTemplateNameLoc()),
+            tl.getQualifierLoc());
+        return true;
+    }
+
   private:
     void add(const clang::NamedDecl* decl, clang::SourceRange name_range, clang::NestedNameSpecifierLoc qualifier) {
         if (decl == nullptr)
@@ -1853,9 +1872,17 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     if (exposition && marked != expos_set.end()) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, marked->second, marked->second};
-        const unsigned name_begin  = sm.getDecomposedLoc(named->getLocation()).second;
+        // The declared name's own token. A TypeAliasTemplateDecl's
+        // getLocation() is the `using` keyword on this Clang, so the rename
+        // reads the templated declaration's location instead — which is the
+        // name token for every templated kind.
+        clang::SourceLocation name_loc = named->getLocation();
+        if (const auto* tmpl = llvm::dyn_cast<clang::TemplateDecl>(named);
+            tmpl != nullptr && tmpl->getTemplatedDecl() != nullptr)
+            name_loc = tmpl->getTemplatedDecl()->getLocation();
+        const unsigned name_begin = sm.getDecomposedLoc(name_loc).second;
         const unsigned name_end =
-            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(named->getLocation(), 0, sm, lang_opts)).second;
+            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_loc, 0, sm, lang_opts)).second;
         edits.push_back(SynopsisEdit{name_begin, name_end, sentinel});
     }
 
@@ -3508,16 +3535,18 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
 // synopses. isFileContext includes the global namespace and named namespaces,
 // while excluding an out-of-line definition of a static data member.
 bool is_namespace_expos_candidate(const clang::Decl* decl) {
-    if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl))
+    if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
+        llvm::isa<clang::TypeAliasTemplateDecl>(decl))
         return true;
+    if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl))
+        return alias->getDeclContext()->isFileContext();
     const auto* variable = llvm::dyn_cast<clang::VarDecl>(decl);
     return variable != nullptr && variable->getDeclContext()->isFileContext();
 }
 
-// The documented-wording counterpart: the namespace-owned entity kinds whose
-// docblock makes them ordinary wording items (design §6) rather than
-// `\expos` standalone synopses — alias templates and aliases join the
-// candidate set above, since an alias has no exposition-only form yet. The
+// The documented-wording counterpart: the same namespace-owned entity kinds,
+// asked about by a docblock with description content rather than `\expos` —
+// ordinary wording items (design §6) instead of standalone synopses. The
 // isFileContext guard excludes the out-of-line definition of a class's own
 // member (a static data member, a member variable template), whose wording
 // belongs to its class.
@@ -3534,9 +3563,9 @@ const clang::NamedDecl* as_namespace_entity(const clang::Decl* decl) {
 // its `\exposid` display name (`\expos(name)` override, else `exposid_name` of the
 // identifier). A pre-pass like build_omit_set, so extract_synopsis has the set
 // when a class is first seen. Covers data members, member functions, and the
-// namespace-scope concepts/variables/variable templates whose resolved uses
-// are rewritten as exposids (extract_namespace_expos_synopsis emits their
-// free-standing declarations).
+// namespace-scope concepts/variables/variable templates/aliases/alias
+// templates whose resolved uses are rewritten as exposids
+// (extract_namespace_expos_synopsis emits their free-standing declarations).
 std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clang::Decl*>& decls,
                                                           const clang::SourceManager&      sm) {
     const auto is_marked  = [&sm](const clang::NamedDecl* named) { return docblock_directives(named, sm).expos; };
@@ -4194,17 +4223,13 @@ db::DocEvent classify(const RawItem&                                   ev,
     // concept is an ordinary wording item (design §6): the declaration
     // itself is the itemdecl and the docblock's description follows, the
     // way [concept.same] and [tuple.helper] write them. Marked `\expos` it
-    // takes the standalone-synopsis arm above instead; undocumented it stays
-    // absent, like every other unannotated entity. Aliases route through
-    // attach_alias, whose masking rules (`\seebelow`/`\impdef`) and grouping
-    // apply at namespace scope exactly as they do in a class body. The
-    // `!expos` guard is for the alias kinds only — they are not standalone-
-    // synopsis candidates yet, so an `\expos`-marked alias keeps its
-    // omit-like silence here rather than rendering as an itemdecl under its
-    // source name (every other marked kind is in the expos set and took the
-    // arm above).
+    // took the standalone-synopsis arm above instead (every marked kind here
+    // is an expos candidate); undocumented it stays absent, like every other
+    // unannotated entity. Aliases route through attach_alias, whose masking
+    // rules (`\seebelow`/`\impdef`) and grouping apply at namespace scope
+    // exactly as they do in a class body.
     if (const clang::NamedDecl* entity = as_namespace_entity(ev.decl);
-        entity != nullptr && has_docblock(ev.decl, sm) && !docblock_directives(ev.decl, sm).expos) {
+        entity != nullptr && has_docblock(ev.decl, sm)) {
         if (const auto* alias_tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(entity))
             return item_decl_event(
                 attach_alias(alias_tmpl->getTemplatedDecl(), sm, lang_opts, ns_drop_set, expos_set, alias_tmpl));

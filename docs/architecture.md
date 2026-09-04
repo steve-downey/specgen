@@ -217,9 +217,9 @@ back to name match within the class's fragments only):
   owns stay qualified (and then trip the leakage checker, §9, which is the point).
 - Expos renaming: referents in the expos set → an ExposId sentinel, rendered as
   `\exposidnc{kebab-name}` in code contexts and `\exposid{kebab-name}` in prose.
-  Namespace-scope concepts, variable templates, and ordinary variables can
-  enter that set; their resolved uses are rewritten inside extracted bodies as
-  well as synopses, itemdecls, and derived conjuncts. `\expos` also applies to **member
+  Namespace-scope concepts, variable templates, ordinary variables, aliases, and alias
+  templates can enter that set; their resolved uses — expression and type uses alike — are
+  rewritten inside extracted bodies as well as synopses, itemdecls, and derived conjuncts. `\expos` also applies to **member
   function templates**: the helper survives private-member filtering, its declared name is
   rewritten as an exposid in the class synopsis and its routed itemdecl, and extracted bodies
   rewrite calls to it through the same exposition-use path.
@@ -442,7 +442,7 @@ function un-`noexcept` even when it visibly never throws.
 | In-class type alias with markup | yes | routed itemdecl; `\also` groups an adjacent alias |
 | In-class type alias, unmarked | yes (synopsis-only) | none; absent from roster |
 | Direct class-scope `static_assert` | removed | one adjacent general paragraph (§5.2) |
-| Namespace concept/variable, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
+| Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |

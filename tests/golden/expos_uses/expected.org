@@ -8,6 +8,14 @@ concept @\exposidnc{enabled}@ = true; // exposition only
 #+end_codeblock
 
 #+begin_codeblock
+using @\exposidnc{token}@ = int; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
 class counter {
 public:
   // \ref{counter.obs}, observers
@@ -46,3 +54,9 @@ if constexpr (@\exposidnc{enabled}@<int>)
 #+end_codeblock
 
 /Remarks/: Increments @@latex:\exposid{value}@@ in place.
+
+#+begin_itemdecl
+template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<int> context);
+#+end_itemdecl
+
+/Returns/: The result of ~f~ applied to the dereferenced context.

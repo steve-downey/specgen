@@ -7,6 +7,10 @@
 // mention it. Also resolved namespace-scope uses in an extracted body:
 // an ordinary variable and a concept lose their `detail::` qualifier and gain
 // exposid spans, while a same-named local variable remains ordinary code.
+// Type uses resolve the same way: an exposition-only alias and alias template
+// render as standalone synopses, the alias template's RHS naming the alias as
+// an exposid, and a documented function's parameter written as
+// `detail::traverse_context_t<int>` renders as `traverse-context-t<int>`.
 // Self-contained (no #includes) under -std=c++2c.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_EXPOS_USES_HPP
@@ -22,6 +26,13 @@ inline constexpr int exposed_limit = 1;
 //! \expos(enabled)
 template <class T>
 concept enabled_for = true;
+
+//! \expos
+using token_ = int;
+
+//! \expos
+template <class T>
+using traverse_context_t = token_*;
 
 } // namespace detail
 
@@ -48,6 +59,12 @@ void counter::bump() {
     int exposed_limit = 2;
     if constexpr (detail::enabled_for<int>)
         value_ = value_ + detail::exposed_limit + exposed_limit;
+}
+
+//! \returns The result of `f` applied to the dereferenced context.
+template <class F>
+int apply_in_context(F&& f, detail::traverse_context_t<int> context) {
+    return f(*context);
 }
 
 } // namespace demo
