@@ -1503,7 +1503,17 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // its indentation goes too) through the trailing `;` and the newline after
     // it, leaving no blank gap. `outer` is the decl whose text is removed — the
     // FriendDecl for a hidden friend, so `friend` is included.
-    std::vector<std::pair<unsigned, unsigned>> removed_ranges; // whole-member removals
+    //
+    // `removed_ranges` holds every span the synopsis will not contain: the
+    // whole-member removals pushed here and the spliced-away in-class bodies
+    // pushed in the member walk below. The qualifier/expos/comment edit
+    // sources all filter against it — an edit nested inside a removal must
+    // never be emitted, because the descending-offset apply loop applies the
+    // inner (further-right) edit first and its watermark then skips the
+    // *removal*. That inversion is exactly how a body naming a droppable
+    // qualifier used to survive into the synopsis while its unqualified twin
+    // was spliced to `;` (issue #5).
+    std::vector<std::pair<unsigned, unsigned>> removed_ranges;
     const auto                                 omit_line = [&](const clang::Decl* outer) {
         const unsigned remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
         unsigned       remove_end =
@@ -1733,6 +1743,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             clang::Lexer::getLocForEndOfToken(body->getEndLoc(), 0, sm, lang_opts);
         const unsigned body_end = sm.getDecomposedLoc(body_end_tok).second;
         edits.push_back(SynopsisEdit{body_begin, body_end, std::format(";{}", freestanding_comment)});
+        removed_ranges.emplace_back(body_begin, body_end);
     }
     open_groups_before(class_end);
     finish_group();
@@ -1752,8 +1763,9 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
 
     // Namespace qualifiers (design §3.5): drop `std::` and the header's own namespace
     // wherever they were written inside the class. A qualifier inside a member
-    // that was removed wholesale is already gone with it — emitting it too
-    // would be an edit nested inside another.
+    // that was removed wholesale — or inside a spliced-away in-class body —
+    // is already gone with it; emitting it too would be an edit nested inside
+    // another, which suppresses the removal instead (see removed_ranges).
     const auto inside_removed = [&removed_ranges](unsigned begin, unsigned end) {
         return std::ranges::any_of(removed_ranges, [&](const auto& r) { return begin >= r.first && end <= r.second; });
     };
@@ -1799,7 +1811,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // views::filter_map), and the optional-then-filter-then-transform
         // pattern that would fake one is harder to read than this loop.
         for (const auto& [offset, comment] : *comments | std::views::filter([&](const auto& kv) {
-                 return kv.first >= class_begin && kv.first < class_end;
+                 return kv.first >= class_begin && kv.first < class_end && !inside_removed(kv.first, kv.first);
              })) {
             const llvm::StringRef            raw_text    = comment->getRawText(sm);
             const std::optional<std::size_t> markup_from = stripped_comment_start(raw_text);

@@ -609,6 +609,16 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_mandates.hpp"
 )
 
+# An in-class body is never synopsis content, whether or not it names an
+# entity the drop set rewrites — the qualifier edit inside the body used to
+# suppress the body splice through the overlap watermark, keeping the
+# implementation in the synopsis for exactly the members that mention `std::`.
+specgen_add_golden(
+    inclass_bodies
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_inclass_bodies.hpp"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
