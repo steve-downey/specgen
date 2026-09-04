@@ -650,6 +650,23 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_namespace.hpp"
 )
 
+# The qualifier half of the leakage checker sees through includes: the
+# `detail::` machinery lives in support/spec_foreign_detail.hpp, not the
+# main file, and its surviving qualifier is still recorded as foreign — the
+# main-file boundary used to disable the check for exactly this shape. The
+# std::ranges stand-in in the same include is the negative control: its
+# `ranges::` qualifier renders and stays silent.
+#
+# NO_VALIDATE for the same reason namespace_map takes it: the leak is the
+# fixture, and `foreign_include_validate` (below the Clang gate) pins the
+# findings it draws.
+specgen_add_golden(
+    foreign_include
+    MODE generate
+    NO_VALIDATE
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_foreign_include.hpp"
+)
+
 # Exposition-only *uses* (design §3.5/§4.1) — an expos member
 # referenced inside the class's own fragments renders as `\exposid`: in an
 # extracted `*-equiv` body and in backticked prose.
@@ -942,6 +959,18 @@ specgen_add_golden(
     namespace_map_validate
     MODE validate
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_map/expected.json"
+)
+
+# `spec_foreign_include.hpp`'s standing findings, read off its own generate
+# golden the same way `namespace_map_validate` reads its header's — and
+# registered after the Clang-gated block for the same regeneration-ordering
+# reason. What the hand-written validate_qualifier sibling cannot pin: that
+# the front end records a foreign namespace whose declaration lives in an
+# included header at all.
+specgen_add_golden(
+    foreign_include_validate
+    MODE validate
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/foreign_include/expected.json"
 )
 
 # `spec_optional.hpp`'s standing note, read off its own generate golden
