@@ -1,0 +1,41 @@
+#+begin_codeblock
+struct tag {};
+#+end_codeblock
+
+/Remarks/: A defined record's own description.
+
+#+begin_codeblock
+template<class T>
+struct checked {};
+#+end_codeblock
+
+/Mandates/: ~T~ is a type this facility accepts.
+
+/Remarks/: Instantiating ~checked~ registers nothing; it only constrains.
+
+#+begin_codeblock
+template<class T>
+struct probe {};
+#+end_codeblock
+
+A program that instantiates ~probe<T>~ is ill-formed unless ~acceptable_v<T>~ is ~true~.
+
+/Remarks/: The derived paragraph above states the requirement; this says what the type is for.
+
+#+begin_codeblock
+template<class T>
+struct box {
+  // \ref{box.mem}, member types
+  using type = T;
+};
+#+end_codeblock
+
+/Remarks/: A ~box~ is a distinct type for each ~T~; two ~box~ types with different ~T~ never compare equal.
+
+** Member types [box.mem]
+
+#+begin_itemdecl
+using type = T;
+#+end_itemdecl
+
+/Remarks/: The contained type.

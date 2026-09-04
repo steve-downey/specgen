@@ -174,6 +174,17 @@ struct SynopsisDecl {
     // sibling IR node rather than synopsis metadata, so every backend renders
     // it through the existing FreeParagraph case.
     std::optional<beman::specgen::ir::FreeParagraph> general = {};
+    // What the class's *own* docblock said about the type (design §6, issue
+    // #18): `\remarks` on a defined class, an authored `\mandates` standing
+    // in for the derived paragraph above, and so on. Also a sibling node
+    // rather than synopsis metadata -- a description-only ir::SpecItem, one
+    // carrying no signatures, which is what class-general wording is: an
+    // itemdescr with no itemdecl. Reusing SpecItem is what lets the class's
+    // own description be span-checked, leakage-checked and rendered by the
+    // machinery every other description already goes through; a Synopsis
+    // deliberately is not a wording site (validate.cpp's wording_names_layer)
+    // and giving it prose would falsify that.
+    beman::specgen::ir::ItemDescr descr = {};
 };
 
 // An out-of-line function definition's SpecItem (design §3.3), keyed by its

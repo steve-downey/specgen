@@ -32,13 +32,18 @@
 // other output (design §9). Three channels carry docblock findings
 // — ItemDecl, SynopsisDecl, and Ignored — and the
 // three docblock cases below are chosen to exercise exactly one
-// per channel that carries them:
+// per channel that carries them, plus the second of the SynopsisDecl
+// channel's two routes:
 //
 //   - `gadget::value()`, an out-of-line definition: `\effects` after
 //     `\remarks` (the ItemDecl channel, and an easy mistake for a corpus
 //     header to make),
 //   - `operator==`, a hidden friend: two `\effects` elements (the
 //     SynopsisDecl channel, which carries in-class members' findings),
+//   - `gadget` itself, whose own docblock names a tag that does not exist
+//     (the SynopsisDecl channel again, by its other route: a class
+//     *definition*'s own markup, whose findings — and description — used to
+//     be dropped outright, issue #18),
 //   - `gadget::scratch()`, an `\omit`ted definition whose docblock names a
 //     tag that does not exist (the Ignored channel: the entity is unspecified
 //     on purpose, the typo in the block saying so is not).
@@ -51,6 +56,8 @@
 
 namespace demo {
 
+//! \remarks A `gadget` holds one value.
+//! \remark A tag that does not exist; the element is `\remarks`.
 class gadget {
   public:
     // \ref{gadget.cons}, constructors

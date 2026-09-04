@@ -1198,6 +1198,18 @@ Diagnostics check_nonempty(const std::string& context, const ir::CodeText& code)
     return {Diagnostic{Severity::Error, context, "the synopsis has no code and would render as an empty code block"}};
 }
 
+// The same rule one node over. An item carrying no signatures is a
+// description with no itemdecl, which is how a class's own wording is
+// represented (design §6, issue #18) and which every backend renders as bare
+// paragraphs. Carrying neither leaves nothing at all -- the silent drop that
+// motivated the check above, in the shape that produces no blank box to
+// notice it by, so it is an Error here rather than an absence.
+Diagnostics check_item_nonempty(const ir::SpecItem& item) {
+    if (!item.decl.signatures.empty() || !item.descr.elements.empty())
+        return {};
+    return {Diagnostic{Severity::Error, "item", "the item has neither a declaration nor a description"}};
+}
+
 // `ValidationAlgebra`'s std::visit dispatch (decision visitation-rules: named
 // struct, `ir::NodeF` has four alternatives).
 struct ValidationAlgebra {
@@ -1253,7 +1265,8 @@ struct ValidationAlgebra {
             check_dangling_ref(context, v.code, sections));
     }
 
-    // A declared item: check every signature's span table (an item groups
+    // A declared item: check that it says anything at all, every signature's
+    // span table (an item groups
     // overloads under one itemdecl, so more than one signature is
     // ordinary), every fragment of wording it carries -- the
     // signatures themselves plus each description element -- for leaked
@@ -1285,9 +1298,11 @@ struct ValidationAlgebra {
         Diagnostics throws_findings = check_noexcept_throws(v);
 
         return diagnostics_monoid.combine(
-            diagnostics_monoid.combine(diagnostics_monoid.combine(std::move(decl_findings), descr_findings),
-                                       drift_findings),
-            throws_findings);
+            diagnostics_monoid.combine(
+                diagnostics_monoid.combine(diagnostics_monoid.combine(std::move(decl_findings), descr_findings),
+                                           drift_findings),
+                throws_findings),
+            check_item_nonempty(v));
     }
 
     // A free paragraph: prose, and so a leakage site like any other

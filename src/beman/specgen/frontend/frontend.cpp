@@ -861,18 +861,25 @@ record_suppression_diagnostics(const clang::Decl* decl, const clang::SourceManag
     return docblock_diagnostics(rc, *start, parsed.diags, sm);
 }
 
-// A record definition docblock's `\verbatim-synopsis` payload (design §4.3,
-// issue #4): authored synopsis text that replaces extraction, while the
-// class's members, roster, and derived wording are still collected as usual.
-// The block's findings ride along — classify() suppresses the comment's own
-// RawItem for an attached verbatim block, so this is where they reach the
-// driver. An ordinary record docblock returns nothing and changes nothing.
-struct RecordVerbatim {
+// Everything a class or class-template *definition*'s own `//!` docblock
+// contributes (design §3.4, §6): the description elements the author wrote
+// about the type itself, a `\verbatim-synopsis` payload replacing extraction
+// (design §4.3, issue #4), and the block's grammar findings.
+//
+// All three used to be conditional on a verbatim marker, so an ordinary class
+// docblock produced nothing and said nothing — issue #18's silent loss. It is
+// the one shape issue #1's backstop cannot catch: a definition *does* produce
+// wording (its synopsis), so the docblock looks accounted for while its
+// contents are gone. The findings ride along here because classify()
+// suppresses the comment's own RawItem for an attached block, so this is
+// where they reach the driver.
+struct RecordDocblock {
+    beman::specgen::ir::ItemDescr                           descr;
     std::optional<std::string>                              synopsis;
     std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
 };
 
-RecordVerbatim record_verbatim_synopsis(const clang::Decl* decl, const clang::SourceManager& sm) {
+RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManager& sm) {
     const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl);
     if (rc == nullptr)
         return {};
@@ -882,17 +889,28 @@ RecordVerbatim record_verbatim_synopsis(const clang::Decl* decl, const clang::So
         return {};
 
     const grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
-    if (!parsed.block.markers.verbatim_synopsis && !parsed.block.verbatim_itemdecl)
-        return {};
 
-    RecordVerbatim out;
+    RecordDocblock out;
     out.diagnostics = docblock_diagnostics(rc, *start, parsed.diags, sm);
-    if (parsed.block.verbatim_itemdecl) {
-        const std::vector<grammar::Diagnostic> invalid{
-            {beman::specgen::Severity::Error,
-             0,
-             "\\verbatim-itemdecl applies to a declaration; a class definition takes \\verbatim-synopsis"}};
+    out.descr       = lowering::lower(parsed.block).descr;
+
+    const auto reject = [&](std::string message) {
+        const std::vector<grammar::Diagnostic> invalid{{beman::specgen::Severity::Error, 0, std::move(message)}};
         out.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
+    };
+
+    if (parsed.block.verbatim_itemdecl)
+        reject("\\verbatim-itemdecl applies to a declaration; a class definition takes \\verbatim-synopsis");
+    // An extraction marker (design §4.2) reads a *function definition's* body.
+    // A class has none, so lowering's placeholder EquivalentTo is never filled
+    // and its element would render as an "Equivalent to:" with an empty code
+    // block under it -- design §9's blank box, one node over. Report it and
+    // drop the placeholder, rather than print the box the Error is about.
+    if (parsed.block.markers.effects_equiv || parsed.block.markers.returns_equiv) {
+        reject("an extraction marker applies to a function definition, not to a class definition");
+        std::erase_if(out.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
+            return element.equivalent && element.equivalent->code.text.empty();
+        });
     }
     if (parsed.block.markers.verbatim_synopsis)
         out.synopsis = parsed.block.verbatim_synopsis.value_or("");
@@ -2546,12 +2564,22 @@ std::string class_instantiation_name(const clang::CXXRecordDecl* record) {
                        arguments | std::views::join_with(std::string_view(", ")) | std::ranges::to<std::string>());
 }
 
-std::optional<beman::specgen::ir::FreeParagraph>
-derive_class_mandates(const clang::CXXRecordDecl*                      record,
-                      const clang::SourceManager&                      sm,
-                      const clang::LangOptions&                        lang_opts,
-                      const std::set<std::string>&                     ns_drop_set,
-                      const std::map<const clang::Decl*, std::string>& expos_set) {
+// The class-scope static_assert derivation (design §5.2): one adjacent
+// general-subclause paragraph, plus the conjuncts it was folded from. The
+// conjuncts are the same validator-only drift evidence a member's derived
+// Mandates carries -- an authored class `\mandates` replaces the paragraph
+// and inherits them, so drift detection still sees the assertions the
+// authored text is standing in for.
+struct ClassMandates {
+    beman::specgen::ir::FreeParagraph          text;
+    std::vector<beman::specgen::ir::Paragraph> conjuncts;
+};
+
+std::optional<ClassMandates> derive_class_mandates(const clang::CXXRecordDecl*                      record,
+                                                   const clang::SourceManager&                      sm,
+                                                   const clang::LangOptions&                        lang_opts,
+                                                   const std::set<std::string>&                     ns_drop_set,
+                                                   const std::map<const clang::Decl*, std::string>& expos_set) {
     namespace ir = beman::specgen::ir;
 
     std::vector<const clang::Expr*> leaves;
@@ -2568,18 +2596,53 @@ derive_class_mandates(const clang::CXXRecordDecl*                      record,
     if (leaves.empty())
         return std::nullopt;
 
-    const std::vector<ir::Paragraph> conditions =
-        leaves | std::views::transform([&](const clang::Expr* leaf) {
-            return phrase_conjunct(leaf, sm, lang_opts, ns_drop_set, expos_set);
-        }) |
-        std::ranges::to<std::vector<ir::Paragraph>>();
+    std::vector<ir::Paragraph> conditions = leaves | std::views::transform([&](const clang::Expr* leaf) {
+                                                return phrase_conjunct(leaf, sm, lang_opts, ns_drop_set, expos_set);
+                                            }) |
+                                            std::ranges::to<std::vector<ir::Paragraph>>();
 
     ir::Paragraph text;
     text.push_back(ir::TextInline{"A program that instantiates "});
     text.push_back(ir::CodeInline{ir::CodeText{class_instantiation_name(record), {}}});
     text.push_back(ir::TextInline{" is ill-formed unless "});
     text.append_range(beman::specgen::conjuncts::join_sentence(conditions));
-    return ir::FreeParagraph{std::move(text)};
+    return ClassMandates{ir::FreeParagraph{std::move(text)}, std::move(conditions)};
+}
+
+// The description half of a class or class-template definition's own
+// docblock (design §6, issue #18), folded into the SynopsisDecl the two
+// definition arms of classify() build. `record` is the templated
+// CXXRecordDecl for a template, so the derivation and the exposition-only
+// spellings both come off the decl that carries the members.
+//
+// An authored `\mandates` replaces the derived class-scope paragraph and
+// inherits its conjuncts, exactly as attach_function's attach_derivation does
+// for a member (design §5.2): the derivation stays validator-only drift
+// evidence rather than a second paragraph saying the same thing twice.
+void attach_class_description(beman::specgen::document_build::SynopsisDecl&    out,
+                              RecordDocblock&&                                 block,
+                              const clang::CXXRecordDecl*                      record,
+                              const clang::SourceManager&                      sm,
+                              const clang::LangOptions&                        lang_opts,
+                              const std::set<std::string>&                     ns_drop_set,
+                              const std::map<const clang::Decl*, std::string>& expos_set) {
+    namespace ir = beman::specgen::ir;
+
+    out.descr = std::move(block.descr);
+    // Within the class's own wording, uses of its exposition-only members
+    // render as \exposid -- the same rewrite a member's description gets.
+    rewrite_prose_expos(out.descr, expos_spellings(record, expos_set));
+
+    std::optional<ClassMandates> derived = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
+    if (!derived)
+        return;
+    const auto authored = std::ranges::find_if(out.descr.elements, [](const ir::DescriptionElement& element) {
+        return element.kind == ir::ElementKind::Mandates && !element.derived;
+    });
+    if (authored != out.descr.elements.end())
+        authored->conjuncts = std::move(derived->conjuncts);
+    else
+        out.general = std::move(derived->text);
 }
 
 // --- \effects-equiv / \returns-equiv body extraction (design §4.2) ----------
@@ -4420,15 +4483,16 @@ db::DocEvent classify(const RawItem&                                   ev,
         // An attached \verbatim-synopsis replaces the extracted synopsis text
         // (design §4.3, issue #4) — authored, span-free — while members,
         // roster, and derived class wording are collected exactly as for an
-        // extracted one.
-        RecordVerbatim   verbatim = record_verbatim_synopsis(record, sm);
+        // extracted one. The rest of the same docblock is the class's own
+        // description, attached below.
+        RecordDocblock   block = record_docblock(record, sm);
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = record->getNameAsString();
-        out.diagnostics   = std::move(verbatim.diagnostics);
+        out.diagnostics   = std::move(block.diagnostics);
         out.synopsis.code =
-            verbatim.synopsis
-                ? ir::CodeText{std::move(*verbatim.synopsis), {}}
+            block.synopsis
+                ? ir::CodeText{std::move(*block.synopsis), {}}
                 : extract_synopsis(
                       record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
         collect_inclass_items(record, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
@@ -4438,7 +4502,7 @@ db::DocEvent classify(const RawItem&                                   ev,
         // identifies its own routed declaration, including an \also follower.
         out.synopsis.roster = build_roster(record, sm, expos_set, out.pending);
         group_adjacent_aliases(out.pending);
-        out.general = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
+        attach_class_description(out, std::move(block), record, sm, lang_opts, ns_drop_set, expos_set);
         return out;
     }
     if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(ev.decl)) {
@@ -4447,30 +4511,31 @@ db::DocEvent classify(const RawItem&                                   ev,
             return classify_record_declaration(tmpl, templated, sm, lang_opts, ns_drop_set, expos_set);
         if (auto diagnostics = record_suppression_diagnostics(tmpl, sm))
             return db::Ignored{std::move(*diagnostics)};
-        // Same attached-\verbatim-synopsis substitution as the plain-record
-        // arm above; the docblock is looked up on the ClassTemplateDecl, the
-        // decl the arm's other docblock reads use.
-        RecordVerbatim   verbatim = record_verbatim_synopsis(tmpl, sm);
+        // Same attached-\verbatim-synopsis substitution, and the same class
+        // description, as the plain-record arm above; the docblock is looked
+        // up on the ClassTemplateDecl, the decl the arm's other docblock
+        // reads use.
+        RecordDocblock   block = record_docblock(tmpl, sm);
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = templated->getNameAsString();
-        out.diagnostics   = std::move(verbatim.diagnostics);
-        out.synopsis.code = verbatim.synopsis ? ir::CodeText{std::move(*verbatim.synopsis), {}}
-                                              : extract_synopsis(templated,
-                                                                 sm,
-                                                                 lang_opts,
-                                                                 omit_set,
-                                                                 expos_set,
-                                                                 seebelow_map,
-                                                                 freestanding_map,
-                                                                 ns_drop_set,
-                                                                 tmpl);
+        out.diagnostics   = std::move(block.diagnostics);
+        out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
+                                           : extract_synopsis(templated,
+                                                              sm,
+                                                              lang_opts,
+                                                              omit_set,
+                                                              expos_set,
+                                                              seebelow_map,
+                                                              freestanding_map,
+                                                              ns_drop_set,
+                                                              tmpl);
         collect_inclass_items(templated, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
         // Build the roster before grouping so every alias offset still
         // identifies its own routed declaration, including an \also follower.
         out.synopsis.roster = build_roster(templated, sm, expos_set, out.pending);
         group_adjacent_aliases(out.pending);
-        out.general = derive_class_mandates(templated, sm, lang_opts, ns_drop_set, expos_set);
+        attach_class_description(out, std::move(block), templated, sm, lang_opts, ns_drop_set, expos_set);
         return out;
     }
 

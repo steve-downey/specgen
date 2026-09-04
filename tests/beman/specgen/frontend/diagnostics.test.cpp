@@ -149,8 +149,9 @@ TEST_CASE("build_document - a numbered section-like header is reported instead o
 
     // It is still ignored rather than guessed into a Section: without a
     // depth, opening a frame would trade a visible warning for invented
-    // structure. The pre-existing synopsis and two valid sections stay put.
-    CHECK(built->document.nodes.size() == 3);
+    // structure. The pre-existing synopsis, the class's own description and
+    // the two valid sections stay put.
+    CHECK(built->document.nodes.size() == 4);
 }
 
 TEST_CASE("build_document - section markers retain physical lines inside a coalesced RawComment") {
@@ -197,22 +198,28 @@ TEST_CASE("build_document - a docblock's findings are reported, positioned in th
     REQUIRE(built.has_value());
 
     const std::vector<db::Diagnostic> found = docblock_diagnostics(built->diagnostics);
-    REQUIRE(found.size() == 3);
+    REQUIRE(found.size() == 4);
+
+    // `gadget`'s own docblock, misspelling \remarks (the SynopsisDecl channel
+    // by its class-definition route, issue #18): the class produces a
+    // synopsis either way, so nothing else here would have shown the typo.
+    CHECK(found[0].severity == beman::specgen::Severity::Error);
+    CHECK(contains(found[0].message, "unknown tag \\remark"));
 
     // The hidden friend's duplicate \effects (the SynopsisDecl channel: an
     // in-class member's markup is parsed while walking the class body).
-    CHECK(found[0].severity == beman::specgen::Severity::Warning);
-    CHECK(contains(found[0].message, "duplicate \\effects element"));
+    CHECK(found[1].severity == beman::specgen::Severity::Warning);
+    CHECK(contains(found[1].message, "duplicate \\effects element"));
 
     // gadget::value()'s \effects after its \remarks (the ItemDecl channel) --
     // a mistake the canonicalized output hides, so only this report shows it.
-    CHECK(found[1].severity == beman::specgen::Severity::Note);
-    CHECK(contains(found[1].message, "\\effects appears after \\remarks"));
+    CHECK(found[2].severity == beman::specgen::Severity::Note);
+    CHECK(contains(found[2].message, "\\effects appears after \\remarks"));
 
     // The \omit'ed gadget::scratch()'s misspelled tag (the Ignored channel):
     // the entity is deliberately unspecified, the typo is not.
-    CHECK(found[2].severity == beman::specgen::Severity::Error);
-    CHECK(contains(found[2].message, "unknown tag \\effect"));
+    CHECK(found[3].severity == beman::specgen::Severity::Error);
+    CHECK(contains(found[3].message, "unknown tag \\effect"));
 
     // Each line is the docblock line the finding is about, translated out of
     // the docblock's own 1-based numbering into the file's. Nothing here
@@ -222,6 +229,7 @@ TEST_CASE("build_document - a docblock's findings are reported, positioned in th
     CHECK(found[0].line > 10);
     CHECK(found[0].line < found[1].line);
     CHECK(found[1].line < found[2].line);
+    CHECK(found[2].line < found[3].line);
 }
 
 // --- the channel is additive ------------------------------------------------
@@ -231,19 +239,26 @@ TEST_CASE("build_document - diagnostics do not change which nodes land in the do
     REQUIRE(built.has_value());
     REQUIRE_FALSE(built->diagnostics.empty());
 
-    // The class synopsis plus the two well-formed `\rSec3` sections: exactly
-    // what this header produces with the diagnostics disregarded, since a
-    // malformed marker is skipped, and so is the `\omit`ed definition whose
-    // docblock is reported above.
-    REQUIRE(built->document.nodes.size() == 3);
+    // The class synopsis, the class's own description, and the two
+    // well-formed `\rSec3` sections: exactly what this header produces with
+    // the diagnostics disregarded, since a malformed marker is skipped, and
+    // so is the `\omit`ed definition whose docblock is reported above. The
+    // reported class docblock still contributes its good element, which is
+    // the description node.
+    REQUIRE(built->document.nodes.size() == 4);
     CHECK(std::holds_alternative<ir::Synopsis>(built->document.nodes[0]));
+    const auto* description = std::get_if<ir::SpecItem>(&built->document.nodes[1]);
+    REQUIRE(description != nullptr);
+    CHECK(description->decl.signatures.empty());
+    REQUIRE(description->descr.elements.size() == 1);
+    CHECK(description->descr.elements[0].kind == ir::ElementKind::Remarks);
 
-    const auto* cons = std::get_if<ir::Section>(&built->document.nodes[1]);
+    const auto* cons = std::get_if<ir::Section>(&built->document.nodes[2]);
     REQUIRE(cons != nullptr);
     CHECK(cons->stable_name == "gadget.cons");
     CHECK(cons->title == "Constructors");
 
-    const auto* obs = std::get_if<ir::Section>(&built->document.nodes[2]);
+    const auto* obs = std::get_if<ir::Section>(&built->document.nodes[3]);
     REQUIRE(obs != nullptr);
     CHECK(obs->stable_name == "gadget.obs");
     // The reported entities are still described: the duplicate-\effects

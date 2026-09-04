@@ -164,6 +164,64 @@ TEST_CASE("build_tree - a class-general paragraph stays adjacent to its synopsis
     CHECK(std::holds_alternative<ir::SpecItem>(section->children[2]));
 }
 
+TEST_CASE("build_tree - a class's own description follows its synopsis and the derived general paragraph") {
+    // The three share one placement key (design §5.2, issue #18), so only the
+    // stable sort's push order keeps them in this order: the synopsis, the
+    // paragraph derived from the class's static_asserts, and the class's own
+    // authored wording. The last is a SpecItem carrying no signatures --
+    // a description with no itemdecl, which is what class-general wording is.
+    db::SynopsisDecl synopsis;
+    synopsis.offset        = 10;
+    synopsis.synopsis.code = ir::CodeText{"template <class T> class widget;", {}};
+    synopsis.general       = ir::FreeParagraph{{ir::TextInline{"A program that instantiates ..."}}};
+    synopsis.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+
+    auto doc = build({std::move(synopsis)});
+
+    REQUIRE(doc.nodes.size() == 3);
+    CHECK(std::holds_alternative<ir::Synopsis>(doc.nodes[0]));
+    CHECK(std::holds_alternative<ir::FreeParagraph>(doc.nodes[1]));
+    const auto* descr = std::get_if<ir::SpecItem>(&doc.nodes[2]);
+    REQUIRE(descr != nullptr);
+    CHECK(descr->decl.signatures.empty());
+    REQUIRE(descr->descr.elements.size() == 1);
+    CHECK(descr->descr.elements[0].kind == ir::ElementKind::Remarks);
+}
+
+TEST_CASE("build_tree - an empty class description contributes no node") {
+    db::SynopsisDecl synopsis;
+    synopsis.offset        = 10;
+    synopsis.synopsis.code = ir::CodeText{"class widget;", {}};
+
+    auto doc = build({std::move(synopsis)});
+
+    REQUIRE(doc.nodes.size() == 1);
+    CHECK(std::holds_alternative<ir::Synopsis>(doc.nodes[0]));
+}
+
+TEST_CASE("group_items - a description-only item is neither a group primary nor a follower") {
+    // Grouping moves *signatures*, so an item with no itemdecl -- a class's
+    // own description -- cannot take part. Were it a primary, the following
+    // empty-descr member would append its signature to it and the class's
+    // wording would come out labelled as that member's.
+    ir::SpecItem class_descr;
+    class_descr.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+
+    auto doc = build({
+        db::ItemDecl{10, false, std::move(class_descr)},
+        db::ItemDecl{20, true, make_item("f();", false)},
+    });
+
+    REQUIRE(doc.nodes.size() == 2);
+    const auto* first  = std::get_if<ir::SpecItem>(&doc.nodes[0]);
+    const auto* second = std::get_if<ir::SpecItem>(&doc.nodes[1]);
+    REQUIRE(first != nullptr);
+    REQUIRE(second != nullptr);
+    CHECK(first->decl.signatures.empty());
+    REQUIRE(second->decl.signatures.size() == 1);
+    CHECK(second->decl.signatures[0].text == "f();");
+}
+
 TEST_CASE("build_tree - a pending in-class item is injected into the section its \\ref group names, "
           "sorted against the section's own children by placement key") {
     // The class's own SynopsisDecl (and the pending member it harvested) is

@@ -63,7 +63,13 @@ std::vector<GroupCandidate> group_items(std::vector<GroupCandidate> candidates, 
     // candidate while updating adjacency. A transform/fold expression would
     // conceal those non-local mutations rather than state the operation.
     for (GroupCandidate& candidate : candidates) {
-        const bool is_item = std::holds_alternative<ir::SpecItem>(candidate.node);
+        // A *signature-carrying* item, which is what grouping moves: grouping
+        // appends a follower's signatures to a primary's itemdecl, so an item
+        // with no itemdecl at all -- a class's own description (issue #18) --
+        // is neither. Treating it as one would relabel that description as
+        // the wording of whichever `\also` member happened to follow it.
+        const bool is_item = std::holds_alternative<ir::SpecItem>(candidate.node) &&
+                             !std::get<ir::SpecItem>(candidate.node).decl.signatures.empty();
 
         if (candidate.group_id && candidate.also_target) {
             grouped.push_back(std::move(candidate));
@@ -224,6 +230,16 @@ BuildResult build_tree(std::span<DocEvent> events) {
                            if (syn.general)
                                stack.back().pushed.push_back(
                                    GroupCandidate{syn.offset, std::move(*syn.general), false});
+                           // Same placement key again, pushed last: the
+                           // class's own authored description (issue #18)
+                           // follows both the synopsis and the derived
+                           // general paragraph it may have replaced. A
+                           // description-only ir::SpecItem -- no signatures,
+                           // so group_items neither joins it to anything nor
+                           // lets a following \also item join onto it.
+                           if (!syn.descr.elements.empty())
+                               stack.back().pushed.push_back(
+                                   GroupCandidate{syn.offset, ir::SpecItem{{}, std::move(syn.descr)}, false});
                            // substrate generic algorithm: distributes each
                            // in-class member to the pending bucket for its
                            // own \rSec target — a scatter keyed by data
