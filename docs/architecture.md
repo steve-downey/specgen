@@ -444,6 +444,8 @@ function un-`noexcept` even when it visibly never throws.
 | Direct class-scope `static_assert` | removed | one adjacent general paragraph (§5.2) |
 | Namespace concept/variable, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
+| Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
+| Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock
 becomes an ordinary itemdecl in the nearest `\ref` section (or the section named by `\at`);
@@ -451,6 +453,14 @@ adjacent aliases group with `\also`. Bare `\seebelow` masks the complete RHS as 
 alias-only `\impdef` masks it as *implementation-defined*, and the two never combine (§4.3).
 Marked aliases have `MemberKind::Alias` roster entries; unmarked aliases remain synopsis-only
 and absent from the roster.
+
+A documented record or class-template declaration the header never defines (an undefined
+primary — the normal way to write an algebra whose operations a model must register) is an
+ordinary wording item: its itemdecl is the declaration through its semicolon, with the
+template head kept on its own line, and adjacent primaries group with `\also`. A record
+declaration whose entity is defined elsewhere in the header, or an undocumented never-defined
+one, contributes nothing — in particular never an empty Synopsis, whose rendering was an
+empty code block (§9's empty-synopsis check keeps it that way).
 
 ## 7. Intermediate representation
 
@@ -586,7 +596,7 @@ driver. Consequences:
 
 ## 9. Validation
 
-`render --validate` runs six checks over an IR document. An Error makes validation skip
+`render --validate` runs seven checks over an IR document. An Error makes validation skip
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
 
@@ -629,6 +639,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    `\expos` and still leaves a data member unmarked — narrower than "any unmarked private
    data", which reports the filler members of nearly every fixture. The rule it
    enforces: a class that uses `\expos` should mark *all* the state its wording leans on.
+7. **Empty synopsis** (Error): a Synopsis whose code is empty, which every backend renders as
+   an empty fenced code block — a blank box where a declaration should be. The front end no
+   longer produces one (a record declaration that defines nothing becomes an ordinary
+   itemdecl, or no node at all — §6), so a finding here means hand-written IR or a front-end
+   regression.
 
 ## 10. Testing strategy
 

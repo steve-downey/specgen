@@ -147,10 +147,13 @@ struct PendingItem {
     bool                         wants_join = false; // adjacent alias carries \also
 };
 
-// A class/struct/union (or class template) top-level decl (design §3.4): its
-// synopsis, plus any in-class-defined members classify() collected from its
-// body alongside it (the same class-body walk serves both). A
-// forward declaration carries an empty Synopsis and no pending items. The
+// A class/struct/union (or class template) *definition* at the top level
+// (design §3.4): its synopsis, plus any in-class-defined members classify()
+// collected from its body alongside it (the same class-body walk serves
+// both). A declaration that defines nothing never reaches this event — it
+// becomes an ordinary ItemDecl when it is a documented undefined primary and
+// no node at all otherwise, so a Synopsis is never empty (an empty one
+// rendered as an empty code block, and the validator now rejects it). The
 // event itself is never a join candidate; adjacent alias joining is completed
 // inside its pending list before build_tree sees the event.
 //

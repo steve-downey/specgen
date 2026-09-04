@@ -1,0 +1,27 @@
+{
+  "_comment": [
+    "Validate-mode golden: a Synopsis whose code is empty is an Error --",
+    "it renders as an empty fenced code block, a blank box where a",
+    "declaration should be. The front end no longer produces one (a record",
+    "declaration that defines nothing becomes an itemdecl or no node at",
+    "all), so this hand-written IR is the only way to reach the check, which",
+    "is the point: the backstop fires on hand-written IR and on any future",
+    "front-end regression alike.",
+    "",
+    "`gadget` is the negative control: a synopsis with code stays silent."
+  ],
+  "nodes": [
+    {
+      "type": "synopsis",
+      "name": "widget",
+      "code": { "text": "", "spans": [] },
+      "roster": []
+    },
+    {
+      "type": "synopsis",
+      "name": "gadget",
+      "code": { "text": "class gadget { ... };", "spans": [] },
+      "roster": []
+    }
+  ]
+}

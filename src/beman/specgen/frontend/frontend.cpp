@@ -1812,18 +1812,25 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     return format_and_recover(std::move(text), sentinels, std::string_view(record_tag.data(), record_tag.size()));
 }
 
-// A free-standing exposition-only entity is already a complete
-// definition, so it uses the ordinary Synopsis IR rather than inventing an
-// itemdecl or a fragment-shaped node. Keep the declaration's template head and
-// initializer/constraint through its semicolon, rewrite the declared name and
-// any references to other exposition-only entities with the same sentinels as
-// class synopses, and append the draft's exposition-only comment.
+// One free-standing namespace-scope declaration, extracted whole: the
+// template head and initializer/constraint through the trailing semicolon,
+// with the same qualifier drops and expos-use sentinels as class synopses.
+// Two callers share it. The `\expos` standalone synopsis
+// (extract_namespace_expos_synopsis below) passes `exposition` to rewrite the
+// declared name as an `\exposid` span and append the draft's exposition-only
+// comment. A documented record declaration the header never defines (an
+// undefined class-template primary — classify_record_declaration below)
+// passes `record_tag` instead, keeping the draft's template-head line break
+// the same way extract_synopsis does, and takes the text verbatim: the
+// declaration *is* the wording, an itemdecl rather than a Synopsis.
 beman::specgen::ir::CodeText
-extract_namespace_expos_synopsis(const clang::NamedDecl*                          named,
+extract_freestanding_declaration(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
                                  const clang::LangOptions&                        lang_opts,
                                  const std::set<std::string>&                     ns_drop_set,
-                                 const std::map<const clang::Decl*, std::string>& expos_set) {
+                                 const std::map<const clang::Decl*, std::string>& expos_set,
+                                 bool                                             exposition,
+                                 std::optional<std::string_view>                  record_tag = std::nullopt) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -1835,14 +1842,15 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
 
     const llvm::StringRef buffer = sm.getBufferData(sm.getMainFileID());
     std::string           text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
-    text += " // exposition only";
+    if (exposition)
+        text += " // exposition only";
 
     std::map<std::string, SpanInfo> sentinels;
     std::vector<SynopsisEdit>       edits;
     unsigned                        span_n = 0;
 
     const auto marked = expos_set.find(named->getCanonicalDecl());
-    if (marked != expos_set.end()) {
+    if (exposition && marked != expos_set.end()) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, marked->second, marked->second};
         const unsigned name_begin  = sm.getDecomposedLoc(named->getLocation()).second;
@@ -1878,7 +1886,22 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
         text.replace(edit.begin - decl_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels);
+    return format_and_recover(std::move(text), sentinels, record_tag);
+}
+
+// A free-standing exposition-only entity is already a complete
+// definition, so it uses the ordinary Synopsis IR rather than inventing an
+// itemdecl or a fragment-shaped node. Keep the declaration's template head and
+// initializer/constraint through its semicolon, rewrite the declared name and
+// any references to other exposition-only entities with the same sentinels as
+// class synopses, and append the draft's exposition-only comment.
+beman::specgen::ir::CodeText
+extract_namespace_expos_synopsis(const clang::NamedDecl*                          named,
+                                 const clang::SourceManager&                      sm,
+                                 const clang::LangOptions&                        lang_opts,
+                                 const std::set<std::string>&                     ns_drop_set,
+                                 const std::map<const clang::Decl*, std::string>& expos_set) {
+    return extract_freestanding_declaration(named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true);
 }
 
 // --- redeclaration-chain attachment (design §3.3) ---------------------------
@@ -2944,6 +2967,57 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
     return attached;
 }
 
+// Build the AttachedItem for a documented record declaration the header never
+// defines (design §6): an undefined class-template primary — the normal way
+// to write an algebra whose operations a model must register, deliberately
+// left undefined so an unregistered type fails a concept — or its non-template
+// counterpart. Its wording is an ordinary itemdecl: the declaration through
+// its semicolon, plus whatever description the docblock carries. `decl` is
+// the top-level decl (the ClassTemplateDecl for a template, so the extraction
+// starts at `template` and the docblock is looked up where classify's
+// definition arms look it up); `record` supplies the class/struct/union tag
+// that keeps the template head on its own line. No index metadata: a
+// *defined* record's Synopsis carries none either, and the two should index
+// alike or not at all.
+AttachedItem attach_record_declaration(const clang::NamedDecl*                          decl,
+                                       const clang::CXXRecordDecl*                      record,
+                                       const clang::SourceManager&                      sm,
+                                       const clang::LangOptions&                        lang_opts,
+                                       const std::set<std::string>&                     ns_drop_set,
+                                       const std::map<const clang::Decl*, std::string>& expos_set) {
+    namespace grammar  = beman::specgen::grammar;
+    namespace lowering = beman::specgen::lowering;
+
+    AttachedItem attached;
+    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+
+    if (const clang::RawComment* rc = decl->getASTContext().getRawCommentForDeclNoCache(decl)) {
+        const llvm::StringRef            raw      = rc->getRawText(sm);
+        const std::optional<std::size_t> start    = docblock_start(raw);
+        const llvm::StringRef            raw_text = start ? raw.substr(*start) : llvm::StringRef{};
+        if (!raw_text.empty()) {
+            attached.grouping_line =
+                sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(*start)));
+            const grammar::ParseResult pr      = grammar::parse_docblock(raw_text.str());
+            lowering::Lowered          lowered = lowering::lower(pr.block);
+            attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
+            attached.item.descr                = std::move(lowered.descr);
+            attached.directives                = std::move(lowered.directives);
+        }
+    }
+
+    const llvm::StringRef tag = record->getKindName();
+    attached.item.decl.signatures.push_back(
+        extract_freestanding_declaration(decl,
+                                         sm,
+                                         lang_opts,
+                                         ns_drop_set,
+                                         expos_set,
+                                         /*exposition=*/false,
+                                         std::string_view(tag.data(), tag.size())));
+    return attached;
+}
+
 // --- Shared unwrapping projections ------------------------------------------
 //
 // collect_inclass_items below and the build_omit_set/build_expos_set/
@@ -3906,6 +3980,76 @@ struct UnrecognizedSectionHeader {
 
 std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string_view raw);
 
+// Fold one attached item into its DocEvent: classify()'s shared tail for
+// every top-level decl that becomes an ItemDecl — an out-of-line or free
+// function definition, or a documented record declaration the header never
+// defines. Kept out of classify() so both arms make the same
+// `\omit`/`\merge` and grouping decisions rather than drifting apart.
+beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached) {
+    namespace db = beman::specgen::document_build;
+
+    if (attached.directives.omit || attached.directives.merge)
+        // \omit / \merge (design §4.3): no itemdescr. Removal from the
+        // synopsis is handled by the omit-set pre-pass (build_omit_set +
+        // extract_synopsis), which ran before this decl was reached. The
+        // docblock's own findings still travel: the entity is
+        // unspecified deliberately, but a malformed marker in the block that
+        // says so is not deliberate.
+        return db::Ignored{std::move(attached.diagnostics)};
+
+    // This is only the "does this item *want* to join" half of \also/
+    // empty-descr grouping — a property of this item alone. Whether a join
+    // actually happens depends on tree-adjacency context this function does
+    // not have (is there a preceding primary in the same open \rSec frame,
+    // in push order); that half belongs to document_build::build_tree, which
+    // evaluates it before this item's descr is touched by anything, so a
+    // follower that turns out to have no primary keeps its own content
+    // (design §4.3; see document_build.hpp's top-of-file note for the two
+    // review findings this split fixes: a follower's content must not be
+    // discarded just because it *asked* to join, and the join must be
+    // decided in push order, not the placement-key-sorted order the tree
+    // ends up in).
+    const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
+    const bool wants_join     = !named_grouping && (attached.directives.also || attached.item.descr.elements.empty());
+
+    return db::ItemDecl{attached.inclass_offset,
+                        wants_join,
+                        std::move(attached.item),
+                        std::move(attached.diagnostics),
+                        std::move(attached.directives.group_id),
+                        std::move(attached.directives.also_target),
+                        attached.grouping_line};
+}
+
+// A record declaration that is not a definition. Three cases, none of which
+// is the empty Synopsis node this used to produce (whose rendering was an
+// empty code block — worse than nothing in a paper):
+//
+//  - The entity is defined elsewhere: the definition's own event carries the
+//    synopsis, and this redeclaration is plumbing. No node, silent.
+//  - Documented and never defined: an undefined class-template primary (or
+//    plain record) whose declaration *is* the wording — an ordinary itemdecl
+//    plus the docblock's description, through item_decl_event so
+//    `\omit`/`\merge` and `\also` grouping mean what they mean everywhere
+//    else.
+//  - Undocumented and never defined: omitted, silent — the same treatment
+//    every unmarked entity gets (design §6).
+beman::specgen::document_build::DocEvent
+classify_record_declaration(const clang::NamedDecl*                          decl,
+                            const clang::CXXRecordDecl*                      record,
+                            const clang::SourceManager&                      sm,
+                            const clang::LangOptions&                        lang_opts,
+                            const std::set<std::string>&                     ns_drop_set,
+                            const std::map<const clang::Decl*, std::string>& expos_set) {
+    namespace db = beman::specgen::document_build;
+
+    if (record == nullptr || record->hasDefinition())
+        return db::Ignored{};
+    if (!has_docblock(decl, sm))
+        return db::Ignored{};
+    return item_decl_event(attach_record_declaration(decl, record, sm, lang_opts, ns_drop_set, expos_set));
+}
+
 db::DocEvent classify(const RawItem&                                   ev,
                       const clang::SourceManager&                      sm,
                       const clang::LangOptions&                        lang_opts,
@@ -4003,10 +4147,13 @@ db::DocEvent classify(const RawItem&                                   ev,
         return out;
     }
 
-    // A class/struct/union heads a synopsis; every other top-level decl (free
-    // function, out-of-line member definition, variable, ...) is a spec item.
-    // A defined class gets its synopsis text extracted (design §3.4); a
-    // forward declaration has no body to extract and keeps an empty Synopsis.
+    // A class/struct/union definition heads a synopsis; every other top-level
+    // decl (free function, out-of-line member definition, variable, ...) is a
+    // spec item. A defined class gets its synopsis text extracted (design
+    // §3.4); a declaration that defines nothing goes through
+    // classify_record_declaration — an itemdecl when it is a documented
+    // undefined primary, no node at all otherwise, and never an empty
+    // Synopsis (which rendered as an empty code block).
     //
     // A class template is not itself a CXXRecordDecl — top-level iteration
     // yields the ClassTemplateDecl, whose templated decl (getTemplatedDecl())
@@ -4015,44 +4162,42 @@ db::DocEvent classify(const RawItem&                                   ev,
     // extract_synopsis takes the ClassTemplateDecl as the extraction range's
     // head so the synopsis starts at `template`, not at `class`.
     if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(ev.decl)) {
+        if (!record->isThisDeclarationADefinition())
+            return classify_record_declaration(record, record, sm, lang_opts, ns_drop_set, expos_set);
+        if (auto diagnostics = record_suppression_diagnostics(record, sm))
+            return db::Ignored{std::move(*diagnostics)};
         db::SynopsisDecl out;
-        out.offset = ev.offset;
-        if (record->isThisDeclarationADefinition()) {
-            if (auto diagnostics = record_suppression_diagnostics(record, sm))
-                return db::Ignored{std::move(*diagnostics)};
-            out.synopsis.name = record->getNameAsString();
-            out.synopsis.code = extract_synopsis(
-                record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
-            collect_inclass_items(
-                record, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
-            // After collection: the roster reads the routed sections
-            // collect_inclass_items just decided.
-            // Build the roster before grouping so every alias offset still
-            // identifies its own routed declaration, including an \also follower.
-            out.synopsis.roster = build_roster(record, sm, expos_set, out.pending);
-            group_adjacent_aliases(out.pending);
-            out.general = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
-        }
+        out.offset        = ev.offset;
+        out.synopsis.name = record->getNameAsString();
+        out.synopsis.code =
+            extract_synopsis(record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
+        collect_inclass_items(record, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
+        // After collection: the roster reads the routed sections
+        // collect_inclass_items just decided.
+        // Build the roster before grouping so every alias offset still
+        // identifies its own routed declaration, including an \also follower.
+        out.synopsis.roster = build_roster(record, sm, expos_set, out.pending);
+        group_adjacent_aliases(out.pending);
+        out.general = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
         return out;
     }
     if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(ev.decl)) {
         const clang::CXXRecordDecl* templated = tmpl->getTemplatedDecl();
-        db::SynopsisDecl            out;
-        out.offset = ev.offset;
-        if (templated != nullptr && templated->isThisDeclarationADefinition()) {
-            if (auto diagnostics = record_suppression_diagnostics(tmpl, sm))
-                return db::Ignored{std::move(*diagnostics)};
-            out.synopsis.name = templated->getNameAsString();
-            out.synopsis.code = extract_synopsis(
-                templated, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, tmpl);
-            collect_inclass_items(
-                templated, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
-            // Build the roster before grouping so every alias offset still
-            // identifies its own routed declaration, including an \also follower.
-            out.synopsis.roster = build_roster(templated, sm, expos_set, out.pending);
-            group_adjacent_aliases(out.pending);
-            out.general = derive_class_mandates(templated, sm, lang_opts, ns_drop_set, expos_set);
-        }
+        if (templated == nullptr || !templated->isThisDeclarationADefinition())
+            return classify_record_declaration(tmpl, templated, sm, lang_opts, ns_drop_set, expos_set);
+        if (auto diagnostics = record_suppression_diagnostics(tmpl, sm))
+            return db::Ignored{std::move(*diagnostics)};
+        db::SynopsisDecl out;
+        out.offset        = ev.offset;
+        out.synopsis.name = templated->getNameAsString();
+        out.synopsis.code = extract_synopsis(
+            templated, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, tmpl);
+        collect_inclass_items(templated, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
+        // Build the roster before grouping so every alias offset still
+        // identifies its own routed declaration, including an \also follower.
+        out.synopsis.roster = build_roster(templated, sm, expos_set, out.pending);
+        group_adjacent_aliases(out.pending);
+        out.general = derive_class_mandates(templated, sm, lang_opts, ns_drop_set, expos_set);
         return out;
     }
 
@@ -4071,37 +4216,7 @@ db::DocEvent classify(const RawItem&                                   ev,
         // nodes). Emitting an empty SpecItem here produced stray empty
         // itemdecl blocks in the output.
         return db::Ignored{};
-    if (attached.directives.omit || attached.directives.merge)
-        // \omit / \merge (design §4.3): no itemdescr. Removal from the
-        // synopsis is handled by the omit-set pre-pass (build_omit_set +
-        // extract_synopsis), which ran before this decl was reached. The
-        // docblock's own findings still travel: the entity is
-        // unspecified deliberately, but a malformed marker in the block that
-        // says so is not deliberate.
-        return db::Ignored{std::move(attached.diagnostics)};
-
-    // This is only the "does this item *want* to join" half of \also/
-    // empty-descr grouping — a property of this item alone. Whether a join
-    // actually happens depends on tree-adjacency context this function does
-    // not have (is there a preceding primary in the same open \rSec frame,
-    // in push order); that half belongs to document_build::build_tree, which
-    // evaluates it before this item's descr is touched by anything, so a
-    // follower that turns out to have no primary keeps its own content
-    // (design §4.3; see document_build.hpp's top-of-file note for the two
-    // review findings this split fixes: a follower's content must not be
-    // discarded just because it *asked* to join, and the join must be
-    // decided in push order, not the placement-key-sorted order the tree
-    // ends up in).
-    const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
-    const bool wants_join     = !named_grouping && (attached.directives.also || attached.item.descr.elements.empty());
-
-    return db::ItemDecl{attached.inclass_offset,
-                        wants_join,
-                        std::move(attached.item),
-                        std::move(attached.diagnostics),
-                        std::move(attached.directives.group_id),
-                        std::move(attached.directives.also_target),
-                        attached.grouping_line};
+    return item_decl_event(std::move(attached));
 }
 
 } // namespace

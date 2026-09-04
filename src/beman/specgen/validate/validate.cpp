@@ -1169,6 +1169,21 @@ check_dangling_ref(const std::string& context, const ir::CodeText& code, const s
            std::ranges::to<Diagnostics>();
 }
 
+// --- an empty synopsis (design §9) ------------------------------------------
+
+// A Synopsis whose code is empty renders as an empty fenced code block in
+// every backend -- a blank box where a declaration should be, worse in a
+// paper than no output at all. The front end no longer produces one (a
+// record declaration that defines nothing becomes an ordinary itemdecl or no
+// node at all), so an occurrence is hand-written IR or a front-end
+// regression; either way it is an Error here so it cannot reach rendered
+// output silently again.
+Diagnostics check_nonempty(const std::string& context, const ir::CodeText& code) {
+    if (!code.text.empty())
+        return {};
+    return {Diagnostic{Severity::Error, context, "the synopsis has no code and would render as an empty code block"}};
+}
+
 // `ValidationAlgebra`'s std::visit dispatch (decision visitation-rules: named
 // struct, `ir::NodeF` has four alternatives).
 struct ValidationAlgebra {
@@ -1203,9 +1218,9 @@ struct ValidationAlgebra {
                std::ranges::to<std::vector>();
     }
 
-    // A synopsis: check its one CodeText's span table, the coverage
-    // invariant over the roster beside it, the same roster for
-    // unmarked private data, the synopsis text itself for a
+    // A synopsis: check that it has code at all, its one CodeText's span
+    // table, the coverage invariant over the roster beside it, the same
+    // roster for unmarked private data, the synopsis text itself for a
     // namespace qualifier the reader cannot follow, and every `Ref`
     // span in it for a stable name that names no section. A synopsis
     // ordinarily sits at the top level, outside every `\rSec`, so the section
@@ -1215,9 +1230,11 @@ struct ValidationAlgebra {
         const std::string context = v.name.empty() ? "synopsis" : v.name + "/synopsis";
         return diagnostics_monoid.combine(
             diagnostics_monoid.combine(
-                diagnostics_monoid.combine(diagnostics_monoid.combine(check_spans(context, v.code),
-                                                                      check_coverage(context, v.roster, sections)),
-                                           check_private_data(context, v.roster)),
+                diagnostics_monoid.combine(
+                    diagnostics_monoid.combine(
+                        diagnostics_monoid.combine(check_nonempty(context, v.code), check_spans(context, v.code)),
+                        check_coverage(context, v.roster, sections)),
+                    check_private_data(context, v.roster)),
                 check_synopsis_leakage(context, v.code, visible)),
             check_dangling_ref(context, v.code, sections));
     }
