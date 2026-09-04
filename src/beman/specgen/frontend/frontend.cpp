@@ -959,8 +959,24 @@ std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers) {
 std::optional<clang::SourceRange> seebelow_source_range(const clang::FunctionDecl* fn, SeeBelowTarget target) {
     const clang::SourceRange valid = [&]() -> clang::SourceRange {
         switch (target) {
-        case SeeBelowTarget::ReturnType:
-            return fn->getReturnTypeSourceRange();
+        case SeeBelowTarget::ReturnType: {
+            const clang::SourceRange leading = fn->getReturnTypeSourceRange();
+            if (leading.isValid())
+                return leading;
+            // getReturnTypeSourceRange() deliberately rejects a range that
+            // sits after the declarator name — which is exactly an explicit
+            // trailing return type, so `\seebelow` silently did nothing for
+            // the SFINAE-friendly spellings most in need of masking
+            // (issue #6). Mask the trailing type itself, read off the
+            // FunctionTypeLoc: the declaration keeps its trailing shape and
+            // renders `auto f(...) -> see below;`.
+            if (const auto* proto = fn->getType()->getAs<clang::FunctionProtoType>();
+                proto != nullptr && proto->hasTrailingReturn())
+                if (const clang::TypeSourceInfo* tsi = fn->getTypeSourceInfo())
+                    if (const auto ftl = tsi->getTypeLoc().IgnoreParens().getAs<clang::FunctionTypeLoc>())
+                        return ftl.getReturnLoc().getSourceRange();
+            return {};
+        }
         case SeeBelowTarget::Noexcept:
             if (const auto* type = fn->getType()->getAs<clang::FunctionProtoType>())
                 if (const clang::Expr* expr = type->getNoexceptExpr())

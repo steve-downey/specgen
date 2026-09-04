@@ -303,7 +303,9 @@ An `\also` block should contain no description elements. `\group` and
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, aliases, and alias templates, as well as class
   members, can be exposed.
-- Bare `\seebelow` masks a function return type. `\seebelow noexcept` and
+- Bare `\seebelow` masks a function return type — a leading one whole, an
+  explicit trailing one as `auto f(...) -> see below;`, keeping the trailing
+  shape. `\seebelow noexcept` and
   `\seebelow explicit` mask only the condition inside that specifier. On a
   documented in-class type alias, bare `\seebelow` masks the complete RHS.
 - `\impdef` masks a documented in-class type alias RHS as
