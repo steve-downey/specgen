@@ -1,0 +1,39 @@
+** Vocabulary [demo.vocab]
+
+#+begin_itemdecl
+template<class T> using id_t = T;
+#+end_itemdecl
+
+/Remarks/: The identity alias.
+
+#+begin_itemdecl
+using value_t = int;
+using size_type = unsigned long;
+#+end_itemdecl
+
+/Remarks/: The value aliases.
+
+#+begin_itemdecl
+using token_t = @\impdef@;
+#+end_itemdecl
+
+/Remarks/: The token type is implementation-defined.
+
+#+begin_itemdecl
+template<class T> inline constexpr bool flag_v = false;
+#+end_itemdecl
+
+/Remarks/: ~flag_v<T>~ is ~false~ unless a program specializes it.
+
+#+begin_itemdecl
+inline constexpr int max_links = 8;
+#+end_itemdecl
+
+/Remarks/: The registration limit.
+
+#+begin_itemdecl
+template<class T>
+concept usable = requires { typename T::type; };
+#+end_itemdecl
+
+/Remarks/: A type is usable if it names a member type.
