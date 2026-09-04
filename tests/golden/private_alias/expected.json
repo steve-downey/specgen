@@ -1,0 +1,1 @@
+{"nodes":[{"type":"synopsis","name":"lifted","code":{"text":"template<class T>\nstruct lifted {\n  using type = raw;\n};","spans":[{"begin":25,"end":31,"kind":"library-index","payload":""},{"begin":42,"end":46,"kind":"library-index","payload":"lifted"}]},"roster":[{"name":"raw","disposition":"private","section":"","kind":"alias"}]}],"foreign":[],"body_uses":[]}

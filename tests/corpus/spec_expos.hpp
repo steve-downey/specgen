@@ -6,7 +6,9 @@
 // synopsis its name renders as an `\exposid` span (kebab-derived: trailing `_`
 // stripped -> `value`) with a trailing `// exposition only` comment, produced
 // via the §3.6 sentinel pipeline (rewrite -> clang-format -> recover spans).
-// `count_` uses `\expos(size)` to override the derived name. Self-contained (no
+// `count_` uses `\expos(size)` to override the derived name, and the private
+// alias `raw_` is exposition too: it renders as `using raw = T; // exposition
+// only` and the public `value_type`'s RHS names it by its exposid. Self-contained (no
 // #includes) and built from a template parameter / int only, so it parses
 // standalone under -std=c++2c.
 
@@ -21,6 +23,13 @@ class holder {
     // \ref{holder.obs}, observers
     T    get() const;
     void set(T value);
+
+  private:
+    //! \expos(raw)
+    using raw_ = T;
+
+  public:
+    using value_type = raw_;
 
   private:
     union {
