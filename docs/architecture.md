@@ -496,7 +496,9 @@ than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is deliber
   (disposition + `MemberKind`) per declaration. The roster is the validator's input for the
   coverage invariant and the hidden-name checks (§9). The document additionally carries two
   validator channels the front end alone can populate: `foreign_namespaces` (the
-  implementation namespaces seen and not mapped away) and `unextracted_uses` (`BodyUse`
+  implementation namespaces whose qualifiers survive the mapping, wherever their
+  declarations live — only a `std`-rooted qualifier like `std::ranges::` is exempt, being
+  the standard's own vocabulary) and `unextracted_uses` (`BodyUse`
   records naming the members reached by bodies that never become wording).
 - Itemdecl index entries are optional metadata with the draft's eight editorial
   kinds: global, constructor, destructor, member, memberx, memberexpos, zombie,
@@ -687,11 +689,12 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
   reproducible anywhere. Corpus headers are clang-format-controlled, and their formatting is
   part of the extracted output, so goldens are regenerated after a header is reformatted.
   Every corpus header must satisfy the §9 coverage invariant and, by convention, validate
-  clean, with two standing findings, each **pinned rather than skipped**:
+  clean, with three standing findings, each **pinned rather than skipped**:
   - `spec_namespace.hpp` is the fixture for a foreign qualifier surviving at all; it is
     registered `NO_VALIDATE` and its Error is pinned by its own validate golden. That is the
     opt-out to reuse if another header ever needs one; pin the diagnostic, never just skip
-    the case.
+    the case. `spec_foreign_include.hpp` takes the same opt-out for the qualifier whose
+    namespace is declared in an included header rather than the main file.
   - `spec_optional.hpp`'s default constructor calls the undocumented `hard_reset()`, and a
     validate golden pins the resulting Note. It needs no `NO_VALIDATE`: a Note leaves the
     exit code at 0.

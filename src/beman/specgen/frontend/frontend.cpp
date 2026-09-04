@@ -3678,19 +3678,19 @@ std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& 
 //
 //   - a namespace already in the drop set is skipped even when it is part of a
 //     surviving chain, so `demo::detail::storage` reports `detail` alone;
-//   - the namespace must be *declared in the main file*, which is the same
-//     boundary collect_top_level_decl draws around the document (design §3.1).
-//     A `std::ranges::` qualifier is the case this exists for: it survives the
-//     drop set (the set holds `std`, not `std::ranges`) and belongs in the
-//     draft verbatim, and what distinguishes it from `demo::detail` is that
-//     nothing in this header declares it. The cost is that a helper namespace
-//     living in an included implementation header goes unreported.
+//   - a namespace rooted in `std` is skipped. A `std::ranges::` qualifier is
+//     the case this exists for: it survives the drop set (the set holds
+//     `std`, not `std::ranges`) and belongs in the draft verbatim, because it
+//     is the standard's own vocabulary. That is a property of the namespace's
+//     qualified path, not of where it happens to be declared — the guard used
+//     to be "declared in the main file", which let the identical rendered
+//     `detail::` pass unreported the moment the helper namespace moved into
+//     an included implementation header, disabling the leakage guarantee by
+//     exactly the refactor the tool's own guidance encourages.
 class ForeignQualifierCollector : public clang::RecursiveASTVisitor<ForeignQualifierCollector> {
   public:
-    ForeignQualifierCollector(const std::set<std::string>&        drop,
-                              const clang::SourceManager&         sm,
-                              std::map<std::string, std::string>& out)
-        : drop_(drop), sm_(sm), out_(out) {}
+    ForeignQualifierCollector(const std::set<std::string>& drop, std::map<std::string, std::string>& out)
+        : drop_(drop), out_(out) {}
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc nns) {
         if (nns) {
@@ -3740,24 +3740,22 @@ class ForeignQualifierCollector : public clang::RecursiveASTVisitor<ForeignQuali
                 return;
             const std::string name      = named->getNameAsString();
             const std::string qualified = named->getQualifiedNameAsString();
-            if (!name.empty() && drop_.count(qualified) == 0 && sm_.isInMainFile(named->getLocation()))
+            if (!name.empty() && drop_.count(qualified) == 0 && !qualified.starts_with("std::"))
                 out_.emplace(name, qualified);
             qualifier = np.Prefix;
         }
     }
 
     const std::set<std::string>&        drop_;
-    const clang::SourceManager&         sm_;
     std::map<std::string, std::string>& out_;
 };
 
 std::vector<beman::specgen::ir::ForeignNamespace> collect_foreign_namespaces(const std::vector<clang::Decl*>& decls,
-                                                                             const std::set<std::string>&     drop,
-                                                                             const clang::SourceManager&      sm) {
+                                                                             const std::set<std::string>&     drop) {
     // The map deduplicates and orders by name, so the IR channel is stable
     // whichever decl wrote the qualifier first.
     std::map<std::string, std::string> found;
-    ForeignQualifierCollector          collector(drop, sm, found);
+    ForeignQualifierCollector          collector(drop, found);
     // substrate generic algorithm: a for_each-shaped walk driving
     // RecursiveASTVisitor's side effect (appending to `found`), the same
     // shape build_document's collect_top_level_decl loop has -- not a
@@ -4805,7 +4803,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // pipeline goes clang-free below and attached to the finished document.
     // It is document-level data, so it rides past build_tree rather than
     // through it — no DocEvent carries it and no node owns it.
-    const std::vector<ir::ForeignNamespace> foreign = collect_foreign_namespaces(decls, ns_drop_set, sm);
+    const std::vector<ir::ForeignNamespace> foreign = collect_foreign_namespaces(decls, ns_drop_set);
 
     // And the members named by the bodies this pipeline never renders,
     // collected here for the same reason and carried the same way — the one
