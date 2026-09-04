@@ -342,7 +342,10 @@ The markers are enumerated in a single registry shared by the grammar and the fr
 - `\expos` / `\expos(name)` — exposition-only; name derived by stripping trailing
   underscores then `_` → `-` kebab conversion; `\expos(name)` overrides. Rendered
   in synopsis with italic name + `// exposition only`.
-- `\seebelow` — substitute *see below* for a return type. `\seebelow noexcept`
+- `\seebelow` — substitute *see below* for a return type: a leading one
+  (deduced `auto` included) is replaced whole, and an explicit trailing
+  return type keeps its SFINAE-friendly shape and renders
+  `auto f(...) -> see below;`. `\seebelow noexcept`
   and `\seebelow explicit` substitute it for only the operand of the named
   conditional specifier, preserving its keyword and parentheses. Pairs with a
   `\remarks` specification of the masked type or condition.

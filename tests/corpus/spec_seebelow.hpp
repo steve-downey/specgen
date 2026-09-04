@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // Hand-curated corpus header (design §4.3: `\seebelow`). Bare
-// `\seebelow` replaces a return type; the `explicit` and `noexcept` targets
+// `\seebelow` replaces a return type — a leading deduced one, or an explicit
+// trailing one, whose `detail::` spelling is exactly what the marker exists
+// to keep out of wording; the `explicit` and `noexcept` targets
 // replace only the corresponding conditional-specifier operand. The named
 // cases are marked on out-of-line definitions and contain a droppable `demo::`
 // qualifier, exercising both pre-pass target propagation and dominant nested
@@ -12,6 +14,11 @@
 #define BEMAN_SPECGEN_CORPUS_SPEC_SEEBELOW_HPP
 
 namespace demo {
+
+namespace detail {
+template <class F, class T>
+using chain_t = T;
+} // namespace detail
 
 template <class From, class To>
 inline constexpr bool is_convertible_v = false;
@@ -32,6 +39,9 @@ class future {
     // \ref{future.monadic}, monadic operations
     template <class F>
     auto transform(F&& f) const;
+
+    template <class F>
+    auto and_then(F&& f) const -> detail::chain_t<F, T>;
 
   private:
     T value_;
@@ -60,6 +70,15 @@ void future<T>::swap(future&) noexcept(demo::is_nothrow_swappable_v<T>) {}
 template <class T>
 template <class F>
 auto future<T>::transform(F&& f) const {
+    return f(value_);
+}
+
+//! \seebelow
+//! \effects Chains `f` after the contained value.
+//! \remarks The return type is specified in the class description.
+template <class T>
+template <class F>
+auto future<T>::and_then(F&& f) const -> detail::chain_t<F, T> {
     return f(value_);
 }
 
