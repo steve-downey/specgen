@@ -127,7 +127,10 @@ is installed. There is no Clang-free configuration.
 - **Every physical `\rSec` line is a structure event**, even when Clang coalesces adjacent
   line comments into one raw comment. Collection splits comment chunks only around recognized
   section-marker lines, retaining their absolute offsets; other multi-line chunks, including
-  docblocks, remain intact.
+  docblocks, remain intact. A marker whose `{title}` a formatter wrapped continues on the
+  immediately following plain `//` lines — never a `///`/`//!` line or another `\rSec` — and
+  the wrapped lines join back into one title with single spaces; an unclosed title is still a
+  malformed-marker Warning.
 - An **unrecognized draft-style section heading reports a Warning**. A draft-form line such as
   `// 22.5.3.3 Destructor[optional.dtor]` cannot open a section (it carries no `\rSec` depth),
   but it is reported instead of silently filing every following declaration into the

@@ -178,6 +178,10 @@ The depth controls nesting, the bracketed value is the stable name, and the
 braced value is the title. A numbered draft-style heading ending in a stable
 name, such as `// 22.5.3.3 Destructor[optional.dtor]`, is not enough because it
 has no depth; specgen warns and suggests the `\rSec<depth>[stable]{title}` form.
+A title too long for one line may continue on the immediately following plain
+`//` lines — the shape `clang-format` produces when it wraps a long marker —
+and the wrapped lines join back into one title with single spaces. A `{title}`
+that never closes is still reported as a malformed marker.
 
 Inside a class, a draft-form group header routes following documented in-class
 members to the section with the matching stable name:
