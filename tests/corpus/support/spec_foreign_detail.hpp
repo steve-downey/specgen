@@ -7,6 +7,12 @@
 // never included; only the resolution matters). Everything here is *declared
 // outside the main file* on purpose — that placement is what the qualifier
 // half of the leakage checker must see through.
+//
+// `steppable` is the same placement asked the other way (issue #36): an
+// exposition-only helper marked here and named by a requires-clause in the
+// main file. Its `\expos` must be honoured across the include, or the tidy
+// refactor that moved it here would cost the author a rename or a move out
+// of `detail` — an edit to the library, made to suit the generator.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SUPPORT_SPEC_FOREIGN_DETAIL_HPP
 #define BEMAN_SPECGEN_CORPUS_SUPPORT_SPEC_FOREIGN_DETAIL_HPP
@@ -22,6 +28,10 @@ namespace demo {
 namespace detail {
 struct evaluator {};
 inline constexpr evaluator eval{};
+
+//! \expos
+template <class T>
+concept steppable = requires(const T& impl) { impl.step(eval); };
 } // namespace detail
 } // namespace demo
 

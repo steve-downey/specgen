@@ -276,6 +276,51 @@ void collect_top_level_decl(clang::Decl*                decl,
     out.push_back(decl);
 }
 
+// The same descent, run for the `\expos` pre-pass alone and over the
+// declarations the walk above rejects: the ones outside the main file (issue
+// #36). Where an exposition-only helper is *declared* is not a property of
+// the wording. A concept in `detail/range_traits.hpp` named by a
+// requires-clause in the header being specified must still render
+// `$const-iterable$`; without this the marker on it was silently ignored, and
+// the only remedies the qualifier finding offered -- rewrite the name, or move
+// the entity out of `detail` -- were both edits to the library, made to suit
+// the generator, and both of them change name lookup and ADL.
+//
+// Only the marked declaration's *uses* are reached this way. It contributes no
+// node of its own, because document structure is still main-file-only (design
+// §3.1) and every routing arm reads the walk above; an author who wants the
+// helper's own declaration in the wording writes it in the header being
+// specified, which is where the draft would put it.
+//
+// A system header is skipped whole, namespace and all: nothing in one carries
+// specgen markup, and descending `namespace std` to establish that is
+// thousands of declarations per parse.
+void collect_expos_scope_decl(clang::Decl*                decl,
+                              const clang::SourceManager& sm,
+                              clang::FileID               main_file,
+                              std::vector<clang::Decl*>&  out) {
+    const clang::SourceLocation loc = decl->getBeginLoc();
+    if (!loc.isValid() || sm.isInSystemHeader(loc))
+        return;
+    if (auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(decl)) {
+        // substrate generic algorithm: the same recursive tree descent as
+        // collect_top_level_decl, for the same reason.
+        for (clang::Decl* child : ns->decls())
+            collect_expos_scope_decl(child, sm, main_file, out);
+        return;
+    }
+    if (auto* linkage = llvm::dyn_cast<clang::LinkageSpecDecl>(decl)) {
+        // substrate generic algorithm: same recursive tree descent as above.
+        for (clang::Decl* child : linkage->decls())
+            collect_expos_scope_decl(child, sm, main_file, out);
+        return;
+    }
+    if (decl->isImplicit() || sm.getDecomposedLoc(loc).first == main_file)
+        return; // implicit, or already collected by collect_top_level_decl
+
+    out.push_back(decl);
+}
+
 std::string decl_label(clang::Decl* decl) {
     std::string label = decl->getDeclKindName();
     if (const auto* named = llvm::dyn_cast<clang::NamedDecl>(decl)) {
@@ -5277,8 +5322,17 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // Pre-passes: members to drop from every synopsis
     // (`\omit`/`\merge`) and exposition-only members (`\expos`) to render with an
     // `\exposid` span — both needed before the first extract_synopsis call below.
+    // `\expos` alone reads a wider set than the document-structure walk
+    // collected: the marked declaration may live in an included header while
+    // the signature naming it is here (issue #36).
+    std::vector<clang::Decl*> expos_decls = decls;
+    // substrate generic algorithm: the same iterator-pair-turned-subrange,
+    // for_each-shaped side effect as the walk just above.
+    for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
+        collect_expos_scope_decl(decl, sm, main_file, expos_decls);
+
     const std::set<const clang::Decl*>              omit_set         = build_omit_set(decls, sm);
-    const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(decls, sm);
+    const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(expos_decls, sm);
     const SeeBelowMap                               seebelow_map     = build_seebelow_map(decls, sm);
     const FreestandingMap                           freestanding_map = build_freestanding_map(decls, sm);
     const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
