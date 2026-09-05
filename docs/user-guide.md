@@ -316,7 +316,11 @@ An `\also` block should contain no description elements. `\group` and
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, aliases, alias templates, and class templates, as
-  well as class members, can be exposed.
+  well as class members, can be exposed. The marked declaration may live in an
+  included header: the uses in the header being specified still render as
+  `\exposid`, so moving implementation machinery into a `detail/` header costs
+  nothing. Its own declaration is not rendered, though — only declarations in
+  the header being specified are.
 - Bare `\seebelow` masks a function return type — a leading one whole, an
   explicit trailing one as `auto f(...) -> see below;`, keeping the trailing
   shape. `\seebelow noexcept` and

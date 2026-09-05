@@ -101,6 +101,13 @@ share one back half, so single-pass wording equals two-pass wording byte for byt
   implicit decl is compiler synthesis reporting some other entity's location — an implicit
   deduction guide sits on the constructor's or class's own tokens, and collecting one plants a
   phantom top-level decl in the middle of a class body (issue #22).
+- One pre-pass reaches past that boundary: the `\expos` set also collects marked
+  declarations from included headers, skipping system headers whole (issue #36). Where an
+  exposition-only helper is declared is not a property of the wording — a `detail::` concept
+  named by a requires-clause in the header being specified renders `$const-iterable$` whether
+  it was written here or in `detail/range_traits.hpp`. Only its *uses* are reached: document
+  structure stays main-file-only, so the marked declaration still contributes no node, and an
+  author who wants it shown writes it in the header being specified.
 - Comments retrieved via the raw comment list; markup attachment via
   `getRawCommentForDeclNoCache`, looked up through the *described template* when the decl
   has one. Clang anchors comment search for a template decl at its `template` keyword but

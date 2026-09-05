@@ -7,9 +7,12 @@
 // qualifier must still be recorded as foreign and reported. The
 // `std::ranges` stand-in lives in the same include: its qualifier renders as
 // `ranges::` and must stay silent, because the standard's own vocabulary
-// belongs in wording wherever it happens to be declared. This header keeps
-// its leak on purpose; `foreign_include_validate` pins the findings it
-// draws, the spec_namespace.hpp pattern.
+// belongs in wording wherever it happens to be declared. `detail::steppable`
+// is the third case in the same include, and the one the marker answers: it
+// carries `\expos` there, so its uses here render `$steppable$` with no
+// qualifier left to report (issue #36). This header keeps its leak on
+// purpose; `foreign_include_validate` pins the findings it draws, the
+// spec_namespace.hpp pattern.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_FOREIGN_INCLUDE_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_FOREIGN_INCLUDE_HPP
@@ -25,6 +28,9 @@ struct widget {
         requires requires(const Impl& impl) { impl.step(detail::eval); };
 
     std::ranges::probe_t<int> slot() const;
+
+    auto tick() const
+        requires detail::steppable<Impl>;
 };
 
 // \rSec3[demo.obs]{Observers}
@@ -41,6 +47,14 @@ auto widget<Impl>::probe(int x) const
 template <class Impl>
 std::ranges::probe_t<int> widget<Impl>::slot() const {
     return {};
+}
+
+//! \returns Nothing in particular.
+template <class Impl>
+auto widget<Impl>::tick() const
+    requires detail::steppable<Impl>
+{
+    return 0;
 }
 
 } // namespace demo
