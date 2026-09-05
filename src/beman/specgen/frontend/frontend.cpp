@@ -2004,6 +2004,35 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     return format_and_recover(std::move(text), sentinels, std::string_view(record_tag.data(), record_tag.size()));
 }
 
+// The first offset of the run of cv-qualifier keywords written immediately
+// before `begin`, or `begin` itself; never earlier than `floor`. A
+// QualifiedTypeLoc begins at its unqualified child on this Clang -- the same
+// quirk alias_rhs_source_range works around -- so the `const` in
+// `const T& obj` sits outside the declared type's TypeLoc and would survive a
+// mask taken from it (issue #33).
+unsigned cv_run_begin(llvm::StringRef buffer, unsigned begin, unsigned floor) {
+    static constexpr std::string_view qualifiers[] = {"const", "volatile"};
+    // substrate generic algorithm: a backwards walk over a run of tokens
+    // whose length is not known in advance, each step's start being the next
+    // step's end -- no adaptor over the buffer says that.
+    for (;;) {
+        const std::size_t last = buffer.substr(0, begin).find_last_not_of(" \t\n\v\f\r");
+        if (last == llvm::StringRef::npos)
+            return begin;
+        const auto written = [&](std::string_view keyword) {
+            if (last + 1 < floor + keyword.size())
+                return false;
+            const std::size_t start = last + 1 - keyword.size();
+            return std::string_view(buffer.substr(start, keyword.size())) == keyword &&
+                   (start == 0 || !is_ident_char(buffer[start - 1]));
+        };
+        const auto* const found = std::ranges::find_if(qualifiers, written);
+        if (found == std::ranges::end(qualifiers))
+            return begin;
+        begin = static_cast<unsigned>(last + 1 - found->size());
+    }
+}
+
 // One free-standing namespace-scope declaration, extracted whole: the
 // template head and initializer/constraint through the trailing semicolon,
 // with the same qualifier drops and expos-use sentinels as class synopses.
@@ -2083,19 +2112,25 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     if (unspecified != nullptr) {
         // The declared type, masked whole: a dominant edit, so a qualifier
         // drop or expos-use rewrite inside the spelling loses to the mask
-        // instead of tripping the watermark (the alias RHS rule).
-        if (const clang::TypeSourceInfo* tsi = unspecified->getTypeSourceInfo()) {
-            const clang::SourceRange range = tsi->getTypeLoc().getSourceRange();
-            const unsigned type_begin = range.isValid() ? sm.getDecomposedLoc(range.getBegin()).second : decl_begin;
-            const unsigned type_end =
-                range.isValid()
-                    ? sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm, lang_opts)).second
-                    : decl_begin;
-            if (type_begin >= decl_begin && type_end > type_begin) {
+        // instead of tripping the watermark (the alias RHS rule). Whole means
+        // every token from the type's first through to the declared name,
+        // which the TypeLoc bounds at neither end: a leading cv-qualifier is
+        // outside it (cv_run_begin), and so is the space a declarator
+        // operator eats. Masking the TypeLoc alone left the `const` of
+        // `const T &obj` standing against the placeholder and lost the space
+        // before the name (issue #33).
+        const clang::TypeSourceInfo* tsi = unspecified->getTypeSourceInfo();
+        const clang::SourceRange range   = tsi != nullptr ? tsi->getTypeLoc().getSourceRange() : clang::SourceRange{};
+        if (range.isValid()) {
+            const unsigned name_begin = sm.getDecomposedLoc(unspecified->getLocation()).second;
+            const unsigned type_begin = cv_run_begin(buffer, sm.getDecomposedLoc(range.getBegin()).second, decl_begin);
+            if (type_begin >= decl_begin && name_begin > type_begin) {
                 const std::string sentinel = span_sentinel(span_n++);
                 sentinels[sentinel] =
                     SpanInfo{beman::specgen::ir::SpanKind::Placeholder, "unspecified", "unspecified"};
-                add_dominant_edit(edits, SynopsisEdit{type_begin, type_end, sentinel});
+                // The separating space is the mask's own: the declarator
+                // operator that used to carry it is inside the span now.
+                add_dominant_edit(edits, SynopsisEdit{type_begin, name_begin, sentinel + " "});
             }
         }
         // The initializer is implementation all the way down; the draft

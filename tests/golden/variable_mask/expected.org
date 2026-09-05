@@ -24,3 +24,9 @@ template<typename T> inline constexpr @\placeholder{unspecified}@ tag;
 #+end_itemdecl
 
 /Remarks/: The name ~tag~ denotes a family of tag objects.
+
+#+begin_itemdecl
+inline constexpr @\placeholder{unspecified}@ forwarded;
+#+end_itemdecl
+
+/Remarks/: The name ~forwarded~ denotes an object forwarding to the implementation's own.
