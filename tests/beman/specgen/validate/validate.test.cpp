@@ -411,6 +411,48 @@ TEST_CASE("validate - a documented declaration of a name outweighs an invisible 
     CHECK(validate(document_with_equiv({{"nullopt_t", ir::Disposition::Omitted, ""}}, "nullopt_t x;")).size() == 1);
 }
 
+TEST_CASE("validate - the synopsis half of the private-member check reads its own class's roster") {
+    // A private member is dropped from its class's synopsis (design §6), so
+    // its name appearing there is a surviving declaration reaching for it --
+    // `using type = raw;` naming the elided private alias (issue #7).
+    ir::Document doc;
+    doc.nodes.push_back(
+        ir::Synopsis{.name   = "lifted",
+                     .code   = {"struct lifted {\n  using type = raw;\n};", {}},
+                     .roster = {{"raw", ir::Disposition::Private, ""}, {"type", ir::Disposition::Described, ""}}});
+
+    const Diagnostics diags = validate(doc);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Error);
+    CHECK(diags.front().context == "lifted/synopsis");
+    CHECK(diags.front().message.find("`raw` is named in the synopsis") != std::string::npos);
+    CHECK(diags.front().message.find("an unmarked private member") != std::string::npos);
+}
+
+TEST_CASE("validate - a private member does not make a same-named member of another class a leak") {
+    // The premise above is a statement about one class: *this* synopsis
+    // dropped the declaration, so the occurrence must be something else. Read
+    // off the whole document's rosters it was keyed by bare name, and a
+    // private `state_` in one class made an unrelated public `state_` in
+    // another read as a leak at its own declaration (issue #35).
+    ir::Document doc;
+    doc.nodes.push_back(
+        ir::Synopsis{.name   = "holder",
+                     .code   = {"class holder {\npublic:\n  constexpr int get() const;\n};", {}},
+                     .roster = {{"state_", ir::Disposition::Private, ""}, {"get", ir::Disposition::Described, ""}}});
+    doc.nodes.push_back(ir::Synopsis{.name   = "closure",
+                                     .code   = {"struct closure {\n  int state_;\n};", {}},
+                                     .roster = {{"state_", ir::Disposition::Undocumented, ""}}});
+
+    // The public member is undocumented, which is a coverage finding and the
+    // only one: it is its own visible declaration, and no fixit about another
+    // class's private member applies to it.
+    const Diagnostics diags = validate(doc);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().context == "closure/synopsis");
+    CHECK(diags.front().message.find("`state_` is declared in the synopsis") != std::string::npos);
+}
+
 TEST_CASE("validate - one finding per leaked name per fragment, at its first appearance") {
     const Diagnostics diags = validate(
         document_with_equiv({{"cache_", ir::Disposition::Private, ""}, {"scratch", ir::Disposition::Omitted, ""}},
