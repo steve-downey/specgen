@@ -382,7 +382,14 @@ The markers are enumerated in a single registry shared by the grammar and the fr
 - On a documented namespace-scope variable (template), bare `\seebelow` masks the declared
   type as the draft's *unspecified* placeholder and drops the initializer — the
   customization-point-object shape, `inline constexpr unspecified name;` (issue #24). The
-  targeted forms have no variable meaning and are an Error.
+  mask takes the whole declared type, from its first written token through to the name, so a
+  leading cv-qualifier and a reference declarator go with it (issue #33). The targeted forms
+  have no variable meaning and are an Error.
+- `\expos` composes with that mask rather than displacing it (issue #38): a variable carrying
+  both renders `inline constexpr unspecified $name$; // exposition only`, the draft's spelling
+  for an exposition-only helper of unspecified type. The standalone-synopsis path reads the
+  docblock for this, so the targeted forms are an Error there too — it used to read no marker
+  at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
@@ -498,6 +505,7 @@ function un-`noexcept` even when it visibly never throws.
 | Documented namespace alias/alias template | — | yes, alias masking rules apply; `\also` groups |
 | Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
 | Documented namespace variable (template), bare `\seebelow` | — | yes, type as *unspecified*, initializer dropped |
+| Namespace variable (template), `\expos` + bare `\seebelow` | standalone, type as *unspecified* | — |
 | Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock

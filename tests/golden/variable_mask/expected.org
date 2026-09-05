@@ -30,3 +30,7 @@ inline constexpr @\placeholder{unspecified}@ forwarded;
 #+end_itemdecl
 
 /Remarks/: The name ~forwarded~ denotes an object forwarding to the implementation's own.
+
+#+begin_codeblock
+inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+#+end_codeblock

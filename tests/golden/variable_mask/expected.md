@@ -46,3 +46,7 @@ inline constexpr $unspecified$ forwarded;
 [#]{.pnum} *Remarks*: The name `forwarded` denotes an object forwarding to the implementation's own.
 
 :::
+
+```cpp
+inline constexpr $unspecified$ $helper-obj$; // exposition only
+```

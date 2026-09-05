@@ -329,8 +329,10 @@ An `\also` block should contain no description elements. `\group` and
   On a documented namespace-scope variable or variable template, bare
   `\seebelow` masks the declared type as *unspecified* and drops the
   initializer — the customization-point-object shape,
-  `inline constexpr unspecified name;`. The targeted forms do not apply to
-  a variable.
+  `inline constexpr unspecified name;`. Marked `\expos` as well, the two
+  compose: `inline constexpr unspecified $name$; // exposition only`. The
+  targeted forms do not apply to a variable either way, and saying one is an
+  Error.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.
