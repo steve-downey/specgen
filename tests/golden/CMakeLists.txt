@@ -730,6 +730,19 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_variable_mask_diagnostics.hpp"
 )
 
+# `\ref` group headers inside a gathered header synopsis (issue #31): one
+# written inside a class body is already carried by the class's extraction
+# and is not appended again; one written at namespace scope, between
+# declarations, still survives as a standalone group header. The distinct
+# case name leaves `gathered_refs` free for the backend renderings below;
+# all consume one checked-in expected.json.
+specgen_add_golden(
+    gathered_refs_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_gathered_refs.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1173,6 +1186,21 @@ specgen_add_golden(
     variable_mask
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask/expected.json"
+)
+
+# The gathered-refs IR rendered through every backend: the in-class group
+# header appears once, the namespace-scope one stands alone before its
+# declaration.
+specgen_add_golden(gathered_refs INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs/expected.json")
+specgen_add_golden(
+    gathered_refs
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs/expected.json"
+)
+specgen_add_golden(
+    gathered_refs
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate
