@@ -53,6 +53,7 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
     CHECK(code.text.contains("class widget;"));
     CHECK(code.text.contains("void swap(widget<T>&, widget<T>&);"));
     CHECK(code.text.contains("bool operator==(const widget<T>&, const widget<T>&);"));
+    CHECK(code.text.contains("struct sentinel {"));
     CHECK_FALSE(code.text.contains("operator===="));
     CHECK(code.text.contains("namespace std {\n  template<class T> struct hash<demo::widget<T>>;\n}"));
     CHECK_FALSE(code.text.contains("API documentation"));
@@ -63,10 +64,13 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
         return code.spans | std::views::filter([=](const ir::Span& span) { return span.kind == kind; }) |
                std::ranges::to<std::vector>();
     };
+    // Two `\ref` group headers now: the free-function one, and the one inside
+    // the class defined in the region, which the class extraction carries.
     const auto refs = spans(ir::SpanKind::Ref);
-    REQUIRE(refs.size() == 1);
-    CHECK(refs.front().payload == "widget.ops");
-    CHECK(code.text.substr(refs.front().begin, refs.front().end - refs.front().begin) == "[widget.ops]");
+    REQUIRE(refs.size() == 2);
+    CHECK(std::ranges::all_of(refs, [&](const ir::Span& span) {
+        return span.payload == "widget.ops" && code.text.substr(span.begin, span.end - span.begin) == "[widget.ops]";
+    }));
 
     const auto expos = spans(ir::SpanKind::ExposId);
     REQUIRE(expos.size() == 1);
@@ -78,6 +82,29 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
     CHECK(std::ranges::any_of(indexes, [&](const ir::Span& span) {
         return code.text.substr(span.begin, span.end - span.begin) == "widget";
     }));
+}
+
+// A class defined inside the gathered region routes its in-class members the
+// same way a class outside it does: the fold owns the only event they can
+// travel on, and taking the class's code alone dropped them (issue #34) --
+// declaration in the synopsis, description nowhere, target section empty.
+TEST_CASE("a gathered region's class routes its in-class members to their sections") {
+    const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* ops = find_section(built->document.nodes, "widget.ops");
+    REQUIRE(ops != nullptr);
+    const auto items =
+        ops->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(items.size() == 1);
+
+    const ir::SpecItem& item = std::get<ir::SpecItem>(items.front());
+    REQUIRE(item.decl.signatures.size() == 1);
+    CHECK(item.decl.signatures.front().text.contains("operator==(const T& t, sentinel)"));
+    REQUIRE(item.descr.elements.size() == 1);
+    CHECK(item.descr.elements.front().kind == ir::ElementKind::Returns);
 }
 
 TEST_CASE("malformed header synopsis boundaries do not swallow later sections") {

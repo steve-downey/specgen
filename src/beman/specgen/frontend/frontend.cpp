@@ -5436,6 +5436,14 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     synopsis != nullptr && !synopsis->synopsis.code.text.empty()) {
                     append_synopsis_code(gathered.synopsis.code, std::move(synopsis->synopsis.code));
                     gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
+                    // The class's routed in-class members ride along. They
+                    // are not part of the gathered synopsis -- build_tree
+                    // scatters each to the `\rSec` its `\ref` names, the
+                    // same as for a class outside the region -- but the fold
+                    // owns the only event they can travel on, and taking the
+                    // code alone dropped them and their descriptions with it
+                    // (issue #34), leaving the target section empty.
+                    gathered.pending.append_range(std::move(synopsis->pending));
                 } else {
                     if (auto* ignored = std::get_if<db::Ignored>(&classified))
                         gathered.diagnostics.append_range(std::move(ignored->diagnostics));

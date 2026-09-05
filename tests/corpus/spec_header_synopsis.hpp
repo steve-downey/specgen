@@ -29,6 +29,21 @@ void swap(widget<T>&, widget<T>&);
 template <class T>
 bool operator==(const widget<T>&, const widget<T>&);
 
+// A class *defined* inside the region gathers its synopsis like any other
+// declaration, but its `\ref`-routed in-class member belongs to the section
+// that `\ref` names, not to the synopsis — the whole point of gathering is
+// that the members live somewhere else. The fold used to take the class's
+// code and drop the routed members riding with it, leaving the target
+// section empty and saying nothing (issue #34).
+struct sentinel {
+    // \ref{widget.ops}, comparison
+    //! \returns `t == 0`.
+    template <class T>
+    friend constexpr bool operator==(const T& t, sentinel) {
+        return t == 0;
+    }
+};
+
 //! \verbatim-synopsis
 //! namespace std {
 //!   template<class T> struct hash<demo::widget<T>>;
