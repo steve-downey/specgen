@@ -1,0 +1,41 @@
+\begin{codeblock}
+struct @\libglobal{adaptor}@ {};
+\end{codeblock}
+
+\begin{codeblock}
+template<typename T>
+struct @\libglobal{tagger}@ {};
+\end{codeblock}
+
+\indexlibraryglobal{thing}%
+\begin{itemdecl}
+inline constexpr @\placeholder{unspecified}@ thing;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The name \tcode{thing} denotes a customization point object.
+\end{itemdescr}
+
+\indexlibraryglobal{copied}%
+\begin{itemdecl}
+inline constexpr @\placeholder{unspecified}@ copied;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The copy-initialized spelling masks the same way.
+\end{itemdescr}
+
+\indexlibraryglobal{tag}%
+\begin{itemdecl}
+template<typename T> inline constexpr @\placeholder{unspecified}@ tag;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The name \tcode{tag} denotes a family of tag objects.
+\end{itemdescr}

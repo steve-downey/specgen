@@ -710,6 +710,26 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template"
 )
 
+# Bare `\seebelow` on a namespace-scope variable (template) masks the
+# declared type as the draft's *unspecified* placeholder and drops the
+# initializer — the customization-point-object shape (issue #24) — list-init
+# and copy-init alike. The distinct case name leaves `variable_mask` free for
+# the backend renderings below; all consume one checked-in expected.json.
+specgen_add_golden(
+    variable_mask_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_variable_mask.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask"
+)
+
+# The targeted `\seebelow` forms have no meaning on a variable, so one is an
+# Error rather than the silent no-op it used to be.
+specgen_add_golden(
+    variable_mask_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_variable_mask_diagnostics.hpp"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1139,6 +1159,20 @@ specgen_add_golden(
     expos_class_template
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template/expected.json"
+)
+
+# The variable-mask IR rendered through every backend: the *unspecified*
+# placeholder span survives in each itemdecl.
+specgen_add_golden(variable_mask INPUT "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask/expected.json")
+specgen_add_golden(
+    variable_mask
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask/expected.json"
+)
+specgen_add_golden(
+    variable_mask
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate
