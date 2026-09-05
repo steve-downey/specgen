@@ -5378,6 +5378,12 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
 
         db::SynopsisDecl gathered;
         gathered.offset = opener.offset + 1;
+        // The furthest end offset of any declaration this fold has consumed.
+        // A comment before it sits *inside* that declaration's extracted
+        // text — an in-class `\ref` group header, most commonly — and the
+        // extraction already carries it, so appending it again as a
+        // standalone group header rendered it twice (issue #31).
+        unsigned consumed_end = 0;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -5386,6 +5392,9 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                 item.comment_text.resize(close->line_begin);
 
             if (item.decl != nullptr) {
+                const clang::SourceLocation decl_end_tok =
+                    clang::Lexer::getLocForEndOfToken(item.decl->getEndLoc(), 0, sm, lang_opts);
+                consumed_end = std::max(consumed_end, sm.getDecomposedLoc(decl_end_tok).second);
                 const lowering::ItemDirectives directives = docblock_directives(item.decl, sm);
                 db::DocEvent                   classified = classify_one(item);
                 if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified);
@@ -5402,7 +5411,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                 }
                 continue;
             }
-            if (item.comment_text.empty())
+            if (item.comment_text.empty() || item.offset < consumed_end)
                 continue;
 
             db::DocEvent classified = classify_one(item);

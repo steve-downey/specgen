@@ -1,0 +1,42 @@
+\rSec3[demo.syn]{Header synopsis}
+
+\begin{codeblock}
+template<typename I>
+class @\libglobal{holder}@ {
+  I @\exposidnc{ptr}@; // exposition only
+
+public:
+  // \ref{demo.holder}, construction
+  constexpr explicit holder(I ptr);
+};
+
+// \ref{demo.ops}, operations
+
+template<typename I> void @\libglobal{swap}@(holder<I>&, holder<I>&);
+\end{codeblock}
+
+\rSec4[demo.holder]{Class template `holder`}
+
+\indexlibraryctor{holder}%
+\begin{itemdecl}
+constexpr explicit holder(I ptr);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes the holder with \tcode{ptr}.
+\end{itemdescr}
+
+\rSec4[demo.ops]{Operations}
+
+\indexlibraryglobal{swap}%
+\begin{itemdecl}
+template<typename I> void swap(holder<I>&, holder<I>&);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Exchanges the states of \tcode{a} and \tcode{b}.
+\end{itemdescr}

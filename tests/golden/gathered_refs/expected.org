@@ -1,0 +1,32 @@
+** Header synopsis [demo.syn]
+
+#+begin_codeblock
+template<typename I>
+class holder {
+  I @\exposidnc{ptr}@; // exposition only
+
+public:
+  // \ref{demo.holder}, construction
+  constexpr explicit holder(I ptr);
+};
+
+// \ref{demo.ops}, operations
+
+template<typename I> void swap(holder<I>&, holder<I>&);
+#+end_codeblock
+
+*** Class template `holder` [demo.holder]
+
+#+begin_itemdecl
+constexpr explicit holder(I ptr);
+#+end_itemdecl
+
+/Effects/: Initializes the holder with ~ptr~.
+
+*** Operations [demo.ops]
+
+#+begin_itemdecl
+template<typename I> void swap(holder<I>&, holder<I>&);
+#+end_itemdecl
+
+/Effects/: Exchanges the states of ~a~ and ~b~.

@@ -206,7 +206,10 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   flattened.
 - **A header synopsis is an explicitly bounded ordinary synopsis.** A `\rSec` section whose
   stable name ends in `.syn` gathers the declarations and draft `\ref` headers up to an exact
-  matching Doxygen fence line `/// END [same.stable]` into one anonymous synopsis child.
+  matching Doxygen fence line `/// END [same.stable]` into one anonymous synopsis child. Only
+  a `\ref` header *between* declarations is gathered as a standalone group header: one inside
+  a class body is already carried by that class's extraction, so a consumed-range watermark
+  skips comments a preceding declaration covers rather than appending them twice (issue #31).
   Doxygen, markup, and namespace scaffolding are dropped; declaration, Ref, exposition, and
   index spans retain their semantics; a terminal `\verbatim-synopsis` payload is appended
   byte-for-byte. The gathered node has no coverage roster. `\omit` and `\merge` also suppress
