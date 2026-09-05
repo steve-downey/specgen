@@ -334,26 +334,32 @@ std::string_view invisibility_reason(ir::Disposition disposition) {
     return "visible";
 }
 
+// What one synopsis's own roster says about the names in it. The document-wide
+// answer is this folded over every synopsis; the per-class answer is the one a
+// *synopsis's* own text asks, since a class-body declaration's disposition is a
+// fact about the class that declared it and about no other (issue #35).
+NameVisibility synopsis_visibility(const ir::Synopsis& v) {
+    NameVisibility out = foundation::mconcat_map(
+        v.roster,
+        [](const ir::SynopsisEntry& entry) {
+            NameVisibility one;
+            if (names_a_visible_entity(entry.disposition))
+                one.documented.insert(entry.name);
+            else
+                one.hidden.emplace(entry.name, HiddenEntry{entry.disposition, entry.kind});
+            return one;
+        },
+        visibility_monoid);
+    if (!v.name.empty())
+        out.documented.insert(v.name);
+    return out;
+}
+
 NameVisibility visibility_layer(const ir::NodeF<NameVisibility>& layer) {
     return std::visit(
         overloaded{
             [](const ir::SectionF<NameVisibility>& s) { return foundation::mconcat(s.children, visibility_monoid); },
-            [](const ir::Synopsis& v) {
-                NameVisibility out = foundation::mconcat_map(
-                    v.roster,
-                    [](const ir::SynopsisEntry& entry) {
-                        NameVisibility one;
-                        if (names_a_visible_entity(entry.disposition))
-                            one.documented.insert(entry.name);
-                        else
-                            one.hidden.emplace(entry.name, HiddenEntry{entry.disposition, entry.kind});
-                        return one;
-                    },
-                    visibility_monoid);
-                if (!v.name.empty())
-                    out.documented.insert(v.name);
-                return out;
-            },
+            [](const ir::Synopsis& v) { return synopsis_visibility(v); },
             // Only a roster records what became of a name; an
             // item and a paragraph are where names are *used*,
             // which is the other side of this check.
@@ -488,11 +494,22 @@ Diagnostics check_leakage(const std::string& context, const ir::CodeText& code, 
 // no such double life either; it is wrong in the synopsis for exactly the reason it
 // is wrong in an *Equivalent to:* body, and `spec_namespace.hpp` is where it
 // happens to land.
-Diagnostics
-check_synopsis_leakage(const std::string& context, const ir::CodeText& code, const NameVisibility& visible) {
-    return report_leaks(context, code, [&visible](const IdentifierRun& run) -> std::optional<std::string> {
-        if (!visible.documented.contains(run.name) && visible.hidden.contains(run.name) &&
-            visible.hidden.at(run.name).disposition == ir::Disposition::Private)
+//
+// The Private half reads *this* synopsis's roster, not the document's. Its
+// whole premise -- the declaration of this name was dropped from this
+// synopsis, so an occurrence of it must be something else reaching for it --
+// is a statement about one class, and the document-wide map is keyed by bare
+// name, so a private member in one class made an unrelated public member of
+// the same name in another read as a leak at its own declaration, with fixits
+// pointing at a member of a class the reader was not looking at (issue #35).
+// The qualifier half stays document-wide: a namespace is not a class-body
+// declaration, and `foreign` is seeded from the document rather than from any
+// roster.
+Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsis& v, const NameVisibility& visible) {
+    const NameVisibility own = synopsis_visibility(v);
+    return report_leaks(context, v.code, [&own, &visible](const IdentifierRun& run) -> std::optional<std::string> {
+        if (!own.documented.contains(run.name) && own.hidden.contains(run.name) &&
+            own.hidden.at(run.name).disposition == ir::Disposition::Private)
             return "`" + run.name + "` is named in the synopsis but is not a visible declaration (" +
                    std::string(invisibility_reason(ir::Disposition::Private)) +
                    "): mark it `\\expos` so it can be named, or mask the declaration that names it (bare "
@@ -1261,7 +1278,7 @@ struct ValidationAlgebra {
                         diagnostics_monoid.combine(check_nonempty(context, v.code), check_spans(context, v.code)),
                         check_coverage(context, v.roster, sections)),
                     check_private_data(context, v.roster)),
-                check_synopsis_leakage(context, v.code, visible)),
+                check_synopsis_leakage(context, v, visible)),
             check_dangling_ref(context, v.code, sections));
     }
 

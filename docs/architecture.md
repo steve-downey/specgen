@@ -692,7 +692,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      for exactly one hidden disposition, **Private** — an unmarked private member's own
      declaration is unconditionally dropped there, so an occurrence of its name is a
      surviving declaration reaching for it (`using type = raw;` naming the elided private
-     alias) and cannot be the self-report a `\merge`d or `\omit`ted name would be.
+     alias) and cannot be the self-report a `\merge`d or `\omit`ted name would be. That
+     premise is about one class, so the roster it reads is the **synopsis's own**, not the
+     document's: a private member in one class says nothing about a same-named declaration
+     in another. The qualifier half stays document-wide, a namespace being no class's
+     member.
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any
