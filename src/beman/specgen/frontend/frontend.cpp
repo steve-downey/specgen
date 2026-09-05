@@ -2168,12 +2168,19 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
 // initializer/constraint through its semicolon, rewrite the declared name and
 // any references to other exposition-only entities with the same sentinels as
 // class synopses, and append the draft's exposition-only comment.
+//
+// `unspecified` is the variable whose bare `\seebelow` composes with the
+// `\expos` that brought it here (issue #38): the declared type is masked and
+// the initializer dropped in the standalone synopsis, exactly as they are in an
+// unmarked variable's itemdecl. Null for every other kind, and for a variable
+// carrying no such marker.
 beman::specgen::ir::CodeText
 extract_namespace_expos_synopsis(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
                                  const clang::LangOptions&                        lang_opts,
                                  const std::set<std::string>&                     ns_drop_set,
-                                 const std::map<const clang::Decl*, std::string>& expos_set) {
+                                 const std::map<const clang::Decl*, std::string>& expos_set,
+                                 const clang::VarDecl*                            unspecified = nullptr) {
     // An exposition-only class template (issue #23) keeps the draft's
     // template-head line break, the same FormatStyle nudge every record
     // extraction passes; the non-record kinds format as before.
@@ -2183,7 +2190,7 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
         record_tag                = std::string_view(tag.data(), tag.size());
     }
     return extract_freestanding_declaration(
-        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag);
+        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified);
 }
 
 // --- redeclaration-chain attachment (design §3.3) ---------------------------
@@ -3129,6 +3136,38 @@ struct AttachedItem {
     std::optional<std::string> verbatim_itemdecl = {};
 };
 
+// What bare `\seebelow` on a namespace-scope variable (template) asks for: the
+// declared type masked as the draft's *unspecified* placeholder and the
+// initializer dropped — the customization-point-object shape (issue #24). The
+// targeted forms have no variable meaning, so one is an Error rather than the
+// silent no-op the bare form used to be.
+//
+// Both variable paths read the marker through here. On an ordinary wording item
+// it is the itemdecl that carries the mask; marked `\expos` as well, the two
+// compose (issue #38) and the standalone synopsis carries it, an
+// exposition-only object of unspecified type being how the draft spells a
+// helper of this kind. Read on only one of the two paths, the other one
+// silently ignored the marker.
+struct VariableMask {
+    const clang::VarDecl*                                     unspecified = nullptr;
+    std::optional<beman::specgen::document_build::Diagnostic> diagnostic  = {};
+};
+
+VariableMask variable_seebelow_mask(const clang::Decl*                              decl,
+                                    const beman::specgen::lowering::ItemDirectives& directives,
+                                    unsigned                                        grouping_line) {
+    const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
+    if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
+        variable = var_tmpl->getTemplatedDecl();
+    if (variable == nullptr || !directives.seebelow || grouping_line == 0)
+        return {};
+    if (directives.seebelow_target)
+        return {nullptr,
+                beman::specgen::document_build::Diagnostic{
+                    beman::specgen::Severity::Error, grouping_line, "a variable accepts only bare \\seebelow"}};
+    return {variable, std::nullopt};
+}
+
 // Parse and lower `decl`'s own `//!` docblock into `attached` — descr,
 // directives, diagnostics, and the grouping line — if it carries one. The
 // shared front half of the attach_* functions whose markup and itemdecl come
@@ -3400,28 +3439,15 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     attach_docblock(attached, decl, sm);
 
-    // Bare `\seebelow` on a namespace-scope variable (template) masks the
-    // declared type as the draft's *unspecified* placeholder and drops the
-    // initializer — the customization-point-object shape (issue #24). The
-    // targeted forms have no variable meaning, so they are an Error rather
-    // than the silent no-op the bare form used to be.
-    const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
-    if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
-        variable = var_tmpl->getTemplatedDecl();
-    const clang::VarDecl* unspecified = nullptr;
-    if (variable != nullptr && attached.directives.seebelow && attached.grouping_line > 0) {
-        if (attached.directives.seebelow_target)
-            attached.diagnostics.push_back(
-                {beman::specgen::Severity::Error, attached.grouping_line, "a variable accepts only bare \\seebelow"});
-        else
-            unspecified = variable;
-    }
+    const VariableMask mask = variable_seebelow_mask(decl, attached.directives, attached.grouping_line);
+    if (mask.diagnostic)
+        attached.diagnostics.push_back(*mask.diagnostic);
 
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
     else
         attached.item.decl.signatures.push_back(extract_freestanding_declaration(
-            decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false, std::nullopt, unspecified));
+            decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false, std::nullopt, mask.unspecified));
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
@@ -4607,10 +4633,22 @@ db::DocEvent classify(const RawItem&                                   ev,
     if (is_namespace_expos_candidate(ev.decl))
         namespace_expos = llvm::cast<clang::NamedDecl>(ev.decl);
     if (namespace_expos != nullptr && expos_set.contains(namespace_expos->getCanonicalDecl())) {
+        // The marker that brought it here is not the only one its docblock may
+        // carry: bare `\seebelow` on a variable composes with `\expos` (issue
+        // #38), and this arm used to read neither that nor the findings the
+        // docblock's own parse produced.
+        AttachedItem marked;
+        attach_docblock(marked, ev.decl, sm);
+        const VariableMask mask = variable_seebelow_mask(ev.decl, marked.directives, marked.grouping_line);
+        if (mask.diagnostic)
+            marked.diagnostics.push_back(*mask.diagnostic);
+
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = namespace_expos->getNameAsString();
-        out.synopsis.code = extract_namespace_expos_synopsis(namespace_expos, sm, lang_opts, ns_drop_set, expos_set);
+        out.synopsis.code =
+            extract_namespace_expos_synopsis(namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified);
+        out.diagnostics = std::move(marked.diagnostics);
         return out;
     }
 

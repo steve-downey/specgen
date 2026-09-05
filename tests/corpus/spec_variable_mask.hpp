@@ -13,6 +13,11 @@
 // the declared type, so the mask takes them too (issue #33). It used to reach
 // only the pointee's TypeLoc, leaving a stray `const` standing against the
 // placeholder and eating the space before the name.
+//
+// `\expos` composes with the marker rather than displacing it (issue #38): an
+// exposition-only object of unspecified type is how the draft spells a helper
+// of this kind, and the standalone synopsis carries the same mask the itemdecls
+// above do. The `\expos` path used to read neither the marker nor the docblock.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_VARIABLE_MASK_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_VARIABLE_MASK_HPP
@@ -43,6 +48,10 @@ inline constexpr detail::tagger<T> tag{};
 //! \remarks The name `forwarded` denotes an object forwarding to the
 //!   implementation's own.
 inline constexpr const detail::adaptor& forwarded = detail::instance;
+
+//! \expos
+//! \seebelow
+inline constexpr detail::adaptor helper_obj{};
 
 } // namespace demo
 
