@@ -1,0 +1,35 @@
+\begin{codeblock}
+template<typename T>
+struct @\exposidnc{box}@ {
+  using type = T;
+}; // exposition only
+\end{codeblock}
+
+\begin{codeblock}
+template<typename T>
+struct @\exposidnc{raw-box}@ {
+  T value;
+}; // exposition only
+\end{codeblock}
+
+\indexlibraryglobal{make}%
+\begin{itemdecl}
+template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+A boxed copy of \tcode{t}.
+\end{itemdescr}
+
+\indexlibraryglobal{unwrap}%
+\begin{itemdecl}
+template<typename T> constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The raw form of \tcode{b}.
+\end{itemdescr}

@@ -2101,7 +2101,16 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
                                  const clang::LangOptions&                        lang_opts,
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set) {
-    return extract_freestanding_declaration(named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true);
+    // An exposition-only class template (issue #23) keeps the draft's
+    // template-head line break, the same FormatStyle nudge every record
+    // extraction passes; the non-record kinds format as before.
+    std::optional<std::string_view> record_tag;
+    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(named)) {
+        const llvm::StringRef tag = tmpl->getTemplatedDecl()->getKindName();
+        record_tag                = std::string_view(tag.data(), tag.size());
+    }
+    return extract_freestanding_declaration(
+        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag);
 }
 
 // --- redeclaration-chain attachment (design §3.3) ---------------------------
@@ -3801,9 +3810,13 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
 // Namespace-owned entities that can be rendered as free-standing exposition
 // synopses. isFileContext includes the global namespace and named namespaces,
 // while excluding an out-of-line definition of a static data member.
+// Class templates belong here too (issue #23): the draft's exposition-only
+// helpers are spelled as class templates as well as alias templates, and
+// their template-id uses resolve through the same TemplateName hook the
+// alias-template uses take.
 bool is_namespace_expos_candidate(const clang::Decl* decl) {
     if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
-        llvm::isa<clang::TypeAliasTemplateDecl>(decl))
+        llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::ClassTemplateDecl>(decl))
         return true;
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl))
         return alias->getDeclContext()->isFileContext();

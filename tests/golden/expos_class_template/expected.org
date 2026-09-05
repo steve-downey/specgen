@@ -1,0 +1,25 @@
+#+begin_codeblock
+template<typename T>
+struct @\exposidnc{box}@ {
+  using type = T;
+}; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename T>
+struct @\exposidnc{raw-box}@ {
+  T value;
+}; // exposition only
+#+end_codeblock
+
+#+begin_itemdecl
+template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
+#+end_itemdecl
+
+/Returns/: A boxed copy of ~t~.
+
+#+begin_itemdecl
+template<typename T> constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
+#+end_itemdecl
+
+/Returns/: The raw form of ~b~.
