@@ -199,6 +199,29 @@ TEST_CASE("build_tree - an empty class description contributes no node") {
     CHECK(std::holds_alternative<ir::Synopsis>(doc.nodes[0]));
 }
 
+TEST_CASE("build_tree - a SynopsisDecl with no code contributes its wording and no synopsis node") {
+    // What the header-synopsis fold forwards for a class it folded into the
+    // gathered node (issue #41): the code is gone, but the class-general
+    // paragraph and the class's own description have no route and still
+    // belong in the section that is open. An empty Synopsis is not a node --
+    // it renders as an empty code block and the validator rejects it -- so
+    // the two arrive without one.
+    db::SynopsisDecl synopsis;
+    synopsis.offset  = 10;
+    synopsis.general = ir::FreeParagraph{{ir::TextInline{"A program that instantiates it is ill-formed."}}};
+    synopsis.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+
+    auto doc = build({std::move(synopsis)});
+
+    REQUIRE(doc.nodes.size() == 2);
+    CHECK(std::holds_alternative<ir::FreeParagraph>(doc.nodes[0]));
+    const auto* descr = std::get_if<ir::SpecItem>(&doc.nodes[1]);
+    REQUIRE(descr != nullptr);
+    CHECK(descr->decl.signatures.empty());
+    REQUIRE(descr->descr.elements.size() == 1);
+    CHECK(descr->descr.elements[0].kind == ir::ElementKind::Remarks);
+}
+
 TEST_CASE("group_items - a description-only item is neither a group primary nor a follower") {
     // Grouping moves *signatures*, so an item with no itemdecl -- a class's
     // own description -- cannot take part. Were it a primary, the following

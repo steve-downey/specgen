@@ -107,6 +107,35 @@ TEST_CASE("a gathered region's class routes its in-class members to their sectio
     CHECK(item.descr.elements.front().kind == ir::ElementKind::Returns);
 }
 
+// The other half of what a folded-in class carries (issue #41): its
+// class-general paragraph and its own description are not routed anywhere, so
+// they belong beside its synopsis -- which, inside a region, means in the
+// gathered section. The fold used to keep only the class's code and let the
+// event go, taking both with it.
+TEST_CASE("a gathered region's class keeps its general paragraph and its own description") {
+    const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* syn = find_section(built->document.nodes, "widget.syn");
+    REQUIRE(syn != nullptr);
+
+    const auto paragraphs =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::FreeParagraph>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(paragraphs.size() == 1);
+
+    const auto items =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(items.size() == 1);
+    const ir::SpecItem& descr = std::get<ir::SpecItem>(items.front());
+    CHECK(descr.decl.signatures.empty()); // a description-only item, not a member
+    REQUIRE(descr.descr.elements.size() == 1);
+    CHECK(descr.descr.elements.front().kind == ir::ElementKind::Remarks);
+}
+
 TEST_CASE("malformed header synopsis boundaries do not swallow later sections") {
     const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis_invalid.hpp");
     REQUIRE(built.has_value());

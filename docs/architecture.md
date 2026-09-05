@@ -219,7 +219,14 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   skips comments a preceding declaration covers rather than appending them twice (issue #31).
   Doxygen, markup, and namespace scaffolding are dropped; declaration, Ref, exposition, and
   index spans retain their semantics; a terminal `\verbatim-synopsis` payload is appended
-  byte-for-byte. The gathered node has no coverage roster. `\omit` and `\merge` also suppress
+  byte-for-byte. A folded-in class keeps everything of its own that the gathered node cannot
+  hold: its routed in-class members ride the gathered event to the `\rSec` each `\ref` names
+  (issue #34), and its class-general paragraph and own description — neither of them routed,
+  both belonging beside their class — travel as their own event, since the gathered node has
+  one slot for each and a region may hold several classes (issue #41). That event carries no
+  code, and `build_tree` pushes no node for a synopsis that has none. The gathered node still
+  has no coverage roster, so a class folded into one is not coverage-checked. `\omit` and
+  `\merge` also suppress
   declarations inside the gathered interval; the filter reads the declaration's directive
   instead of treating every ignored collection event as suppressed, because ordinary unmarked
   helpers use that same event alternative and must still be gathered. A missing or mismatched
