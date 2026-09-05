@@ -257,6 +257,15 @@ void collect_top_level_decl(clang::Decl*                decl,
         return;
     }
 
+    // Implicit decls are compiler synthesis, not source: an implicit
+    // deduction guide reports the enclosing constructor's (or the class's)
+    // own location, so collecting one plants a phantom top-level decl in the
+    // middle of a class body — which a gathered header synopsis then
+    // re-extracts as raw source, markup comments and all (issue #22). Only
+    // authored declarations are document-tree items.
+    if (decl->isImplicit())
+        return;
+
     const clang::SourceLocation loc = decl->getBeginLoc();
     if (!loc.isValid())
         return;
@@ -5022,13 +5031,20 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
     }
 
-    if (const auto* named = llvm::dyn_cast<clang::NamedDecl>(decl);
-        named != nullptr && !named->getNameAsString().empty() && named->getLocation().isValid()) {
+    const auto*                named    = llvm::dyn_cast<clang::NamedDecl>(decl);
+    const clang::FunctionDecl* named_fn = named != nullptr ? llvm::dyn_cast<clang::FunctionDecl>(named) : nullptr;
+    if (named != nullptr)
+        if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(named))
+            named_fn = tmpl->getTemplatedDecl();
+    // A deduction guide's AST name (`<deduction guide for X>`) is not its
+    // source spelling, so an index sentinel would swap the guide's class-name
+    // token for that angle-bracketed label (issue #22). A guide renders
+    // verbatim and unindexed, as the draft's header synopses show them.
+    const bool is_guide = named_fn != nullptr && llvm::isa<clang::CXXDeductionGuideDecl>(named_fn);
+    if (named != nullptr && !is_guide && !named->getNameAsString().empty() && named->getLocation().isValid()) {
         clang::SourceRange name_range{named->getLocation(), named->getLocation()};
-        if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(named))
-            name_range = fn->getNameInfo().getSourceRange();
-        else if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(named))
-            name_range = tmpl->getTemplatedDecl()->getNameInfo().getSourceRange();
+        if (named_fn != nullptr)
+            name_range = named_fn->getNameInfo().getSourceRange();
         const unsigned name_begin = sm.getDecomposedLoc(name_range.getBegin()).second;
         const unsigned name_end =
             sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_range.getEnd(), 0, sm, lang_opts)).second;

@@ -683,6 +683,20 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/meminit"
 )
 
+# A deduction guide inside a gathered header synopsis (issue #22): clang's
+# *implicit* guides — located at the constructor's and class's own tokens —
+# are compiler synthesis, never document-tree items, so the class no longer
+# replays into the gathered synopsis as raw source. The authored guide
+# renders verbatim and unindexed; the `\omit`ed one is absent. The distinct
+# case name leaves `deduction_guide` free for the backend renderings below;
+# all consume one checked-in expected.json.
+specgen_add_golden(
+    deduction_guide_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deduction_guide.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1079,6 +1093,21 @@ specgen_add_golden(
     meminit
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/meminit/expected.json"
+)
+
+# The deduction-guide IR rendered through every backend: one gathered
+# synopsis holding the class and the authored guide, closed cleanly, with
+# the out-of-line wording following it.
+specgen_add_golden(deduction_guide INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide/expected.json")
+specgen_add_golden(
+    deduction_guide
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide/expected.json"
+)
+specgen_add_golden(
+    deduction_guide
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate
