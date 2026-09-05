@@ -36,3 +36,13 @@ template<typename T> inline constexpr $unspecified$ tag;
 [#]{.pnum} *Remarks*: The name `tag` denotes a family of tag objects.
 
 :::
+
+::: wording
+
+```cpp
+inline constexpr $unspecified$ forwarded;
+```
+
+[#]{.pnum} *Remarks*: The name `forwarded` denotes an object forwarding to the implementation's own.
+
+:::
