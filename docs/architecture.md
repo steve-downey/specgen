@@ -369,6 +369,10 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   alias RHS instead. `\impdef` is the alias-only spelling for an
   implementation-defined RHS; the two markers are mutually exclusive, and targeted
   `\seebelow` forms do not apply to an alias.
+- On a documented namespace-scope variable (template), bare `\seebelow` masks the declared
+  type as the draft's *unspecified* placeholder and drops the initializer — the
+  customization-point-object shape, `inline constexpr unspecified name;` (issue #24). The
+  targeted forms have no variable meaning and are an Error.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
@@ -483,6 +487,7 @@ function un-`noexcept` even when it visibly never throws.
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
 | Documented namespace alias/alias template | — | yes, alias masking rules apply; `\also` groups |
 | Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
+| Documented namespace variable (template), bare `\seebelow` | — | yes, type as *unspecified*, initializer dropped |
 | Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock

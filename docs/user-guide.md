@@ -322,6 +322,11 @@ An `\also` block should contain no description elements. `\group` and
   shape. `\seebelow noexcept` and
   `\seebelow explicit` mask only the condition inside that specifier. On a
   documented in-class type alias, bare `\seebelow` masks the complete RHS.
+  On a documented namespace-scope variable or variable template, bare
+  `\seebelow` masks the declared type as *unspecified* and drops the
+  initializer — the customization-point-object shape,
+  `inline constexpr unspecified name;`. The targeted forms do not apply to
+  a variable.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.

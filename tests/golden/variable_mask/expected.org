@@ -1,0 +1,26 @@
+#+begin_codeblock
+struct adaptor {};
+#+end_codeblock
+
+#+begin_codeblock
+template<typename T>
+struct tagger {};
+#+end_codeblock
+
+#+begin_itemdecl
+inline constexpr @\placeholder{unspecified}@ thing;
+#+end_itemdecl
+
+/Remarks/: The name ~thing~ denotes a customization point object.
+
+#+begin_itemdecl
+inline constexpr @\placeholder{unspecified}@ copied;
+#+end_itemdecl
+
+/Remarks/: The copy-initialized spelling masks the same way.
+
+#+begin_itemdecl
+template<typename T> inline constexpr @\placeholder{unspecified}@ tag;
+#+end_itemdecl
+
+/Remarks/: The name ~tag~ denotes a family of tag objects.

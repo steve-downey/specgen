@@ -2015,6 +2015,10 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
 // passes `record_tag` instead, keeping the draft's template-head line break
 // the same way extract_synopsis does, and takes the text verbatim: the
 // declaration *is* the wording, an itemdecl rather than a Synopsis.
+// `unspecified` (issue #24) is the variable whose declared type bare
+// `\seebelow` masks as the draft's *unspecified* placeholder, with the
+// initializer dropped — the customization-point-object shape,
+// `inline constexpr unspecified name;`. Null for every other caller.
 beman::specgen::ir::CodeText
 extract_freestanding_declaration(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
@@ -2022,7 +2026,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
-                                 std::optional<std::string_view>                  record_tag = std::nullopt) {
+                                 std::optional<std::string_view>                  record_tag  = std::nullopt,
+                                 const clang::VarDecl*                            unspecified = nullptr) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -2073,6 +2078,39 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         edits.push_back(SynopsisEdit{use.name_begin, use.name_end, sentinel});
         if (use.qualifier_end > use.qualifier_begin)
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
+    }
+
+    if (unspecified != nullptr) {
+        // The declared type, masked whole: a dominant edit, so a qualifier
+        // drop or expos-use rewrite inside the spelling loses to the mask
+        // instead of tripping the watermark (the alias RHS rule).
+        if (const clang::TypeSourceInfo* tsi = unspecified->getTypeSourceInfo()) {
+            const clang::SourceRange range = tsi->getTypeLoc().getSourceRange();
+            const unsigned type_begin = range.isValid() ? sm.getDecomposedLoc(range.getBegin()).second : decl_begin;
+            const unsigned type_end =
+                range.isValid()
+                    ? sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm, lang_opts)).second
+                    : decl_begin;
+            if (type_begin >= decl_begin && type_end > type_begin) {
+                const std::string sentinel = span_sentinel(span_n++);
+                sentinels[sentinel] =
+                    SpanInfo{beman::specgen::ir::SpanKind::Placeholder, "unspecified", "unspecified"};
+                add_dominant_edit(edits, SynopsisEdit{type_begin, type_end, sentinel});
+            }
+        }
+        // The initializer is implementation all the way down; the draft
+        // writes the declaration alone. A copy-init's `=` goes with it.
+        if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
+            unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
+            const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
+                                                                   init->getSourceRange().getEnd(), 0, sm, lang_opts))
+                                               .second;
+            const std::size_t equal      = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
+            if (equal != llvm::StringRef::npos && buffer[equal] == '=')
+                init_begin = static_cast<unsigned>(equal);
+            if (init_begin >= decl_begin && init_end > init_begin)
+                add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+        }
     }
 
     std::sort(
@@ -3326,11 +3364,29 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     attach_docblock(attached, decl, sm);
+
+    // Bare `\seebelow` on a namespace-scope variable (template) masks the
+    // declared type as the draft's *unspecified* placeholder and drops the
+    // initializer — the customization-point-object shape (issue #24). The
+    // targeted forms have no variable meaning, so they are an Error rather
+    // than the silent no-op the bare form used to be.
+    const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
+    if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
+        variable = var_tmpl->getTemplatedDecl();
+    const clang::VarDecl* unspecified = nullptr;
+    if (variable != nullptr && attached.directives.seebelow && attached.grouping_line > 0) {
+        if (attached.directives.seebelow_target)
+            attached.diagnostics.push_back(
+                {beman::specgen::Severity::Error, attached.grouping_line, "a variable accepts only bare \\seebelow"});
+        else
+            unspecified = variable;
+    }
+
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
     else
-        attached.item.decl.signatures.push_back(
-            extract_freestanding_declaration(decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false));
+        attached.item.decl.signatures.push_back(extract_freestanding_declaration(
+            decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false, std::nullopt, unspecified));
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
