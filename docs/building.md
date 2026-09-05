@@ -39,7 +39,7 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-That run reports **664 tests**. The count goes stale the moment a ctest case is
+That run reports **671 tests**. The count goes stale the moment a ctest case is
 added; whoever adds one updates this number here in the same change.
 
 The full preset list is `{gcc, llvm, appleclang, msvc}` × `{debug, release}`;

@@ -655,6 +655,21 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_inclass_bodies.hpp"
 )
 
+# A requires-expression in a template-head constraint is an ordinary
+# constraint spelling (issue #20): clang anchors doc-comment attachment for a
+# templated function at its name and rejects the `;{}#@` a requires-expression
+# puts in between, so the docblock lookup must go through the described
+# template. Each requires-expression form — in-class member, hidden friend,
+# free function — must render exactly as its named-concept twin does. The
+# distinct case name leaves `reqexpr` free for the backend renderings below;
+# all consume one checked-in expected.json.
+specgen_add_golden(
+    reqexpr_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_reqexpr.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1021,6 +1036,21 @@ specgen_add_golden(
     namespace_entities
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities/expected.json"
+)
+
+# The requires-expression IR rendered through every backend: the multi-line
+# constraint shape survives the draft FormatStyle in synopsis and itemdecl
+# alike, for members, hidden friends, and free functions.
+specgen_add_golden(reqexpr INPUT "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr/expected.json")
+specgen_add_golden(
+    reqexpr
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr/expected.json"
+)
+specgen_add_golden(
+    reqexpr
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate

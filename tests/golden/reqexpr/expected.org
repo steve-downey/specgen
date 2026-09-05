@@ -1,0 +1,71 @@
+** Class `box` [demo.box]
+
+#+begin_codeblock
+struct box {
+  // \ref{demo.box}, observers
+
+  template<class T>
+    requires requires(T t) {
+      { t == 0 };
+    }
+  constexpr int with_req_expr(T) const;
+
+  template<class T>
+    requires nonzero<T>
+  constexpr int with_named(T) const;
+
+  template<class I>
+    requires requires(I i) {
+      { *i == 0 };
+    }
+  friend constexpr bool operator==(const I& it, box);
+};
+#+end_codeblock
+
+#+begin_itemdecl
+template<class T>
+  requires requires(T t) {
+    { t == 0 };
+  }
+constexpr int with_req_expr(T) const;
+#+end_itemdecl
+
+/Returns/: ~0~.
+
+#+begin_itemdecl
+template<class T>
+  requires nonzero<T>
+constexpr int with_named(T) const;
+#+end_itemdecl
+
+/Returns/: ~1~.
+
+#+begin_itemdecl
+template<class I>
+  requires requires(I i) {
+    { *i == 0 };
+  }
+friend constexpr bool operator==(const I& it, box);
+#+end_itemdecl
+
+/Returns/: Whether ~it~ is at the end.
+
+** Free functions [demo.free]
+
+#+begin_itemdecl
+template<class T>
+  requires requires(T t) {
+    { t == 0 };
+  }
+constexpr int free_with_req_expr(T);
+#+end_itemdecl
+
+/Returns/: ~2~.
+
+#+begin_itemdecl
+template<class T>
+  requires nonzero<T>
+constexpr int free_with_named(T);
+#+end_itemdecl
+
+/Returns/: ~3~.
