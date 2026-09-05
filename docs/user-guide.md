@@ -312,6 +312,11 @@ An `\also` block should contain no description elements. `\group` and
 
 ## Synopsis and spelling markers
 
+specgen normalizes the spellings the draft is strict about, so a header may use
+its own house style. `T const&` and `const T&` both render `const T&`, and
+`T *p` renders `T* p`; whichever the library writes, the wording says what
+[structure.specifications] says.
+
 - `\expos` marks an entity exposition-only. The default spelling removes a
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable

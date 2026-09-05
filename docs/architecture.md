@@ -277,8 +277,23 @@ back to name match within the class's fragments only):
    `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,
    `IndentRequiresClause`, `BreakBeforeConceptDeclarations`, column limit ≈ 85–90, penalties
    keeping return type and name together. Tuned via golden-file diff, not a priori.
+   Two of the options are about **spelling** rather than layout, and both say the same
+   thing — the draft's spelling wins over the library's: `PointerAlignment: Left` attaches
+   `&`/`*` to the type, and `QualifierAlignment: Left` writes `const T&` however the header
+   wrote it (issue #39). The second needs `QualifierOrder` set alongside it, because
+   clang-format derives that list from the enum only while parsing YAML, so a style built in
+   code gets the enum, an empty order, and a fixer that silently does nothing.
+   Expression text — a derived conjunct, an *Equivalent to:* body — is taken from source
+   verbatim and never reflowed, so it goes through the same style with `ColumnLimit: 0`:
+   the qualifier fixer runs, the layout does not move.
 3. Parse sentinels into a **span table** (byte range → semantic kind); store
    `{text, spans}` in the IR. Backends substitute escapes per target.
+
+Every generate-mode golden has an `.eastconst` sibling holding the property this buys: the
+same header run through clang-format with the *opposite* qualifier order must produce the
+checked-in IR byte for byte. The east-const twin is generated at test time rather than
+checked in — corpus headers are clang-format-controlled, so a committed one would be
+rewritten west by the next `make lint` and the case would quietly stop testing anything.
 
 ## 4. Markup grammar (docblock comments)
 

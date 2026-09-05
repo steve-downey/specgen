@@ -434,7 +434,18 @@ clang::format::FormatStyle draft_format_style() {
     style.PenaltyReturnTypeOnItsOwnLine  = 1000; // keep return type and name together
     // WG21 draft wording attaches references/pointers to the type (`const T&`,
     // `T*`), not the declarator; getLLVMStyle() defaults to the opposite.
-    style.PointerAlignment              = clang::format::FormatStyle::PAS_Left;
+    style.PointerAlignment = clang::format::FormatStyle::PAS_Left;
+    // And it writes the qualifier on the left, always: `const T&`, never
+    // `T const&`. Left unset, clang-format keeps whichever order the header
+    // used, so the draft's spelling depended on the library's house style
+    // (issue #39). A header may write either; the wording says `const T&`.
+    //
+    // QualifierOrder is set alongside, and has to be: clang-format derives it
+    // from QualifierAlignment only while *parsing YAML*, so a style built in
+    // code gets the enum and an empty order, and the fixer it gates then has
+    // nothing to reorder by and silently does nothing.
+    style.QualifierAlignment            = clang::format::FormatStyle::QAS_Left;
+    style.QualifierOrder                = {"const", "volatile", "type"};
     style.KeepEmptyLines.AtStartOfBlock = false;
     return style;
 }
@@ -1012,6 +1023,30 @@ std::optional<AliasMask> alias_mask(const grammar::Markers& markers) {
     return std::nullopt;
 }
 
+// The last token of an alias declaration before its `;`. `getEndLoc()` is the
+// end of the *TypeSourceInfo*, which leaves out a trailing cv-qualifier the
+// same way a QualifiedTypeLoc leaves out a leading one, so an east-const RHS
+// (`using token_type = detail::token const;`) ended at `token`: the itemdecl
+// came out with the `const` cut off entirely, and the alias mask left it
+// standing beside the placeholder (issue #39, the alias twin of #33). Falls
+// back to what the AST said when no `;` follows, rather than running on.
+clang::SourceLocation alias_last_token(const clang::TypeAliasDecl* alias,
+                                       const clang::SourceManager& sm,
+                                       const clang::LangOptions&   lang_opts) {
+    const clang::SourceLocation given = alias->getEndLoc();
+    clang::SourceLocation       last  = given;
+    // substrate generic algorithm: a forward token walk to the declaration's
+    // own `;`, whose distance is not known in advance; findNextToken advances
+    // every step and gives out at end of file, so this terminates.
+    for (std::optional<clang::Token> tok = clang::Lexer::findNextToken(last, sm, lang_opts); tok;
+         tok                             = clang::Lexer::findNextToken(last, sm, lang_opts)) {
+        if (tok->is(clang::tok::semi))
+            return last;
+        last = tok->getLocation();
+    }
+    return given;
+}
+
 std::optional<clang::SourceRange> alias_rhs_source_range(const clang::TypeAliasDecl* alias,
                                                          const clang::SourceManager& sm,
                                                          const clang::LangOptions&   lang_opts) {
@@ -1029,6 +1064,8 @@ std::optional<clang::SourceRange> alias_rhs_source_range(const clang::TypeAliasD
         if (first)
             range.setBegin(first->getLocation());
     }
+    // ... and the last RHS token from the `;`, for the mirror-image reason.
+    range.setEnd(alias_last_token(alias, sm, lang_opts));
     return range.isValid() ? std::optional{range} : std::nullopt;
 }
 
@@ -2407,9 +2444,12 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
 
     const clang::SourceLocation begin_loc  = head != nullptr ? head->getBeginLoc() : alias->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
-    std::string                 text       = clang::Lexer::getSourceText(
-                                                 clang::CharSourceRange::getTokenRange(begin_loc, alias->getEndLoc()), sm, lang_opts)
-                                                 .str();
+    // Through the declaration's last token, not the type's: they differ when
+    // the RHS ends in a cv-qualifier, and the semicolon is added back here.
+    std::string text =
+        clang::Lexer::getSourceText(
+            clang::CharSourceRange::getTokenRange(begin_loc, alias_last_token(alias, sm, lang_opts)), sm, lang_opts)
+            .str();
     text += ';';
 
     std::map<std::string, SpanInfo> sentinels;
@@ -2486,6 +2526,19 @@ void split_conjuncts(const clang::Expr* e, std::vector<const clang::Expr*>& out)
     out.push_back(e);
 }
 
+// The draft's qualifier order applied to a fragment whose layout is already
+// what the wording wants. Expression text -- a derived conjunct, an
+// *Equivalent to:* body -- is taken from source verbatim and never reflowed,
+// so a header writing `T const&` put `T const&` in a Constraints element while
+// the itemdecl above it, which does go through clang-format, said `const T&`
+// (issue #39). ColumnLimit 0 keeps the reflow off while the qualifier fixer
+// runs: with no limit clang-format honours the input's own line breaks.
+clang::format::FormatStyle qualifier_style() {
+    clang::format::FormatStyle style = draft_format_style();
+    style.ColumnLimit                = 0;
+    return style;
+}
+
 // Source text of an expression's written form.
 llvm::StringRef expr_text(const clang::Expr* e, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
     return clang::Lexer::getSourceText(clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts);
@@ -2524,7 +2577,7 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
         text.replace(edit.begin - text_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return recover_sentinels(std::move(text), sentinels);
+    return recover_sentinels(format_code(text, qualifier_style()), sentinels);
 }
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:
