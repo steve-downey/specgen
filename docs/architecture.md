@@ -477,6 +477,7 @@ function un-`noexcept` even when it visibly never throws.
 | Direct class-scope `static_assert` | removed | one adjacent general paragraph (§5.2) |
 | Documented record/class-template *definition* | yes | its own description, beside the synopsis, with no itemdecl |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
+| Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |

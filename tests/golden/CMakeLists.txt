@@ -697,6 +697,19 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide"
 )
 
+# `\expos` on a namespace-scope class template (issue #23): the definition
+# renders as a free-standing exposition synopsis under its exposid name —
+# `\expos(name)` overriding it — and template-id uses rewrite to the exposid,
+# the treatment alias templates already had. The distinct case name leaves
+# `expos_class_template` free for the backend renderings below; all consume
+# one checked-in expected.json.
+specgen_add_golden(
+    expos_class_template_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_class_template.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1108,6 +1121,24 @@ specgen_add_golden(
     deduction_guide
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deduction_guide/expected.json"
+)
+
+# The exposition-class-template IR rendered through every backend: the
+# exposid spans survive in the free-standing synopses and in the itemdecl
+# uses alike.
+specgen_add_golden(
+    expos_class_template
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template/expected.json"
+)
+specgen_add_golden(
+    expos_class_template
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template/expected.json"
+)
+specgen_add_golden(
+    expos_class_template
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate

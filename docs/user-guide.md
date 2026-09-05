@@ -315,8 +315,8 @@ An `\also` block should contain no description elements. `\group` and
 - `\expos` marks an entity exposition-only. The default spelling removes a
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
-  templates, variables, aliases, and alias templates, as well as class
-  members, can be exposed.
+  templates, variables, aliases, alias templates, and class templates, as
+  well as class members, can be exposed.
 - Bare `\seebelow` masks a function return type — a leading one whole, an
   explicit trailing one as `auto f(...) -> see below;`, keeping the trailing
   shape. `\seebelow noexcept` and
