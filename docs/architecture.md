@@ -97,7 +97,10 @@ share one back half, so single-pass wording equals two-pass wording byte for byt
 - `ClangTool` over a compilation database or fixed args:
   `-std=c++2c -fparse-all-comments -fsyntax-only`. `--no-compile-commands` forces the
   fixed-args path.
-- Process only decls whose location is in the main file.
+- Process only decls whose location is in the main file, and only *authored* ones: an
+  implicit decl is compiler synthesis reporting some other entity's location — an implicit
+  deduction guide sits on the constructor's or class's own tokens, and collecting one plants a
+  phantom top-level decl in the middle of a class body (issue #22).
 - Comments retrieved via the raw comment list; markup attachment via
   `getRawCommentForDeclNoCache`, looked up through the *described template* when the decl
   has one. Clang anchors comment search for a template decl at its `template` keyword but

@@ -1,0 +1,29 @@
+** Header synopsis [demo.syn]
+
+#+begin_codeblock
+template<typename I>
+class holder {
+  I @\exposidnc{ptr}@; // exposition only
+
+public:
+  constexpr explicit holder(I ptr);
+
+  constexpr I get() const;
+};
+
+template<typename I> holder(I) -> holder<I>;
+#+end_codeblock
+
+*** Class template `holder` [demo.holder]
+
+#+begin_itemdecl
+constexpr explicit holder(I ptr);
+#+end_itemdecl
+
+/Effects/: Initializes the holder with ~ptr~.
+
+#+begin_itemdecl
+constexpr I get() const;
+#+end_itemdecl
+
+/Returns/: @@latex:\exposid{ptr}@@.
