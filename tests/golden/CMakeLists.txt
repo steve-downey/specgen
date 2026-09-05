@@ -670,6 +670,19 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr"
 )
 
+# A constructor's mem-initializer list is implementation, never interface
+# (issue #21): the in-class-body splice starts at the `:` introducing a
+# written ctor-initializer list, so the declaration alone renders in the
+# synopsis and the itemdecl — no private spelling, no dropped-qualifier
+# rewrite of the list. The distinct case name leaves `meminit` free for the
+# backend renderings below; all consume one checked-in expected.json.
+specgen_add_golden(
+    meminit_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_meminit.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/meminit"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1051,6 +1064,21 @@ specgen_add_golden(
     reqexpr
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/reqexpr/expected.json"
+)
+
+# The mem-initializer IR rendered through every backend: constructors whose
+# in-class definitions carried initializer lists render as bare declarations
+# in synopsis and itemdecl alike.
+specgen_add_golden(meminit INPUT "${CMAKE_CURRENT_SOURCE_DIR}/meminit/expected.json")
+specgen_add_golden(
+    meminit
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/meminit/expected.json"
+)
+specgen_add_golden(
+    meminit
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/meminit/expected.json"
 )
 
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate

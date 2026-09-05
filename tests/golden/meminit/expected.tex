@@ -1,0 +1,37 @@
+\rSec3[demo.holder]{Class template `holder`}
+
+\begin{codeblock}
+template<typename R>
+class @\libglobal{holder}@ {
+  R @\exposidnc{base}@;   // exposition only
+  int @\exposidnc{count}@; // exposition only
+
+public:
+  // \ref{demo.holder}, construction
+  constexpr explicit holder(R base);
+
+  constexpr holder();
+};
+\end{codeblock}
+
+\indexlibraryctor{holder}%
+\begin{itemdecl}
+constexpr explicit holder(R base);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \exposid{base} with \tcode{std::move(base)} and \exposid{count} with \tcode{1}.
+\end{itemdescr}
+
+\indexlibraryctor{holder}%
+\begin{itemdecl}
+constexpr holder();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to \tcode{holder(R())}.
+\end{itemdescr}
