@@ -5511,6 +5511,15 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
         // extraction already carries it, so appending it again as a
         // standalone group header rendered it twice (issue #31).
         unsigned consumed_end = 0;
+        // What a folded-in class keeps that the gathered node cannot hold: its
+        // class-general paragraph (design §5.2) and its own description (issue
+        // #18). Neither is routed -- both belong beside their class's synopsis,
+        // in whatever section is open -- and the gathered node has one slot for
+        // each while a region may hold several classes, so they travel on as
+        // their own events instead of being merged (issue #41). Pushed after
+        // the gathered node, in source order, which is where their offsets
+        // place them anyway.
+        std::vector<db::DocEvent> class_extras;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -5536,6 +5545,20 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     // code alone dropped them and their descriptions with it
                     // (issue #34), leaving the target section empty.
                     gathered.pending.append_range(std::move(synopsis->pending));
+                    // Only the class's own wording travels, in an event built
+                    // for it rather than the classified one with its taken
+                    // fields left behind: append_range over an rvalue
+                    // container copies, so forwarding the whole event would
+                    // scatter every routed member and report every finding a
+                    // second time. build_tree pushes no node for the synopsis
+                    // itself, whose code really has been moved out.
+                    if (synopsis->general || !synopsis->descr.elements.empty()) {
+                        db::SynopsisDecl extras;
+                        extras.offset  = synopsis->offset;
+                        extras.general = std::move(synopsis->general);
+                        extras.descr   = std::move(synopsis->descr);
+                        class_extras.push_back(std::move(extras));
+                    }
                 } else {
                     if (auto* ignored = std::get_if<db::Ignored>(&classified))
                         gathered.diagnostics.append_range(std::move(ignored->diagnostics));
@@ -5580,6 +5603,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             append_synopsis_code(gathered.synopsis.code, header_comment_code(std::move(refs)));
         }
         events.push_back(std::move(gathered));
+        events.append_range(std::move(class_extras));
         i = *close_index + 1;
     }
 

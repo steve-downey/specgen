@@ -35,7 +35,15 @@ bool operator==(const widget<T>&, const widget<T>&);
 // that the members live somewhere else. The fold used to take the class's
 // code and drop the routed members riding with it, leaving the target
 // section empty and saying nothing (issue #34).
+//
+// Its own wording is the other thing that used to go: the class-general
+// paragraph its `static_assert` derives and the description its docblock
+// carries have no route, so they belong beside its synopsis in the section
+// that is open — this one (issue #41).
+//! \remarks Comparing against `sentinel` never allocates.
 struct sentinel {
+    static_assert(sizeof(char) == 1);
+
     // \ref{widget.ops}, comparison
     //! \returns `t == 0`.
     template <class T>

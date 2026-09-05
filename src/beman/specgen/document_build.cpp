@@ -197,84 +197,93 @@ BuildResult build_tree(std::span<DocEvent> events) {
     // its effect on `stack` depends on every prior event, so this is a fold
     // with a three-part accumulator and no useful return.
     for (DocEvent& ev : events) {
-        std::visit(beman::specgen::foundation::overloaded{
-                       [&](SectionOpen& open) {
-                           // Close every open frame this section is not nested
-                           // inside, then open its own. The root frame (depth
-                           // 0) is never closed here since every \rSec depth
-                           // is >= 1.
-                           // substrate generic algorithm: a loop-until-a-
-                           // stack-condition, not a sequence walk — nothing
-                           // is being traversed, only `stack`'s own state is
-                           // read and `close_top` mutates it in place.
-                           while (stack.back().depth >= open.depth)
-                               close_top();
-                           Frame opening;
-                           opening.depth       = open.depth;
-                           opening.stable      = std::move(open.stable);
-                           opening.title       = std::move(open.title);
-                           opening.open_offset = open.offset;
-                           stack.push_back(std::move(opening));
-                       },
-                       [&](SynopsisDecl& syn) {
-                           // The class's own members' docblock findings,
-                           // collected before the members themselves
-                           // are scattered below, since a member routed
-                           // nowhere is dropped and its findings must not be.
-                           diagnostics.append_range(std::move(syn.diagnostics));
-                           stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(syn.synopsis), false});
-                           // Same placement key, pushed second: sort_frame is
-                           // stable, so the class-general paragraph remains
-                           // immediately after its synopsis in the active
-                           // subclause frame (design §5.2).
-                           if (syn.general)
-                               stack.back().pushed.push_back(
-                                   GroupCandidate{syn.offset, std::move(*syn.general), false});
-                           // Same placement key again, pushed last: the
-                           // class's own authored description (issue #18)
-                           // follows both the synopsis and the derived
-                           // general paragraph it may have replaced. A
-                           // description-only ir::SpecItem -- no signatures,
-                           // so group_items neither joins it to anything nor
-                           // lets a following \also item join onto it.
-                           if (!syn.descr.elements.empty())
-                               stack.back().pushed.push_back(
-                                   GroupCandidate{syn.offset, ir::SpecItem{{}, std::move(syn.descr)}, false});
-                           // substrate generic algorithm: distributes each
-                           // in-class member to the pending bucket for its
-                           // own \rSec target — a scatter keyed by data
-                           // (PendingItem::stable), not by position, so no
-                           // ranges algorithm (chunk_by groups by adjacency,
-                           // not by an arbitrary key) names it.
-                           for (PendingItem& p : syn.pending)
-                               pending[p.stable].push_back(std::move(p));
-                       },
-                       [&](ItemDecl& item) {
-                           // This item's own docblock findings,
-                           // collected whether or not the grouping below
-                           // folds its content into a primary.
-                           diagnostics.append_range(std::move(item.diagnostics));
-                           stack.back().pushed.push_back(GroupCandidate{item.placement_key,
-                                                                        std::move(item.item),
-                                                                        item.wants_join,
-                                                                        std::move(item.group_id),
-                                                                        std::move(item.also_target),
-                                                                        item.grouping_line});
-                       },
-                       [&](Ignored& ig) {
-                           // \ref group headers, license/SPDX text, trailing
-                           // braces, a malformed \rSec, a non-function
-                           // top-level decl, or an \omit/\merge item: none of
-                           // these are structure. The last two of those are
-                           // the cases classify() attaches Diagnostics to (a
-                           // malformed \rSec; an omitted
-                           // item's docblock findings); collect them,
-                           // but the tree itself stays exactly as unaffected
-                           // as for any other Ignored event.
-                           diagnostics.append_range(std::move(ig.diagnostics));
-                       },
-                   },
-                   ev);
+        std::visit(
+            beman::specgen::foundation::overloaded{
+                [&](SectionOpen& open) {
+                    // Close every open frame this section is not nested
+                    // inside, then open its own. The root frame (depth
+                    // 0) is never closed here since every \rSec depth
+                    // is >= 1.
+                    // substrate generic algorithm: a loop-until-a-
+                    // stack-condition, not a sequence walk — nothing
+                    // is being traversed, only `stack`'s own state is
+                    // read and `close_top` mutates it in place.
+                    while (stack.back().depth >= open.depth)
+                        close_top();
+                    Frame opening;
+                    opening.depth       = open.depth;
+                    opening.stable      = std::move(open.stable);
+                    opening.title       = std::move(open.title);
+                    opening.open_offset = open.offset;
+                    stack.push_back(std::move(opening));
+                },
+                [&](SynopsisDecl& syn) {
+                    // The class's own members' docblock findings,
+                    // collected before the members themselves
+                    // are scattered below, since a member routed
+                    // nowhere is dropped and its findings must not be.
+                    diagnostics.append_range(std::move(syn.diagnostics));
+                    // A synopsis with no code is not a node: it renders
+                    // as an empty code block and the validator rejects
+                    // it. Nothing produced one until the header-synopsis
+                    // fold began forwarding a folded-in class's event
+                    // with the code already taken out of it, so that the
+                    // class's own general paragraph and description --
+                    // which have no route and belong beside it -- still
+                    // reach the frame (issue #41).
+                    if (!syn.synopsis.code.text.empty())
+                        stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(syn.synopsis), false});
+                    // Same placement key, pushed second: sort_frame is
+                    // stable, so the class-general paragraph remains
+                    // immediately after its synopsis in the active
+                    // subclause frame (design §5.2).
+                    if (syn.general)
+                        stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(*syn.general), false});
+                    // Same placement key again, pushed last: the
+                    // class's own authored description (issue #18)
+                    // follows both the synopsis and the derived
+                    // general paragraph it may have replaced. A
+                    // description-only ir::SpecItem -- no signatures,
+                    // so group_items neither joins it to anything nor
+                    // lets a following \also item join onto it.
+                    if (!syn.descr.elements.empty())
+                        stack.back().pushed.push_back(
+                            GroupCandidate{syn.offset, ir::SpecItem{{}, std::move(syn.descr)}, false});
+                    // substrate generic algorithm: distributes each
+                    // in-class member to the pending bucket for its
+                    // own \rSec target — a scatter keyed by data
+                    // (PendingItem::stable), not by position, so no
+                    // ranges algorithm (chunk_by groups by adjacency,
+                    // not by an arbitrary key) names it.
+                    for (PendingItem& p : syn.pending)
+                        pending[p.stable].push_back(std::move(p));
+                },
+                [&](ItemDecl& item) {
+                    // This item's own docblock findings,
+                    // collected whether or not the grouping below
+                    // folds its content into a primary.
+                    diagnostics.append_range(std::move(item.diagnostics));
+                    stack.back().pushed.push_back(GroupCandidate{item.placement_key,
+                                                                 std::move(item.item),
+                                                                 item.wants_join,
+                                                                 std::move(item.group_id),
+                                                                 std::move(item.also_target),
+                                                                 item.grouping_line});
+                },
+                [&](Ignored& ig) {
+                    // \ref group headers, license/SPDX text, trailing
+                    // braces, a malformed \rSec, a non-function
+                    // top-level decl, or an \omit/\merge item: none of
+                    // these are structure. The last two of those are
+                    // the cases classify() attaches Diagnostics to (a
+                    // malformed \rSec; an omitted
+                    // item's docblock findings); collect them,
+                    // but the tree itself stays exactly as unaffected
+                    // as for any other Ignored event.
+                    diagnostics.append_range(std::move(ig.diagnostics));
+                },
+            },
+            ev);
     }
 
     // Flush whatever sections are still open at EOF.
