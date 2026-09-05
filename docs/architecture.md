@@ -169,7 +169,12 @@ is installed. There is no Clang-free configuration.
 
 From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
 
-- Splice out bodies (body range → `;`), keeping `= default` / `= delete`. **A
+- Splice out bodies (body range → `;`), keeping `= default` / `= delete`. **The splice starts
+  at the `:` of a written ctor-initializer list** when the definition is a constructor's: a
+  mem-initializer list is implementation, never interface, and leaving it in place also leaked
+  the private member's spelling and the dropped-qualifier rewrite into the synopsis and the
+  itemdecl (issue #21). If the `:` is not found directly before the first written initializer
+  across whitespace only, the splice falls back to the body brace. **A
   Clang-synthesized body is not mistaken for source**: an explicitly defaulted special member
   can gain a synthetic `CompoundStmt` after ODR-use, with a source range covering only the
   final `t` in `default`, so extraction tests `isDefaulted()`/`isDeleted()` before splicing a

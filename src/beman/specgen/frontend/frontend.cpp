@@ -1380,6 +1380,49 @@ const clang::FunctionDecl* member_function_or_template(const clang::Decl* member
     return nullptr;
 }
 
+// Where the spliced-away tail of an in-class function definition begins: the
+// `{` of the body — or, for a constructor with a written mem-initializer
+// list, the `:` that introduces it (issue #21). A ctor-initializer is
+// implementation, never interface: the draft writes the declaration alone,
+// and leaving the list in place also leaks the private member's spelling and
+// the dropped-qualifier rewrite (`base_(move(base))`) into the synopsis and
+// itemdecl. Starting the splice at the `:` removes the list with the body,
+// and the removed range then suppresses the qualifier/expos edits inside it
+// as with any spliced body. If the `:` cannot be found where it must be —
+// directly before the first written initializer, across whitespace only —
+// fall back to the body brace rather than cut at a guessed offset.
+unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* body, const clang::SourceManager& sm) {
+    const unsigned body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+    const auto*    ctor       = llvm::dyn_cast<clang::CXXConstructorDecl>(fn);
+    if (ctor == nullptr)
+        return body_begin;
+
+    clang::SourceLocation first_init;
+    // substrate generic algorithm: a min-fold over the written initializers'
+    // locations — CXXConstructorDecl::inits() is a pointer range, and the
+    // written/implicit split plus the location projection has no std::ranges
+    // name that reads better than the fold itself.
+    for (const clang::CXXCtorInitializer* init : ctor->inits()) {
+        if (!init->isWritten())
+            continue;
+        const clang::SourceLocation loc = init->getSourceRange().getBegin();
+        if (first_init.isInvalid() || sm.getDecomposedLoc(loc).second < sm.getDecomposedLoc(first_init).second)
+            first_init = loc;
+    }
+    if (first_init.isInvalid())
+        return body_begin;
+
+    const auto [init_file, init_begin] = sm.getDecomposedLoc(first_init);
+    bool                  invalid      = false;
+    const llvm::StringRef buffer       = sm.getBufferData(init_file, &invalid);
+    if (invalid)
+        return body_begin;
+    const std::size_t colon = buffer.substr(0, init_begin).find_last_not_of(" \t\n\v\f\r");
+    if (colon == llvm::StringRef::npos || buffer[colon] != ':')
+        return body_begin;
+    return static_cast<unsigned>(colon);
+}
+
 // Subtractive synopsis extraction (design §3.4): lex the class's own text out
 // of the main file, then remove/splice exactly two things — nothing else —
 // and (design §3.6 step 2) reformat the result with the draft
@@ -1802,7 +1845,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         if (body == nullptr)
             continue;
 
-        const unsigned              body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+        const unsigned              body_begin = spliced_tail_begin(fn, body, sm);
         const clang::SourceLocation body_end_tok =
             clang::Lexer::getLocForEndOfToken(body->getEndLoc(), 0, sm, lang_opts);
         const unsigned body_end = sm.getDecomposedLoc(body_end_tok).second;
@@ -2106,7 +2149,7 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     // can carry a synthesized body whose source range is not a real body.
     if (in_class->doesThisDeclarationHaveABody() && !in_class->isDefaulted() && !in_class->isDeleted()) {
         const clang::Stmt* body       = in_class->getBody();
-        const unsigned     body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+        const unsigned     body_begin = spliced_tail_begin(in_class, body, sm);
         text                          = source_text.substr(0, body_begin - decl_begin).str();
     } else {
         text = source_text.str();

@@ -1,0 +1,27 @@
+** Class template `holder` [demo.holder]
+
+#+begin_codeblock
+template<typename R>
+class holder {
+  R @\exposidnc{base}@;   // exposition only
+  int @\exposidnc{count}@; // exposition only
+
+public:
+  // \ref{demo.holder}, construction
+  constexpr explicit holder(R base);
+
+  constexpr holder();
+};
+#+end_codeblock
+
+#+begin_itemdecl
+constexpr explicit holder(R base);
+#+end_itemdecl
+
+/Effects/: Initializes @@latex:\exposid{base}@@ with ~std::move(base)~ and @@latex:\exposid{count}@@ with ~1~.
+
+#+begin_itemdecl
+constexpr holder();
+#+end_itemdecl
+
+/Effects/: Equivalent to ~holder(R())~.
