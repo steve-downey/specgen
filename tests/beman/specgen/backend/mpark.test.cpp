@@ -519,9 +519,12 @@ TEST_CASE("mpark - an added sublist hangs off its lead-in paragraph's literal") 
     CHECK(out.find("[x+1]{.pnum} *Effects*: Then this.") != std::string::npos);
 }
 
-// Numbering restarts per `::: wording` div, exactly as `[#]` does -- one div
-// per top-level node, and one `::: add` around the lot.
-TEST_CASE("mpark - added numbering restarts per wording div, under one add div") {
+// One ascending run over the whole fragment, across every `::: wording` div in
+// it, under one `::: add`. It used to restart per div, on the reasoning that
+// this matched `[#]` -- but the filter counts `#` across divs and does not
+// count literals at all, so restarting emitted `x` again at the top of each
+// one and a multi-div subclause showed every paragraph as "x" (issue #57).
+TEST_CASE("mpark - added numbering runs across wording divs, under one add div") {
     Document doc;
     for (const char* name : {"first", "second"}) {
         Section sec;
@@ -537,10 +540,13 @@ TEST_CASE("mpark - added numbering restarts per wording div, under one add div")
     const std::string out = mpark::render_to_string(doc, {.paper_mode = true});
     // Exactly one editing instruction for the fragment, not one per section.
     CHECK(out.find("::: add") == out.rfind("::: add"));
-    // Two "x" starts and two "x+1"s: the counter reset at the second div.
-    CHECK(out.find("[x]{.pnum}") != out.rfind("[x]{.pnum}"));
-    CHECK(out.find("[x+1]{.pnum}") != out.rfind("[x+1]{.pnum}"));
-    CHECK(out.find("[x+2]{.pnum}") == std::string::npos);
+    // Four paragraphs over two divs, numbered once through: each literal
+    // appears exactly once, and none repeats.
+    for (const char* literal : {"[x]{.pnum}", "[x+1]{.pnum}", "[x+2]{.pnum}", "[x+3]{.pnum}"}) {
+        CHECK(out.find(literal) != std::string::npos);
+        CHECK(out.find(literal) == out.rfind(literal));
+    }
+    CHECK(out.find("[x+4]{.pnum}") == std::string::npos);
 }
 
 TEST_CASE("mpark - paper mode leaves a bare synopsis alone") {
