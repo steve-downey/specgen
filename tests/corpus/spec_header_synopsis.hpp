@@ -52,6 +52,19 @@ struct sentinel {
     }
 };
 
+// A customization point object belongs in the header synopsis, so a masked
+// variable is inside the region by construction -- which is exactly where the
+// mask stopped being applied (issue #55). The declaration folded in verbatim,
+// initializer and `detail::` and all, and the leak was then reported against
+// the marked declaration.
+namespace detail {
+//! \omit
+struct adaptor {};
+} // namespace detail
+
+//! \seebelow
+inline constexpr detail::adaptor cpo{};
+
 //! \verbatim-synopsis
 //! namespace std {
 //!   template<class T> struct hash<demo::widget<T>>;
