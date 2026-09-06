@@ -11,6 +11,12 @@
 // render as standalone synopses, the alias template's RHS naming the alias as
 // an exposid, and a documented function's parameter written as
 // `detail::traverse_context_t<int>` renders as `traverse-context-t<int>`.
+// A class template's own head is the position the rewrite used to miss
+// (issue #48): its requires-clause, its parameters' type constraints, and
+// their default arguments belong to the ClassTemplateDecl rather than to the
+// record, so a traversal rooted at the record never reached them -- and the
+// same concept renamed correctly in a member's requires-clause kept its
+// `detail::` spelling one line above, in the same rendered block.
 // Self-contained (no #includes) under -std=c++2c.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_EXPOS_USES_HPP
@@ -65,6 +71,28 @@ void counter::bump() {
 template <class F>
 int apply_in_context(F&& f, detail::traverse_context_t<int> context) {
     return f(*context);
+}
+
+// \rSec3[counter.gauge]{Class template `gauge`}
+
+// All three head positions at once: a constrained parameter written in
+// shorthand, a default argument, and a requires-clause.
+template <detail::enabled_for U, class T = detail::token_>
+    requires detail::enabled_for<T>
+class gauge {
+  public:
+    // \ref{counter.gauge}, observers
+    int level() const
+        requires detail::enabled_for<U>;
+};
+
+//! \returns `0`.
+template <detail::enabled_for U, class T>
+    requires detail::enabled_for<T>
+int gauge<U, T>::level() const
+    requires detail::enabled_for<U>
+{
+    return 0;
 }
 
 } // namespace demo

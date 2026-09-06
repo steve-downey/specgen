@@ -651,11 +651,16 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
-    bool VisitConceptSpecializationExpr(clang::ConceptSpecializationExpr* expr) {
-        if (expr != nullptr)
-            add(expr->getNamedConcept(),
-                expr->getConceptNameInfo().getSourceRange(),
-                expr->getNestedNameSpecifierLoc());
+    // Every written mention of a concept, whichever spelling wrote it: the
+    // `C<T>` of a requires-clause holds one of these, and so does the `C T` of
+    // a constrained template parameter, where there is no
+    // ConceptSpecializationExpr to visit at all -- the shorthand's constraint
+    // hangs off the TemplateTypeParmDecl (issue #48). Visiting the reference
+    // rather than the expression covers both from one hook, and covers each
+    // exactly once.
+    bool VisitConceptReference(clang::ConceptReference* ref) {
+        if (ref != nullptr)
+            add(ref->getNamedConcept(), ref->getConceptNameInfo().getSourceRange(), ref->getNestedNameSpecifierLoc());
         return true;
     }
 
@@ -1537,6 +1542,19 @@ unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* bo
 // exposition-only display name (design §4.3, §3.5): such a member renders with
 // its declared name replaced by an `\exposid` span and a trailing
 // `// exposition only` comment.
+// A class template's own head: the parameter list carrying its requires-clause,
+// its parameters' type constraints, and their default arguments. All of it
+// belongs to the ClassTemplateDecl, not to the templated record, so a rewrite
+// traversal rooted at the record never reaches it -- an exposition-only concept
+// named in a class-head constraint kept its implementation spelling while the
+// same concept in a member's requires-clause was renamed, in the same rendered
+// block (issue #48). Rooting at the ClassTemplateDecl instead would walk the
+// record a second time and emit every member's edits twice.
+const clang::TemplateParameterList* head_parameters(const clang::Decl* head_decl) {
+    const auto* tmpl = llvm::dyn_cast_or_null<clang::TemplateDecl>(head_decl);
+    return tmpl != nullptr ? tmpl->getTemplateParameters() : nullptr;
+}
+
 beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*                      record,
                                               const clang::SourceManager&                      sm,
                                               const clang::LangOptions&                        lang_opts,
@@ -1974,17 +1992,35 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     const auto inside_removed = [&removed_ranges](unsigned begin, unsigned end) {
         return std::ranges::any_of(removed_ranges, [&](const auto& r) { return begin >= r.first && end <= r.second; });
     };
-    edits.append_range(
-        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts) |
-        std::views::filter([&](const auto& p) {
-            return p.first >= class_begin && p.second <= class_end && !inside_removed(p.first, p.second);
-        }) |
-        std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
+    // The record's own rewrites, plus the template head's: two roots, because
+    // no single AST node spans both without spanning the record twice.
+    std::vector<std::pair<unsigned, unsigned>> qualifier_edits =
+        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts);
+    std::vector<ExposUse> uses = expos_uses(const_cast<clang::CXXRecordDecl*>(record), expos_set, sm, lang_opts);
+    if (const clang::TemplateParameterList* head_params = head_parameters(head_decl)) {
+        const auto gather = [&](auto* node) {
+            qualifier_edits.append_range(namespace_qualifier_edits(node, ns_drop_set, sm, lang_opts));
+            uses.append_range(expos_uses(node, expos_set, sm, lang_opts));
+        };
+        // substrate generic algorithm: a for_each-shaped walk driving the
+        // gather's side effect over two unlike roots -- the parameters, then
+        // the clause -- not a transform building a container.
+        for (const clang::NamedDecl* param : *head_params)
+            gather(const_cast<clang::NamedDecl*>(param));
+        if (const clang::Expr* clause = head_params->getRequiresClause())
+            gather(const_cast<clang::Expr*>(clause));
+    }
+
+    edits.append_range(qualifier_edits | std::views::filter([&](const auto& p) {
+                           return p.first >= class_begin && p.second <= class_end &&
+                                  !inside_removed(p.first, p.second);
+                       }) |
+                       std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
 
     // substrate generic algorithm: each use allocates a unique sentinel while
     // conditionally emitting its qualifier deletion, so this is a stateful
     // flat-map into two coupled outputs rather than a transform.
-    for (const ExposUse& use : expos_uses(const_cast<clang::CXXRecordDecl*>(record), expos_set, sm, lang_opts)) {
+    for (const ExposUse& use : uses) {
         if (use.name_begin < class_begin || use.name_end > class_end || inside_removed(use.name_begin, use.name_end))
             continue;
         const std::string sentinel = span_sentinel(span_n++);
