@@ -427,9 +427,16 @@ std::string wrap_wording(std::string text) { return "::: wording\n\n" + text + "
 // a literal parent.
 //
 // This runs over already-rendered text rather than inside the algebra, for the
-// same reason `wrap_wording` does: it is a property of the enclosing div, not
-// of any node. Per-div is also what gives the counter its reset for free, and
-// keeps it in step with the `#` numbering it replaces.
+// same reason `wrap_wording` does: it is a property of the document, not of any
+// node. Of the *document*, and that is the correction: it used to run per
+// wording div, on the reasoning that a per-div reset kept it in step with the
+// `#` numbering it replaces. It does not. The filter counts `#` across divs and
+// does not count literals at all, so a per-div run emitted `x` again at the top
+// of every one -- and a subclause built from more than one div, which is the
+// ordinary shape once documented entities interleave with undocumented synopsis
+// code, showed every paragraph as "x" (issue #57). Nothing can then refer to
+// one of them. Within a div the run was right, which is what made the reset
+// easy to miss.
 std::string renumber_added(const std::string& text) {
     constexpr std::string_view kPara = "[#]{.pnum}";
     constexpr std::string_view kItem = "[#.#]{.pnum}";
@@ -482,16 +489,19 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
     const std::vector<std::string> rendered = doc.nodes | std::views::transform([&](const ir::Node& node) {
                                                   std::string text = render_node_to_string(node, ctx);
                                                   // A synopsis holds no numbered paragraph, so wrapping one would
-                                                  // put an empty wording div around a code fence -- and, for the
-                                                  // same reason, there is nothing in one to renumber. Every other
-                                                  // node kind either is a numbered paragraph or contains them.
+                                                  // put an empty wording div around a code fence. Every other node
+                                                  // kind either is a numbered paragraph or contains them.
                                                   if (std::holds_alternative<ir::Synopsis>(node))
                                                       return text;
-                                                  return wrap_wording(paper ? renumber_added(text) : std::move(text));
+                                                  return wrap_wording(std::move(text));
                                               }) |
                                               std::ranges::to<std::vector>();
     std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
-    return paper ? wrap_added(std::move(out)) : out;
+    // Renumbered once, over the joined document, so the added-paragraph run
+    // ascends across every wording div in it rather than restarting inside
+    // each (issue #57). Rendering a fragment renders a document, so this is
+    // the one ascending run per subclause the placeholders are for.
+    return paper ? wrap_added(renumber_added(out)) : out;
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {

@@ -644,7 +644,11 @@ There are exactly three backends, and **adding wording to one means adding it to
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
   `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
   with caption anchors; index entries dropped. Paper mode (`--paper`) wraps the fragment in an
-  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2`.
+  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2` — one
+  ascending run over the whole fragment, across every `::: wording` div in it. The run does
+  *not* restart per div the way `[#]` numbering does: the framework's filter counts `#` across
+  divs and does not count a literal at all, so a per-div restart emitted `x` again at the top
+  of each one (issue #57).
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
