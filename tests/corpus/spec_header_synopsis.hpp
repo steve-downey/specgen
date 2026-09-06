@@ -18,7 +18,7 @@ void merged_helper();
 template <class T>
 class widget;
 
-//! \expos widget-like
+//! \expos(widget-like)
 template <class T>
 concept widget_like = true;
 

@@ -39,7 +39,7 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-That run reports **757 tests**. The count goes stale the moment a ctest case is
+That run reports **799 tests**. The count goes stale the moment a ctest case is
 added; whoever adds one updates this number here in the same change.
 
 The full preset list is `{gcc, llvm, appleclang, msvc}` × `{debug, release}`;
@@ -127,3 +127,9 @@ requiring the one-command form above to print exactly what the two-command form
 does. `make goldens` regenerates the golden files wholesale; a non-empty
 `git diff --stat tests/golden/` afterwards is a finding to report, never an edit
 to the golden.
+
+Each generate-mode golden also has a `.quiet` sibling requiring the run to report
+**nothing** on stderr: the corpus is meant to be well-formed markup, and only a
+`MODE diagnose` case ever looks at findings, so without this a typo in an ordinary
+header warned on every run and nothing noticed. There is no opt-out — a header
+whose finding is the point gets a `MODE diagnose` case, which pins the exact text.
