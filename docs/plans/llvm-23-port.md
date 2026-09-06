@@ -1,10 +1,10 @@
 # Plan: moving the front end to LLVM 23
 
-**Status:** planned, not started. The pin stays at `22.1` until
-[pin-bump](#pin-bump) lands. Everything below was measured on 2026-09-06 against
-the LLVM 23 packages on the dev box and against the released clang-format
-23.1.0; the reproductions are recorded so a later reader can redo them rather
-than trust the numbers.
+**Status:** planned; [llvm-23-install](#llvm-23-install) done. The pin stays at
+`22.1` until [pin-bump](#pin-bump) lands. Everything below was measured on
+2026-09-06 against **LLVM 23.1.1** installed on the dev box from apt.llvm.org;
+the reproductions are recorded so a later reader can redo them rather than trust
+the numbers.
 
 ## Goal
 
@@ -14,11 +14,14 @@ same 757 tests. Decision [llvm-toolchain-pin](../decisions/llvm-toolchain-pin.md
 already says a move is one deliberate flag; this is the first exercise of it, so
 the plan is also a check that the flag is all it costs.
 
-LLVM 23.1.0 released on 2026-08-25 (`llvmorg-23.1.0`). It is the first release
-of the 23 line, so the pin's target is `23.1`, not `23.0` — the `23.0.0` the
-`llvm-23` packages carry on this box is apt.llvm.org's development snapshot
-(`1:23~++20260614083101+db210c5e3364`, 2026-06-14), from the unversioned
-`llvm-toolchain-questing` channel rather than a release channel.
+LLVM 23.1.0 released on 2026-08-25 (`llvmorg-23.1.0`), so the pin's target is
+`23.1`, not `23.0`: `23.0.0` is the development trunk, not the release line. The
+dev box now carries `23.1.1` from apt.llvm.org's 23 channel
+(`1:23.1.1~++20260905084250+f603629d9ec7`), which
+`find_package(Clang 23.1)` accepts — `ClangConfigVersion.cmake` matches on
+major.minor, so the pin tracks the release *line* and point releases arrive
+without touching it. The same is already true underneath the current pin: `22.1`
+resolves today's `22.1.8` exactly as it resolved `22.1.5`.
 
 ## What the port actually costs
 
@@ -26,13 +29,18 @@ A probe build configured and built the whole tree against the installed LLVM 23:
 
 ```sh
 uv run cmake --preset gcc-release -B <scratch>/build-llvm23 \
-  -DBEMAN_SPECGEN_LLVM_VERSION=23.0 \
+  -DBEMAN_SPECGEN_LLVM_VERSION=23.1 \
   -DClang_DIR=/usr/lib/llvm-23/lib/cmake/clang
 uv run cmake --build <scratch>/build-llvm23 -j8
 uv run ctest --test-dir <scratch>/build-llvm23 -j8 --output-on-failure
 ```
 
-Configuration succeeded untouched: `find_package(Clang 23.0)` resolved,
+It was run twice, three months of the 23 branch apart — first against the
+`23.0.0` trunk snapshot the box carried before the release, then against
+`23.1.1` — and produced the same two findings both times, character for
+character. Nothing below is an artifact of a pre-release compiler.
+
+Configuration succeeded untouched: `find_package(Clang 23.1)` resolved,
 `LLVMConfig`'s transitive `FindFFI`/`FindLibEdit` probes ran, and the
 `clang-cpp` + `LLVM` shared link held. Nothing in `CMakeLists.txt` or
 `src/beman/specgen/frontend/CMakeLists.txt` needed changing beyond the version
@@ -75,19 +83,19 @@ accordingly; 21 and 22 read it as a declarator. Reduced to the fragment alone:
 
 ```sh
 printf 'requires(const Impl& impl) { impl.step(detail::eval); }\n' > /tmp/f.cpp
-uvx --from clang-format==22.1.5 clang-format \
-  --style='{BasedOnStyle: LLVM, PointerAlignment: Left}' /tmp/f.cpp
+S='{BasedOnStyle: LLVM, PointerAlignment: Left}'
+/usr/lib/llvm-22/bin/clang-format --style="$S" /tmp/f.cpp   # 22.1.8
 #   requires(const Impl& impl) { impl.step(detail::eval); }
-uvx --from clang-format==23.1.0 clang-format \
-  --style='{BasedOnStyle: LLVM, PointerAlignment: Left}' /tmp/f.cpp
+/usr/lib/llvm-23/bin/clang-format --style="$S" /tmp/f.cpp   # 23.1.1
 #   requires(const Impl & impl) { impl.step(detail::eval); }
 ```
 
-It is present in the **released** 23.1.0, not only in the dev snapshot the
-probe built against, so it is not something to wait out. It is also specific to
-the bare fragment: the same requires-clause inside a declaration still formats
-as `Impl&` under 23.1.0, which is both the diagnosis and the shape of a fix —
-see [constraints-fragment-format](#constraints-fragment-format).
+Reproduced identically on the released 23.1.0 wheel
+(`uvx --from clang-format==23.1.0`), so it is neither a packaging artifact nor
+something to wait out. It is also specific to the bare fragment: the same
+requires-clause inside a declaration still formats as `Impl&` under 23.1, which
+is both the diagnosis and the shape of a fix — see
+[constraints-fragment-format](#constraints-fragment-format).
 
 **What did not move.** `golden.include_path_parse_error` pins Clang's own fatal
 diagnostic text, caret diagram included, and `tests/golden/CMakeLists.txt`
@@ -103,26 +111,19 @@ Cross-reference by the slug, never the number.
 
 ### llvm-23-install
 
-Stage 1. Get a released LLVM/Clang **23.1** development install onto the dev
-box. The `llvm-23` packages currently installed are the June dev snapshot
-(23.0.0), and `find_package(Clang 23.1)` rejects them by design — the pin
-cannot move before this does. Either add the `llvm-toolchain-questing-23`
-apt.llvm.org line beside the existing `-20`/`-21` ones and install
-`llvm-23-dev` + `libclang-23-dev` from it, or unpack the release tarball the
-way CI does. Confirm before going further:
+Stage 1. **Done** (2026-09-06). `llvm-23-dev` and `libclang-23-dev` 23.1.1 are
+installed from apt.llvm.org's 23 channel, at the usual
+`/usr/lib/llvm-23/lib/cmake/clang`; `find_package(Clang 23.1)` resolves them
+and reports `LLVM 23.1.1`. The probe in
+[What the port actually costs](#what-the-port-actually-costs) was re-run against
+them and the finding list is unchanged: one compile error, three goldens, the
+same two-character diff. The measurements the rest of this plan rests on are
+therefore against a released compiler, and the later steps carry no residual
+"confirm this against the real 23.1" caveat.
 
-```sh
-grep LLVM_VERSION_STRING <prefix>/include/llvm/Config/llvm-config.h  # 23.1.x
-uv run cmake --preset gcc-release -B <scratch>/b23 \
-  -DBEMAN_SPECGEN_LLVM_VERSION=23.1 -DClang_DIR=<prefix>/lib/cmake/clang
-```
-
-Re-run the probe from [What the port actually costs](#what-the-port-actually-costs)
-against 23.1 and confirm the finding list is still exactly the one above.
-23.1.0 is three months of fixes past the snapshot; a *shorter* list is the
-likely outcome and would shrink [constraints-fragment-format](#constraints-fragment-format)
-or delete it, but the clang-format reduction above says the fragment spacing at
-least survives.
+The one thing this step did *not* settle is CI, which takes LLVM from the
+official release tarball rather than from Debian packages — a different build
+of the same version, notably without RTTI. See [ci-llvm-23](#ci-llvm-23).
 
 ### raw-comment-lookup-key
 
@@ -142,11 +143,12 @@ as [pin-bump](#pin-bump), or immediately before it, depending on
 Stage 3. Settle the derived-Constraints spacing, blocked on
 [constraints-fragment-spelling](#constraints-fragment-spelling). If the answer
 is to restore `Impl&`, the fix is to give the fragment a declaration context
-before formatting and strip it afterwards — verified against 23.1.0:
+before formatting and strip it afterwards — verified against the installed
+23.1.1, the same library the front end links:
 
 ```sh
 printf 'auto probe() requires requires(const Impl& impl) { impl.step(detail::eval); };\n' \
-  | uvx --from clang-format==23.1.0 clang-format \
+  | /usr/lib/llvm-23/bin/clang-format \
       --style='{BasedOnStyle: LLVM, PointerAlignment: Left}'
 # auto probe()
 #   requires requires(const Impl& impl) { impl.step(detail::eval); };
@@ -223,10 +225,16 @@ Two things to watch rather than assume:
 ### clang-format-rev
 
 Stage 6. Bump `.pre-commit-config.yaml`'s `mirrors-clang-format` rev from
-`v22.1.5` to the 23.1 rev, so the formatter that polices the tree matches the
-one linked into the front end. **This is independent of every step above and
-costs nothing**: clang-format 22.1.5 and 23.1.0 both report the 136 tracked
-`.hpp`/`.cpp` files (vendor excluded) already conformant, so nothing reformats.
+`v22.1.5` to `v23.1.0`, so the formatter that polices the tree is on the same
+release line as the one linked into the front end. Exactly the same line, not
+the same build: the mirror publishes wheels per release, and 23.1.1 has none
+yet. That gap is already the standing situation — the current `v22.1.5` rev
+polices a tree built against 22.1.8 — and is why the *pin* is major.minor while
+this rev is exact.
+
+**This step is independent of every other one and costs nothing**: clang-format
+22.1.5 and 23.1.0 both report the 136 tracked `.hpp`/`.cpp` files (vendor
+excluded) already conformant, so nothing reformats.
 
 ```sh
 uvx --from clang-format==23.1.0 clang-format --dry-run \
