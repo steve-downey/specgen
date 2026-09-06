@@ -1,6 +1,7 @@
 # Plan: moving the front end to LLVM 23
 
-**Status:** planned; [llvm-23-install](#llvm-23-install) done. The pin stays at
+**Status:** planned; [llvm-23-install](#llvm-23-install) and
+[constraints-fragment-format](#constraints-fragment-format) done. The pin stays at
 `22.1` until [pin-bump](#pin-bump) lands. Everything below was measured on
 2026-09-06 against **LLVM 23.1.1** installed on the dev box from apt.llvm.org;
 the reproductions are recorded so a later reader can redo them rather than trust
@@ -140,29 +141,35 @@ as [pin-bump](#pin-bump), or immediately before it, depending on
 
 ### constraints-fragment-format
 
-Stage 3. Settle the derived-Constraints spacing, blocked on
-[constraints-fragment-spelling](#constraints-fragment-spelling). If the answer
-is to restore `Impl&`, the fix is to give the fragment a declaration context
-before formatting and strip it afterwards — verified against the installed
-23.1.1, the same library the front end links:
+Stage 3. **Done** (2026-09-06), per
+[constraints-fragment-spelling](#constraints-fragment-spelling): `Impl&` is
+restored rather than the goldens regenerated.
 
-```sh
-printf 'auto probe() requires requires(const Impl& impl) { impl.step(detail::eval); };\n' \
-  | /usr/lib/llvm-23/bin/clang-format \
-      --style='{BasedOnStyle: LLVM, PointerAlignment: Left}'
-# auto probe()
-#   requires requires(const Impl& impl) { impl.step(detail::eval); };
-```
+`format_expr_fragment` (`frontend.cpp`, beside `qualifier_style()`) formats the
+fragment as a variable initializer — `auto beman_specgen_expr = <expr>;` — and
+takes the wrapper off again by its own fixed length. An initializer and not a
+requires-clause because *any* expression is a valid initializer, and this path
+(`expr_code_rewritten`, reached only from `phrase_conjunct`) carries Mandates
+conjuncts lifted from `static_assert` conditions as well as Constraints
+conjuncts, which a requires-clause grammar need not admit. `ColumnLimit = 0`,
+already set by `qualifier_style()` for the qualifier fixer's sake, is what makes
+the round trip safe: with no limit clang-format honours the input's own line
+breaks, so the added prefix reflows nothing after it. If the wrapper does not
+come back intact the fragment is formatted bare, which is the pre-existing
+behavior, so `format_code`'s degrade-to-input remains the only failure mode.
 
-`frontend.cpp` already owns this idiom: `qualifier_style()` formats through
-sentinels and calls `recover_sentinels` (`frontend.cpp:2536`, `:2580`). A
-context wrapper is the same shape and belongs beside it, not as a special case
-inside `format_code`, which other callers hand well-formed declarations to.
+Measured both ways before committing:
 
-Taste-sensitive output, so the wording gets a first cut and sign-off before the
-commit (`AGENTS.md`). If the answer is to accept 23's spelling instead, the step
-is `make goldens` for the three `foreign_include` cases and a note in
-`tests/golden/CMakeLists.txt` saying which LLVM the spelling tracks.
+- **LLVM 22.1.8, the current pin: 757/757, not one golden byte moved.** The
+  wrapper is transparent on the LLVM clang-format got this right on, which is
+  why this step could land ahead of [pin-bump](#pin-bump) instead of behind it.
+- **LLVM 23.1.1: 757/757.** The three `foreign_include` cases pass with the
+  goldens unchanged — the wording is `const Impl&` again.
+
+Checked against every derived conjunct the corpus actually produces (18
+distinct fragments across all goldens) plus multi-line, disjunction,
+negation, and `T const&` shapes: under both toolchains the wrapped result
+equals the LLVM 22 bare result in every case.
 
 ### pin-bump
 
@@ -254,21 +261,30 @@ future formatter, the churn is not tangled with a version bump.
 
 **Question:** in derived *Constraints* wording, is the requires-expression
 spelled `requires(const Impl& impl)` or `requires(const Impl & impl)` under
-LLVM 23? **Status:** OPEN.
+LLVM 23? **Status:** DECIDED, 2026-09-06. **Decided by:** Steve Downey.
 
-`Impl&` is the draft's own spelling and what `PAS_Left` exists to produce; the
-project sets it deliberately (`frontend.cpp:436-437` says the reference binds
-to the type, not the declarator). `Impl & impl` reads as an expression, which
-is exactly what clang-format 23 mistook it for. The wording is worse, and it is
-worse for a reason that is a clang-format defect rather than a change of
-opinion — which argues for restoring it and for reporting the fragment case
-upstream. Against: a wrapper is machinery specgen carries forever to work
-around one release's parse, and the sentinel idiom it copies is already the
-fiddliest corner of the front end.
+**Decision:** `Impl&`. Restore it with a declaration-context wrapper; do not
+regenerate the goldens to match clang-format 23.
 
-The answer decides [constraints-fragment-format](#constraints-fragment-format)
-entirely: restore means a context wrapper and unchanged goldens, accept means
-`make goldens` and a comment.
+**Why:** standardese requires it. `const T&` is the draft's spelling, not a
+preference — which is why `PAS_Left` is set deliberately in the first place
+(`frontend.cpp:436-437`: the reference binds to the type, not the declarator).
+`Impl & impl` reads as an expression, which is exactly what clang-format 23
+mistook it for; the tool's job is to emit wording a paper can paste, so a
+formatter defect is not grounds to change what the wording says. The argument
+against — permanent machinery for one release's parse — is real but is bounded
+by what the fix turned out to be: nine lines, one call site, and a no-op on the
+LLVM the tree is pinned to today.
+
+**Log:**
+
+- 2026-09-06 — decided; implemented as `format_expr_fragment` in
+  [constraints-fragment-format](#constraints-fragment-format), which see for
+  the shape and the measurements.
+- Still worth reporting the bare-fragment case upstream. Not a blocker: the
+  wrapper is correct regardless of whether clang-format changes back, since a
+  declaration fragment formatted without a declaration context was always the
+  tool asking clang-format to guess.
 
 ### [llvm-22-support-window](#llvm-22-support-window)
 
