@@ -321,7 +321,9 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, aliases, alias templates, and class templates, as
-  well as class members, can be exposed. The marked declaration may live in an
+  well as class members, can be exposed. A partial or explicit specialization
+  follows its primary and needs no marker of its own: it is the same entity,
+  and renders under the same exposition name. The marked declaration may live in an
   included header: the uses in the header being specified still render as
   `\exposid`, so moving implementation machinery into a `detail/` header costs
   nothing. Its own declaration is not rendered, though — only declarations in

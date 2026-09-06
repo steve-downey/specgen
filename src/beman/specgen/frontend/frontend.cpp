@@ -2303,8 +2303,11 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
     // template-head line break, the same FormatStyle nudge every record
     // extraction passes; the non-record kinds format as before.
     std::optional<std::string_view> record_tag;
-    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(named)) {
-        const llvm::StringRef tag = tmpl->getTemplatedDecl()->getKindName();
+    const clang::CXXRecordDecl*     record = llvm::dyn_cast<clang::CXXRecordDecl>(named);
+    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(named))
+        record = tmpl->getTemplatedDecl();
+    if (record != nullptr) {
+        const llvm::StringRef tag = record->getKindName();
         record_tag                = std::string_view(tag.data(), tag.size());
     }
     return extract_freestanding_declaration(
@@ -3611,6 +3614,17 @@ const clang::FunctionDecl* as_out_of_line_function(const clang::Decl* decl) {
     return nullptr;
 }
 
+// A specialization and the primary it specializes, or {decl, nullptr} when
+// `decl` specializes nothing. Partial and explicit alike: the partial kinds
+// derive from these, so one cast each covers both (issue #49).
+std::pair<const clang::Decl*, const clang::Decl*> specialized_primary(const clang::Decl* decl) {
+    if (const auto* record = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl))
+        return {decl, record->getSpecializedTemplate()};
+    if (const auto* variable = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl))
+        return {decl, variable->getSpecializedTemplate()};
+    return {decl, nullptr};
+}
+
 // A class or class template's templated record, if `decl` names either.
 // Shared by all three set-builder pre-passes' outer walk.
 const clang::CXXRecordDecl* as_record_decl(const clang::Decl* decl) {
@@ -4073,6 +4087,12 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
     if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
         llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::ClassTemplateDecl>(decl))
         return true;
+    // A specialization of one, which is the same entity as its primary and so
+    // shares its disposition (issue #49). The variable-template kinds reach
+    // the VarDecl test below on their own; a class-template specialization is
+    // a CXXRecordDecl and would otherwise be routed as an ordinary class.
+    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl))
+        return true;
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl))
         return alias->getDeclContext()->isFileContext();
     const auto* variable = llvm::dyn_cast<clang::VarDecl>(decl);
@@ -4134,6 +4154,21 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
         std::views::filter(is_marked) | std::views::transform([&expos_name](const clang::NamedDecl* named) {
             return std::pair<const clang::Decl*, std::string>{named->getCanonicalDecl(), expos_name(named)};
         }));
+
+    // A second pass, because a specialization takes its name from the primary
+    // and the primary need not have been seen first. It is the same entity, so
+    // it cannot be exposition-only under one name and not under another
+    // (issue #49) -- and its own markers do not enter into it: `\expos` on a
+    // specialization was accepted and ignored, `\also` made it a wording item,
+    // and neither kept the raw implementation spelling out of the wording.
+    expos.insert_range(decls | std::views::transform(specialized_primary) |
+                       std::views::filter([&expos](const auto& pair) {
+                           return pair.second != nullptr && expos.contains(pair.second->getCanonicalDecl());
+                       }) |
+                       std::views::transform([&expos](const auto& pair) {
+                           return std::pair<const clang::Decl*, std::string>{
+                               pair.first->getCanonicalDecl(), expos.at(pair.second->getCanonicalDecl())};
+                       }));
     return expos;
 }
 
