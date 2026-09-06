@@ -224,9 +224,10 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   (issue #34), and its class-general paragraph and own description — neither of them routed,
   both belonging beside their class — travel as their own event, since the gathered node has
   one slot for each and a region may hold several classes (issue #41). That event carries no
-  code, and `build_tree` pushes no node for a synopsis that has none. The gathered node still
-  has no coverage roster, so a class folded into one is not coverage-checked. `\omit` and
-  `\merge` also suppress
+  code, and `build_tree` pushes no node for a synopsis that has none. Its coverage roster
+  rides the gathered event, so a class folded into a region is coverage-checked like any
+  other (issue #45); each entry names the class that declared it, since the node names none
+  of them. `\omit` and `\merge` also suppress
   declarations inside the gathered interval; the filter reads the declaration's directive
   instead of treating every ignored collection event as suppressed, because ordinary unmarked
   helpers use that same event alternative and must still be gathered. A missing or mismatched
@@ -713,8 +714,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
 1. **Coverage invariant** (Error, either direction): every class-body declaration is exactly
    one of: merged twin, defaulted/deleted, `\omit`ted, or paired with a markup block; every
    markup block resolves to a declaration; and every `\ref` group a header uses has a matching
-   `\rSec`. The check reads the synopsis roster (§7). A gathered header synopsis (§3.4) has
-   no roster and is exempt.
+   `\rSec`. The check reads the synopsis roster (§7), and a gathered header synopsis (§3.4)
+   is checked like any other: it carries the folded-in classes' rosters, each entry naming
+   its declaring class, so a finding says which class it is about even though the node
+   itself names none (issue #45).
 2. **Leakage checker**: every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
    body. Three clauses at two severities:
@@ -732,8 +735,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      alias) and cannot be the self-report a `\merge`d or `\omit`ted name would be. That
      premise is about one class, so the roster it reads is the **synopsis's own**, not the
      document's: a private member in one class says nothing about a same-named declaration
-     in another. The qualifier half stays document-wide, a namespace being no class's
-     member.
+     in another. It follows that this half does not run on a gathered header synopsis at
+     all — its code is several classes' concatenated, and a bare name there cannot be
+     attributed to one of them. The qualifier half stays document-wide, a namespace being
+     no class's member.
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any

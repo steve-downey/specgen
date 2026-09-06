@@ -155,13 +155,24 @@ std::set<std::string> section_names(const ir::Node& node) {
 //    document_build::build_tree drops such an item silently, so without the
 //    roster entry there is nothing left to see -- which is why this check
 //    cannot be written against the wording alone.
-Diagnostics check_coverage(const std::string&                    context,
+// Which class a roster finding is about. Ordinarily the synopsis's own -- the
+// roster is its class's -- but a gathered header synopsis holds several
+// classes' rosters in one node and names none of them, so there the entry is
+// the only thing that says (issue #45). Composed the same way the caller's
+// own context is, so the two are indistinguishable in output.
+std::string roster_context(const std::string& synopsis_name, const ir::SynopsisEntry& entry) {
+    const std::string& owner = synopsis_name.empty() ? entry.parent : synopsis_name;
+    return owner.empty() ? "synopsis" : owner + "/synopsis";
+}
+
+Diagnostics check_coverage(const std::string&                    synopsis_name,
                            const std::vector<ir::SynopsisEntry>& roster,
                            const std::set<std::string>&          sections) {
     return foundation::mconcat_map(
         roster,
         [&](const ir::SynopsisEntry& entry) {
-            Diagnostics out;
+            const std::string context = roster_context(synopsis_name, entry);
+            Diagnostics       out;
             if (entry.disposition == ir::Disposition::Undocumented)
                 out.push_back({Severity::Error,
                                context,
@@ -215,19 +226,26 @@ Diagnostics check_coverage(const std::string&                    context,
 // because then the reader demonstrably cannot follow the description. This
 // nudge covers the same mistake made silently, where nothing in the wording
 // points at the gap.
-Diagnostics check_private_data(const std::string& context, const std::vector<ir::SynopsisEntry>& roster) {
-    const bool exposes_state = std::ranges::any_of(
-        roster, [](const ir::SynopsisEntry& e) { return e.disposition == ir::Disposition::Expos; });
-    if (!exposes_state)
-        return {};
+Diagnostics check_private_data(const std::string& synopsis_name, const std::vector<ir::SynopsisEntry>& roster) {
+    // "already marks something `\expos`" is a fact about one class, so it is
+    // asked of the entry's own class rather than of the node: a gathered
+    // header synopsis holds several, and one class exposing state must not
+    // start nudging another's private data (issue #45).
+    const auto exposes_state = [&roster](const ir::SynopsisEntry& entry) {
+        return std::ranges::any_of(roster, [&entry](const ir::SynopsisEntry& e) {
+            return e.parent == entry.parent && e.disposition == ir::Disposition::Expos;
+        });
+    };
 
     return foundation::mconcat_map(
         roster,
         [&](const ir::SynopsisEntry& entry) -> Diagnostics {
             if (entry.disposition != ir::Disposition::Private || entry.kind != ir::MemberKind::Data)
                 return {};
+            if (!exposes_state(entry))
+                return {};
             return {{Severity::Note,
-                     context,
+                     roster_context(synopsis_name, entry),
                      "`" + entry.name +
                          "` is unmarked private data in a class that marks other members `\\expos`, so it is "
                          "dropped from the synopsis: mark it `\\expos` too if the wording describes this class's "
@@ -338,9 +356,9 @@ std::string_view invisibility_reason(ir::Disposition disposition) {
 // answer is this folded over every synopsis; the per-class answer is the one a
 // *synopsis's* own text asks, since a class-body declaration's disposition is a
 // fact about the class that declared it and about no other (issue #35).
-NameVisibility synopsis_visibility(const ir::Synopsis& v) {
+NameVisibility roster_visibility(const ir::Synopsis& v, const std::vector<ir::SynopsisEntry>& roster) {
     NameVisibility out = foundation::mconcat_map(
-        v.roster,
+        roster,
         [](const ir::SynopsisEntry& entry) {
             NameVisibility one;
             if (names_a_visible_entity(entry.disposition))
@@ -353,6 +371,26 @@ NameVisibility synopsis_visibility(const ir::Synopsis& v) {
     if (!v.name.empty())
         out.documented.insert(v.name);
     return out;
+}
+
+// Everything the node's roster says: what the document-wide fold reads, since
+// wording anywhere may name any of it.
+NameVisibility synopsis_visibility(const ir::Synopsis& v) { return roster_visibility(v, v.roster); }
+
+// Only what this synopsis's *own* class declared. The Private half of the
+// synopsis leak check asks a question about one class -- this synopsis dropped
+// the declaration, so an occurrence of the name is something else reaching for
+// it -- and a gathered header synopsis's code is several classes'
+// concatenated, where a bare identifier cannot be attributed to any of them.
+// Its entries name other classes, so nothing matches and the half is inert
+// there, which is the honest answer rather than a guessed one (issues #35, #45).
+// An entry naming no class is this synopsis's by construction -- that is what a
+// hand-written roster looks like, and hand-written IR is exactly the case with
+// no fold to have merged anything into it.
+NameVisibility own_class_visibility(const ir::Synopsis& v) {
+    return roster_visibility(v, v.roster | std::views::filter([&v](const ir::SynopsisEntry& entry) {
+                                    return entry.parent.empty() || entry.parent == v.name;
+                                }) | std::ranges::to<std::vector<ir::SynopsisEntry>>());
 }
 
 NameVisibility visibility_layer(const ir::NodeF<NameVisibility>& layer) {
@@ -506,7 +544,7 @@ Diagnostics check_leakage(const std::string& context, const ir::CodeText& code, 
 // declaration, and `foreign` is seeded from the document rather than from any
 // roster.
 Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsis& v, const NameVisibility& visible) {
-    const NameVisibility own = synopsis_visibility(v);
+    const NameVisibility own = own_class_visibility(v);
     return report_leaks(context, v.code, [&own, &visible](const IdentifierRun& run) -> std::optional<std::string> {
         if (!own.documented.contains(run.name) && own.hidden.contains(run.name) &&
             own.hidden.at(run.name).disposition == ir::Disposition::Private)
@@ -1276,8 +1314,8 @@ struct ValidationAlgebra {
                 diagnostics_monoid.combine(
                     diagnostics_monoid.combine(
                         diagnostics_monoid.combine(check_nonempty(context, v.code), check_spans(context, v.code)),
-                        check_coverage(context, v.roster, sections)),
-                    check_private_data(context, v.roster)),
+                        check_coverage(v.name, v.roster, sections)),
+                    check_private_data(v.name, v.roster)),
                 check_synopsis_leakage(context, v, visible)),
             check_dangling_ref(context, v.code, sections));
     }

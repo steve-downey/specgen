@@ -44,7 +44,17 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
     REQUIRE(synopses.size() == 1);
 
     const ir::Synopsis& synopsis = std::get<ir::Synopsis>(synopses.front());
-    CHECK(synopsis.roster.empty());
+    // The gathered node's roster is the folded-in classes' own, each entry
+    // naming the class that declared it, since the node names none of them
+    // (issue #45). Only `sentinel` is a class *definition* in this region --
+    // the free functions and the forward-declared `widget` have no class body
+    // and so no roster of their own.
+    CHECK_FALSE(synopsis.roster.empty());
+    CHECK(std::ranges::all_of(synopsis.roster,
+                              [](const ir::SynopsisEntry& entry) { return entry.parent == "sentinel"; }));
+    CHECK(std::ranges::any_of(synopsis.roster, [](const ir::SynopsisEntry& entry) {
+        return entry.name == "operator==" && entry.disposition == ir::Disposition::Routed;
+    }));
     const ir::CodeText& code = synopsis.code;
     CHECK(code.text.contains("struct tag"));
     CHECK(code.text.contains("inline constexpr tag value"));
