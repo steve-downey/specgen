@@ -247,6 +247,34 @@ function(specgen_add_golden case)
                     "${CMAKE_CURRENT_BINARY_DIR}/${case}.validate.tex"
             )
         endif()
+        # The `.quiet` sibling: the header's markup must draw no finding. The
+        # golden above compares the IR on stdout and never looks at stderr, so
+        # a typo in an ordinary corpus header warned on every run and nothing
+        # noticed (issue #65) -- the mirror of the silence `.validate` demands
+        # from the validator. A header whose finding is the point gets a
+        # `MODE diagnose` case, which pins the exact text; that is why there is
+        # no opt-out flag here.
+        #
+        # Skipped for a COMPILE_COMMANDS_DIR case: reading a database is itself
+        # reported on stderr, so silence is the wrong demand. Those cases pair
+        # with an EXTRA_ARGS twin reaching the same parse, and the twin carries
+        # the gate.
+        if(NOT ARG_COMPILE_COMMANDS_DIR)
+            set(quiet_args
+                "-DSPECGEN=$<TARGET_FILE:specgen>"
+                "-DINPUT=${ARG_INPUT}"
+                "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/${case}.quiet.json"
+            )
+            if(ARG_EXTRA_ARGS)
+                list(APPEND quiet_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
+            endif()
+            add_test(
+                NAME golden.${case}.quiet
+                COMMAND
+                    ${CMAKE_COMMAND} ${quiet_args} -P
+                    "${CMAKE_CURRENT_SOURCE_DIR}/run-quiet.cmake"
+            )
+        endif()
         # The `.eastconst` sibling: the same header written `T const&` instead
         # of `const T&` must produce the same IR, because the draft writes
         # `const T&` whatever the library wrote (issue #39). The east-const
