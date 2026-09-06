@@ -408,11 +408,15 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   mask takes the whole declared type, from its first written token through to the name, so a
   leading cv-qualifier and a reference declarator go with it (issue #33). The targeted forms
   have no variable meaning and are an Error.
-- `\expos` composes with that mask rather than displacing it (issue #38): a variable carrying
-  both renders `inline constexpr unspecified $name$; // exposition only`, the draft's spelling
-  for an exposition-only helper of unspecified type. The standalone-synopsis path reads the
-  docblock for this, so the targeted forms are an Error there too — it used to read no marker
-  at all and report nothing.
+- On a documented namespace-scope **concept**, bare `\seebelow` masks the
+  constraint-expression, the same way it masks an alias's RHS (issue #50). The two are one
+  rule: an entity whose *definition* is the implementation writes that definition as *see
+  below*, where an entity whose *declared type* is writes the type as *unspecified*.
+- `\expos` composes with either mask rather than displacing it (issues #38, #50): a variable
+  carrying both renders `inline constexpr unspecified $name$; // exposition only`, and an
+  alias or concept renders `using $name$ = see below; // exposition only`. The
+  standalone-synopsis path reads the docblock for this, so the targeted forms are an Error
+  there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
@@ -530,6 +534,8 @@ function un-`noexcept` even when it visibly never throws.
 | Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
 | Documented namespace variable (template), bare `\seebelow` | — | yes, type as *unspecified*, initializer dropped |
 | Namespace variable (template), `\expos` + bare `\seebelow` | standalone, type as *unspecified* | — |
+| Documented namespace concept, bare `\seebelow` | — | yes, constraint-expression as *see below* |
+| Namespace alias/concept, `\expos` + bare `\seebelow` | standalone, definition as *see below* | — |
 | Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock

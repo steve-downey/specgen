@@ -40,4 +40,20 @@ concept usable = requires { typename T::type; };
 
 [#]{.pnum} *Remarks*: A type is usable if it names a member type.
 
+```cpp
+template<class T>
+concept masked = $see below$;
+```
+
+[#]{.pnum} *Remarks*: The concept is specified below.
+
+```cpp
+template<class T> using $hidden-t$ = $see below$; // exposition only
+```
+
+```cpp
+template<class T>
+concept $hidden-usable$ = $see below$; // exposition only
+```
+
 :::

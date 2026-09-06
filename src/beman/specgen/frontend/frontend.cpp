@@ -1074,6 +1074,31 @@ std::optional<clang::SourceRange> alias_rhs_source_range(const clang::TypeAliasD
     return range.isValid() ? std::optional{range} : std::nullopt;
 }
 
+// What bare `\seebelow` masks on a namespace-scope entity that is not a
+// variable: the *definition*, not the declared type. An alias's right-hand
+// side, an alias template's, or a concept's constraint-expression -- the part
+// that is implementation and that the draft writes as *see below*. A variable
+// masks its declared type instead (issue #24) and goes through `unspecified`.
+//
+// The alias half already had this on the wording-item path; the concept half
+// had it nowhere, and neither had it on the `\expos` standalone-synopsis path,
+// so the two markers did not compose and the leak the mask was for was
+// reported against a declaration the author had already marked (issue #50).
+std::optional<clang::SourceRange>
+definition_mask_range(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    const clang::TypeAliasDecl* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl);
+    if (const auto* alias_tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl))
+        alias = alias_tmpl->getTemplatedDecl();
+    if (alias != nullptr)
+        return alias_rhs_source_range(alias, sm, lang_opts);
+    if (const auto* concept_decl = llvm::dyn_cast<clang::ConceptDecl>(decl)) {
+        const clang::Expr* constraint = concept_decl->getConstraintExpr();
+        if (constraint != nullptr && constraint->getSourceRange().isValid())
+            return constraint->getSourceRange();
+    }
+    return std::nullopt;
+}
+
 std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers) {
     if (!markers.seebelow)
         return std::nullopt;
@@ -2174,7 +2199,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
                                  std::optional<std::string_view>                  record_tag  = std::nullopt,
-                                 const clang::VarDecl*                            unspecified = nullptr) {
+                                 const clang::VarDecl*                            unspecified = nullptr,
+                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -2253,6 +2279,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         }
         // The initializer is implementation all the way down; the draft
         // writes the declaration alone. A copy-init's `=` goes with it.
+        // (see_below below is the same idea for the kinds whose definition,
+        // rather than whose declared type, is the implementation.)
         if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
             unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
             const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
@@ -2263,6 +2291,22 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                 init_begin = static_cast<unsigned>(equal);
             if (init_begin >= decl_begin && init_end > init_begin)
                 add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+        }
+    }
+
+    // The definition, masked whole: an alias's RHS or a concept's
+    // constraint-expression (issue #50). A dominant edit for the same reason
+    // the declared-type mask is one -- a qualifier drop or expos-use rewrite
+    // inside the masked spelling loses to the mask rather than tripping the
+    // watermark.
+    if (see_below && see_below->isValid()) {
+        const unsigned begin = sm.getDecomposedLoc(see_below->getBegin()).second;
+        const unsigned end =
+            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(see_below->getEnd(), 0, sm, lang_opts)).second;
+        if (begin >= decl_begin && end > begin && end <= decl_end) {
+            const std::string sentinel = span_sentinel(span_n++);
+            sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::SeeBelow, "SEEBELOW", ""};
+            add_dominant_edit(edits, SynopsisEdit{begin, end, sentinel});
         }
     }
 
@@ -2298,7 +2342,8 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
                                  const clang::LangOptions&                        lang_opts,
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
-                                 const clang::VarDecl*                            unspecified = nullptr) {
+                                 const clang::VarDecl*                            unspecified = nullptr,
+                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
     // An exposition-only class template (issue #23) keeps the draft's
     // template-head line break, the same FormatStyle nudge every record
     // extraction passes; the non-record kinds format as before.
@@ -2311,7 +2356,7 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
         record_tag                = std::string_view(tag.data(), tag.size());
     }
     return extract_freestanding_declaration(
-        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified);
+        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified, see_below);
 }
 
 // --- redeclaration-chain attachment (design §3.3) ---------------------------
@@ -3579,12 +3624,25 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     const VariableMask mask = variable_seebelow_mask(decl, attached.directives, attached.grouping_line);
     if (mask.diagnostic)
         attached.diagnostics.push_back(*mask.diagnostic);
+    // A concept reaches this path too, and its definition masks the same way
+    // an alias's RHS does on attach_alias's (issue #50); the marker used to be
+    // accepted here with no effect and no diagnostic.
+    std::optional<clang::SourceRange> see_below;
+    if (attached.directives.seebelow && !attached.directives.seebelow_target)
+        see_below = definition_mask_range(decl, sm, lang_opts);
 
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
     else
-        attached.item.decl.signatures.push_back(extract_freestanding_declaration(
-            decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false, std::nullopt, mask.unspecified));
+        attached.item.decl.signatures.push_back(extract_freestanding_declaration(decl,
+                                                                                 sm,
+                                                                                 lang_opts,
+                                                                                 ns_drop_set,
+                                                                                 expos_set,
+                                                                                 /*exposition=*/false,
+                                                                                 std::nullopt,
+                                                                                 mask.unspecified,
+                                                                                 see_below));
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
@@ -4815,12 +4873,20 @@ db::DocEvent classify(const RawItem&                                   ev,
         const VariableMask mask = variable_seebelow_mask(ev.decl, marked.directives, marked.grouping_line);
         if (mask.diagnostic)
             marked.diagnostics.push_back(*mask.diagnostic);
+        // The kinds whose *definition* is the implementation mask it the same
+        // way (issue #50): an alias's RHS, an alias template's, a concept's
+        // constraint-expression. Bare `\seebelow` only -- the targeted forms
+        // have no meaning here either, and variable_seebelow_mask has already
+        // said so for the kinds it speaks for.
+        std::optional<clang::SourceRange> see_below;
+        if (marked.directives.seebelow && !marked.directives.seebelow_target)
+            see_below = definition_mask_range(ev.decl, sm, lang_opts);
 
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = namespace_expos->getNameAsString();
-        out.synopsis.code =
-            extract_namespace_expos_synopsis(namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified);
+        out.synopsis.code = extract_namespace_expos_synopsis(
+            namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below);
         out.diagnostics = std::move(marked.diagnostics);
         return out;
     }

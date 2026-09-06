@@ -339,7 +339,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   `inline constexpr unspecified name;`. Marked `\expos` as well, the two
   compose: `inline constexpr unspecified $name$; // exposition only`. The
   targeted forms do not apply to a variable either way, and saying one is an
-  Error.
+  Error. On a documented namespace-scope concept, bare `\seebelow` masks the
+  constraint-expression, as it does an alias's right-hand side; both compose
+  with `\expos` the same way, rendering
+  `using $name$ = see below; // exposition only`.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.
