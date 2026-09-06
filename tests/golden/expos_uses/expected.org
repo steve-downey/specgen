@@ -60,3 +60,25 @@ template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<i
 #+end_itemdecl
 
 /Returns/: The result of ~f~ applied to the dereferenced context.
+
+** Class template `gauge` [counter.gauge]
+
+#+begin_codeblock
+template<@\exposidnc{enabled}@ U,
+class T = @\exposidnc{token}@>
+  requires @\exposidnc{enabled}@<T>
+class gauge {
+public:
+  // \ref{counter.gauge}, observers
+  int level() const
+    requires @\exposidnc{enabled}@<U>;
+};
+#+end_codeblock
+
+#+begin_itemdecl
+int level() const;
+#+end_itemdecl
+
+/Constraints/: ~U~ models @@latex:\exposid{enabled}@@.
+
+/Returns/: ~0~.

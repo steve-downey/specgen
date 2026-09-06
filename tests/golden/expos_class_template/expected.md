@@ -7,9 +7,25 @@ struct $box$ {
 
 ```cpp
 template<typename T>
+struct $box$<T*> {
+  using type = T;
+}; // exposition only
+```
+
+```cpp
+template<typename T>
 struct $raw-box$ {
   T value;
 }; // exposition only
+```
+
+```cpp
+template<typename T> inline constexpr bool $boxed$ = false; // exposition only
+```
+
+```cpp
+template<typename T>
+inline constexpr bool $boxed$<$box$<T>> = true; // exposition only
 ```
 
 ::: wording

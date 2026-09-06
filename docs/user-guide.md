@@ -321,7 +321,9 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, aliases, alias templates, and class templates, as
-  well as class members, can be exposed. The marked declaration may live in an
+  well as class members, can be exposed. A partial or explicit specialization
+  follows its primary and needs no marker of its own: it is the same entity,
+  and renders under the same exposition name. The marked declaration may live in an
   included header: the uses in the header being specified still render as
   `\exposid`, so moving implementation machinery into a `detail/` header costs
   nothing. Its own declaration is not rendered, though — only declarations in
@@ -337,7 +339,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   `inline constexpr unspecified name;`. Marked `\expos` as well, the two
   compose: `inline constexpr unspecified $name$; // exposition only`. The
   targeted forms do not apply to a variable either way, and saying one is an
-  Error.
+  Error. On a documented namespace-scope concept, bare `\seebelow` masks the
+  constraint-expression, as it does an alias's right-hand side; both compose
+  with `\expos` the same way, rendering
+  `using $name$ = see below; // exposition only`.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.

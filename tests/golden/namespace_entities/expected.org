@@ -37,3 +37,19 @@ concept usable = requires { typename T::type; };
 #+end_itemdecl
 
 /Remarks/: A type is usable if it names a member type.
+
+#+begin_itemdecl
+template<class T>
+concept masked = @\seebelow@;
+#+end_itemdecl
+
+/Remarks/: The concept is specified below.
+
+#+begin_codeblock
+template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<class T>
+concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+#+end_codeblock

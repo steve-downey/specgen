@@ -651,11 +651,16 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
-    bool VisitConceptSpecializationExpr(clang::ConceptSpecializationExpr* expr) {
-        if (expr != nullptr)
-            add(expr->getNamedConcept(),
-                expr->getConceptNameInfo().getSourceRange(),
-                expr->getNestedNameSpecifierLoc());
+    // Every written mention of a concept, whichever spelling wrote it: the
+    // `C<T>` of a requires-clause holds one of these, and so does the `C T` of
+    // a constrained template parameter, where there is no
+    // ConceptSpecializationExpr to visit at all -- the shorthand's constraint
+    // hangs off the TemplateTypeParmDecl (issue #48). Visiting the reference
+    // rather than the expression covers both from one hook, and covers each
+    // exactly once.
+    bool VisitConceptReference(clang::ConceptReference* ref) {
+        if (ref != nullptr)
+            add(ref->getNamedConcept(), ref->getConceptNameInfo().getSourceRange(), ref->getNestedNameSpecifierLoc());
         return true;
     }
 
@@ -1067,6 +1072,31 @@ std::optional<clang::SourceRange> alias_rhs_source_range(const clang::TypeAliasD
     // ... and the last RHS token from the `;`, for the mirror-image reason.
     range.setEnd(alias_last_token(alias, sm, lang_opts));
     return range.isValid() ? std::optional{range} : std::nullopt;
+}
+
+// What bare `\seebelow` masks on a namespace-scope entity that is not a
+// variable: the *definition*, not the declared type. An alias's right-hand
+// side, an alias template's, or a concept's constraint-expression -- the part
+// that is implementation and that the draft writes as *see below*. A variable
+// masks its declared type instead (issue #24) and goes through `unspecified`.
+//
+// The alias half already had this on the wording-item path; the concept half
+// had it nowhere, and neither had it on the `\expos` standalone-synopsis path,
+// so the two markers did not compose and the leak the mask was for was
+// reported against a declaration the author had already marked (issue #50).
+std::optional<clang::SourceRange>
+definition_mask_range(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    const clang::TypeAliasDecl* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl);
+    if (const auto* alias_tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(decl))
+        alias = alias_tmpl->getTemplatedDecl();
+    if (alias != nullptr)
+        return alias_rhs_source_range(alias, sm, lang_opts);
+    if (const auto* concept_decl = llvm::dyn_cast<clang::ConceptDecl>(decl)) {
+        const clang::Expr* constraint = concept_decl->getConstraintExpr();
+        if (constraint != nullptr && constraint->getSourceRange().isValid())
+            return constraint->getSourceRange();
+    }
+    return std::nullopt;
 }
 
 std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers) {
@@ -1537,6 +1567,19 @@ unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* bo
 // exposition-only display name (design §4.3, §3.5): such a member renders with
 // its declared name replaced by an `\exposid` span and a trailing
 // `// exposition only` comment.
+// A class template's own head: the parameter list carrying its requires-clause,
+// its parameters' type constraints, and their default arguments. All of it
+// belongs to the ClassTemplateDecl, not to the templated record, so a rewrite
+// traversal rooted at the record never reaches it -- an exposition-only concept
+// named in a class-head constraint kept its implementation spelling while the
+// same concept in a member's requires-clause was renamed, in the same rendered
+// block (issue #48). Rooting at the ClassTemplateDecl instead would walk the
+// record a second time and emit every member's edits twice.
+const clang::TemplateParameterList* head_parameters(const clang::Decl* head_decl) {
+    const auto* tmpl = llvm::dyn_cast_or_null<clang::TemplateDecl>(head_decl);
+    return tmpl != nullptr ? tmpl->getTemplateParameters() : nullptr;
+}
+
 beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*                      record,
                                               const clang::SourceManager&                      sm,
                                               const clang::LangOptions&                        lang_opts,
@@ -1974,17 +2017,35 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     const auto inside_removed = [&removed_ranges](unsigned begin, unsigned end) {
         return std::ranges::any_of(removed_ranges, [&](const auto& r) { return begin >= r.first && end <= r.second; });
     };
-    edits.append_range(
-        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts) |
-        std::views::filter([&](const auto& p) {
-            return p.first >= class_begin && p.second <= class_end && !inside_removed(p.first, p.second);
-        }) |
-        std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
+    // The record's own rewrites, plus the template head's: two roots, because
+    // no single AST node spans both without spanning the record twice.
+    std::vector<std::pair<unsigned, unsigned>> qualifier_edits =
+        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts);
+    std::vector<ExposUse> uses = expos_uses(const_cast<clang::CXXRecordDecl*>(record), expos_set, sm, lang_opts);
+    if (const clang::TemplateParameterList* head_params = head_parameters(head_decl)) {
+        const auto gather = [&](auto* node) {
+            qualifier_edits.append_range(namespace_qualifier_edits(node, ns_drop_set, sm, lang_opts));
+            uses.append_range(expos_uses(node, expos_set, sm, lang_opts));
+        };
+        // substrate generic algorithm: a for_each-shaped walk driving the
+        // gather's side effect over two unlike roots -- the parameters, then
+        // the clause -- not a transform building a container.
+        for (const clang::NamedDecl* param : *head_params)
+            gather(const_cast<clang::NamedDecl*>(param));
+        if (const clang::Expr* clause = head_params->getRequiresClause())
+            gather(const_cast<clang::Expr*>(clause));
+    }
+
+    edits.append_range(qualifier_edits | std::views::filter([&](const auto& p) {
+                           return p.first >= class_begin && p.second <= class_end &&
+                                  !inside_removed(p.first, p.second);
+                       }) |
+                       std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
 
     // substrate generic algorithm: each use allocates a unique sentinel while
     // conditionally emitting its qualifier deletion, so this is a stateful
     // flat-map into two coupled outputs rather than a transform.
-    for (const ExposUse& use : expos_uses(const_cast<clang::CXXRecordDecl*>(record), expos_set, sm, lang_opts)) {
+    for (const ExposUse& use : uses) {
         if (use.name_begin < class_begin || use.name_end > class_end || inside_removed(use.name_begin, use.name_end))
             continue;
         const std::string sentinel = span_sentinel(span_n++);
@@ -2115,6 +2176,89 @@ unsigned cv_run_begin(llvm::StringRef buffer, unsigned begin, unsigned floor) {
     }
 }
 
+// The masks a marked declaration's own spelling takes, applied to one
+// extraction's edit list. Two of them, and they are the same idea told about
+// different halves of a declaration: `unspecified` is the variable whose
+// declared *type* is the implementation (issue #24), `see_below` the range --
+// an alias's right-hand side, a concept's constraint-expression -- of an
+// entity whose *definition* is (issue #50). Both are dominant edits, so a
+// qualifier drop or expos-use rewrite inside the masked spelling loses to the
+// mask rather than tripping the watermark.
+//
+// Shared, because a declaration is extracted by more than one path and the
+// masks must not be one of the things that differ: a variable folded into a
+// gathered header synopsis goes through extract_header_declaration rather than
+// extract_freestanding_declaration, and used to come out unmasked, initializer
+// and `detail::` and all, with the leak then reported against the marked
+// declaration (issue #55).
+void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
+                           std::map<std::string, SpanInfo>&  sentinels,
+                           unsigned&                         span_n,
+                           const clang::VarDecl*             unspecified,
+                           std::optional<clang::SourceRange> see_below,
+                           llvm::StringRef                   buffer,
+                           unsigned                          decl_begin,
+                           unsigned                          decl_end,
+                           const clang::SourceManager&       sm,
+                           const clang::LangOptions&         lang_opts) {
+    if (unspecified != nullptr) {
+        // The declared type, masked whole: a dominant edit, so a qualifier
+        // drop or expos-use rewrite inside the spelling loses to the mask
+        // instead of tripping the watermark (the alias RHS rule). Whole means
+        // every token from the type's first through to the declared name,
+        // which the TypeLoc bounds at neither end: a leading cv-qualifier is
+        // outside it (cv_run_begin), and so is the space a declarator
+        // operator eats. Masking the TypeLoc alone left the `const` of
+        // `const T &obj` standing against the placeholder and lost the space
+        // before the name (issue #33).
+        const clang::TypeSourceInfo* tsi = unspecified->getTypeSourceInfo();
+        const clang::SourceRange range   = tsi != nullptr ? tsi->getTypeLoc().getSourceRange() : clang::SourceRange{};
+        if (range.isValid()) {
+            const unsigned name_begin = sm.getDecomposedLoc(unspecified->getLocation()).second;
+            const unsigned type_begin = cv_run_begin(buffer, sm.getDecomposedLoc(range.getBegin()).second, decl_begin);
+            if (type_begin >= decl_begin && name_begin > type_begin) {
+                const std::string sentinel = span_sentinel(span_n++);
+                sentinels[sentinel] =
+                    SpanInfo{beman::specgen::ir::SpanKind::Placeholder, "unspecified", "unspecified"};
+                // The separating space is the mask's own: the declarator
+                // operator that used to carry it is inside the span now.
+                add_dominant_edit(edits, SynopsisEdit{type_begin, name_begin, sentinel + " "});
+            }
+        }
+        // The initializer is implementation all the way down; the draft
+        // writes the declaration alone. A copy-init's `=` goes with it.
+        // (see_below below is the same idea for the kinds whose definition,
+        // rather than whose declared type, is the implementation.)
+        if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
+            unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
+            const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
+                                                                   init->getSourceRange().getEnd(), 0, sm, lang_opts))
+                                               .second;
+            const std::size_t equal      = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
+            if (equal != llvm::StringRef::npos && buffer[equal] == '=')
+                init_begin = static_cast<unsigned>(equal);
+            if (init_begin >= decl_begin && init_end > init_begin)
+                add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+        }
+    }
+
+    // The definition, masked whole: an alias's RHS or a concept's
+    // constraint-expression (issue #50). A dominant edit for the same reason
+    // the declared-type mask is one -- a qualifier drop or expos-use rewrite
+    // inside the masked spelling loses to the mask rather than tripping the
+    // watermark.
+    if (see_below && see_below->isValid()) {
+        const unsigned begin = sm.getDecomposedLoc(see_below->getBegin()).second;
+        const unsigned end =
+            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(see_below->getEnd(), 0, sm, lang_opts)).second;
+        if (begin >= decl_begin && end > begin && end <= decl_end) {
+            const std::string sentinel = span_sentinel(span_n++);
+            sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::SeeBelow, "SEEBELOW", ""};
+            add_dominant_edit(edits, SynopsisEdit{begin, end, sentinel});
+        }
+    }
+}
+
 // One free-standing namespace-scope declaration, extracted whole: the
 // template head and initializer/constraint through the trailing semicolon,
 // with the same qualifier drops and expos-use sentinels as class synopses.
@@ -2138,7 +2282,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
                                  std::optional<std::string_view>                  record_tag  = std::nullopt,
-                                 const clang::VarDecl*                            unspecified = nullptr) {
+                                 const clang::VarDecl*                            unspecified = nullptr,
+                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -2191,44 +2336,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
     }
 
-    if (unspecified != nullptr) {
-        // The declared type, masked whole: a dominant edit, so a qualifier
-        // drop or expos-use rewrite inside the spelling loses to the mask
-        // instead of tripping the watermark (the alias RHS rule). Whole means
-        // every token from the type's first through to the declared name,
-        // which the TypeLoc bounds at neither end: a leading cv-qualifier is
-        // outside it (cv_run_begin), and so is the space a declarator
-        // operator eats. Masking the TypeLoc alone left the `const` of
-        // `const T &obj` standing against the placeholder and lost the space
-        // before the name (issue #33).
-        const clang::TypeSourceInfo* tsi = unspecified->getTypeSourceInfo();
-        const clang::SourceRange range   = tsi != nullptr ? tsi->getTypeLoc().getSourceRange() : clang::SourceRange{};
-        if (range.isValid()) {
-            const unsigned name_begin = sm.getDecomposedLoc(unspecified->getLocation()).second;
-            const unsigned type_begin = cv_run_begin(buffer, sm.getDecomposedLoc(range.getBegin()).second, decl_begin);
-            if (type_begin >= decl_begin && name_begin > type_begin) {
-                const std::string sentinel = span_sentinel(span_n++);
-                sentinels[sentinel] =
-                    SpanInfo{beman::specgen::ir::SpanKind::Placeholder, "unspecified", "unspecified"};
-                // The separating space is the mask's own: the declarator
-                // operator that used to carry it is inside the span now.
-                add_dominant_edit(edits, SynopsisEdit{type_begin, name_begin, sentinel + " "});
-            }
-        }
-        // The initializer is implementation all the way down; the draft
-        // writes the declaration alone. A copy-init's `=` goes with it.
-        if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
-            unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
-            const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
-                                                                   init->getSourceRange().getEnd(), 0, sm, lang_opts))
-                                               .second;
-            const std::size_t equal      = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
-            if (equal != llvm::StringRef::npos && buffer[equal] == '=')
-                init_begin = static_cast<unsigned>(equal);
-            if (init_begin >= decl_begin && init_end > init_begin)
-                add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
-        }
-    }
+    add_declaration_masks(
+        edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
 
     std::sort(
         edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
@@ -2262,17 +2371,21 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
                                  const clang::LangOptions&                        lang_opts,
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
-                                 const clang::VarDecl*                            unspecified = nullptr) {
+                                 const clang::VarDecl*                            unspecified = nullptr,
+                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
     // An exposition-only class template (issue #23) keeps the draft's
     // template-head line break, the same FormatStyle nudge every record
     // extraction passes; the non-record kinds format as before.
     std::optional<std::string_view> record_tag;
-    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(named)) {
-        const llvm::StringRef tag = tmpl->getTemplatedDecl()->getKindName();
+    const clang::CXXRecordDecl*     record = llvm::dyn_cast<clang::CXXRecordDecl>(named);
+    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(named))
+        record = tmpl->getTemplatedDecl();
+    if (record != nullptr) {
+        const llvm::StringRef tag = record->getKindName();
         record_tag                = std::string_view(tag.data(), tag.size());
     }
     return extract_freestanding_declaration(
-        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified);
+        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified, see_below);
 }
 
 // --- redeclaration-chain attachment (design §3.3) ---------------------------
@@ -3540,12 +3653,25 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     const VariableMask mask = variable_seebelow_mask(decl, attached.directives, attached.grouping_line);
     if (mask.diagnostic)
         attached.diagnostics.push_back(*mask.diagnostic);
+    // A concept reaches this path too, and its definition masks the same way
+    // an alias's RHS does on attach_alias's (issue #50); the marker used to be
+    // accepted here with no effect and no diagnostic.
+    std::optional<clang::SourceRange> see_below;
+    if (attached.directives.seebelow && !attached.directives.seebelow_target)
+        see_below = definition_mask_range(decl, sm, lang_opts);
 
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
     else
-        attached.item.decl.signatures.push_back(extract_freestanding_declaration(
-            decl, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/false, std::nullopt, mask.unspecified));
+        attached.item.decl.signatures.push_back(extract_freestanding_declaration(decl,
+                                                                                 sm,
+                                                                                 lang_opts,
+                                                                                 ns_drop_set,
+                                                                                 expos_set,
+                                                                                 /*exposition=*/false,
+                                                                                 std::nullopt,
+                                                                                 mask.unspecified,
+                                                                                 see_below));
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }
@@ -3573,6 +3699,17 @@ const clang::FunctionDecl* as_out_of_line_function(const clang::Decl* decl) {
     if (const auto* ft = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
         return ft->getTemplatedDecl();
     return nullptr;
+}
+
+// A specialization and the primary it specializes, or {decl, nullptr} when
+// `decl` specializes nothing. Partial and explicit alike: the partial kinds
+// derive from these, so one cast each covers both (issue #49).
+std::pair<const clang::Decl*, const clang::Decl*> specialized_primary(const clang::Decl* decl) {
+    if (const auto* record = llvm::dyn_cast<clang::ClassTemplateSpecializationDecl>(decl))
+        return {decl, record->getSpecializedTemplate()};
+    if (const auto* variable = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl))
+        return {decl, variable->getSpecializedTemplate()};
+    return {decl, nullptr};
 }
 
 // A class or class template's templated record, if `decl` names either.
@@ -4037,6 +4174,12 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
     if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
         llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::ClassTemplateDecl>(decl))
         return true;
+    // A specialization of one, which is the same entity as its primary and so
+    // shares its disposition (issue #49). The variable-template kinds reach
+    // the VarDecl test below on their own; a class-template specialization is
+    // a CXXRecordDecl and would otherwise be routed as an ordinary class.
+    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl))
+        return true;
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl))
         return alias->getDeclContext()->isFileContext();
     const auto* variable = llvm::dyn_cast<clang::VarDecl>(decl);
@@ -4098,6 +4241,21 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
         std::views::filter(is_marked) | std::views::transform([&expos_name](const clang::NamedDecl* named) {
             return std::pair<const clang::Decl*, std::string>{named->getCanonicalDecl(), expos_name(named)};
         }));
+
+    // A second pass, because a specialization takes its name from the primary
+    // and the primary need not have been seen first. It is the same entity, so
+    // it cannot be exposition-only under one name and not under another
+    // (issue #49) -- and its own markers do not enter into it: `\expos` on a
+    // specialization was accepted and ignored, `\also` made it a wording item,
+    // and neither kept the raw implementation spelling out of the wording.
+    expos.insert_range(decls | std::views::transform(specialized_primary) |
+                       std::views::filter([&expos](const auto& pair) {
+                           return pair.second != nullptr && expos.contains(pair.second->getCanonicalDecl());
+                       }) |
+                       std::views::transform([&expos](const auto& pair) {
+                           return std::pair<const clang::Decl*, std::string>{
+                               pair.first->getCanonicalDecl(), expos.at(pair.second->getCanonicalDecl())};
+                       }));
     return expos;
 }
 
@@ -4744,12 +4902,20 @@ db::DocEvent classify(const RawItem&                                   ev,
         const VariableMask mask = variable_seebelow_mask(ev.decl, marked.directives, marked.grouping_line);
         if (mask.diagnostic)
             marked.diagnostics.push_back(*mask.diagnostic);
+        // The kinds whose *definition* is the implementation mask it the same
+        // way (issue #50): an alias's RHS, an alias template's, a concept's
+        // constraint-expression. Bare `\seebelow` only -- the targeted forms
+        // have no meaning here either, and variable_seebelow_mask has already
+        // said so for the kinds it speaks for.
+        std::optional<clang::SourceRange> see_below;
+        if (marked.directives.seebelow && !marked.directives.seebelow_target)
+            see_below = definition_mask_range(ev.decl, sm, lang_opts);
 
         db::SynopsisDecl out;
         out.offset        = ev.offset;
         out.synopsis.name = namespace_expos->getNameAsString();
-        out.synopsis.code =
-            extract_namespace_expos_synopsis(namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified);
+        out.synopsis.code = extract_namespace_expos_synopsis(
+            namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below);
         out.diagnostics = std::move(marked.diagnostics);
         return out;
     }
@@ -5245,7 +5411,9 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const clang::SourceManager&                      sm,
                                                         const clang::LangOptions&                        lang_opts,
                                                         const std::set<std::string>&                     ns_drop_set,
-                                                        const std::map<const clang::Decl*, std::string>& expos_set) {
+                                                        const std::map<const clang::Decl*, std::string>& expos_set,
+                                                        const clang::VarDecl*             unspecified = nullptr,
+                                                        std::optional<clang::SourceRange> see_below   = std::nullopt) {
     const unsigned        decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     clang::SourceLocation end_loc    = clang::Lexer::getLocForEndOfToken(decl->getEndLoc(), 0, sm, lang_opts);
     if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(decl->getEndLoc(), sm, lang_opts);
@@ -5274,6 +5442,9 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         if (use.qualifier_end > use.qualifier_begin)
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
     }
+
+    add_declaration_masks(
+        edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
 
     const auto*                named    = llvm::dyn_cast<clang::NamedDecl>(decl);
     const clang::FunctionDecl* named_fn = named != nullptr ? llvm::dyn_cast<clang::FunctionDecl>(named) : nullptr;
@@ -5627,10 +5798,31 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                 } else {
                     if (auto* ignored = std::get_if<db::Ignored>(&classified))
                         gathered.diagnostics.append_range(std::move(ignored->diagnostics));
-                    if (!directives.omit && !directives.merge)
+                    // An item's findings are dropped with the item -- the
+                    // region takes its declaration and not its wording -- but
+                    // a misspelled tag is still a typo, and this is the only
+                    // place left to report it from.
+                    if (auto* item_decl = std::get_if<db::ItemDecl>(&classified))
+                        gathered.diagnostics.append_range(std::move(item_decl->diagnostics));
+                    if (!directives.omit && !directives.merge) {
+                        // The marker masks the declaration here exactly as it
+                        // does outside the region (issue #55): a
+                        // customization point object belongs in the header
+                        // synopsis, so a masked variable is inside one by
+                        // construction, and that is where the mask stopped
+                        // being applied.
+                        AttachedItem marked;
+                        attach_docblock(marked, item.decl, sm);
+                        const VariableMask mask =
+                            variable_seebelow_mask(item.decl, marked.directives, marked.grouping_line);
+                        std::optional<clang::SourceRange> see_below;
+                        if (marked.directives.seebelow && !marked.directives.seebelow_target)
+                            see_below = definition_mask_range(item.decl, sm, lang_opts);
                         append_synopsis_code(
                             gathered.synopsis.code,
-                            extract_header_declaration(item.decl, sm, lang_opts, ns_drop_set, expos_set));
+                            extract_header_declaration(
+                                item.decl, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below));
+                    }
                 }
                 continue;
             }

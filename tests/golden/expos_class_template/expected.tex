@@ -7,9 +7,25 @@ struct @\exposidnc{box}@ {
 
 \begin{codeblock}
 template<typename T>
+struct @\exposidnc{box}@<T*> {
+  using type = T;
+}; // exposition only
+\end{codeblock}
+
+\begin{codeblock}
+template<typename T>
 struct @\exposidnc{raw-box}@ {
   T value;
 }; // exposition only
+\end{codeblock}
+
+\begin{codeblock}
+template<typename T> inline constexpr bool @\exposidnc{boxed}@ = false; // exposition only
+\end{codeblock}
+
+\begin{codeblock}
+template<typename T>
+inline constexpr bool @\exposidnc{boxed}@<@\exposidnc{box}@<T>> = true; // exposition only
 \end{codeblock}
 
 \indexlibraryglobal{make}%

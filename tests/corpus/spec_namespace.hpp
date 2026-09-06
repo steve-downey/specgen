@@ -57,6 +57,28 @@ class holder {
     demo::detail::storage spare_;
 };
 
+// A template head is a rewrite position like any other, and it used to be the
+// one that escaped: a `std::` qualifier on a non-type parameter survived into
+// the synopsis while the very next line of the same block dropped it, so one
+// parameter appeared in the document under two spellings (issue #56). It was
+// fixed by the head traversal issue #48 needed -- the head belongs to the
+// ClassTemplateDecl, and the rewrite was rooted at the record -- so this class
+// is here to keep it fixed.
+template <class T, std::size_type N>
+class fixed {
+  public:
+    // \ref{fixed.obs}, observers
+    std::size_type size() const;
+};
+
+// \rSec3[fixed.obs]{Observers}
+
+//! \returns `N`.
+template <class T, std::size_type N>
+std::size_type fixed<T, N>::size() const {
+    return N;
+}
+
 // \rSec3[holder.cons]{Constructors}
 
 //! \effects Constructs a `holder` with room for `n` elements and a reference

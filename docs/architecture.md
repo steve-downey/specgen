@@ -408,11 +408,15 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   mask takes the whole declared type, from its first written token through to the name, so a
   leading cv-qualifier and a reference declarator go with it (issue #33). The targeted forms
   have no variable meaning and are an Error.
-- `\expos` composes with that mask rather than displacing it (issue #38): a variable carrying
-  both renders `inline constexpr unspecified $name$; // exposition only`, the draft's spelling
-  for an exposition-only helper of unspecified type. The standalone-synopsis path reads the
-  docblock for this, so the targeted forms are an Error there too — it used to read no marker
-  at all and report nothing.
+- On a documented namespace-scope **concept**, bare `\seebelow` masks the
+  constraint-expression, the same way it masks an alias's RHS (issue #50). The two are one
+  rule: an entity whose *definition* is the implementation writes that definition as *see
+  below*, where an entity whose *declared type* is writes the type as *unspecified*.
+- `\expos` composes with either mask rather than displacing it (issues #38, #50): a variable
+  carrying both renders `inline constexpr unspecified $name$; // exposition only`, and an
+  alias or concept renders `using $name$ = see below; // exposition only`. The
+  standalone-synopsis path reads the docblock for this, so the targeted forms are an Error
+  there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
@@ -522,6 +526,7 @@ function un-`noexcept` even when it visibly never throws.
 | Documented record/class-template *definition* | yes | its own description, beside the synopsis, with no itemdecl |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
+| Specialization of an `\expos` primary | the same, under the primary's name | its own markers do not apply |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
@@ -529,6 +534,8 @@ function un-`noexcept` even when it visibly never throws.
 | Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
 | Documented namespace variable (template), bare `\seebelow` | — | yes, type as *unspecified*, initializer dropped |
 | Namespace variable (template), `\expos` + bare `\seebelow` | standalone, type as *unspecified* | — |
+| Documented namespace concept, bare `\seebelow` | — | yes, constraint-expression as *see below* |
+| Namespace alias/concept, `\expos` + bare `\seebelow` | standalone, definition as *see below* | — |
 | Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock
@@ -637,7 +644,11 @@ There are exactly three backends, and **adding wording to one means adding it to
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
   `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
   with caption anchors; index entries dropped. Paper mode (`--paper`) wraps the fragment in an
-  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2`.
+  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2` — one
+  ascending run over the whole fragment, across every `::: wording` div in it. The run does
+  *not* restart per div the way `[#]` numbering does: the framework's filter counts `#` across
+  divs and does not count a literal at all, so a per-div restart emitted `x` again at the top
+  of each one (issue #57).
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
