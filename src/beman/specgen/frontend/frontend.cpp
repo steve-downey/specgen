@@ -3918,6 +3918,10 @@ build_roster(const clang::CXXRecordDecl*                                     rec
 
         ir::SynopsisEntry entry;
         entry.name = named->getNameAsString();
+        // The same spelling the node's own `name` takes, and from the same
+        // call: a gathered header synopsis holds several classes' entries and
+        // names none of them, so this is what tells them apart (issue #45).
+        entry.parent = record->getNameAsString();
         // `fn` is the FunctionDecl this member resolved to, so its absence is
         // exactly "this is a data member" -- a FieldDecl or a static VarDecl,
         // the only two other things reaching here (a nested type, alias or
@@ -5598,6 +5602,14 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     // code alone dropped them and their descriptions with it
                     // (issue #34), leaving the target section empty.
                     gathered.pending.append_range(std::move(synopsis->pending));
+                    // And the coverage roster, which the gathered node used to
+                    // carry none of: a class folded into a region was not
+                    // coverage-checked at all, and `--validate` could not say
+                    // so because the evidence never reached it (issue #45).
+                    // Each entry names the class that declared it, so several
+                    // classes' entries share this node without a finding
+                    // losing track of whose member it is about.
+                    gathered.synopsis.roster.append_range(std::move(synopsis->synopsis.roster));
                     // Only the class's own wording travels, in an event built
                     // for it rather than the classified one with its taken
                     // fields left behind: append_range over an rvalue

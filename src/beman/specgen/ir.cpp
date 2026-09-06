@@ -360,6 +360,7 @@ struct json_descriptor<SynopsisEntry> {
         enum_field("disposition", &SynopsisEntry::disposition, disposition_name, disposition_from_name, "disposition"),
         field("section", &SynopsisEntry::section),
         enum_field("kind", &SynopsisEntry::kind, member_kind_name, member_kind_from_name, "member kind"),
+        field("parent", &SynopsisEntry::parent),
     };
 };
 

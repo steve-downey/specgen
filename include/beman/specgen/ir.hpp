@@ -219,11 +219,21 @@ std::optional<MemberKind> member_kind_from_name(std::string_view);
 // it is the stable name that entry's markup asked to be placed under, and the
 // only record that the request was made at all -- an unresolvable one is
 // dropped by document_build::build_tree, leaving no other trace.
+//
+// `parent` is the class that declared it, which the roster's own node
+// ordinarily names too (`Synopsis::name`) -- until a gathered header synopsis
+// folds several classes into one node that names none of them. Then it is the
+// only thing that says which class a finding is about, and the only way to ask
+// a question about one class of a roster holding several (issue #45).
 struct SynopsisEntry {
     std::string name;
     Disposition disposition = Disposition::Described;
     std::string section     = {}; // Routed entries only; "" means routed to nowhere
     MemberKind  kind        = MemberKind::Function;
+    // The declaring class. Empty means "this synopsis's own", which is what a
+    // hand-written roster looks like and what every reader treats it as; only
+    // the front end's fold has anything else to say.
+    std::string parent = {};
 };
 
 struct Synopsis {

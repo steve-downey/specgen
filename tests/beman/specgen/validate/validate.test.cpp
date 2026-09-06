@@ -227,6 +227,57 @@ TEST_CASE("validate - direction 1: an undocumented declaration is an error namin
     CHECK(diags.front().message.find("`resize` is declared in the synopsis") != std::string::npos);
 }
 
+TEST_CASE("validate - a roster entry names its own class when the node names none") {
+    // A gathered header synopsis holds several classes' rosters in one node
+    // with no name of its own, so the context comes from the entry (issue
+    // #45). Without it every finding would read `synopsis: error: ...` and
+    // leave the reader to guess whose member it is about.
+    ir::Synopsis gathered;
+    gathered.code   = {"struct box_t {\n  int v;\n};\n\nstruct crate_t {\n  int w;\n};", {}};
+    gathered.roster = {{"v", ir::Disposition::Undocumented, "", ir::MemberKind::Data, "box_t"},
+                       {"w", ir::Disposition::Undocumented, "", ir::MemberKind::Data, "crate_t"}};
+
+    const Diagnostics diags = validate(ir::Node{std::move(gathered)});
+    REQUIRE(diags.size() == 2);
+    CHECK(diags.at(0).context == "box_t/synopsis");
+    CHECK(diags.at(1).context == "crate_t/synopsis");
+}
+
+TEST_CASE("validate - the private-data nudge does not cross classes sharing a node") {
+    // "already marks something `\expos`" is a fact about one class. Asked of
+    // the node, one class exposing state would start nudging another's private
+    // data (issue #45).
+    ir::Synopsis gathered;
+    gathered.code   = {"struct exposer { ... };\n\nstruct hider { ... };", {}};
+    gathered.roster = {{"shown", ir::Disposition::Expos, "", ir::MemberKind::Data, "exposer"},
+                       {"kept", ir::Disposition::Private, "", ir::MemberKind::Data, "exposer"},
+                       {"mine", ir::Disposition::Private, "", ir::MemberKind::Data, "hider"}};
+
+    const Diagnostics diags = validate(ir::Node{std::move(gathered)});
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Note);
+    CHECK(diags.front().context == "exposer/synopsis");
+    CHECK(diags.front().message.find("`kept`") != std::string::npos);
+}
+
+TEST_CASE("validate - the synopsis private-member check is silent on a node holding several classes") {
+    // Its premise -- *this* synopsis dropped the declaration, so an occurrence
+    // of the name is something else reaching for it -- needs the code to be
+    // one class's. A gathered node's is several concatenated, where a bare
+    // identifier cannot be attributed to any of them, so the honest answer is
+    // no finding rather than a guessed one (issues #35, #45).
+    ir::Synopsis gathered;
+    gathered.code   = {"struct holder { ... };\n\nstruct closure {\n  int state_;\n};", {}};
+    gathered.roster = {{"state_", ir::Disposition::Private, "", ir::MemberKind::Data, "holder"},
+                       {"state_", ir::Disposition::Undocumented, "", ir::MemberKind::Data, "closure"}};
+
+    const Diagnostics diags = validate(ir::Node{std::move(gathered)});
+    // The undocumented member's own coverage finding, and nothing else.
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().context == "closure/synopsis");
+    CHECK(diags.front().message.find("is declared in the synopsis") != std::string::npos);
+}
+
 TEST_CASE("validate - direction 2: a description routed to a section that does not exist is an error") {
     const ir::Node node = synopsis_with("widget", {{"reserve", ir::Disposition::Routed, "widget.nowhere"}});
 
