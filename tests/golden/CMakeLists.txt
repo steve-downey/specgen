@@ -943,6 +943,35 @@ specgen_add_golden(
 # `expected.json` (an unlinked out-of-line definition renders with its
 # `gadget::` qualification and an `undocumented` roster entry, rather than
 # the clean in-class itemdecl `expected.json` pins), not merely absent.
+# A document that spans the headers it includes (issue #77): the gathered
+# `.syn` region names two, and a third included outside it is implementation
+# and stays invisible.  The generated IR is where the whole rule is visible at
+# once -- one synopsis holding both followed files' declarations in include
+# order, each entity once even though one of them is defined out of line, and
+# each file's wording routed to the umbrella's clause by its `\ref` group.
+specgen_add_golden(
+    document_span_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_document_span.hpp"
+    EXTRA_ARGS "-I ${PROJECT_SOURCE_DIR}/tests/corpus"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/document_span"
+)
+specgen_add_golden(
+    document_span
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/document_span/expected.json"
+)
+
+# And a finding in a followed header names that header: the line is a line of
+# the file the markup is in, so reporting it against the umbrella would name a
+# line in a file that has no such line. The include is quoted here so the
+# fixture needs no `-I`, which diagnose mode does not pass.
+specgen_add_golden(
+    document_span_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_document_span_diagnostics.hpp"
+)
+
 set(include_path_header
     "${PROJECT_SOURCE_DIR}/tests/corpus/include_path/consumer/spec_include.hpp"
 )

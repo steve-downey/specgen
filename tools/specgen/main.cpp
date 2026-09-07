@@ -593,10 +593,13 @@ int generate_command(const std::vector<std::string>& args) {
                 // not all printed as the literal word "warning". An Error
                 // here still does not fail the build: failing it would
                 // withhold the wording, not just the finding's own text.
+                // `diagnostic.file` is set only for a finding in a header the
+                // document follows (a `.syn` region's includes), where the
+                // main file's name would be the wrong one.
                 for (const auto& diagnostic : built.diagnostics)
                     std::println(stderr,
                                  "{}:{}: {}: {}",
-                                 header,
+                                 diagnostic.file.empty() ? std::string(header) : diagnostic.file,
                                  diagnostic.line,
                                  beman::specgen::severity_label(diagnostic.severity),
                                  diagnostic.message);
