@@ -568,15 +568,19 @@ declaration whose entity is defined elsewhere in the header, or an undocumented 
 one, contributes nothing — in particular never an empty Synopsis, whose rendering was an
 empty code block (§9's empty-synopsis check keeps it that way).
 
-Documented namespace-scope aliases, alias templates, variables, variable templates, and
-concepts are likewise ordinary wording items, extracted whole through their semicolon with
-constraint and initializer kept, the way the draft writes them ([concept.same],
-[tuple.helper]); the alias kinds carry the in-class alias masking rules (`\impdef`, bare
-`\seebelow`) and group with `\also`. `\expos` on the candidate kinds still takes the
-standalone-synopsis path above instead. And the backstop for everything else: a docblock on
-an entity kind that produces no wording — an enum, a deduction guide, or a function
-*declaration*, whose markup belongs at the definition — is an Error from `generate` rather
-than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is deliberate.
+Documented namespace-scope aliases, alias templates, variables, variable templates,
+concepts, and enumerations are likewise ordinary wording items, extracted whole through
+their semicolon with constraint, enumerator-list and initializer kept, the way the draft
+writes them ([concept.same], [tuple.helper]); the alias kinds carry the in-class alias
+masking rules (`\impdef`, bare `\seebelow`) and group with `\also`. `\expos` on the
+candidate kinds still takes the standalone-synopsis path above instead. An enumeration is
+the one of them whose *definition* is what the wording shows — scoped or not, enum-base or
+none — so its itemdecl is the enumerator list and its description says what the enumerators
+mean, the shape [fs.enum.file.type] writes. And the backstop for everything else: a docblock
+on an entity kind that produces no wording — a namespace alias, a deduction guide, or a
+function *declaration*, whose markup belongs at the definition — is an Error from `generate`
+rather than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is
+deliberate.
 
 ## 7. Intermediate representation
 
