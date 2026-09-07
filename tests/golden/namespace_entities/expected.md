@@ -71,4 +71,14 @@ enum link_width : unsigned char { narrow = 1, wide = 2 };
 
 [#]{.pnum} *Remarks*: The width of a link, in bytes.
 
+```cpp
+enum class $channel-state$ { open, closed }; // exposition only
+```
+
+```cpp
+inline constexpr $channel-state$ initial_state = $channel-state$::open;
+```
+
+[#]{.pnum} *Remarks*: The state a new channel starts in.
+
 :::

@@ -115,3 +115,18 @@ enum link_width : unsigned char { narrow = 1, wide = 2 };
 \remarks
 The width of a link, in bytes.
 \end{itemdescr}
+
+\begin{codeblock}
+enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+\end{codeblock}
+
+\indexlibraryglobal{initial_state}%
+\begin{itemdecl}
+inline constexpr @\exposidnc{channel-state}@ initial_state = @\exposidnc{channel-state}@::open;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The state a new channel starts in.
+\end{itemdescr}
