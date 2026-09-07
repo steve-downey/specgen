@@ -120,14 +120,15 @@ share one back half, so single-pass wording equals two-pass wording byte for byt
 
 The Clang dependency is mandatory and unconditional (`find_package(Clang REQUIRED)`), and it
 is **version-pinned** ([llvm-toolchain-pin](decisions/llvm-toolchain-pin.md)). The cache
-variable `BEMAN_SPECGEN_LLVM_VERSION` (default `22.1`) is the version request: CMake's config
+variable `BEMAN_SPECGEN_LLVM_VERSION` (default `23.1`) is the version request: CMake's config
 search globs `lib/cmake/clang*`, and an unversioned `find_package(Clang)` on a box with several
 LLVMs installed side by side silently takes the newest, which is how an incompatible new LLVM
-would break the build the day it lands (LLVM 23 renamed
-`ASTContext::getRawCommentForDeclNoCache`, which `frontend.cpp` calls six times). A `Clang_DIR`
-whose version does not match the request is *rejected* rather than used, so moving to a new
-LLVM is one deliberate flag (`-DBEMAN_SPECGEN_LLVM_VERSION=23.0`) and never an accident of what
-is installed. There is no Clang-free configuration.
+breaks the build the day it lands — LLVM 23 renamed `ASTContext::getRawCommentForDeclNoCache`
+out from under `frontend.cpp`, and the pin is what made moving to it a one-identifier change.
+A `Clang_DIR` whose version does not match the request is *rejected* rather than used, so
+moving to a new LLVM is one deliberate flag (`-DBEMAN_SPECGEN_LLVM_VERSION=24.1`) and never an
+accident of what is installed. The pin is a floor as well as a ceiling: the front end is
+written against exactly one LLVM, not a range. There is no Clang-free configuration.
 
 ### 3.2 Document tree
 

@@ -9,12 +9,12 @@ BUILD_DIR?=.build
 CMAKE_FLAGS?=
 
 # Where to find LLVM/Clang's CMake package. specgen requires the front end,
-# and find_package asks for BEMAN_SPECGEN_LLVM_VERSION (22.1), so it
+# and find_package asks for BEMAN_SPECGEN_LLVM_VERSION (23.1), so it
 # picks that LLVM even next to a newer one. This is a search hint, not an
 # override: an LLVM whose version does not match the request is rejected, so
 # building against a different one means moving the pin too, e.g.
-# `make CMAKE_FLAGS=-DBEMAN_SPECGEN_LLVM_VERSION=23.0 CLANG_DIR=/usr/lib/llvm-23/lib/cmake/clang`.
-CLANG_DIR?=/usr/lib/llvm-22/lib/cmake/clang
+# `make CMAKE_FLAGS=-DBEMAN_SPECGEN_LLVM_VERSION=24.1 CLANG_DIR=/usr/lib/llvm-24/lib/cmake/clang`.
+CLANG_DIR?=/usr/lib/llvm-23/lib/cmake/clang
 
 
 PYEXECPATH ?= $(shell which python3.13 || which python3.12 || which python3.11 || which python3.10 || which python3.9 || which python3.8 || which python3)

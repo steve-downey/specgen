@@ -970,7 +970,7 @@ specgen_add_golden(
 # diagram included, ahead of specgen's own message.
 #
 # That first line is coupled to the pinned LLVM version (decision
-# llvm-toolchain-pin: LLVM 22) — a Clang upgrade that reworded this
+# llvm-toolchain-pin: LLVM 23) — a Clang upgrade that reworded this
 # fatal error moves this golden, and
 # that is expected, not a regression to chase. It is deliberately not
 # filtered out: a user debugging a header wants Clang's own diagnostic,

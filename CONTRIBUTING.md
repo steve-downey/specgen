@@ -12,7 +12,7 @@ design reference is [docs/architecture.md](docs/architecture.md), and settled ra
 ## Requirements
 
 - GCC 16 (libstdc++ with C++26 support)
-- LLVM/Clang development packages matching the pinned version (`BEMAN_SPECGEN_LLVM_VERSION`, default `22.1`)
+- LLVM/Clang development packages matching the pinned version (`BEMAN_SPECGEN_LLVM_VERSION`, default `23.1`)
 - CMake 3.30 or later and `uv` (the repository wraps CMake in `uv run`)
 - Catch2 3 for the test suite (fetched automatically, or provided by vcpkg)
 
@@ -51,7 +51,7 @@ Catch2 is the only test dependency. The default path fetches it with CMake `Fetc
 | `BEMAN_SPECGEN_BUILD_EXAMPLES` | `ON` | Build the compiled examples |
 | `BEMAN_SPECGEN_BUILD_TOOLS` | `ON` | Build the `specgen` driver |
 | `BEMAN_SPECGEN_USE_MODULES` | `OFF` | Also build the experimental C++ modules lane |
-| `BEMAN_SPECGEN_LLVM_VERSION` | `22.1` | The LLVM/Clang version `find_package(Clang)` must match |
+| `BEMAN_SPECGEN_LLVM_VERSION` | `23.1` | The LLVM/Clang version `find_package(Clang)` must match |
 
 ## Before you push
 

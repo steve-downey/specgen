@@ -132,16 +132,15 @@ of the same version, notably without RTTI. See [ci-llvm-23](#ci-llvm-23).
 
 ### raw-comment-lookup-key
 
-Stage 2. Change `frontend.cpp:894` to `getRawCommentNoCache`, and update the
-comment two lines above it, which names `getRawCommentForDeclNoCacheImpl` while
-explaining the `;{}#@` anchor rule. Note in that comment that the argument is
-now a `RawCommentLookupKey` the `const Decl*` converts into, so the next reader
-does not think the conversion is accidental.
-
-This does not build against 22 — the name does not exist there — so it is the
-step that actually crosses the version boundary and belongs in the same commit
-as [pin-bump](#pin-bump), or immediately before it, depending on
-[llvm-22-support-window](#llvm-22-support-window).
+Stage 2. **Done** (2026-09-06), in the same commit as
+[pin-bump](#pin-bump) — the rename does not compile against 22, so a separate
+commit would build against nothing. `attached_raw_comment` calls
+`getRawCommentNoCache`; the comment above it names the new `…NoCacheImpl`
+spelling of the anchor rule, says the argument is a `RawCommentLookupKey` the
+`const Decl*` converts into rather than a coincidence, and records why the
+lookup stays the NoCache one — see the log under
+[llvm-22-support-window](#llvm-22-support-window) for the alternative that
+compiles on both and is nonetheless wrong.
 
 ### constraints-fragment-format
 
@@ -177,9 +176,11 @@ equals the LLVM 22 bare result in every case.
 
 ### pin-bump
 
-Stage 4. Move the pin and every place that writes the version down. The
-default in `CMakeLists.txt:125` is the only functional one; the rest are hints
-and prose, and they drift the moment one is missed:
+Stage 4. **Done** (2026-09-06). `BEMAN_SPECGEN_LLVM_VERSION` is `23.1`, and a
+clean `cmake --preset gcc-release` with no `-DClang_DIR` at all now reports
+`Clang front end (LLVM 23.1.1)` and passes 757/757. Every place that writes
+the version down moved with it — the default in `CMakeLists.txt` was the only
+functional one, but hints and prose drift the moment one is missed:
 
 | File | What it says |
 | --- | --- |
