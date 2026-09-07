@@ -48,7 +48,7 @@ public:
   friend constexpr bool operator==(const optional& x, const optional& y);
 
 private:
-  T $value$;            // exposition only
+  T $value$;              // exposition only
   bool $engaged$ = false; // exposition only
 };
 ```

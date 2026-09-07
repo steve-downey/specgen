@@ -277,7 +277,14 @@ back to name match within the class's fragments only):
 ### 3.6 Normalization pipeline
 
 1. Token-rewrite with **valid-C++ sentinel identifiers** (`__SEE_BELOW__`,
-   `__EXPOSID_val__`), length-padded if needed so line-breaking stays honest.
+   `__EXPOSID_val__`), resized to the exact width of the text that replaces them so
+   line-breaking stays honest. That resize happens once, just before formatting, because
+   it is the only point holding the whole fragment — which is what makes "this identifier
+   occurs nowhere else" checkable rather than assumed. Without it clang-format decided
+   breaks and continuation alignment at the sentinel's width, and a continuation under an
+   opening `<` lined up with nothing (issue #67). The width matched is the *display* text's:
+   a backend's own wrapper (`$…$`, `\exposid{…}`) is added later and differs per backend, so
+   the front end aligns for what the reader sees rather than for any one fragment spelling.
 2. `clang::format::reformat()` with a `FormatStyle` derived from `getLLVMStyle()`
    (`draft_format_style()` in the front end), tuned to draft conventions:
    `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,

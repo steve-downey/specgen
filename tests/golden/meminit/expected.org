@@ -3,7 +3,7 @@
 #+begin_codeblock
 template<typename R>
 class holder {
-  R @\exposidnc{base}@;   // exposition only
+  R @\exposidnc{base}@;    // exposition only
   int @\exposidnc{count}@; // exposition only
 
 public:
