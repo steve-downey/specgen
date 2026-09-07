@@ -114,6 +114,11 @@ struct Diagnostic {
     beman::specgen::Severity severity = beman::specgen::Severity::Warning;
     unsigned                 line     = 0;
     std::string              message;
+    // Which file `line` is a line of, empty for the document's main file. A
+    // document can span the headers it includes, and a finding in one of them
+    // that reported the main file's name with the followed file's line number
+    // would name a line in a file that has no such line.
+    std::string file;
 };
 
 // Opens a nested ir::Section frame (design §3.2): a `\rSec<depth>[stable]

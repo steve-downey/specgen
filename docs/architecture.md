@@ -214,7 +214,16 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   flattened.
 - **A header synopsis is an explicitly bounded ordinary synopsis.** A `\rSec` section whose
   stable name ends in `.syn` gathers the declarations and draft `\ref` headers up to an exact
-  matching Doxygen fence line `/// END [same.stable]` into one anonymous synopsis child. Only
+  matching Doxygen fence line `/// END [same.stable]` into one anonymous synopsis child.
+  **It gathers the files `#include`d inside it too** (issue #77), so a document is the main
+  file plus the headers it names there: the region is the author's statement of which
+  includes are the specification surface, and an include outside it — `detail/`, or anything
+  else — stays invisible exactly as it was when a document was one file. A followed file's
+  declarations sort where its `#include` sits, each entity appears once (an out-of-line
+  definition folded in adds no second synopsis entry for a member its class already
+  declares), and its wording routes to a clause by `\at` or by a `\ref` group header — the
+  class's own for an out-of-line member definition, the standing namespace-scope one
+  otherwise. Only
   a `\ref` header *between* declarations is gathered as a standalone group header: one inside
   a class body is already carried by that class's extraction, so a consumed-range watermark
   skips comments a preceding declaration covers rather than appending them twice (issue #31).

@@ -192,6 +192,27 @@ members to the section with the matching stable name:
 
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
+A gathered header synopsis can span files. The declarations of every header
+`#include`d **inside** the region are part of the document, in the order their
+includes appear, so a header that is an umbrella of includes specifies the
+whole of what it includes there:
+
+```cpp
+// \rSec2[transcode.syn]{Header `<transcode>` synopsis}
+#include <beman/transcode/error.hpp>
+#include <beman/transcode/concepts.hpp>
+/// END [transcode.syn]
+
+#include <beman/transcode/detail/labels.hpp>   // outside: implementation
+
+// \rSec2[transcode.errors]{Error types}
+```
+
+An include outside the region is invisible, as everything reached by an
+include was before. A followed header carries no `\rSec` markers of its own —
+its clauses are the umbrella's, after the fence — and its declarations reach
+them by routing.
+
 A gathered header synopsis routes the same way. A documented declaration folded
 into the region contributes its declaration to the synopsis, and its
 description goes to the section `\at` names, or to the one named by the `\ref`

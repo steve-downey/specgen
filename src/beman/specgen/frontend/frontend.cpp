@@ -46,6 +46,7 @@
 
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/Path.h>
 #pragma GCC diagnostic pop
 
 #include <algorithm>
@@ -225,6 +226,92 @@ ParsedHeader parse_header(std::string_view header_path, const ParseOptions& opti
     return ParsedHeader{std::move(ast), had_error};
 }
 
+// The files whose declarations form one document (issue #77): the main file,
+// and the files `#include`d inside a gathered `.syn` region.  Anything else
+// reached through an include is implementation, exactly as it was when a
+// document was one file -- the region is the author's statement of which
+// includes are the header's specification surface, which is what a header
+// synopsis is.
+//
+// Positions are *document* offsets: the position in a virtual concatenation
+// where each followed include is replaced by that file's contents.  Every rule
+// that orders or compares positions -- region extents, the consumed-range
+// watermark, placement keys, `\also` adjacency -- keeps working against them
+// unchanged, which is why the mapping is this one and not a synthetic counter.
+// Extraction is unaffected: it works inside one declaration, in its own file's
+// buffer, at that file's own offsets.
+class DocumentFiles {
+  public:
+    struct Part {
+        clang::FileID file;
+        unsigned      include_offset = 0; // where the main file includes it
+        unsigned      size           = 0;
+        unsigned      base           = 0; // its first document offset
+    };
+
+    static DocumentFiles discover(clang::ASTUnit& ast, const clang::SourceManager& sm);
+
+    clang::FileID main() const { return main_; }
+
+    bool contains(clang::FileID file) const {
+        return file == main_ || std::ranges::any_of(parts_, [&](const Part& p) { return p.file == file; });
+    }
+
+    // The document offset of a location, or of a (file, local offset) pair.
+    unsigned offset(const clang::SourceManager& sm, clang::SourceLocation loc) const {
+        const auto [file, local] = sm.getDecomposedLoc(loc);
+        return offset_in(file, local);
+    }
+
+    unsigned offset_in(clang::FileID file, unsigned local) const {
+        if (file == main_)
+            return local + inserted_before(local);
+        const auto part = std::ranges::find(parts_, file, &Part::file);
+        return part == parts_.end() ? local : part->base + local;
+    }
+
+    const std::vector<Part>& parts() const { return parts_; }
+
+    // A document offset back to the file it came from and its offset there,
+    // which is what a diagnostic has to name: a line number in the virtual
+    // concatenation is a line in no file anyone can open.
+    std::pair<clang::FileID, unsigned> locate(unsigned document_offset) const {
+        // substrate generic algorithm: a linear scan over the parts, which are
+        // sorted and few -- one per include inside the region.
+        for (const Part& part : parts_)
+            if (document_offset >= part.base && document_offset < part.base + part.size)
+                return {part.file, document_offset - part.base};
+        unsigned shift = 0;
+        // substrate generic algorithm: the same running sum inserted_before
+        // makes, stopping where this offset sits rather than at a bound
+        // computed in advance.
+        for (const Part& part : parts_) {
+            if (part.base > document_offset)
+                break;
+            shift += part.size + 1;
+        }
+        return {main_, document_offset - shift};
+    }
+
+  private:
+    // How much followed content sits before a main-file offset.
+    unsigned inserted_before(unsigned main_offset) const {
+        unsigned shift = 0;
+        // substrate generic algorithm: a running sum over the parts that
+        // precede this offset, which are a prefix -- parts_ is sorted by
+        // include_offset.
+        for (const Part& part : parts_) {
+            if (part.include_offset >= main_offset)
+                break;
+            shift += part.size + 1;
+        }
+        return shift;
+    }
+
+    clang::FileID     main_;
+    std::vector<Part> parts_;
+};
+
 // Namespaces (and, incidentally, `extern "C"` blocks) are transparent scoping
 // constructs: their members are what design §3.1 means by "top-level decls",
 // not the enclosing namespace itself. top_level_begin()/end() yields the
@@ -237,7 +324,7 @@ ParsedHeader parse_header(std::string_view header_path, const ParseOptions& opti
 // collect_interleaved formats a label from it.
 void collect_top_level_decl(clang::Decl*                decl,
                             const clang::SourceManager& sm,
-                            clang::FileID               main_file,
+                            const DocumentFiles&        doc,
                             std::vector<clang::Decl*>&  out) {
     if (auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(decl)) {
         // substrate generic algorithm: recursive descent over a decl tree --
@@ -247,13 +334,13 @@ void collect_top_level_decl(clang::Decl*                decl,
         // loop whose job is a side effect (the recursive call), not building
         // a container.
         for (clang::Decl* child : ns->decls())
-            collect_top_level_decl(child, sm, main_file, out);
+            collect_top_level_decl(child, sm, doc, out);
         return;
     }
     if (auto* linkage = llvm::dyn_cast<clang::LinkageSpecDecl>(decl)) {
         // substrate generic algorithm: same recursive tree descent as above.
         for (clang::Decl* child : linkage->decls())
-            collect_top_level_decl(child, sm, main_file, out);
+            collect_top_level_decl(child, sm, doc, out);
         return;
     }
 
@@ -270,7 +357,7 @@ void collect_top_level_decl(clang::Decl*                decl,
     if (!loc.isValid())
         return;
     const auto [file_id, offset] = sm.getDecomposedLoc(loc);
-    if (file_id != main_file)
+    if (!doc.contains(file_id))
         return;
 
     out.push_back(decl);
@@ -389,13 +476,94 @@ struct RawItem {
     std::string  comment_text;     // decl == nullptr: a comment event
 };
 
-using SkippedRanges = std::vector<std::pair<unsigned, unsigned>>;
+// The buffer and the comment map of the file a location is in, rather than of
+// the main file (issue #77).  Extraction is per declaration and every offset it
+// computes is local to that declaration's own file, so a document that spans
+// several files reads each one's text where it used to read the main file's.
+// For a document that is one file these are the main file, as before.
+llvm::StringRef file_buffer(const clang::SourceManager& sm, clang::SourceLocation loc) {
+    return sm.getBufferData(sm.getFileID(loc));
+}
+
+const std::map<unsigned, clang::RawComment*>*
+file_comments(const clang::ASTContext& ctx, const clang::SourceManager& sm, clang::SourceLocation loc) {
+    return ctx.Comments.getCommentsInFile(sm.getFileID(loc));
+}
+
+// The out-of-line definition of a class member, or null.  `isOutOfLine` alone
+// says yes for a hidden friend, which is lexically in the class and has no
+// in-class declaration to inherit a group from.
+const clang::FunctionDecl* as_out_of_line_member(const clang::Decl* decl) {
+    const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl);
+    if (fn == nullptr)
+        if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
+            fn = tmpl->getTemplatedDecl();
+    if (fn == nullptr || !fn->isOutOfLine())
+        return nullptr;
+    const clang::FunctionDecl* first = fn->getFirstDecl();
+    return first != fn && llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext()) ? fn : nullptr;
+}
+
+// Is this the declaration of its entity that a synopsis should show?
+//
+// A synopsis lists an entity once.  In a document that is one file the question
+// never arose -- out-of-line definitions live after the `/// END` fence, and a
+// region held declarations only -- but a followed header (issue #77) carries
+// both, and a definition folded in would list a member the class synopsis
+// above it already declares, in the `Class::member` spelling the draft never
+// prints.  Its *wording* still travels: only the synopsis entry is dropped.
+bool is_first_declaration(const clang::Decl* decl) {
+    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl))
+        return fn->getFirstDecl() == fn;
+    if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
+        return tmpl->getFirstDecl() == tmpl;
+    if (const auto* var = llvm::dyn_cast<clang::VarDecl>(decl))
+        return var->getFirstDecl() == var;
+    return true;
+}
+
+// How a diagnostic names the file a finding is in: empty for the main file,
+// which the driver already names, and otherwise the path relative to the main
+// file's own directory when the file is under it -- `document/errors.hpp` --
+// so a finding reads the way the `#include` that pulled the file in does.
+std::string diagnostic_file_name(const clang::SourceManager& sm, clang::FileID file) {
+    if (file == sm.getMainFileID() || file.isInvalid())
+        return {};
+    const clang::OptionalFileEntryRef entry = sm.getFileEntryRefForID(file);
+    const clang::OptionalFileEntryRef main  = sm.getFileEntryRefForID(sm.getMainFileID());
+    if (!entry)
+        return {};
+    const llvm::StringRef name = entry->getName();
+    if (main) {
+        const llvm::StringRef dir = llvm::sys::path::parent_path(main->getName());
+        if (!dir.empty() && name.starts_with(dir) && name.size() > dir.size() + 1)
+            return name.substr(dir.size() + 1).str();
+    }
+    return llvm::sys::path::filename(name).str();
+}
+
+// The line a document offset is on, in the file it is actually in: a line
+// number in the virtual concatenation is a line in no file anyone can open.
+unsigned document_line(const clang::SourceManager& sm, const DocumentFiles& doc, unsigned document_offset) {
+    const auto [file, local] = doc.locate(document_offset);
+    return sm.getLineNumber(file, local);
+}
+
+// A skipped preprocessor range, and the file it is in: the ranges are compared
+// against offsets local to one declaration's own file, and a document can span
+// several (issue #77), so a range from another file must not match.
+struct SkippedRange {
+    clang::FileID file;
+    unsigned      begin = 0;
+    unsigned      end   = 0;
+};
+
+using SkippedRanges = std::vector<SkippedRange>;
 
 SkippedRanges collect_skipped_ranges(clang::ASTUnit& ast) {
     SkippedRanges               result;
-    const clang::SourceManager& sm        = ast.getSourceManager();
-    const clang::FileID         main_file = sm.getMainFileID();
-    clang::PreprocessingRecord* record    = ast.getPreprocessor().getPreprocessingRecord();
+    const clang::SourceManager& sm     = ast.getSourceManager();
+    clang::PreprocessingRecord* record = ast.getPreprocessor().getPreprocessingRecord();
     if (record == nullptr)
         return result;
 
@@ -408,8 +576,8 @@ SkippedRanges collect_skipped_ranges(clang::ASTUnit& ast) {
         const clang::SourceLocation end_loc =
             clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm, ast.getLangOpts());
         const auto [end_file, end] = sm.getDecomposedLoc(end_loc);
-        if (begin_file == main_file && end_file == main_file && end > begin)
-            result.emplace_back(begin, end);
+        if (begin_file == end_file && end > begin)
+            result.emplace_back(begin_file, begin, end);
     }
     return result;
 }
@@ -876,9 +1044,10 @@ docblock_diagnostics(const clang::RawComment*                rc,
         return {};
     const unsigned first_line =
         sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(markup_start)));
+    const std::string file = diagnostic_file_name(sm, sm.getFileID(rc->getBeginLoc()));
     return diags | std::views::transform([&](const grammar::Diagnostic& d) {
                const unsigned line = d.line > 0 ? first_line + static_cast<unsigned>(d.line) - 1 : first_line;
-               return beman::specgen::document_build::Diagnostic{d.severity, line, d.message};
+               return beman::specgen::document_build::Diagnostic{d.severity, line, d.message, file};
            }) |
            std::ranges::to<std::vector<beman::specgen::document_build::Diagnostic>>();
 }
@@ -1660,9 +1829,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const FreestandingMap&                           freestanding_map,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl = nullptr) {
-    const llvm::StringRef buffer = sm.getBufferData(sm.getMainFileID());
-
-    const clang::Decl* head = head_decl != nullptr ? head_decl : record;
+    const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
+    const llvm::StringRef buffer = file_buffer(sm, head->getBeginLoc());
 
     const unsigned              class_begin = sm.getDecomposedLoc(head->getBeginLoc()).second;
     const clang::SourceLocation end_of_brace =
@@ -1746,7 +1914,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     };
     std::vector<RefGroup>                         ref_groups;
     const std::map<unsigned, clang::RawComment*>* comments =
-        record->getASTContext().Comments.getCommentsInFile(sm.getMainFileID());
+        file_comments(record->getASTContext(), sm, record->getBeginLoc());
     const auto inside_direct_declaration = [&](unsigned pos) {
         return std::ranges::any_of(record->decls(), [&](const clang::Decl* member) {
             if (member->isImplicit() || member->getBeginLoc().isInvalid() || member->getEndLoc().isInvalid())
@@ -2364,7 +2532,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         end_loc = clang::Lexer::getLocForEndOfToken(semi->getLocation(), 0, sm, lang_opts);
     const unsigned decl_end = sm.getDecomposedLoc(end_loc).second;
 
-    const llvm::StringRef buffer = sm.getBufferData(sm.getMainFileID());
+    const llvm::StringRef buffer = file_buffer(sm, begin_loc);
     std::string           text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
     if (exposition)
         text += " // exposition only";
@@ -3135,14 +3303,16 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
 // Extracting up to getRBracLoc() (rather than the last statement's end token)
 // keeps the trailing `;` of each statement, which the statement's own source
 // range excludes. Empty if nothing remains (an all-asserts or empty body).
-std::vector<std::pair<unsigned, unsigned>>
-conditional_body_edits(const llvm::StringRef& buffer, unsigned begin, unsigned end, const SkippedRanges& skipped) {
+std::vector<std::pair<unsigned, unsigned>> conditional_body_edits(
+    const llvm::StringRef& buffer, clang::FileID file, unsigned begin, unsigned end, const SkippedRanges& skipped) {
     std::vector<std::pair<unsigned, unsigned>> edits;
     // substrate generic algorithm: clip-and-filter into an existing edit set;
     // the optional output makes a plain transform the wrong shape.
-    for (const auto& [skip_begin, skip_end] : skipped) {
-        const unsigned clipped_begin = std::max(begin, skip_begin);
-        const unsigned clipped_end   = std::min(end, skip_end);
+    for (const SkippedRange& range : skipped) {
+        if (range.file != file)
+            continue;
+        const unsigned clipped_begin = std::max(begin, range.begin);
+        const unsigned clipped_end   = std::min(end, range.end);
         if (clipped_end > clipped_begin)
             edits.emplace_back(clipped_begin, clipped_end);
     }
@@ -3182,10 +3352,11 @@ std::vector<std::pair<unsigned, unsigned>> body_comment_edits(const clang::ASTCo
                                                               const clang::SourceManager& sm,
                                                               const clang::LangOptions&   lang_opts,
                                                               const llvm::StringRef&      buffer,
+                                                              clang::SourceLocation       in_file,
                                                               unsigned                    begin,
                                                               unsigned                    end) {
     std::vector<std::pair<unsigned, unsigned>> edits;
-    const auto*                                comments = ctx.Comments.getCommentsInFile(sm.getMainFileID());
+    const auto*                                comments = file_comments(ctx, sm, in_file);
     if (comments == nullptr)
         return edits;
 
@@ -3323,11 +3494,13 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
     if (end <= begin)
         return {};
 
-    const llvm::StringRef                      buffer = sm.getBufferData(sm.getMainFileID());
+    const llvm::StringRef                      buffer = file_buffer(sm, prologue.extraction_first->getBeginLoc());
     std::vector<std::pair<unsigned, unsigned>> deletions =
         namespace_qualifier_edits(const_cast<clang::CompoundStmt*>(body), ns_drop_set, sm, lang_opts);
-    deletions.append_range(conditional_body_edits(buffer, begin, end, skipped));
-    deletions.append_range(body_comment_edits(ctx, sm, lang_opts, buffer, begin, end));
+    deletions.append_range(
+        conditional_body_edits(buffer, sm.getFileID(prologue.extraction_first->getBeginLoc()), begin, end, skipped));
+    deletions.append_range(
+        body_comment_edits(ctx, sm, lang_opts, buffer, prologue.extraction_first->getBeginLoc(), begin, end));
     deletions.append_range(prologue.assertions | std::views::transform([&](const clang::DeclStmt* statement) {
                                const unsigned statement_begin = sm.getDecomposedLoc(statement->getBeginLoc()).second;
                                const unsigned statement_end =
@@ -3447,7 +3620,12 @@ struct AttachedItem {
     // §3.3), the axis that interleaves in-class members with their out-of-line
     // siblings.
     unsigned inclass_offset = 0;
-    unsigned grouping_line  = 0; // first line of the docblock carrying grouping metadata
+    // The file `inclass_offset` is an offset in.  A document can span several
+    // files (issue #77), and placement keys are compared across all of them,
+    // so the pair is what identifies a position -- item_decl_event turns it
+    // into the document offset that ordering actually uses.
+    clang::FileID file;
+    unsigned      grouping_line = 0; // first line of the docblock carrying grouping metadata
     // \verbatim-itemdecl payload (design §4.3, issue #4): exact, span-free
     // text that *replaces* the extracted declaration — the attach path that
     // would extract one uses this instead when it is engaged, and classify()
@@ -3544,9 +3722,10 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     namespace lowering = beman::specgen::lowering;
 
     AttachedItem attached;
-    attached.is_function_def = true;
-    attached.inclass_offset =
-        sm.getDecomposedLoc(friend_begin.isValid() ? friend_begin : decl_form->getBeginLoc()).second;
+    attached.is_function_def               = true;
+    const clang::SourceLocation anchor_loc = friend_begin.isValid() ? friend_begin : decl_form->getBeginLoc();
+    attached.inclass_offset                = sm.getDecomposedLoc(anchor_loc).second;
+    attached.file                          = sm.getFileID(anchor_loc);
 
     // Descr: the definition's own `//!` docblock, if it has one.
     // attached_raw_comment yields the immediately preceding comment;
@@ -3681,6 +3860,7 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
 
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(anchor->getBeginLoc()).second;
+    attached.file           = sm.getFileID(anchor->getBeginLoc());
 
     attach_docblock(attached, anchor, sm);
     if (attached.directives.seebelow_target && attached.grouping_line > 0)
@@ -3725,6 +3905,7 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                        const std::map<const clang::Decl*, std::string>& expos_set) {
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attached.file           = sm.getFileID(decl->getBeginLoc());
     attach_docblock(attached, decl, sm);
 
     const llvm::StringRef tag = record->getKindName();
@@ -3756,6 +3937,7 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                      const std::map<const clang::Decl*, std::string>& expos_set) {
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attached.file           = sm.getFileID(decl->getBeginLoc());
     attach_docblock(attached, decl, sm);
 
     const VariableMask mask = variable_seebelow_mask(decl, attached.directives, attached.grouping_line);
@@ -3884,6 +4066,7 @@ AttachedItem build_spec_item(clang::Decl*                                     de
         attach_function(fn, fn->getFirstDecl(), /*friend_begin=*/{}, sm, lang_opts, ns_drop_set, expos_set, skipped);
     if (documented_free)
         attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attached.file = sm.getFileID(decl->getBeginLoc());
     return attached;
 }
 
@@ -3915,6 +4098,48 @@ AttachedItem build_spec_item(clang::Decl*                                     de
 // markup can still be malformed. They ride the enclosing SynopsisDecl rather
 // than the PendingItem for the same reason: a member dropped for want of a
 // section must not take its diagnostics down with it.
+// The `\ref` group headers inside a class body, by offset -- the same class
+// span and comment source extract_synopsis walks.  Two callers ask it the same
+// question: collect_inclass_items, for a member declared and defined in the
+// class, and the gathered-region fold, for the out-of-line definition of one,
+// which carries the wording in the house style this tool was written for and
+// belongs to its class's group like every other member (issue #77).
+class ClassRefGroups {
+  public:
+    ClassRefGroups(const clang::CXXRecordDecl* record,
+                   const clang::SourceManager& sm,
+                   const clang::LangOptions&   lang_opts) {
+        const unsigned              class_begin = sm.getDecomposedLoc(record->getBeginLoc()).second;
+        const clang::SourceLocation end_of_brace =
+            clang::Lexer::getLocForEndOfToken(record->getEndLoc(), 0, sm, lang_opts);
+        const unsigned class_end = sm.getDecomposedLoc(end_of_brace).second;
+
+        // ascending by offset -- getCommentsInFile is offset-keyed, and
+        // neither the filter nor the transform below reorders.
+        if (const std::map<unsigned, clang::RawComment*>* comments =
+                file_comments(record->getASTContext(), sm, record->getBeginLoc())) {
+            groups_ = *comments | std::views::filter([&](const auto& kv) {
+                return kv.first >= class_begin && kv.first < class_end &&
+                       parse_ref(kv.second->getRawText(sm)).has_value();
+            }) | std::views::transform([&](const auto& kv) {
+                return std::pair<unsigned, std::string>{kv.first, *parse_ref(kv.second->getRawText(sm))};
+            }) | std::ranges::to<std::vector<std::pair<unsigned, std::string>>>();
+        }
+    }
+
+    // Stable name of the nearest `\ref` group at or before `offset`, else "".
+    // groups_ is ascending, so the answer is the element just before the
+    // partition point of "ref_offset <= offset" -- a binary search, not a
+    // linear scan with a break.
+    std::string section_for(unsigned offset) const {
+        const auto it = std::ranges::partition_point(groups_, [&](const auto& rg) { return rg.first <= offset; });
+        return it == groups_.begin() ? std::string{} : std::prev(it)->second;
+    }
+
+  private:
+    std::vector<std::pair<unsigned, std::string>> groups_;
+};
+
 void collect_inclass_items(const clang::CXXRecordDecl*                               record,
                            const clang::SourceManager&                               sm,
                            const clang::LangOptions&                                 lang_opts,
@@ -3923,33 +4148,8 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                            const SkippedRanges&                                      skipped,
                            std::vector<beman::specgen::document_build::PendingItem>& pending,
                            std::vector<beman::specgen::document_build::Diagnostic>&  diagnostics) {
-    // The `\ref` group headers inside the class body, by offset — the same
-    // class span and comment source extract_synopsis walks.
-    const unsigned              class_begin = sm.getDecomposedLoc(record->getBeginLoc()).second;
-    const clang::SourceLocation end_of_brace =
-        clang::Lexer::getLocForEndOfToken(record->getEndLoc(), 0, sm, lang_opts);
-    const unsigned class_end = sm.getDecomposedLoc(end_of_brace).second;
-
-    // ascending by offset -- getCommentsInFile is offset-keyed, and neither
-    // the filter nor the transform below reorders.
-    std::vector<std::pair<unsigned, std::string>> ref_groups;
-    if (const std::map<unsigned, clang::RawComment*>* comments =
-            record->getASTContext().Comments.getCommentsInFile(sm.getMainFileID())) {
-        ref_groups = *comments | std::views::filter([&](const auto& kv) {
-            return kv.first >= class_begin && kv.first < class_end && parse_ref(kv.second->getRawText(sm)).has_value();
-        }) | std::views::transform([&](const auto& kv) {
-            return std::pair<unsigned, std::string>{kv.first, *parse_ref(kv.second->getRawText(sm))};
-        }) | std::ranges::to<std::vector<std::pair<unsigned, std::string>>>();
-    }
-
-    // Stable name of the nearest `\ref` group at or before `offset`, else "".
-    // ref_groups is ascending, so the answer is the element just before the
-    // partition point of "ref_offset <= offset" -- a binary search, not the
-    // linear scan-with-break this replaces.
-    const auto section_for = [&ref_groups](unsigned offset) -> std::string {
-        const auto it = std::ranges::partition_point(ref_groups, [&](const auto& rg) { return rg.first <= offset; });
-        return it == ref_groups.begin() ? std::string{} : std::prev(it)->second;
-    };
+    const ClassRefGroups ref_groups(record, sm, lang_opts);
+    const auto           section_for = [&ref_groups](unsigned offset) { return ref_groups.section_for(offset); };
 
     // substrate generic algorithm: whether a member is collected, and what it
     // is collected as, is a five-step conditional computation -- unwrap it,
@@ -4828,7 +5028,7 @@ std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string
 // function definition, or a documented record declaration the header never
 // defines. Kept out of classify() so both arms make the same
 // `\omit`/`\merge` and grouping decisions rather than drifting apart.
-beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached) {
+beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached, const DocumentFiles& doc) {
     namespace db = beman::specgen::document_build;
 
     if (attached.directives.omit || attached.directives.merge)
@@ -4855,7 +5055,7 @@ beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached
     const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
     const bool wants_join     = !named_grouping && (attached.directives.also || attached.item.descr.elements.empty());
 
-    return db::ItemDecl{attached.inclass_offset,
+    return db::ItemDecl{doc.offset_in(attached.file, attached.inclass_offset),
                         wants_join,
                         std::move(attached.item),
                         std::move(attached.diagnostics),
@@ -4881,6 +5081,7 @@ beman::specgen::document_build::DocEvent
 classify_record_declaration(const clang::NamedDecl*                          decl,
                             const clang::CXXRecordDecl*                      record,
                             const clang::SourceManager&                      sm,
+                            const DocumentFiles&                             doc,
                             const clang::LangOptions&                        lang_opts,
                             const std::set<std::string>&                     ns_drop_set,
                             const std::map<const clang::Decl*, std::string>& expos_set) {
@@ -4890,7 +5091,7 @@ classify_record_declaration(const clang::NamedDecl*                          dec
         return db::Ignored{};
     if (!has_docblock(decl, sm))
         return db::Ignored{};
-    return item_decl_event(attach_record_declaration(decl, record, sm, lang_opts, ns_drop_set, expos_set));
+    return item_decl_event(attach_record_declaration(decl, record, sm, lang_opts, ns_drop_set, expos_set), doc);
 }
 
 // The main-file byte ranges of raw comments some processed declaration
@@ -4907,6 +5108,7 @@ bool is_attached_comment(unsigned offset, const AttachedCommentRanges& ranges) {
 
 db::DocEvent classify(const RawItem&                                   ev,
                       const clang::SourceManager&                      sm,
+                      const DocumentFiles&                             doc,
                       const clang::LangOptions&                        lang_opts,
                       const std::set<const clang::Decl*>&              omit_set,
                       const std::map<const clang::Decl*, std::string>& expos_set,
@@ -4937,7 +5139,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                     is_attached_comment(ev.offset, attached_comments) && !parsed.block.markers.omit &&
                     !parsed.block.markers.merge)
                     return db::Ignored{};
-                const unsigned first_line = sm.getLineNumber(sm.getMainFileID(), ev.offset) +
+                const unsigned first_line = document_line(sm, doc, ev.offset) +
                                             static_cast<unsigned>(std::ranges::count(
                                                 std::string_view(ev.comment_text).substr(0, *start), '\n'));
                 std::vector<db::Diagnostic> diagnostics =
@@ -4982,7 +5184,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                 // byte offset (its place in the interleave), and the line is
                 // what the driver prints.
                 return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Warning,
-                                                   sm.getLineNumber(sm.getMainFileID(), ev.offset),
+                                                   document_line(sm, doc, ev.offset),
                                                    std::format("malformed \\rSec marker: {} (comment offset {})",
                                                                failure.message,
                                                                failure.where.offset)}}};
@@ -4990,7 +5192,7 @@ db::DocEvent classify(const RawItem&                                   ev,
             if (const auto candidate = unrecognized_section_header(ev.comment_text)) {
                 return db::Ignored{
                     {db::Diagnostic{beman::specgen::Severity::Warning,
-                                    sm.getLineNumber(sm.getMainFileID(), ev.offset) + candidate->line_offset,
+                                    document_line(sm, doc, ev.offset) + candidate->line_offset,
                                     std::format("unrecognized section header [{}]; use \\rSec<depth>[{}]{{title}}",
                                                 candidate->stable_name,
                                                 candidate->stable_name)}}};
@@ -5049,10 +5251,10 @@ db::DocEvent classify(const RawItem&                                   ev,
         entity != nullptr && has_docblock(ev.decl, sm)) {
         if (const auto* alias_tmpl = llvm::dyn_cast<clang::TypeAliasTemplateDecl>(entity))
             return item_decl_event(
-                attach_alias(alias_tmpl->getTemplatedDecl(), sm, lang_opts, ns_drop_set, expos_set, alias_tmpl));
+                attach_alias(alias_tmpl->getTemplatedDecl(), sm, lang_opts, ns_drop_set, expos_set, alias_tmpl), doc);
         if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(entity))
-            return item_decl_event(attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set));
-        return item_decl_event(attach_namespace_entity(entity, sm, lang_opts, ns_drop_set, expos_set));
+            return item_decl_event(attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set), doc);
+        return item_decl_event(attach_namespace_entity(entity, sm, lang_opts, ns_drop_set, expos_set), doc);
     }
 
     // A class/struct/union definition heads a synopsis; every other top-level
@@ -5071,7 +5273,7 @@ db::DocEvent classify(const RawItem&                                   ev,
     // head so the synopsis starts at `template`, not at `class`.
     if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(ev.decl)) {
         if (!record->isThisDeclarationADefinition())
-            return classify_record_declaration(record, record, sm, lang_opts, ns_drop_set, expos_set);
+            return classify_record_declaration(record, record, sm, doc, lang_opts, ns_drop_set, expos_set);
         if (auto diagnostics = record_suppression_diagnostics(record, sm))
             return db::Ignored{std::move(*diagnostics)};
         // An attached \verbatim-synopsis replaces the extracted synopsis text
@@ -5102,7 +5304,7 @@ db::DocEvent classify(const RawItem&                                   ev,
     if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(ev.decl)) {
         const clang::CXXRecordDecl* templated = tmpl->getTemplatedDecl();
         if (templated == nullptr || !templated->isThisDeclarationADefinition())
-            return classify_record_declaration(tmpl, templated, sm, lang_opts, ns_drop_set, expos_set);
+            return classify_record_declaration(tmpl, templated, sm, doc, lang_opts, ns_drop_set, expos_set);
         if (auto diagnostics = record_suppression_diagnostics(tmpl, sm))
             return db::Ignored{std::move(*diagnostics)};
         // Same attached-\verbatim-synopsis substitution, and the same class
@@ -5154,7 +5356,7 @@ db::DocEvent classify(const RawItem&                                   ev,
         if (has_docblock(ev.decl, sm)) {
             const beman::specgen::lowering::ItemDirectives dirs = docblock_directives(ev.decl, sm);
             if (!dirs.omit && !dirs.merge && !dirs.expos) {
-                const unsigned line = sm.getLineNumber(sm.getMainFileID(), ev.offset);
+                const unsigned line = document_line(sm, doc, ev.offset);
                 // A documented function *declaration* is the one shape here
                 // with a better answer than "unsupported": the markup
                 // belongs at the definition, which is what places a
@@ -5167,12 +5369,15 @@ db::DocEvent classify(const RawItem&                                   ev,
                                             "the definition, which places a function's wording (design §3.3)"
                                           : std::format("a documented {} produces no wording: unsupported entity kind",
                                                         ev.decl->getDeclKindName());
-                return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Error, line, std::move(message)}}};
+                return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Error,
+                                                   line,
+                                                   std::move(message),
+                                                   diagnostic_file_name(sm, sm.getFileID(ev.decl->getBeginLoc()))}}};
             }
         }
         return db::Ignored{};
     }
-    return item_decl_event(std::move(attached));
+    return item_decl_event(std::move(attached), doc);
 }
 
 } // namespace
@@ -5537,7 +5742,7 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         end_loc = clang::Lexer::getLocForEndOfToken(semi->getLocation(), 0, sm, lang_opts);
     const unsigned decl_end = sm.getDecomposedLoc(end_loc).second;
 
-    const llvm::StringRef           buffer = sm.getBufferData(sm.getMainFileID());
+    const llvm::StringRef           buffer = file_buffer(sm, decl->getBeginLoc());
     std::string                     text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
     std::vector<SynopsisEdit>       edits;
     std::map<std::string, SpanInfo> sentinels;
@@ -5612,6 +5817,83 @@ beman::specgen::ir::CodeText header_comment_code(std::string text) {
     return recover_sentinels(std::move(text), sentinels);
 }
 
+DocumentFiles DocumentFiles::discover(clang::ASTUnit& ast, const clang::SourceManager& sm) {
+    DocumentFiles doc;
+    doc.main_ = sm.getMainFileID();
+
+    // The gathered region, if the main file opens one: a `\rSec` whose stable
+    // name ends in `.syn`, and the matching `/// END` fence.
+    const std::map<unsigned, clang::RawComment*>* comments = ast.getASTContext().Comments.getCommentsInFile(doc.main_);
+    if (comments == nullptr)
+        return doc;
+
+    std::optional<unsigned> region_begin;
+    std::string             region_stable;
+    std::optional<unsigned> region_end;
+    // substrate generic algorithm: a find-then-find over one ordered pass --
+    // the opener, then the fence that matches it -- whose state is which of
+    // the two is still being looked for.
+    for (const auto& [offset, comment] : *comments) {
+        const std::string text = comment->getRawText(sm).str();
+        if (!region_begin) {
+            if (const auto header = parse_rsec(text);
+                header && std::string_view(header->value.stable).ends_with(".syn")) {
+                region_begin  = offset;
+                region_stable = header->value.stable;
+            }
+            continue;
+        }
+        if (const auto end = header_synopsis_end(text); end && end->stable == region_stable) {
+            region_end = offset + static_cast<unsigned>(end->line_begin);
+            break;
+        }
+    }
+    if (!region_begin || !region_end)
+        return doc;
+
+    // The files included between them.  A file reached first from somewhere
+    // else keeps that first inclusion's location and so is not one of these:
+    // the synopsis lists its parts in an order that works, and one that does
+    // not is a header the author has to reorder.
+    std::vector<clang::FileID> candidates;
+    const auto                 note_file = [&](const clang::Decl* decl) {
+        if (decl == nullptr || decl->getBeginLoc().isInvalid())
+            return;
+        const clang::FileID file = sm.getFileID(decl->getBeginLoc());
+        if (file.isInvalid() || file == doc.main_)
+            return;
+        if (!std::ranges::contains(candidates, file))
+            candidates.push_back(file);
+    };
+    // substrate generic algorithm: a for_each-shaped walk driving note_file's
+    // side effect over the translation unit's own declaration list.
+    for (const clang::Decl* decl : std::ranges::subrange(ast.top_level_begin(), ast.top_level_end()))
+        note_file(decl);
+
+    // substrate generic algorithm: a filter-map with a side effect -- a
+    // candidate is kept only if its inclusion is the one inside the region,
+    // and what is kept is a Part built from the file's buffer.
+    for (clang::FileID file : candidates) {
+        const clang::SourceLocation include = sm.getIncludeLoc(file);
+        if (include.isInvalid())
+            continue;
+        const auto [include_file, include_offset] = sm.getDecomposedLoc(include);
+        if (include_file != doc.main_ || include_offset < *region_begin || include_offset >= *region_end)
+            continue;
+        doc.parts_.push_back(Part{file, include_offset, static_cast<unsigned>(sm.getBufferData(file).size()), 0});
+    }
+    std::ranges::sort(doc.parts_, {}, &Part::include_offset);
+
+    unsigned shift = 0;
+    // substrate generic algorithm: a running sum assigning each part its base,
+    // which is a scan whose state is the sum of the parts before it.
+    for (Part& part : doc.parts_) {
+        part.base = part.include_offset + 1 + shift;
+        shift += part.size + 1;
+    }
+    return doc;
+}
+
 } // namespace
 
 InterleaveResult collect_interleaved(std::string_view header_path, const ParseOptions& options) {
@@ -5626,9 +5908,11 @@ InterleaveResult collect_interleaved(std::string_view header_path, const ParseOp
     // the entire point of the command (see InterleaveResult, BuildFailure).
     result.had_parse_error = parsed.had_error;
 
-    clang::ASTContext&    ctx       = parsed.ast->getASTContext();
-    clang::SourceManager& sm        = parsed.ast->getSourceManager();
-    const clang::FileID   main_file = sm.getMainFileID();
+    clang::ASTContext&    ctx = parsed.ast->getASTContext();
+    clang::SourceManager& sm  = parsed.ast->getSourceManager();
+    // The same document rule build_document uses, so the debugging view shows
+    // what the wording is generated from and not a narrower file (issue #77).
+    const DocumentFiles doc = DocumentFiles::discover(*parsed.ast, sm);
 
     // Main-file top-level declarations (design §3.1: "process only decls whose
     // location is in the main file"). top_level_begin()/end() is a
@@ -5641,19 +5925,27 @@ InterleaveResult collect_interleaved(std::string_view header_path, const ParseOp
     // declines ranges::for_each as a costume for a loop with a side effect
     // (see collect_inclass_items's docblock-comment note above).
     for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
-        collect_top_level_decl(decl, sm, main_file, decls);
-    result.items.append_range(decls | std::views::transform([&sm](clang::Decl* decl) {
-                                  const auto [file_id, offset] = sm.getDecomposedLoc(decl->getBeginLoc());
-                                  return SourceItem{SourceItem::Kind::Declaration, offset, decl_label(decl)};
-                              }));
-
-    // Main-file raw comments (design §3.1/§3.2), keyed by begin offset;
-    // getCommentsInFile may return null when the file has none.
-    if (const std::map<unsigned, clang::RawComment*>* comments = ctx.Comments.getCommentsInFile(main_file)) {
-        result.items.append_range(*comments | std::views::transform([&sm](const auto& kv) {
-            return SourceItem{SourceItem::Kind::Comment, kv.first, kv.second->getRawText(sm).str()};
+        collect_top_level_decl(decl, sm, doc, decls);
+    result.items.append_range(
+        decls | std::views::transform([&](clang::Decl* decl) {
+            return SourceItem{SourceItem::Kind::Declaration, doc.offset(sm, decl->getBeginLoc()), decl_label(decl)};
         }));
-    }
+
+    // The document's raw comments (design §3.1/§3.2), keyed by begin offset;
+    // getCommentsInFile may return null when a file has none.
+    const auto collect_comments = [&](clang::FileID file) {
+        if (const std::map<unsigned, clang::RawComment*>* comments = ctx.Comments.getCommentsInFile(file)) {
+            result.items.append_range(*comments | std::views::transform([&](const auto& kv) {
+                return SourceItem{
+                    SourceItem::Kind::Comment, doc.offset_in(file, kv.first), kv.second->getRawText(sm).str()};
+            }));
+        }
+    };
+    collect_comments(doc.main());
+    // substrate generic algorithm: a for_each-shaped walk driving
+    // collect_comments' side effect over the followed files.
+    for (const DocumentFiles::Part& part : doc.parts())
+        collect_comments(part.file);
 
     // Design §3.2: "collect top-level decls and raw comments; sort by source
     // offset; interleave." Ties keep decls before comments, which cannot
@@ -5694,12 +5986,18 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     const clang::FileID       main_file = sm.getMainFileID();
     const clang::LangOptions& lang_opts = parsed.ast->getLangOpts();
 
+    // Which files this document is: the main file, and the ones it `#include`s
+    // inside a gathered `.syn` region (issue #77).  Everything below orders and
+    // compares *document* offsets, which are the same numbers as before for a
+    // document that is one file.
+    const DocumentFiles doc = DocumentFiles::discover(*parsed.ast, sm);
+
     std::vector<clang::Decl*> decls;
     // substrate generic algorithm: same iterator-pair-turned-subrange,
     // for_each-shaped side effect as collect_interleaved's identical walk
     // above.
     for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
-        collect_top_level_decl(decl, sm, main_file, decls);
+        collect_top_level_decl(decl, sm, doc, decls);
 
     // Pre-passes: members to drop from every synopsis
     // (`\omit`/`\merge`) and exposition-only members (`\expos`) to render with an
@@ -5732,8 +6030,8 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             return;
         const auto [begin_file, begin] = sm.getDecomposedLoc(rc->getBeginLoc());
         const auto [end_file, end]     = sm.getDecomposedLoc(rc->getEndLoc());
-        if (begin_file == main_file && end_file == main_file)
-            attached_comments.emplace_back(begin, end);
+        if (begin_file == end_file && doc.contains(begin_file))
+            attached_comments.emplace_back(doc.offset_in(begin_file, begin), doc.offset_in(end_file, end));
     };
     // substrate generic algorithm: a for_each-shaped walk driving
     // note_attached_docblock's side effect, over the same decls-plus-members
@@ -5750,16 +6048,23 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
 
     std::vector<RawItem> raw_items;
     raw_items.reserve(decls.size());
-    raw_items.append_range(decls | std::views::transform([&sm](clang::Decl* decl) {
-                               const auto [file_id, offset] = sm.getDecomposedLoc(decl->getBeginLoc());
-                               return RawItem{offset, decl, {}};
+    raw_items.append_range(decls | std::views::transform([&](clang::Decl* decl) {
+                               return RawItem{doc.offset(sm, decl->getBeginLoc()), decl, {}};
                            }));
-    if (const std::map<unsigned, clang::RawComment*>* comments = ctx.Comments.getCommentsInFile(main_file)) {
-        // substrate generic algorithm: one RawComment expands to one or more
-        // RawItems, so this is a flat-map into the existing event buffer.
-        for (const auto& [offset, comment] : *comments)
-            append_rsec_comment_items(raw_items, offset, comment->getRawText(sm).str());
-    }
+    const auto collect_comments = [&](clang::FileID file) {
+        if (const std::map<unsigned, clang::RawComment*>* comments = ctx.Comments.getCommentsInFile(file)) {
+            // substrate generic algorithm: one RawComment expands to one or
+            // more RawItems, so this is a flat-map into the existing event
+            // buffer.
+            for (const auto& [offset, comment] : *comments)
+                append_rsec_comment_items(raw_items, doc.offset_in(file, offset), comment->getRawText(sm).str());
+        }
+    };
+    collect_comments(doc.main());
+    // substrate generic algorithm: a for_each-shaped walk driving
+    // collect_comments' side effect over the followed files.
+    for (const DocumentFiles::Part& part : doc.parts())
+        collect_comments(part.file);
     // Same ordering contract as collect_interleaved (design §3.2).
     std::stable_sort(
         raw_items.begin(), raw_items.end(), [](const RawItem& a, const RawItem& b) { return a.offset < b.offset; });
@@ -5783,6 +6088,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     const auto                classify_one = [&](const RawItem& item) {
         return classify(item,
                         sm,
+                        doc,
                         lang_opts,
                         omit_set,
                         expos_set,
@@ -5793,8 +6099,11 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                         attached_comments);
     };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
-        events.push_back(db::Ignored{{db::Diagnostic{
-            beman::specgen::Severity::Warning, sm.getLineNumber(main_file, opener.offset), std::move(message)}}});
+        const auto [file, local] = doc.locate(opener.offset);
+        events.push_back(db::Ignored{{db::Diagnostic{beman::specgen::Severity::Warning,
+                                                     sm.getLineNumber(file, local),
+                                                     std::move(message),
+                                                     diagnostic_file_name(sm, file)}}});
     };
 
     // substrate generic algorithm: a stateful source-order fold whose steps
@@ -5882,7 +6191,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             if (item.decl != nullptr) {
                 const clang::SourceLocation decl_end_tok =
                     clang::Lexer::getLocForEndOfToken(item.decl->getEndLoc(), 0, sm, lang_opts);
-                consumed_end = std::max(consumed_end, sm.getDecomposedLoc(decl_end_tok).second);
+                consumed_end                              = std::max(consumed_end, doc.offset(sm, decl_end_tok));
                 const lowering::ItemDirectives directives = docblock_directives(item.decl, sm);
                 db::DocEvent                   classified = classify_one(item);
                 if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified);
@@ -5946,7 +6255,21 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                         // only its declaration, exactly as before: a masked
                         // customization point object is the common case.
                         if (!item_decl->item.descr.elements.empty()) {
-                            const std::string section = directives.at_anchor.value_or(current_ref);
+                            // An out-of-line member definition belongs to its
+                            // class's group, not to whatever namespace-scope
+                            // header was last seen (issue #77): in the house
+                            // style the definition carries the wording, and
+                            // its `\ref` group is written in the class body
+                            // beside the declaration.
+                            std::string inherited = current_ref;
+                            if (const clang::FunctionDecl* fn = as_out_of_line_member(item.decl)) {
+                                const clang::FunctionDecl* in_class = fn->getFirstDecl();
+                                if (const auto* record =
+                                        llvm::dyn_cast<clang::CXXRecordDecl>(in_class->getLexicalDeclContext()))
+                                    inherited = ClassRefGroups(record, sm, lang_opts)
+                                                    .section_for(sm.getDecomposedLoc(in_class->getBeginLoc()).second);
+                            }
+                            const std::string section = directives.at_anchor.value_or(inherited);
                             if (section.empty())
                                 extras.push_back(std::move(*item_decl));
                             else
@@ -5954,7 +6277,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                                     db::PendingItem{section, item_decl->placement_key, std::move(item_decl->item)});
                         }
                     }
-                    if (!directives.omit && !directives.merge) {
+                    if (!directives.omit && !directives.merge && is_first_declaration(item.decl)) {
                         // The marker masks the declaration here exactly as it
                         // does outside the region (issue #55): a
                         // customization point object belongs in the header
