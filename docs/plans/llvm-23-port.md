@@ -306,3 +306,17 @@ lags: a contributor on a distro that ships 22 cannot build at all after
 [pin-bump](#pin-bump). Whether that is acceptable depends on whether the
 answer is "install the release tarball, as CI does", which is the current
 answer for everyone on a distro that ships 21.
+
+**Log:**
+
+- 2026-09-06 — looked for a spelling both versions accept, which would make the
+  window free. There is one that *compiles*:
+  `ASTContext::getRawCommentForAnyRedecl` is public in both, and 23's
+  `RawCommentLookupKey` overload takes a `const Decl*` by conversion. It is not
+  a drop-in. Substituted for the NoCache call it builds clean on both and then
+  fails four cases — the `build_document` unit test for documented namespace
+  free-function definitions, and `golden.gathered_refs_generate` in all three
+  modes — because the redecl-chain lookup finds comments the described-template
+  lookup deliberately does not (the anchor rule the comment above
+  `attached_raw_comment` sets out). So a window really does cost a version
+  `#if`; there is no free spelling to hide behind.
