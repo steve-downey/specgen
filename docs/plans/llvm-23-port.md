@@ -235,9 +235,11 @@ Two things to watch rather than assume:
 
 ### clang-format-rev
 
-Stage 6. Bump `.pre-commit-config.yaml`'s `mirrors-clang-format` rev from
-`v22.1.5` to `v23.1.0`, so the formatter that polices the tree is on the same
-release line as the one linked into the front end. Exactly the same line, not
+Stage 6. **Done** (2026-09-06). `.pre-commit-config.yaml`'s
+`mirrors-clang-format` rev moved from `v22.1.5` to `v23.1.0` — the newest the
+mirror tags — so the formatter that polices the tree is on the same release
+line as the one linked into the front end. `pre-commit run --all-files` is
+clean: nothing reformatted, as measured below. Exactly the same line, not
 the same build: the mirror publishes wheels per release, and 23.1.1 has none
 yet. That gap is already the standing situation — the current `v22.1.5` rev
 polices a tree built against 22.1.8 — and is why the *pin* is major.minor while
