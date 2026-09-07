@@ -215,24 +215,33 @@ everything else here.
 
 ### ci-llvm-23
 
-Stage 5. `.github/workflows/ci_tests.yml` installs the LLVM release tarball in
-three places (two build lanes at `:76`, coverage at `:116`). Each needs the tag,
-the archive name, the unpack directory, the `libclang-cpp.so.NN.N` symlink
-names, and the `-DClang_DIR=` in the Configure step moved together —
-`llvmorg-23.1.0`, `LLVM-23.1.0-Linux-X64.tar.xz`, `libclang-cpp.so.23.1`.
-Confirm the asset name on the release before editing; it is the one thing here
-that cannot be checked locally.
+Stage 5. **Done** (2026-09-06). `.github/workflows/ci_tests.yml` unpacks the
+LLVM release tarball in two steps — one shared by the build-lane matrix, one
+for coverage — and each moved as a unit: tag, archive name, unpack directory,
+the `libclang-cpp.so.NN.N` symlink names, and the `-DClang_DIR=` in Configure.
+Now `llvmorg-23.1.0`, `LLVM-23.1.0-Linux-X64.tar.xz`, `/opt/llvm23`,
+`libclang-cpp.so.23.1`. The release asset name and the `.so.23.1` soname were
+both confirmed rather than assumed — the asset against the release itself, the
+soname against the local 23.1 install, which names it identically.
 
-Two things to watch rather than assume:
+The two things the plan said to watch rather than assume were both checked
+locally instead of being left for CI to discover:
 
-- The official release binaries are the **no-RTTI** build, so CI is the only
-  lane that exercises the `-fno-rtti` branch in
-  `src/beman/specgen/frontend/CMakeLists.txt`. The dev box's apt packages build
-  with RTTI on, so a 23 RTTI change would show up here first and nowhere else.
-- The `clang` lanes take their compiler from the same unpacked tree via
-  `/usr/local/bin/clang++`, so this bumps the *host* compiler for those lanes
-  from Clang 22 to Clang 23 at the same time. If a lane fails, separate the two
-  before diagnosing.
+- **The no-RTTI build.** The official release binaries build LLVM without RTTI,
+  so CI is the only lane that compiles the front end `-fno-rtti`; the apt
+  packages here set `LLVM_ENABLE_RTTI ON`. Forcing the flag
+  (`-DCMAKE_CXX_FLAGS=-fno-rtti`, since `LLVMConfig` overwrites the cache
+  variable and `-DLLVM_ENABLE_RTTI=OFF` is silently ignored) builds and passes
+  757/757.
+- **The host compiler.** The `llvm-*` lanes take `clang++` from the same
+  unpacked tree, so this bumps them from Clang 22 to Clang 23 as a side effect.
+  Reproduced by putting `clang`/`clang++` symlinks to the 23.1.1 drivers on
+  `PATH` exactly as CI does and configuring `llvm-release`: builds clean,
+  757/757.
+
+Neither is a substitute for the real lane — a distinct LLVM build, and a
+container this box is not — but both failure modes the plan named are now
+ruled out ahead of the push rather than after it.
 
 ### clang-format-rev
 

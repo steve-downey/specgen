@@ -73,23 +73,23 @@ jobs:
       # symbols, so a libLLVM.so shim pointing at it satisfies the front end's
       # `clang-cpp LLVM` link on this layout too. The symlinks into /usr/lib64
       # put both on the default linker and loader paths.
-      - name: Install LLVM/Clang 22 (dev)
+      - name: Install LLVM/Clang 23 (dev)
         run: |
           set -eux
-          mkdir -p /opt/llvm22
+          mkdir -p /opt/llvm23
           curl -sSL \
-            https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz \
-            | tar -xJ -C /opt/llvm22 --strip-components=1
-          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libclang-cpp.so.22.1
-          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libLLVM.so
-          ln -s /opt/llvm22/bin/clang /usr/local/bin/clang
-          ln -s /opt/llvm22/bin/clang++ /usr/local/bin/clang++
-          test -f /opt/llvm22/lib/cmake/clang/ClangConfig.cmake
+            https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-Linux-X64.tar.xz \
+            | tar -xJ -C /opt/llvm23 --strip-components=1
+          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libclang-cpp.so.23.1
+          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libLLVM.so
+          ln -s /opt/llvm23/bin/clang /usr/local/bin/clang
+          ln -s /opt/llvm23/bin/clang++ /usr/local/bin/clang++
+          test -f /opt/llvm23/lib/cmake/clang/ClangConfig.cmake
 
       - name: Configure
         run: >
           cmake --preset ${{ matrix.lane.preset }}
-          -DClang_DIR=/opt/llvm22/lib/cmake/clang
+          -DClang_DIR=/opt/llvm23/lib/cmake/clang
           ${{ matrix.lane.args }}
 
       - name: Build
@@ -113,16 +113,16 @@ jobs:
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
       # Same install as the build lanes; the container already ships gcovr.
-      - name: Install LLVM/Clang 22 (dev)
+      - name: Install LLVM/Clang 23 (dev)
         run: |
           set -eux
-          mkdir -p /opt/llvm22
+          mkdir -p /opt/llvm23
           curl -sSL \
-            https://github.com/llvm/llvm-project/releases/download/llvmorg-22.1.0/LLVM-22.1.0-Linux-X64.tar.xz \
-            | tar -xJ -C /opt/llvm22 --strip-components=1
-          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libclang-cpp.so.22.1
-          ln -s /opt/llvm22/lib/libclang-cpp.so.22.1 /usr/lib64/libLLVM.so
-          test -f /opt/llvm22/lib/cmake/clang/ClangConfig.cmake
+            https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-Linux-X64.tar.xz \
+            | tar -xJ -C /opt/llvm23 --strip-components=1
+          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libclang-cpp.so.23.1
+          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libLLVM.so
+          test -f /opt/llvm23/lib/cmake/clang/ClangConfig.cmake
 
       # The coverage flags go on the preset rather than through the Makefile's
       # Gcov configuration, so this lane configures the same way every other
@@ -130,7 +130,7 @@ jobs:
       - name: Configure
         run: >
           cmake --preset gcc-debug
-          -DClang_DIR=/opt/llvm22/lib/cmake/clang
+          -DClang_DIR=/opt/llvm23/lib/cmake/clang
           "-DCMAKE_CXX_FLAGS=--coverage -fprofile-abs-path"
           "-DCMAKE_EXE_LINKER_FLAGS=--coverage"
 
