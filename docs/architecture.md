@@ -231,7 +231,12 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   of them. `\omit` and `\merge` also suppress
   declarations inside the gathered interval; the filter reads the declaration's directive
   instead of treating every ignored collection event as suppressed, because ordinary unmarked
-  helpers use that same event alternative and must still be gathered. A missing or mismatched
+  helpers use that same event alternative and must still be gathered. A folded-in *namespace
+  entity* keeps its wording the same way (issue #69): the region takes its declaration, and
+  its description — when it has one — travels to the section `\at` names, else to the one the
+  standing `\ref` group header names, else out beside the synopsis as a class's own
+  description does. A declaration carrying no description contributes only its declaration,
+  which is the customization-point-object shape and the common case. A missing or mismatched
   fence warns and does not consume later sections.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
@@ -273,7 +278,14 @@ back to name match within the class's fragments only):
 ### 3.6 Normalization pipeline
 
 1. Token-rewrite with **valid-C++ sentinel identifiers** (`__SEE_BELOW__`,
-   `__EXPOSID_val__`), length-padded if needed so line-breaking stays honest.
+   `__EXPOSID_val__`), resized to the exact width of the text that replaces them so
+   line-breaking stays honest. That resize happens once, just before formatting, because
+   it is the only point holding the whole fragment — which is what makes "this identifier
+   occurs nowhere else" checkable rather than assumed. Without it clang-format decided
+   breaks and continuation alignment at the sentinel's width, and a continuation under an
+   opening `<` lined up with nothing (issue #67). The width matched is the *display* text's:
+   a backend's own wrapper (`$…$`, `\exposid{…}`) is added later and differs per backend, so
+   the front end aligns for what the reader sees rather than for any one fragment spelling.
 2. `clang::format::reformat()` with a `FormatStyle` derived from `getLLVMStyle()`
    (`draft_format_style()` in the front end), tuned to draft conventions:
    `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,
@@ -409,11 +421,15 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   mask takes the whole declared type, from its first written token through to the name, so a
   leading cv-qualifier and a reference declarator go with it (issue #33). The targeted forms
   have no variable meaning and are an Error.
-- `\expos` composes with that mask rather than displacing it (issue #38): a variable carrying
-  both renders `inline constexpr unspecified $name$; // exposition only`, the draft's spelling
-  for an exposition-only helper of unspecified type. The standalone-synopsis path reads the
-  docblock for this, so the targeted forms are an Error there too — it used to read no marker
-  at all and report nothing.
+- On a documented namespace-scope **concept**, bare `\seebelow` masks the
+  constraint-expression, the same way it masks an alias's RHS (issue #50). The two are one
+  rule: an entity whose *definition* is the implementation writes that definition as *see
+  below*, where an entity whose *declared type* is writes the type as *unspecified*.
+- `\expos` composes with either mask rather than displacing it (issues #38, #50): a variable
+  carrying both renders `inline constexpr unspecified $name$; // exposition only`, and an
+  alias or concept renders `using $name$ = see below; // exposition only`. The
+  standalone-synopsis path reads the docblock for this, so the targeted forms are an Error
+  there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
@@ -523,6 +539,7 @@ function un-`noexcept` even when it visibly never throws.
 | Documented record/class-template *definition* | yes | its own description, beside the synopsis, with no itemdecl |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
+| Specialization of an `\expos` primary | the same, under the primary's name | its own markers do not apply |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
@@ -530,6 +547,8 @@ function un-`noexcept` even when it visibly never throws.
 | Documented namespace variable (template), concept | — | yes, the declaration whole (initializer/constraint kept) |
 | Documented namespace variable (template), bare `\seebelow` | — | yes, type as *unspecified*, initializer dropped |
 | Namespace variable (template), `\expos` + bare `\seebelow` | standalone, type as *unspecified* | — |
+| Documented namespace concept, bare `\seebelow` | — | yes, constraint-expression as *see below* |
+| Namespace alias/concept, `\expos` + bare `\seebelow` | standalone, definition as *see below* | — |
 | Documented unsupported kind, or documented fn *declaration* | none | Error diagnostic from `generate` |
 
 Authored in-class type aliases are **routed wording items**: an alias with a specgen docblock
@@ -562,15 +581,19 @@ declaration whose entity is defined elsewhere in the header, or an undocumented 
 one, contributes nothing — in particular never an empty Synopsis, whose rendering was an
 empty code block (§9's empty-synopsis check keeps it that way).
 
-Documented namespace-scope aliases, alias templates, variables, variable templates, and
-concepts are likewise ordinary wording items, extracted whole through their semicolon with
-constraint and initializer kept, the way the draft writes them ([concept.same],
-[tuple.helper]); the alias kinds carry the in-class alias masking rules (`\impdef`, bare
-`\seebelow`) and group with `\also`. `\expos` on the candidate kinds still takes the
-standalone-synopsis path above instead. And the backstop for everything else: a docblock on
-an entity kind that produces no wording — an enum, a deduction guide, or a function
-*declaration*, whose markup belongs at the definition — is an Error from `generate` rather
-than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is deliberate.
+Documented namespace-scope aliases, alias templates, variables, variable templates,
+concepts, and enumerations are likewise ordinary wording items, extracted whole through
+their semicolon with constraint, enumerator-list and initializer kept, the way the draft
+writes them ([concept.same], [tuple.helper]); the alias kinds carry the in-class alias
+masking rules (`\impdef`, bare `\seebelow`) and group with `\also`. `\expos` on the
+candidate kinds still takes the standalone-synopsis path above instead. An enumeration is
+the one of them whose *definition* is what the wording shows — scoped or not, enum-base or
+none — so its itemdecl is the enumerator list and its description says what the enumerators
+mean, the shape [fs.enum.file.type] writes. And the backstop for everything else: a docblock
+on an entity kind that produces no wording — a namespace alias, a deduction guide, or a
+function *declaration*, whose markup belongs at the definition — is an Error from `generate`
+rather than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is
+deliberate.
 
 ## 7. Intermediate representation
 
@@ -638,7 +661,11 @@ There are exactly three backends, and **adding wording to one means adding it to
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
   `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
   with caption anchors; index entries dropped. Paper mode (`--paper`) wraps the fragment in an
-  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2`.
+  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2` — one
+  ascending run over the whole fragment, across every `::: wording` div in it. The run does
+  *not* restart per div the way `[#]` numbering does: the framework's filter counts `#` across
+  divs and does not count a literal at all, so a per-div restart emitted `x` again at the top
+  of each one (issue #57).
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to

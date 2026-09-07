@@ -36,7 +36,7 @@ constexpr bool ready() const noexcept;
 constexpr void reset() noexcept;
 ```
 
-[x]{.pnum} *Effects*: Resets the gadget.
+[x+4]{.pnum} *Effects*: Resets the gadget.
 
 :::
 

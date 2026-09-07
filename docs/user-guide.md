@@ -192,6 +192,14 @@ members to the section with the matching stable name:
 
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
+A gathered header synopsis routes the same way. A documented declaration folded
+into the region contributes its declaration to the synopsis, and its
+description goes to the section `\at` names, or to the one named by the `\ref`
+group header standing over it. With neither, the description is rendered beside
+the synopsis, in the section the region itself is in — which is how a range
+adaptor object gets a clause of its own without leaving the header synopsis it
+belongs in.
+
 An in-class member definition is reduced to a declaration in the synopsis — a
 body is never synopsis content — and the member is described in its own
 subclause like any other. Declaring in class and defining out of line remains
@@ -212,8 +220,10 @@ and class-template definitions (a synopsis, the class's own description, and
 routed members), documented
 function *definitions*, documented in-class type aliases, and — at namespace
 scope — documented aliases, alias templates, variables, variable templates,
-concepts, and record declarations the header never defines (an undefined
-class-template primary renders as its own declaration). A docblock on any
+concepts, enumerations, and record declarations the header never defines (an
+undefined class-template primary renders as its own declaration). A documented
+enumeration's item declaration is the enumeration as written, enumerator list
+included, and its description is what the enumerators mean. A docblock on any
 other entity kind, or on a function declaration rather than its definition,
 is reported as an error: it would otherwise produce no wording, silently.
 
@@ -321,7 +331,9 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, aliases, alias templates, and class templates, as
-  well as class members, can be exposed. The marked declaration may live in an
+  well as class members, can be exposed. A partial or explicit specialization
+  follows its primary and needs no marker of its own: it is the same entity,
+  and renders under the same exposition name. The marked declaration may live in an
   included header: the uses in the header being specified still render as
   `\exposid`, so moving implementation machinery into a `detail/` header costs
   nothing. Its own declaration is not rendered, though — only declarations in
@@ -337,7 +349,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   `inline constexpr unspecified name;`. Marked `\expos` as well, the two
   compose: `inline constexpr unspecified $name$; // exposition only`. The
   targeted forms do not apply to a variable either way, and saying one is an
-  Error.
+  Error. On a documented namespace-scope concept, bare `\seebelow` masks the
+  constraint-expression, as it does an alias's right-hand side; both compose
+  with `\expos` the same way, rendering
+  `using $name$ = see below; // exposition only`.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.
@@ -385,8 +400,8 @@ Docblock and source-structure diagnostics are printed by `generate` as
 `<header>:<line>: <severity>: <message>`. Examples include element-order notes,
 duplicate-element warnings, unknown-tag errors, malformed `\rSec` markers,
 unrecognized draft-style headings, and errors for a docblock on an entity kind
-that produces no wording (an enum, or a function declaration whose markup
-belongs at the definition). These diagnostics describe markup on a
+that produces no wording (a namespace alias, or a function declaration whose
+markup belongs at the definition). These diagnostics describe markup on a
 successfully parsed header, so even an error does not prevent IR emission or
 change `generate`'s successful exit status. Always inspect standard error.
 

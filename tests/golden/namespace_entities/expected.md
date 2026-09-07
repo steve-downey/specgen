@@ -40,4 +40,35 @@ concept usable = requires { typename T::type; };
 
 [#]{.pnum} *Remarks*: A type is usable if it names a member type.
 
+```cpp
+template<class T>
+concept masked = $see below$;
+```
+
+[#]{.pnum} *Remarks*: The concept is specified below.
+
+```cpp
+template<class T> using $hidden-t$ = $see below$; // exposition only
+```
+
+```cpp
+template<class T>
+concept $hidden-usable$ = $see below$; // exposition only
+```
+
+```cpp
+enum class color { red, green };
+```
+
+[#]{.pnum} *Remarks*: The enumerators have the following meanings:
+
+- [#.#]{.pnum} `red` -- the default channel.
+- [#.#]{.pnum} `green` -- the channel a program selects.
+
+```cpp
+enum link_width : unsigned char { narrow = 1, wide = 2 };
+```
+
+[#]{.pnum} *Remarks*: The width of a link, in bytes.
+
 :::

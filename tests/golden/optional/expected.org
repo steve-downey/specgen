@@ -48,7 +48,7 @@ public:
   friend constexpr bool operator==(const optional& x, const optional& y);
 
 private:
-  T @\exposidnc{value}@;            // exposition only
+  T @\exposidnc{value}@;              // exposition only
   bool @\exposidnc{engaged}@ = false; // exposition only
 };
 #+end_codeblock

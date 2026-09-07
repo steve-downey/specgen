@@ -74,13 +74,16 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
         return code.spans | std::views::filter([=](const ir::Span& span) { return span.kind == kind; }) |
                std::ranges::to<std::vector>();
     };
-    // Two `\ref` group headers now: the free-function one, and the one inside
-    // the class defined in the region, which the class extraction carries.
+    // Three `\ref` group headers now: the free-function one, the one inside
+    // the class defined in the region, which the class extraction carries, and
+    // the one routing the customization point objects that follow it.
     const auto refs = spans(ir::SpanKind::Ref);
-    REQUIRE(refs.size() == 2);
+    REQUIRE(refs.size() == 3);
     CHECK(std::ranges::all_of(refs, [&](const ir::Span& span) {
-        return span.payload == "widget.ops" && code.text.substr(span.begin, span.end - span.begin) == "[widget.ops]";
+        return code.text.substr(span.begin, span.end - span.begin) == "[" + span.payload + "]";
     }));
+    CHECK(std::ranges::count_if(refs, [](const ir::Span& span) { return span.payload == "widget.ops"; }) == 2);
+    CHECK(std::ranges::count_if(refs, [](const ir::Span& span) { return span.payload == "widget.cpo"; }) == 1);
 
     const auto expos = spans(ir::SpanKind::ExposId);
     REQUIRE(expos.size() == 1);
@@ -135,15 +138,86 @@ TEST_CASE("a gathered region's class keeps its general paragraph and its own des
         std::ranges::to<std::vector>();
     REQUIRE(paragraphs.size() == 1);
 
+    // The class's own description is the description-only item here: an
+    // unrouted namespace entity's wording rides out beside the synopsis too
+    // (issue #69), and that one carries its declaration.
     const auto items =
         syn->children |
         std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::views::transform([](const ir::Node& node) { return std::get<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(items.size() == 2);
+    const auto described = items |
+                           std::views::filter([](const ir::SpecItem& item) { return item.decl.signatures.empty(); }) |
+                           std::ranges::to<std::vector>();
+    REQUIRE(described.size() == 1);
+    REQUIRE(described.front().descr.elements.size() == 1);
+    CHECK(described.front().descr.elements.front().kind == ir::ElementKind::Remarks);
+}
+
+// A namespace entity folded into the region keeps its wording, which the fold
+// used to drop (issue #69). Unrouted, it rides out beside the synopsis, in the
+// section the region itself is in -- declaration and all, since a variable's
+// declaration is its itemdecl.
+TEST_CASE("a gathered region's unrouted namespace entity keeps its wording") {
+    const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* syn = find_section(built->document.nodes, "widget.syn");
+    REQUIRE(syn != nullptr);
+    const auto items =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::views::transform([](const ir::Node& node) { return std::get<ir::SpecItem>(node); }) |
+        std::views::filter([](const ir::SpecItem& item) { return !item.decl.signatures.empty(); }) |
         std::ranges::to<std::vector>();
     REQUIRE(items.size() == 1);
-    const ir::SpecItem& descr = std::get<ir::SpecItem>(items.front());
-    CHECK(descr.decl.signatures.empty()); // a description-only item, not a member
-    REQUIRE(descr.descr.elements.size() == 1);
-    CHECK(descr.descr.elements.front().kind == ir::ElementKind::Remarks);
+    CHECK(items.front().decl.signatures.front().text.contains("limit"));
+    REQUIRE(items.front().descr.elements.size() == 1);
+    CHECK(items.front().descr.elements.front().kind == ir::ElementKind::Remarks);
+}
+
+// And routed, it goes where it is sent: `\at` overrides the `\ref` group
+// header in force, and a `\ref` header inside the region routes what follows
+// it, exactly as one inside a class body does. A range adaptor object needs
+// this and has no alternative -- it has no out-of-line definition to carry a
+// description into a later section, and its declaration belongs in the header
+// synopsis.
+TEST_CASE("a gathered region routes a namespace entity's wording to its section") {
+    const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* cpo = find_section(built->document.nodes, "widget.cpo");
+    REQUIRE(cpo != nullptr);
+    const auto items =
+        cpo->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::views::transform([](const ir::Node& node) { return std::get<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(items.size() == 2);
+
+    // \at first, in source order: it sits above the `\ref` header, under
+    // `\ref{widget.ops}`, and lands here anyway.
+    REQUIRE(items[0].decl.signatures.size() == 1);
+    CHECK(items[0].decl.signatures.front().text.contains("tag_of"));
+    REQUIRE(items[0].descr.elements.size() == 1);
+    CHECK(items[0].descr.elements.front().kind == ir::ElementKind::Effects);
+
+    REQUIRE(items[1].decl.signatures.size() == 1);
+    CHECK(items[1].decl.signatures.front().text.contains("make_widget"));
+
+    // The declarations are still in the synopsis: routing moves the wording,
+    // not the declaration.
+    const ir::Section* syn = find_section(built->document.nodes, "widget.syn");
+    REQUIRE(syn != nullptr);
+    const auto synopses =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(synopses.size() == 1);
+    const std::string& code = std::get<ir::Synopsis>(synopses.front()).code.text;
+    CHECK(code.contains("tag_of"));
+    CHECK(code.contains("make_widget"));
 }
 
 TEST_CASE("malformed header synopsis boundaries do not swallow later sections") {

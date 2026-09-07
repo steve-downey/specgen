@@ -8,6 +8,14 @@ namespace demo {
 struct tag {};
 inline constexpr tag value{};
 
+// A described declaration folded into the region keeps its wording, which the
+// fold used to drop on the floor (issue #69). Nothing routes this one -- no
+// `\at`, and no `\ref` group header stands over it yet -- so it rides out
+// beside the synopsis, in the section that is open, the way a folded-in
+// class's own description does.
+//! \remarks A program shall not redeclare `limit`.
+inline constexpr int limit = 8;
+
 //! \omit
 void omitted_helper();
 
@@ -18,7 +26,7 @@ void merged_helper();
 template <class T>
 class widget;
 
-//! \expos widget-like
+//! \expos(widget-like)
 template <class T>
 concept widget_like = true;
 
@@ -52,6 +60,36 @@ struct sentinel {
     }
 };
 
+// A customization point object belongs in the header synopsis, so a masked
+// variable is inside the region by construction -- which is exactly where the
+// mask stopped being applied (issue #55). The declaration folded in verbatim,
+// initializer and `detail::` and all, and the leak was then reported against
+// the marked declaration.
+namespace detail {
+//! \omit
+struct adaptor {};
+} // namespace detail
+
+//! \seebelow
+inline constexpr detail::adaptor cpo{};
+
+// A range adaptor object is the case that has no way around issue #69: a
+// variable with an initializer has no out-of-line definition to carry its
+// description into a later section, and moving its declaration out of the
+// region would take it out of the header synopsis, where the draft puts it.
+// `\at` routes it, overriding the `\ref{widget.ops}` header in force here...
+//! \seebelow
+//! \at widget.cpo
+//! \effects Returns the tag of the widget `E` denotes.
+inline constexpr detail::adaptor tag_of{};
+
+// ... and a `\ref` group header routes the declarations that follow it, here
+// exactly as inside a class body.
+// \ref{widget.cpo}, customization point objects
+//! \seebelow
+//! \effects Returns a `widget<T>` over `E`.
+inline constexpr detail::adaptor make_widget{};
+
 //! \verbatim-synopsis
 //! namespace std {
 //!   template<class T> struct hash<demo::widget<T>>;
@@ -62,3 +100,5 @@ struct sentinel {
 /// END [widget.syn]
 
 // \rSec3[widget.ops]{Operations}
+
+// \rSec3[widget.cpo]{Customization point objects}

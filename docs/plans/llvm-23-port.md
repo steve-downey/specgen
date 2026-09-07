@@ -2,8 +2,10 @@
 
 **Status:** **complete**, 2026-09-06. Every stage below is done and both
 questions are decided. The pin, the front end, the docs, the formatter and CI
-are on LLVM 23; the suite is 757/757 from a clean configure with no
-`-DClang_DIR` at all. Everything here was measured against **LLVM 23.1.1**
+are on LLVM 23; the suite passed 757/757 from a clean configure with no
+`-DClang_DIR` at all. Every count below is that day's 757-test tree and is left
+as measured; merging `main` in on 2026-09-07 brought the suite to 801, which
+passes clean on 23.1.1 with no golden movement of its own. Everything here was measured against **LLVM 23.1.1**
 installed on the dev box from apt.llvm.org; the reproductions are recorded so
 a later reader can redo them rather than trust the numbers, and so the next
 major move has a worked example to follow.

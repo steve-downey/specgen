@@ -7,9 +7,39 @@ struct @\exposidnc{box}@ {
 
 #+begin_codeblock
 template<typename T>
+struct @\exposidnc{box}@<T*> {
+  using type = T;
+}; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename T>
 struct @\exposidnc{raw-box}@ {
   T value;
 }; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename T> inline constexpr bool @\exposidnc{boxed}@ = false; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename T> inline constexpr bool @\exposidnc{boxed}@<@\exposidnc{box}@<T>> = true; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename LEFT, typename RIGHT, typename FALLBACK>
+struct @\exposidnc{same-model-impl}@ {
+  static constexpr bool value = true;
+}; // exposition only
+#+end_codeblock
+
+#+begin_codeblock
+template<typename MODEL_GRADE_PARAMETER, typename OPERAND_PARAMETER,
+         typename FALLBACK_PARAMETER>
+concept @\exposidnc{mixes-with-model}@ =
+    @\exposidnc{same-model-impl}@<MODEL_GRADE_PARAMETER, OPERAND_PARAMETER,
+                    FALLBACK_PARAMETER>::value; // exposition only
 #+end_codeblock
 
 #+begin_itemdecl
