@@ -192,6 +192,14 @@ members to the section with the matching stable name:
 
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
+A gathered header synopsis routes the same way. A documented declaration folded
+into the region contributes its declaration to the synopsis, and its
+description goes to the section `\at` names, or to the one named by the `\ref`
+group header standing over it. With neither, the description is rendered beside
+the synopsis, in the section the region itself is in — which is how a range
+adaptor object gets a clause of its own without leaving the header synopsis it
+belongs in.
+
 An in-class member definition is reduced to a declaration in the synopsis — a
 body is never synopsis content — and the member is described in its own
 subclause like any other. Declaring in class and defining out of line remains

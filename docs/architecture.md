@@ -230,7 +230,12 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   of them. `\omit` and `\merge` also suppress
   declarations inside the gathered interval; the filter reads the declaration's directive
   instead of treating every ignored collection event as suppressed, because ordinary unmarked
-  helpers use that same event alternative and must still be gathered. A missing or mismatched
+  helpers use that same event alternative and must still be gathered. A folded-in *namespace
+  entity* keeps its wording the same way (issue #69): the region takes its declaration, and
+  its description — when it has one — travels to the section `\at` names, else to the one the
+  standing `\ref` group header names, else out beside the synopsis as a class's own
+  description does. A declaration carrying no description contributes only its declaration,
+  which is the customization-point-object shape and the common case. A missing or mismatched
   fence warns and does not consume later sections.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
