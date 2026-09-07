@@ -5747,15 +5747,23 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
         // extraction already carries it, so appending it again as a
         // standalone group header rendered it twice (issue #31).
         unsigned consumed_end = 0;
-        // What a folded-in class keeps that the gathered node cannot hold: its
-        // class-general paragraph (design §5.2) and its own description (issue
-        // #18). Neither is routed -- both belong beside their class's synopsis,
-        // in whatever section is open -- and the gathered node has one slot for
-        // each while a region may hold several classes, so they travel on as
-        // their own events instead of being merged (issue #41). Pushed after
-        // the gathered node, in source order, which is where their offsets
-        // place them anyway.
-        std::vector<db::DocEvent> class_extras;
+        // What a folded-in declaration keeps that the gathered node cannot
+        // hold. For a class: its class-general paragraph (design §5.2) and its
+        // own description (issue #18). Neither is routed -- both belong beside
+        // their class's synopsis, in whatever section is open -- and the
+        // gathered node has one slot for each while a region may hold several
+        // classes, so they travel on as their own events instead of being
+        // merged (issue #41). For a namespace entity: its whole wording, when
+        // nothing routes it elsewhere (issue #69). Pushed after the gathered
+        // node, in source order, which is where their offsets place them
+        // anyway.
+        std::vector<db::DocEvent> extras;
+        // The stable name of the `\ref` group header standing over the
+        // declaration being folded, or empty. The in-class equivalent
+        // (collect_inclass_items) reads the same headers out of the class
+        // body; here the fold walks past them in source order, so the last one
+        // seen is the one in force.
+        std::string current_ref;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -5797,21 +5805,47 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     // second time. build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
                     if (synopsis->general || !synopsis->descr.elements.empty()) {
-                        db::SynopsisDecl extras;
-                        extras.offset  = synopsis->offset;
-                        extras.general = std::move(synopsis->general);
-                        extras.descr   = std::move(synopsis->descr);
-                        class_extras.push_back(std::move(extras));
+                        db::SynopsisDecl class_extra;
+                        class_extra.offset  = synopsis->offset;
+                        class_extra.general = std::move(synopsis->general);
+                        class_extra.descr   = std::move(synopsis->descr);
+                        extras.push_back(std::move(class_extra));
                     }
                 } else {
                     if (auto* ignored = std::get_if<db::Ignored>(&classified))
                         gathered.diagnostics.append_range(std::move(ignored->diagnostics));
-                    // An item's findings are dropped with the item -- the
-                    // region takes its declaration and not its wording -- but
-                    // a misspelled tag is still a typo, and this is the only
-                    // place left to report it from.
-                    if (auto* item_decl = std::get_if<db::ItemDecl>(&classified))
+                    if (auto* item_decl = std::get_if<db::ItemDecl>(&classified)) {
+                        // A misspelled tag is a typo whether or not the
+                        // wording it belongs to finds a home, and this is the
+                        // only place left to report it from.
                         gathered.diagnostics.append_range(std::move(item_decl->diagnostics));
+                        // The region takes the declaration. It used to take
+                        // the description with it and drop it (issue #69) --
+                        // silently, and with no roster entry behind it, so
+                        // coverage could not report the loss either. A
+                        // described entity's wording travels instead, the way
+                        // a folded-in class's members do: routed by `\at`,
+                        // else by the `\ref` group header standing over it,
+                        // to the section that should hold it. A range adaptor
+                        // object is the case with no way around this -- a
+                        // variable with an initializer has no out-of-line
+                        // definition to carry its description into a later
+                        // section, and moving its declaration out of the
+                        // region would take it out of the header synopsis,
+                        // where the draft puts it. Unrouted, the wording rides
+                        // out beside the synopsis, which is where it lexically
+                        // is. A declaration with nothing to say contributes
+                        // only its declaration, exactly as before: a masked
+                        // customization point object is the common case.
+                        if (!item_decl->item.descr.elements.empty()) {
+                            const std::string section = directives.at_anchor.value_or(current_ref);
+                            if (section.empty())
+                                extras.push_back(std::move(*item_decl));
+                            else
+                                gathered.pending.push_back(
+                                    db::PendingItem{section, item_decl->placement_key, std::move(item_decl->item)});
+                        }
+                    }
                     if (!directives.omit && !directives.merge) {
                         // The marker masks the declaration here exactly as it
                         // does outside the region (issue #55): a
@@ -5855,11 +5889,13 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                 const std::size_t      newline  = item.comment_text.find('\n', line_begin);
                 const std::size_t      line_end = newline == std::string::npos ? item.comment_text.size() : newline;
                 const std::string_view line(item.comment_text.data() + line_begin, line_end - line_begin);
-                if (line_vocabulary(llvm::StringRef{line}.ltrim(" \t")) == CommentVocabulary::Draft &&
-                    parse_ref(line)) {
-                    if (!refs.empty())
-                        refs.push_back('\n');
-                    refs.append(line);
+                if (line_vocabulary(llvm::StringRef{line}.ltrim(" \t")) == CommentVocabulary::Draft) {
+                    if (const std::optional<std::string> ref = parse_ref(line)) {
+                        current_ref = *ref;
+                        if (!refs.empty())
+                            refs.push_back('\n');
+                        refs.append(line);
+                    }
                 }
                 if (newline == std::string::npos)
                     break;
@@ -5868,7 +5904,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             append_synopsis_code(gathered.synopsis.code, header_comment_code(std::move(refs)));
         }
         events.push_back(std::move(gathered));
-        events.append_range(std::move(class_extras));
+        events.append_range(std::move(extras));
         i = *close_index + 1;
     }
 
