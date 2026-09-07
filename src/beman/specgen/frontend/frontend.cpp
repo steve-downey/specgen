@@ -5947,11 +5947,29 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                         // customization point object is the common case.
                         if (!item_decl->item.descr.elements.empty()) {
                             const std::string section = directives.at_anchor.value_or(current_ref);
-                            if (section.empty())
+                            if (section.empty()) {
                                 extras.push_back(std::move(*item_decl));
-                            else
+                            } else {
+                                // The roster entry is what makes a route
+                                // checkable: build_tree drops a pending item
+                                // whose section no `\rSec` opens, and the
+                                // entry is the only record that the request
+                                // was made (§9's dangling-route rule, which
+                                // reads exactly this). Without it a typo in an
+                                // `\at` or a `\ref` header loses the wording
+                                // as silently as not routing it at all did,
+                                // and a namespace entity has no other roster
+                                // entry to be caught by.
+                                const auto* named = llvm::dyn_cast<clang::NamedDecl>(item.decl);
+                                gathered.synopsis.roster.push_back(ir::SynopsisEntry{
+                                    named != nullptr ? named->getNameAsString() : std::string{},
+                                    ir::Disposition::Routed,
+                                    section,
+                                    llvm::isa<clang::FunctionDecl>(item.decl) ? ir::MemberKind::Function
+                                                                              : ir::MemberKind::Data});
                                 gathered.pending.push_back(
                                     db::PendingItem{section, item_decl->placement_key, std::move(item_decl->item)});
+                            }
                         }
                     }
                     if (!directives.omit && !directives.merge) {

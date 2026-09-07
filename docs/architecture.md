@@ -236,7 +236,11 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   its description — when it has one — travels to the section `\at` names, else to the one the
   standing `\ref` group header names, else out beside the synopsis as a class's own
   description does. A declaration carrying no description contributes only its declaration,
-  which is the customization-point-object shape and the common case. A missing or mismatched
+  which is the customization-point-object shape and the common case. A routed one also earns
+  a `Routed` roster entry naming no class, so §9's dangling-route rule reads it: `build_tree`
+  drops a pending item whose section no `\rSec` opens, and the entry is the only record that
+  the route was asked for — without it a typo loses the wording as silently as not routing it
+  at all did, and a namespace entity has no other roster entry to be caught by. A missing or mismatched
   fence warns and does not consume later sections.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
