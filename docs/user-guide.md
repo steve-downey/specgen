@@ -330,8 +330,11 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
 - `\expos` marks an entity exposition-only. The default spelling removes a
   trailing underscore and changes underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
-  templates, variables, aliases, alias templates, and class templates, as
-  well as class members, can be exposed. A partial or explicit specialization
+  templates, variables, enumerations, aliases, alias templates, and class
+  templates, as
+  well as class members, can be exposed. An exposition-only enumeration's uses
+  — its type, and a qualified enumerator — render under the exposition name
+  too. A partial or explicit specialization
   follows its primary and needs no marker of its own: it is the same entity,
   and renders under the same exposition name. The marked declaration may live in an
   included header: the uses in the header being specified still render as
@@ -352,7 +355,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   Error. On a documented namespace-scope concept, bare `\seebelow` masks the
   constraint-expression, as it does an alias's right-hand side; both compose
   with `\expos` the same way, rendering
-  `using $name$ = see below; // exposition only`.
+  `using $name$ = see below; // exposition only`. An enumeration accepts no
+  `\seebelow` in any form: the draft spells neither an enum-base nor an
+  enumerator list *see below*, and a marker that silently did nothing left a
+  description contradicting the synopsis beside it.
 - `\impdef` masks a documented in-class type alias RHS as
   *implementation-defined*. It applies only to aliases and is mutually
   exclusive with `\seebelow`.

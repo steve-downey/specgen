@@ -694,6 +694,18 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
+    // An exposition-only enumeration is written as a TagTypeLoc -- the type of
+    // a member, a parameter, or a variable (issue #68). Without this hook its
+    // own declaration rendered under its exposid name while every use kept the
+    // real one, which is the wording naming an entity the reader cannot see.
+    // A record reaches this hook too and is harmless: a plain class is not an
+    // exposition candidate, and a class template's uses are template-ids,
+    // handled above.
+    bool VisitTagTypeLoc(clang::TagTypeLoc tl) {
+        add(tl.getDecl(), clang::SourceRange(tl.getNameLoc()), tl.getQualifierLoc());
+        return true;
+    }
+
   private:
     void add(const clang::NamedDecl* decl, clang::SourceRange name_range, clang::NestedNameSpecifierLoc qualifier) {
         if (decl == nullptr)
@@ -3431,6 +3443,17 @@ struct VariableMask {
 VariableMask variable_seebelow_mask(const clang::Decl*                              decl,
                                     const beman::specgen::lowering::ItemDirectives& directives,
                                     unsigned                                        grouping_line) {
+    // An enumeration is the one documented namespace entity with nothing for
+    // `\seebelow` to write: a variable masks its type, an alias and a concept
+    // their definitions, and the draft never spells an enum-base or an
+    // enumerator list *see below*. Reported rather than ignored, because the
+    // marker's whole job is to make the wording say less than the code, and a
+    // marker that silently does nothing leaves a *Remarks* claiming something
+    // the synopsis beside it contradicts.
+    if (llvm::isa<clang::EnumDecl>(decl) && directives.seebelow && grouping_line != 0)
+        return {nullptr,
+                beman::specgen::document_build::Diagnostic{
+                    beman::specgen::Severity::Error, grouping_line, "an enumeration accepts no \\seebelow"}};
     const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
     if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
         variable = var_tmpl->getTemplatedDecl();
@@ -4238,6 +4261,14 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
     if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
         llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::ClassTemplateDecl>(decl))
         return true;
+    // An enumeration belongs here for the same reason it is a wording entity
+    // at all (issue #68): its definition is its interface, so an
+    // exposition-only one renders as a standalone synopsis under its exposid
+    // name. Without this it took the *wording* path with an empty description,
+    // which made it an `\also` follower and folded its declaration into
+    // whatever item preceded it.
+    if (const auto* enumeration = llvm::dyn_cast<clang::EnumDecl>(decl))
+        return enumeration->getDeclContext()->isFileContext();
     // A specialization of one, which is the same entity as its primary and so
     // shares its disposition (issue #49). The variable-template kinds reach
     // the VarDecl test below on their own; a class-template specialization is
