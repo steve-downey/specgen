@@ -1,15 +1,12 @@
 # Plan: moving the front end to LLVM 23
 
-**Status:** in progress, nothing blocked. [llvm-23-install](#llvm-23-install)
-and [constraints-fragment-format](#constraints-fragment-format) are done and
-both questions below are decided, so the remaining stages —
-[raw-comment-lookup-key](#raw-comment-lookup-key), [pin-bump](#pin-bump),
-[ci-llvm-23](#ci-llvm-23), [clang-format-rev](#clang-format-rev) — are
-mechanical. The pin stays at
-`22.1` until [pin-bump](#pin-bump) lands. Everything below was measured on
-2026-09-06 against **LLVM 23.1.1** installed on the dev box from apt.llvm.org;
-the reproductions are recorded so a later reader can redo them rather than trust
-the numbers.
+**Status:** **complete**, 2026-09-06. Every stage below is done and both
+questions are decided. The pin, the front end, the docs, the formatter and CI
+are on LLVM 23; the suite is 757/757 from a clean configure with no
+`-DClang_DIR` at all. Everything here was measured against **LLVM 23.1.1**
+installed on the dev box from apt.llvm.org; the reproductions are recorded so
+a later reader can redo them rather than trust the numbers, and so the next
+major move has a worked example to follow.
 
 ## Goal
 
