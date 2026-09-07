@@ -360,6 +360,28 @@ void collect_top_level_decl(clang::Decl*                decl,
     if (!doc.contains(file_id))
         return;
 
+    // What the parser hands back as a top-level declaration is not always one.
+    // A late-instantiated member function definition arrives here through
+    // HandleTopLevelDecl, reporting the location of the template it was
+    // instantiated from -- so a document that follows the header holding the
+    // pattern (issue #77) collected a class's private member as a namespace
+    // declaration and folded its whole body into the synopsis. Two questions
+    // separate an authored declaration from an instantiation of one: whose
+    // scope it is written in, and whether it is a specialization of something.
+    // *Lexical* scope, because an out-of-line member definition is written at
+    // namespace scope and is exactly what this file's house style puts there;
+    // its semantic context is the class, which is what an instantiation
+    // reports too.
+    if (!decl->getLexicalDeclContext()->isFileContext())
+        return;
+    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl);
+        fn != nullptr && fn->getTemplateSpecializationKind() != clang::TSK_Undeclared)
+        return;
+    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl) &&
+        llvm::cast<clang::ClassTemplateSpecializationDecl>(decl)->getSpecializationKind() !=
+            clang::TSK_ExplicitSpecialization)
+        return;
+
     out.push_back(decl);
 }
 
@@ -502,6 +524,15 @@ const clang::FunctionDecl* as_out_of_line_member(const clang::Decl* decl) {
         return nullptr;
     const clang::FunctionDecl* first = fn->getFirstDecl();
     return first != fn && llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext()) ? fn : nullptr;
+}
+
+// The function a declaration is, looking through a function template.
+const clang::FunctionDecl* function_or_template(const clang::Decl* decl) {
+    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl))
+        return fn;
+    if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
+        return tmpl->getTemplatedDecl();
+    return nullptr;
 }
 
 // Is this the declaration of its entity that a synopsis should show?
@@ -5748,14 +5779,43 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
     std::map<std::string, SpanInfo> sentinels;
     unsigned                        span_n = 0;
 
+    // A body is never synopsis content (design §3.4).  A region that follows
+    // its includes (issue #77) holds function *definitions* -- the header the
+    // definitions are written in is the header being specified -- so the
+    // splice extract_synopsis does inside a class body is needed here too.
+    // `= default` and `= delete` are kept, as they are there.
+    //
+    // Nothing is edited inside the spliced range, per §3.4: the
+    // descending-offset apply loop would take an inner edit first and its
+    // overlap watermark would then suppress the splice, which is how a body
+    // that named a droppable qualifier survived into the synopsis while a body
+    // that named nothing spliced cleanly.
+    std::optional<std::pair<unsigned, unsigned>> body_splice;
+    if (const clang::FunctionDecl* fn = function_or_template(decl);
+        fn != nullptr && fn->doesThisDeclarationHaveABody() && !fn->isDefaulted() && !fn->isDeleted())
+        if (const clang::Stmt* body = fn->getBody(); body != nullptr && body->getSourceRange().isValid()) {
+            const unsigned body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+            if (body_begin > decl_begin && body_begin < decl_end) {
+                body_splice = std::pair{body_begin, decl_end};
+                edits.push_back(SynopsisEdit{body_begin, decl_end, ";"});
+            }
+        }
+    const auto outside_body = [&](unsigned begin, unsigned end) {
+        return !body_splice || end <= body_splice->first || begin >= body_splice->second;
+    };
+
     edits.append_range(
         namespace_qualifier_edits(decl, ns_drop_set, sm, lang_opts) |
-        std::views::filter([&](const auto& range) { return range.first >= decl_begin && range.second <= decl_end; }) |
+        std::views::filter([&](const auto& range) {
+            return range.first >= decl_begin && range.second <= decl_end && outside_body(range.first, range.second);
+        }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));
     // substrate generic algorithm: a conditional edit fold over resolved
     // exposition uses; each accepted use can contribute two source edits.
     for (const ExposUse& use : expos_uses(decl, expos_set, sm, lang_opts)) {
         if (use.name_begin < decl_begin || use.name_end > decl_end)
+            continue;
+        if (!outside_body(use.name_begin, use.name_end))
             continue;
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{ir::SpanKind::ExposId, use.display, use.display};
