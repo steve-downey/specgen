@@ -68,3 +68,13 @@ enum link_width : unsigned char { narrow = 1, wide = 2 };
 #+end_itemdecl
 
 /Remarks/: The width of a link, in bytes.
+
+#+begin_codeblock
+enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+#+end_codeblock
+
+#+begin_itemdecl
+inline constexpr @\exposidnc{channel-state}@ initial_state = @\exposidnc{channel-state}@::open;
+#+end_itemdecl
+
+/Remarks/: The state a new channel starts in.

@@ -48,9 +48,14 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
     // naming the class that declared it, since the node names none of them
     // (issue #45). Only `sentinel` is a class *definition* in this region --
     // the free functions and the forward-declared `widget` have no class body
-    // and so no roster of their own.
+    // and so no roster of their own. The region's own routed namespace
+    // entities are on it too, and name no class, which is what an empty
+    // `parent` means.
     CHECK_FALSE(synopsis.roster.empty());
-    CHECK(std::ranges::all_of(synopsis.roster,
+    CHECK(std::ranges::all_of(synopsis.roster, [](const ir::SynopsisEntry& entry) {
+        return entry.parent == "sentinel" || entry.parent.empty();
+    }));
+    CHECK(std::ranges::any_of(synopsis.roster,
                               [](const ir::SynopsisEntry& entry) { return entry.parent == "sentinel"; }));
     CHECK(std::ranges::any_of(synopsis.roster, [](const ir::SynopsisEntry& entry) {
         return entry.name == "operator==" && entry.disposition == ir::Disposition::Routed;
@@ -232,4 +237,37 @@ TEST_CASE("malformed header synopsis boundaries do not swallow later sections") 
     CHECK(std::ranges::any_of(built->diagnostics, [](const auto& diagnostic) {
         return diagnostic.message.contains("not closed before section [after.nested]");
     }));
+}
+
+// A routed namespace entity earns a roster entry, which is the only record
+// that the route was asked for: build_tree drops a pending item whose section
+// no `\rSec` opens, so without the entry §9's dangling-route rule has nothing
+// to read and a typo loses the wording silently.
+TEST_CASE("a gathered region's routed namespace entity is on the roster") {
+    const auto built = frontend::build_document(kCorpus + "/spec_header_synopsis.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* syn = find_section(built->document.nodes, "widget.syn");
+    REQUIRE(syn != nullptr);
+    const auto synopses =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(synopses.size() == 1);
+
+    const auto routed = std::get<ir::Synopsis>(synopses.front()).roster |
+                        std::views::filter([](const ir::SynopsisEntry& entry) {
+                            return entry.disposition == ir::Disposition::Routed &&
+                                   (entry.name == "tag_of" || entry.name == "make_widget");
+                        }) |
+                        std::ranges::to<std::vector>();
+    REQUIRE(routed.size() == 2);
+    CHECK(std::ranges::all_of(routed, [](const ir::SynopsisEntry& entry) {
+        return entry.section == "widget.cpo" && entry.kind == ir::MemberKind::Data && entry.parent.empty();
+    }));
+
+    // The unrouted one is not on it: its wording is in the document, beside
+    // the synopsis, so there is no route to check.
+    CHECK(std::ranges::none_of(std::get<ir::Synopsis>(synopses.front()).roster,
+                               [](const ir::SynopsisEntry& entry) { return entry.name == "limit"; }));
 }

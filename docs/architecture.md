@@ -245,7 +245,11 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   its description — when it has one — travels to the section `\at` names, else to the one the
   standing `\ref` group header names, else out beside the synopsis as a class's own
   description does. A declaration carrying no description contributes only its declaration,
-  which is the customization-point-object shape and the common case. A missing or mismatched
+  which is the customization-point-object shape and the common case. A routed one also earns
+  a `Routed` roster entry naming no class, so §9's dangling-route rule reads it: `build_tree`
+  drops a pending item whose section no `\rSec` opens, and the entry is the only record that
+  the route was asked for — without it a typo loses the wording as silently as not routing it
+  at all did, and a namespace entity has no other roster entry to be caught by. A missing or mismatched
   fence warns and does not consume later sections.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
@@ -271,8 +275,8 @@ back to name match within the class's fragments only):
   owns stay qualified (and then trip the leakage checker, §9, which is the point).
 - Expos renaming: referents in the expos set → an ExposId sentinel, rendered as
   `\exposidnc{kebab-name}` in code contexts and `\exposid{kebab-name}` in prose.
-  Namespace-scope concepts, variable templates, ordinary variables, aliases, and alias
-  templates can enter that set; their resolved uses — expression and type uses alike — are
+  Namespace-scope concepts, variable templates, ordinary variables, enumerations, aliases,
+  and alias templates can enter that set; their resolved uses — expression and type uses alike — are
   rewritten inside extracted bodies as well as synopses, itemdecls, and derived conjuncts. `\expos` also applies to **member
   function templates**: the helper survives private-member filtering, its declared name is
   rewritten as an exposid in the class synopsis and its routed itemdecl, and extracted bodies
@@ -598,7 +602,11 @@ masking rules (`\impdef`, bare `\seebelow`) and group with `\also`. `\expos` on 
 candidate kinds still takes the standalone-synopsis path above instead. An enumeration is
 the one of them whose *definition* is what the wording shows — scoped or not, enum-base or
 none — so its itemdecl is the enumerator list and its description says what the enumerators
-mean, the shape [fs.enum.file.type] writes. And the backstop for everything else: a docblock
+mean, the shape [fs.enum.file.type] writes. It is an exposition candidate like the others:
+marked `\expos` it renders as a standalone exposition-only synopsis and its uses — its type,
+and a qualified enumerator — take the exposid name (§3.5's TagTypeLoc hook). It is the one
+kind bare `\seebelow` has nothing to write on, so the marker is an Error there rather than
+a silent no-op. And the backstop for everything else: a docblock
 on an entity kind that produces no wording — a namespace alias, a deduction guide, or a
 function *declaration*, whose markup belongs at the definition — is an Error from `generate`
 rather than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is

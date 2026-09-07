@@ -8,7 +8,10 @@
 //
 // An enumeration is a type whose definition is its interface (issue #68), so
 // its declaration is the itemdecl and the docblock describes what the
-// enumerators mean -- scoped or not, with an enum-base or without.
+// enumerators mean -- scoped or not, with an enum-base or without.  Marked
+// `\expos` it is a standalone exposition-only synopsis like the other kinds,
+// and every use of it -- its type, and a qualified enumerator -- renders under
+// the exposition name.
 //
 // Masking reaches the kinds whose *definition* is the implementation, not just
 // the ones whose declared type is (issue #50): bare `\seebelow` writes an
@@ -76,6 +79,12 @@ enum class color { red, green };
 
 //! \remarks The width of a link, in bytes.
 enum link_width : unsigned char { narrow = 1, wide = 2 };
+
+//! \expos
+enum class channel_state { open, closed };
+
+//! \remarks The state a new channel starts in.
+inline constexpr channel_state initial_state = channel_state::open;
 
 //! \omit
 inline constexpr int scratch_count = 3;
