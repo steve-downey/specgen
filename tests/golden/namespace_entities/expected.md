@@ -56,4 +56,19 @@ template<class T>
 concept $hidden-usable$ = $see below$; // exposition only
 ```
 
+```cpp
+enum class color { red, green };
+```
+
+[#]{.pnum} *Remarks*: The enumerators have the following meanings:
+
+- [#.#]{.pnum} `red` -- the default channel.
+- [#.#]{.pnum} `green` -- the channel a program selects.
+
+```cpp
+enum link_width : unsigned char { narrow = 1, wide = 2 };
+```
+
+[#]{.pnum} *Remarks*: The width of a link, in bytes.
+
 :::

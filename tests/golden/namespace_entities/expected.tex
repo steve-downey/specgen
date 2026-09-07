@@ -89,3 +89,29 @@ template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
 template<class T>
 concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
 \end{codeblock}
+
+\indexlibraryglobal{color}%
+\begin{itemdecl}
+enum class color { red, green };
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The enumerators have the following meanings:
+\begin{itemize}
+\item \tcode{red} -- the default channel.
+\item \tcode{green} -- the channel a program selects.
+\end{itemize}
+\end{itemdescr}
+
+\indexlibraryglobal{link_width}%
+\begin{itemdecl}
+enum link_width : unsigned char { narrow = 1, wide = 2 };
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The width of a link, in bytes.
+\end{itemdescr}

@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // Documented namespace-scope aliases, alias templates, variables, variable
-// templates, and concepts are ordinary wording items. Adjacent aliases group
-// with \also and alias masking applies exactly as in a class body;
-// unannotated and `\omit`ted entities stay absent.
+// templates, concepts, and enumerations are ordinary wording items. Adjacent
+// aliases group with \also and alias masking applies exactly as in a class
+// body; unannotated and `\omit`ted entities stay absent.
+//
+// An enumeration is a type whose definition is its interface (issue #68), so
+// its declaration is the itemdecl and the docblock describes what the
+// enumerators mean -- scoped or not, with an enum-base or without.
 //
 // Masking reaches the kinds whose *definition* is the implementation, not just
 // the ones whose declared type is (issue #50): bare `\seebelow` writes an
@@ -65,10 +69,23 @@ using hidden_t = detail::opaque_token*;
 template <class T>
 concept hidden_usable = requires { typename detail::opaque_token; };
 
+//! \remarks The enumerators have the following meanings:
+//! \item `red` -- the default channel.
+//! \item `green` -- the channel a program selects.
+enum class color { red, green };
+
+//! \remarks The width of a link, in bytes.
+enum link_width : unsigned char { narrow = 1, wide = 2 };
+
 //! \omit
 inline constexpr int scratch_count = 3;
 
+//! \omit
+enum class scratch_kind { alpha };
+
 using unannotated_helper = void;
+
+enum class unannotated_kind { beta };
 
 } // namespace demo
 

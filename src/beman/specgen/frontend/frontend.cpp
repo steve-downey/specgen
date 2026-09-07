@@ -4192,10 +4192,18 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
 // isFileContext guard excludes the out-of-line definition of a class's own
 // member (a static data member, a member variable template), whose wording
 // belongs to its class.
+//
+// An enumeration is one of them (issue #68). It is a type whose definition is
+// its interface, so the declaration is the itemdecl and the docblock's
+// description follows — the draft's shape for [fs.enum.file.type], whose
+// wording is a two-column table of enumerator meanings and which `\lib2dtab2`
+// already renders. It was the last kind a library could document and get
+// nothing for: an error said so rather than dropping it silently, but an
+// error is not a way to specify an enum, and there was no other.
 const clang::NamedDecl* as_namespace_entity(const clang::Decl* decl) {
     const bool entity_kind = llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
                              llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::TypeAliasDecl>(decl) ||
-                             llvm::isa<clang::VarDecl>(decl);
+                             llvm::isa<clang::VarDecl>(decl) || llvm::isa<clang::EnumDecl>(decl);
     if (!entity_kind || !decl->getDeclContext()->isFileContext())
         return nullptr;
     return llvm::cast<clang::NamedDecl>(decl);

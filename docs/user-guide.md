@@ -212,8 +212,10 @@ and class-template definitions (a synopsis, the class's own description, and
 routed members), documented
 function *definitions*, documented in-class type aliases, and — at namespace
 scope — documented aliases, alias templates, variables, variable templates,
-concepts, and record declarations the header never defines (an undefined
-class-template primary renders as its own declaration). A docblock on any
+concepts, enumerations, and record declarations the header never defines (an
+undefined class-template primary renders as its own declaration). A documented
+enumeration's item declaration is the enumeration as written, enumerator list
+included, and its description is what the enumerators mean. A docblock on any
 other entity kind, or on a function declaration rather than its definition,
 is reported as an error: it would otherwise produce no wording, silently.
 
@@ -390,8 +392,8 @@ Docblock and source-structure diagnostics are printed by `generate` as
 `<header>:<line>: <severity>: <message>`. Examples include element-order notes,
 duplicate-element warnings, unknown-tag errors, malformed `\rSec` markers,
 unrecognized draft-style headings, and errors for a docblock on an entity kind
-that produces no wording (an enum, or a function declaration whose markup
-belongs at the definition). These diagnostics describe markup on a
+that produces no wording (a namespace alias, or a function declaration whose
+markup belongs at the definition). These diagnostics describe markup on a
 successfully parsed header, so even an error does not prevent IR emission or
 change `generate`'s successful exit status. Always inspect standard error.
 
