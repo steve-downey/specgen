@@ -103,7 +103,7 @@ beman_install_library(beman.specgen TARGETS beman.specgen)
 configure_build_telemetry()
 
 # The Clang front end, required rather than optional (decision llvm-toolchain-pin).
-# System LLVM 22 links via shared clang-cpp + LLVM, built under GCC.
+# System LLVM 23 links via shared clang-cpp + LLVM, built under GCC.
 # ClangConfig pulls in LLVMConfig, so LLVM_INCLUDE_DIRS and CLANG_INCLUDE_DIRS
 # are both defined after this. LLVMConfig's transitive FindFFI/FindLibEdit run
 # C-compiler probes, so C must be enabled first.
@@ -112,17 +112,19 @@ configure_build_telemetry()
 # ClangConfigVersion.cmake accepts only a matching major.minor, and CMake's
 # config search globs `lib/cmake/clang*`, so on a box with several LLVMs
 # installed side by side an unversioned find_package(Clang) silently takes the
-# newest one, which is how a freshly released LLVM breaks the build (23 renamed
-# ASTContext::getRawCommentForDeclNoCache out from under frontend.cpp). Asking
-# for the major.minor the front end is written against makes the search pick
-# that LLVM and report every rejected candidate by version when it is missing.
-# The request outranks a -DClang_DIR= pointing at some other version, so moving
-# to a new LLVM is one deliberate flag, not an accident of what is installed:
-#   -DBEMAN_SPECGEN_LLVM_VERSION=23.0
+# newest one, which is how a freshly released LLVM breaks the build. That is
+# not hypothetical: 23 renamed ASTContext::getRawCommentForDeclNoCache out from
+# under frontend.cpp, and the pin is what turned that into a one-line port
+# instead of a morning. Asking for the major.minor the front end is written
+# against makes the search pick that LLVM and report every rejected candidate
+# by version when it is missing. The request outranks a -DClang_DIR= pointing
+# at some other version, so moving to a new LLVM is one deliberate flag, not an
+# accident of what is installed:
+#   -DBEMAN_SPECGEN_LLVM_VERSION=24.1
 # and -DClang_DIR=<prefix>/lib/cmake/clang still points at one installed off
 # the default search path.
 set(BEMAN_SPECGEN_LLVM_VERSION
-    "22.1"
+    "23.1"
     CACHE STRING
     "major.minor of the LLVM/Clang the front end is built against"
 )

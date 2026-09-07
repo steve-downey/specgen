@@ -27,7 +27,7 @@ One preset, one configuration, 801 tests:
 
 There is no build without the Clang front end: `find_package(Clang REQUIRED)`
 is unconditional and **version-pinned** by `BEMAN_SPECGEN_LLVM_VERSION`
-(default `22.1`); a mismatched `Clang_DIR` is rejected rather than used, so
+(default `23.1`); a mismatched `Clang_DIR` is rejected rather than used, so
 moving to a new LLVM is one deliberate flag and never an accident of what is
 installed (decision `llvm-toolchain-pin`). The floor is **C++26** (decision
 `cxx26-baseline`), so the dev box needs GCC 16.

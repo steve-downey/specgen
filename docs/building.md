@@ -19,7 +19,7 @@ artifacts the tests compare against. Rationale for the toolchain choices lives u
 ## The LLVM version pin
 
 `find_package(Clang)` is version-pinned by the cache variable
-`BEMAN_SPECGEN_LLVM_VERSION` (default `22.1`). CMake's config search globs
+`BEMAN_SPECGEN_LLVM_VERSION` (default `23.1`). CMake's config search globs
 `lib/cmake/clang*`, so an unversioned `find_package(Clang)` on a box with several
 LLVMs installed side by side silently takes the newest — and a newer LLVM can rename
 an API the front end calls, breaking the build the day it lands. Pass

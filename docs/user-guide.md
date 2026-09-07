@@ -21,8 +21,8 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-specgen requires LLVM/Clang 22's development install; `find_package` asks for
-that version by default (`BEMAN_SPECGEN_LLVM_VERSION`, `22.1`) and so locates
+specgen requires LLVM/Clang 23's development install; `find_package` asks for
+that version by default (`BEMAN_SPECGEN_LLVM_VERSION`, `23.1`) and so locates
 it even alongside a newer LLVM, `-DClang_DIR=<prefix>/lib/cmake/clang` points
 at one off the default search path, and `-DBEMAN_SPECGEN_LLVM_VERSION=<major>.<minor>`
 moves the pin. There is one configuration — there is no build of specgen without

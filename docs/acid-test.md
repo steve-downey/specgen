@@ -65,7 +65,7 @@ git -C "$DRAFT" show 831d3cb7:source/utilities.tex | \
 ## Toolchain and binary
 
 A run uses the Clang-enabled `gcc-release` preset build: GCC 16 with the LLVM/Clang
-22 front end (see `docs/building.md`). Record the specgen revision — and, if a
+23 front end (see `docs/building.md`). Record the specgen revision — and, if a
 binary is frozen for later comparison, its SHA256 — alongside the run's outputs so
 the run stays auditable. The locally installed GCC runtime must be visible both
 while CMake discovers Catch2 tests and while specgen runs:
@@ -74,7 +74,7 @@ while CMake discovers Catch2 tests and while specgen runs:
 export LD_LIBRARY_PATH=/home/sdowney/install/gcc-16/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 
 uv run cmake --preset gcc-release \
-  -DClang_DIR=/usr/lib/llvm-22/lib/cmake/clang
+  -DClang_DIR=/usr/lib/llvm-23/lib/cmake/clang
 uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```

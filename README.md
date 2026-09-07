@@ -75,7 +75,7 @@ Its commands are the scripts in [`examples/cli/`](examples/cli), and its output 
 - Catch2 3 when building tests
 
 The supported Clang front-end configurations use Clang 22 or 23 with GCC 16's libstdc++.
-The LLVM version is pinned by `BEMAN_SPECGEN_LLVM_VERSION` (default `22.1`); see [docs/building.md](docs/building.md).
+The LLVM version is pinned by `BEMAN_SPECGEN_LLVM_VERSION` (default `23.1`); see [docs/building.md](docs/building.md).
 Set `BEMAN_SPECGEN_BUILD_TESTS=OFF` to omit the test suite.
 
 ## Running

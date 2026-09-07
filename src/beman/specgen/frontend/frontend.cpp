@@ -887,16 +887,23 @@ docblock_diagnostics(const clang::RawComment*                rc,
 // template when it has one. Clang anchors comment search for a
 // RedeclarableTemplateDecl at its `template` keyword but for the templated
 // decl at its *name*, and rejects any candidate comment separated from the
-// anchor by one of `;{}#@` (ASTContext::getRawCommentForDeclNoCacheImpl). A
+// anchor by one of `;{}#@` (ASTContext::getRawCommentNoCacheImpl). A
 // requires-expression in a template-head constraint —
 // `requires requires(T t) { ... }` — puts all three between the header and
 // the name, so a lookup through the templated decl silently loses the
 // docblock that the template decl still finds (issue #20). The described
 // template is also the decl clang's own comment machinery documents
 // (adjustDeclToTemplate).
+//
+// The key is an ASTContext::RawCommentLookupKey, which LLVM 23 widened from
+// `const Decl*` so that macros can carry comments too; the conversion here is
+// the PointerUnion's, not a coincidence. The lookup stays the *NoCache* one on
+// purpose: getRawCommentForAnyRedecl, the public alternative whose signature
+// happens to span both LLVM 22 and 23, walks the redeclaration chain and finds
+// comments this anchor rule is written to reject.
 const clang::RawComment* attached_raw_comment(const clang::Decl* decl) {
     const clang::TemplateDecl* described = decl->getDescribedTemplate();
-    return decl->getASTContext().getRawCommentForDeclNoCache(described != nullptr ? described : decl);
+    return decl->getASTContext().getRawCommentNoCache(described != nullptr ? described : decl);
 }
 
 // Does `decl` carry a `//!`/`/*!` docblock of its own? The two-step the
@@ -2716,6 +2723,43 @@ clang::format::FormatStyle qualifier_style() {
     return style;
 }
 
+// Format an expression fragment in a declaration context, then take the
+// context back off.
+//
+// clang-format parses what it is handed, and a bare fragment carries no
+// context to parse in. From LLVM 23 on it reads the `&` of
+// `requires(const Impl& impl) { ... }` as a binary operator rather than a
+// declarator and spaces it as one, so a derived Constraints element came out
+// saying `const Impl & impl` where the draft says `const Impl&` -- the very
+// spelling draft_format_style() sets PAS_Left for. The draft's spelling is not
+// negotiable against a formatter defect
+// (docs/plans/llvm-23-port.md#constraints-fragment-spelling), so restore the
+// context instead: wrapped as a variable initializer the fragment parses as
+// what it is. An initializer and not a requires-clause because *any*
+// expression is a valid one, and this path also carries Mandates conjuncts
+// lifted from static_assert conditions, whose grammar a requires-clause need
+// not admit.
+//
+// The wrapper comes off by its own fixed length, and ColumnLimit 0 is what
+// makes that safe: with no limit clang-format honours the input's line breaks,
+// so the added prefix reflows nothing after it and a multi-line fragment
+// survives the round trip unchanged. Under LLVM 22, which formatted the bare
+// fragment correctly, the whole thing is a no-op.
+constexpr std::string_view expr_context_prefix = "auto beman_specgen_expr = ";
+
+std::string format_expr_fragment(const std::string& text) {
+    std::string formatted = format_code(std::format("{}{};", expr_context_prefix, text), qualifier_style());
+    // Should the wrapper not come back intact, format the fragment on its own
+    // rather than guess at where it now starts and ends: format_code already
+    // degrades to its input when clang-format fails, and this keeps that the
+    // only failure mode.
+    if (!formatted.starts_with(expr_context_prefix) || !formatted.ends_with(';'))
+        return format_code(text, qualifier_style());
+    formatted.pop_back();
+    formatted.erase(0, expr_context_prefix.size());
+    return formatted;
+}
+
 // Source text of an expression's written form.
 llvm::StringRef expr_text(const clang::Expr* e, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
     return clang::Lexer::getSourceText(clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts);
@@ -2754,7 +2798,7 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
         text.replace(edit.begin - text_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return recover_sentinels(format_code(text, qualifier_style()), sentinels);
+    return recover_sentinels(format_expr_fragment(text), sentinels);
 }
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:

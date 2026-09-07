@@ -15,7 +15,9 @@ do not change. What changes is the mechanism: a clang-tidy check, loaded as a pl
 
 ## Why a plugin and not stock clang-tidy
 
-Measured against the current tree (LLVM 22.1 from the Debian packages, GCC 16 libstdc++, C++26):
+Measured against the tree as it stood in mid-2026 (LLVM 22.1 from the Debian packages, GCC 16 libstdc++,
+C++26). The pin has since moved to 23.1 (`docs/plans/llvm-23-port.md`), so the site counts below and the
+clang-tidy behaviour they describe want re-measuring before this plan is executed, not trusting:
 
 - No built-in check bans loops; the loop-related checks rewrite loop forms.
 - The query-based custom checks (`--experimental-custom-checks`, `CustomChecks:` in the config) flag every loop
