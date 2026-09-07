@@ -1,7 +1,11 @@
 # Plan: moving the front end to LLVM 23
 
-**Status:** planned; [llvm-23-install](#llvm-23-install) and
-[constraints-fragment-format](#constraints-fragment-format) done. The pin stays at
+**Status:** in progress, nothing blocked. [llvm-23-install](#llvm-23-install)
+and [constraints-fragment-format](#constraints-fragment-format) are done and
+both questions below are decided, so the remaining stages —
+[raw-comment-lookup-key](#raw-comment-lookup-key), [pin-bump](#pin-bump),
+[ci-llvm-23](#ci-llvm-23), [clang-format-rev](#clang-format-rev) — are
+mechanical. The pin stays at
 `22.1` until [pin-bump](#pin-bump) lands. Everything below was measured on
 2026-09-06 against **LLVM 23.1.1** installed on the dev box from apt.llvm.org;
 the reproductions are recorded so a later reader can redo them rather than trust
@@ -255,7 +259,10 @@ and de-risk the rest. Land it separately rather than folding it into
 [pin-bump](#pin-bump), so that if a corpus header ever *does* move under a
 future formatter, the churn is not tangled with a version bump.
 
-## Open questions
+## Questions
+
+Decided and open questions share this namespace; **Status** says which is which,
+and answering one graduates it in place so existing links stay valid.
 
 ### [constraints-fragment-spelling](#constraints-fragment-spelling)
 
@@ -289,23 +296,29 @@ LLVM the tree is pinned to today.
 ### [llvm-22-support-window](#llvm-22-support-window)
 
 **Question:** after the move, does the tree still build against LLVM 22?
-**Status:** OPEN, leaning no.
+**Status:** DECIDED, 2026-09-06. **Decided by:** Steve Downey.
 
-[raw-comment-lookup-key](#raw-comment-lookup-key) is a hard break — the 23 name
-does not exist in 22 and the 22 name does not exist in 23 — so keeping both
-means a version `#if` in `frontend.cpp`, the first one in the file. Decision
-[llvm-toolchain-pin](../decisions/llvm-toolchain-pin.md) is written for a
-single pinned version and says a mismatched `Clang_DIR` is *rejected*, which
-reads as one version at a time; the pin's whole point is that the front end is
-written against one LLVM. Supporting a window would be a change to that
-decision, not an application of it, and it should be recorded as one if it is
-wanted.
+**Decision:** No window. Once [pin-bump](#pin-bump) lands, LLVM 23 *is* the
+version — one pinned LLVM, exactly as decision
+[llvm-toolchain-pin](../decisions/llvm-toolchain-pin.md) already reads.
 
-What makes the question live at all is that the packaged LLVM on a given box
-lags: a contributor on a distro that ships 22 cannot build at all after
-[pin-bump](#pin-bump). Whether that is acceptable depends on whether the
-answer is "install the release tarball, as CI does", which is the current
-answer for everyone on a distro that ships 21.
+**Why:** the barrier to entry is low. apt.llvm.org publishes a per-release
+channel for every supported LLVM, so a contributor on a distro packaging an
+older one adds a repository line and installs `llvm-23-dev` — this is how the
+dev box got 23.1.1, and it is already the standing answer for anyone whose
+distro ships 21. Against that, a support window buys little and costs a version
+`#if` in `frontend.cpp` (the first in that file) permanently, on the very code
+path — comment attachment — whose subtleties are hardest to keep straight
+across two Clang versions at once. The pin exists so the front end is written
+against one LLVM; carrying two would be a change to that decision rather than
+an application of it, for a problem an apt line solves.
+
+**Consequence for [pin-bump](#pin-bump):** the decision record is where this
+belongs once the pin actually moves. Amend
+[llvm-toolchain-pin](../decisions/llvm-toolchain-pin.md) to say the pin is a
+floor as well as a ceiling — a single version, not a minimum — and to name
+apt.llvm.org's per-release channels as the supported way to get one, so the
+next reader is not left to infer it from the absence of an `#if`.
 
 **Log:**
 
