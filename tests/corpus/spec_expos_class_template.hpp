@@ -16,6 +16,13 @@
 // like -- a primary and one specialization carrying the real case -- so the
 // implementation spelling the marker exists to hide reached the wording, exit
 // 0 and validation silent.
+//
+// `same_model_impl` is here for its *width*: a sentinel stands in for the
+// exposition name only until recovery, but clang-format decides line breaks
+// and continuation alignment while it is still there, so a name whose
+// exposition spelling is a different width came out aligned to the sentinel's
+// width instead of its own (issue #67). Its use below wraps, which is where a
+// continuation lining up with nothing shows.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_EXPOS_CLASS_TEMPLATE_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_EXPOS_CLASS_TEMPLATE_HPP
@@ -45,6 +52,16 @@ inline constexpr bool boxed_ = false;
 
 template <typename T>
 inline constexpr bool boxed_<box<T>> = true;
+
+//! \expos
+template <typename LEFT, typename RIGHT, typename FALLBACK>
+struct same_model_impl {
+    static constexpr bool value = true;
+};
+
+//! \expos
+template <typename MODEL_GRADE_PARAMETER, typename OPERAND_PARAMETER, typename FALLBACK_PARAMETER>
+concept mixes_with_model = same_model_impl<MODEL_GRADE_PARAMETER, OPERAND_PARAMETER, FALLBACK_PARAMETER>::value;
 
 //! \returns A boxed copy of `t`.
 template <typename T>

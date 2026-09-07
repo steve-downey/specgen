@@ -5,7 +5,7 @@
 ```cpp
 template<typename R>
 class holder {
-  R $base$;   // exposition only
+  R $base$;    // exposition only
   int $count$; // exposition only
 
 public:

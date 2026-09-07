@@ -1222,10 +1222,74 @@ beman::specgen::ir::CodeText recover_sentinels(std::string text, const std::map<
     return out;
 }
 
+// An identifier of exactly `width` characters that occurs neither in `text` nor
+// among `taken`, or nullopt when none can be built (a width of zero, or every
+// candidate already present -- neither has happened, but a caller that gets
+// nullopt keeps the sentinel it has, which is what the code did before this).
+//
+// The letters are arbitrary; what matters is that a run of one letter followed
+// by a counter is not something C++ source contains, and that the result is
+// checked rather than assumed.
+std::optional<std::string>
+exact_width_sentinel(const std::string& text, const std::set<std::string>& taken, std::size_t width, unsigned n) {
+    if (width == 0)
+        return std::nullopt;
+    // substrate generic algorithm: try letters until one yields a candidate
+    // absent from the text -- a search whose subject is the text, not a range
+    // that already exists.
+    for (const char filler : std::string_view("ZQXJVWKY")) {
+        std::string candidate = std::format("{}{}", filler, n);
+        if (candidate.size() > width)
+            candidate.resize(width);
+        candidate.resize(width, filler);
+        if (!taken.contains(candidate) && text.find(candidate) == std::string::npos)
+            return candidate;
+    }
+    return std::nullopt;
+}
+
+// §3.6 step 1's "length-padded if needed so line-breaking stays honest", which
+// the design has always specified and the sentinels never were. A sentinel
+// stands in for its display text only until recovery, but clang-format decides
+// line breaks and continuation alignment while it is still there -- so a name
+// whose exposition-only spelling is a different width came out aligned to the
+// sentinel's width instead of its own, and a continuation under an opening `<`
+// lined up with nothing (issue #67).
+//
+// Resizing them here rather than at each of the twenty allocation sites keeps
+// the one rule in one place: a sentinel is exactly as wide as what replaces it.
+// It also has to be here, because it is the only point that holds the whole
+// fragment, which is what makes "this identifier appears nowhere else"
+// checkable rather than assumed.
+std::pair<std::string, std::map<std::string, SpanInfo>>
+resize_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentinels) {
+    std::map<std::string, SpanInfo> resized;
+    std::set<std::string>           taken;
+    unsigned                        n = 0;
+    // substrate generic algorithm: a scatter into two coupled outputs -- the
+    // rewritten text and the re-keyed table -- where each step's replacement
+    // depends on what the previous ones claimed.
+    for (const auto& [sentinel, info] : sentinels) {
+        const std::size_t                at = text.find(sentinel);
+        const std::optional<std::string> fitted =
+            at == std::string::npos ? std::nullopt : exact_width_sentinel(text, taken, info.display.size(), n++);
+        if (!fitted) {
+            resized.emplace(sentinel, info);
+            taken.insert(sentinel);
+            continue;
+        }
+        text.replace(at, sentinel.size(), *fitted);
+        resized.emplace(*fitted, info);
+        taken.insert(*fitted);
+    }
+    return {std::move(text), std::move(resized)};
+}
+
 beman::specgen::ir::CodeText format_and_recover(std::string                            text,
                                                 const std::map<std::string, SpanInfo>& sentinels,
                                                 std::optional<std::string_view>        record_tag = std::nullopt) {
-    std::string formatted = format_code(text, draft_format_style());
+    auto [sized_text, sized] = resize_sentinels(std::move(text), sentinels);
+    std::string formatted    = format_code(sized_text, draft_format_style());
 
     // BTDS_MultiLine matches the draft for function templates, but considers a
     // record head short even when its body is not and joins `template<...>` to
@@ -1237,7 +1301,7 @@ beman::specgen::ir::CodeText format_and_recover(std::string                     
         if (pos != std::string::npos && pos < line_end)
             formatted[pos] = '\n';
     }
-    return recover_sentinels(std::move(formatted), sentinels);
+    return recover_sentinels(std::move(formatted), sized);
 }
 
 // --- exposition-only *uses* (design §3.5) -----------------------------------
