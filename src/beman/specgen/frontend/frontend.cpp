@@ -4506,6 +4506,15 @@ build_roster(const clang::CXXRecordDecl*                                     rec
             entry.disposition = ir::Disposition::Expos;
         } else if (real_member.effectively_private) {
             entry.disposition = ir::Disposition::Private;
+        } else if (fn == nullptr && alias == nullptr) {
+            // A *public* data member (issue #82).  Its type and its name are in
+            // the synopsis and its class's own description says what it means,
+            // which is how the draft specifies `from_chars_result`,
+            // `ranges::in_out_result` and every other such struct: a data
+            // member's specification is its declaration.  There is no itemdescr
+            // to ask for -- a docblock on one produces no wording -- so
+            // demanding a description asks for something that cannot exist.
+            entry.disposition = ir::Disposition::Declared;
         } else if (fn != nullptr && (fn->isDefaulted() || fn->isDeleted())) {
             entry.disposition = ir::Disposition::Defaulted;
         } else {

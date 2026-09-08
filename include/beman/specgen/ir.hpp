@@ -186,6 +186,7 @@ enum class Disposition {
     Merged,       // `\merge`d twin
     Omitted,      // `\omit`ted
     Defaulted,    // `= default`/`= delete`, carrying no description
+    Declared,     // a public data member: its declaration is its specification
     Expos,        // exposition-only member (`\expos`)
     Private,      // unmarked private: exposition, not interface (design §6)
     Undocumented, // none of the above -- what the coverage validator reports
