@@ -2171,6 +2171,47 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             continue;
         }
 
+        // An exposition-only nested class (issue #80).  Marked `\expos` alone
+        // it renders under its exposition name, definition and all; marked
+        // bare `\seebelow` as well it renders as a declaration, which is the
+        // shape [range.transform.view] prints -- the class is specified in its
+        // own subclause, and its state is not the synopsis's business.
+        const clang::CXXRecordDecl* nested_record = llvm::dyn_cast<clang::CXXRecordDecl>(member);
+        if (const auto* nested_tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(member))
+            nested_record = nested_tmpl->getTemplatedDecl();
+        if (nested_record != nullptr && !nested_record->isAnonymousStructOrUnion() &&
+            nested_record->isThisDeclarationADefinition()) {
+            if (const auto it = expos_set.find(expos_key); it != expos_set.end()) {
+                const auto* named = llvm::cast<clang::NamedDecl>(member);
+                if (docblock_directives(member, sm).seebelow) {
+                    const unsigned        record_begin = sm.getDecomposedLoc(nested_record->getBeginLoc()).second;
+                    clang::SourceLocation end_loc =
+                        clang::Lexer::getLocForEndOfToken(member->getEndLoc(), 0, sm, lang_opts);
+                    if (const std::optional<clang::Token> semi =
+                            clang::Lexer::findNextToken(member->getEndLoc(), sm, lang_opts);
+                        semi && semi->is(clang::tok::semi))
+                        end_loc = clang::Lexer::getLocForEndOfToken(semi->getLocation(), 0, sm, lang_opts);
+                    const unsigned    record_end = sm.getDecomposedLoc(end_loc).second;
+                    const std::string sentinel   = span_sentinel(span_n++);
+                    sentinels[sentinel]          = SpanInfo{ir::SpanKind::ExposId, it->second, it->second};
+                    const llvm::StringRef tag    = nested_record->getKindName();
+                    edits.push_back(
+                        SynopsisEdit{record_begin,
+                                     record_end,
+                                     std::string(tag.data(), tag.size()) + " " + sentinel + "; // exposition only"});
+                    // Nothing is edited inside a replaced range (design §3.4):
+                    // an inner edit is applied first and its overlap watermark
+                    // would then suppress this one, leaving the definition in
+                    // the synopsis.
+                    removed_ranges.emplace_back(record_begin, record_end);
+                } else {
+                    add_exposid(named, it->second);
+                }
+                mark_survivor();
+                continue;
+            }
+        }
+
         if (const auto* field = llvm::dyn_cast<clang::FieldDecl>(member)) {
             if (const auto it = expos_set.find(field->getCanonicalDecl()); it != expos_set.end())
                 add_exposid(field, it->second);
@@ -4531,6 +4572,15 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
         return alias;
     if (const auto* md = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(member_function_or_template(member)))
         return md;
+    // A nested class (issue #80).  A view's iterator is one, private and named
+    // by every `begin`, `end` and `operator++` signature the class publishes,
+    // so it is exactly the shape `\expos` is for: rendered under an exposition
+    // name rather than dropped as a private member the wording goes on naming.
+    if (const auto* nested = llvm::dyn_cast<clang::CXXRecordDecl>(member);
+        nested != nullptr && nested->getIdentifier() != nullptr)
+        return nested;
+    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(member))
+        return tmpl;
     return nullptr;
 }
 
@@ -4597,6 +4647,8 @@ const clang::NamedDecl* as_namespace_entity(const clang::Decl* decl) {
 // (extract_namespace_expos_synopsis emits their free-standing declarations).
 std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clang::Decl*>& decls,
                                                           const clang::SourceManager&      sm) {
+    using ExposEntry = std::pair<const clang::Decl*, std::string>;
+
     const auto is_marked  = [&sm](const clang::NamedDecl* named) { return docblock_directives(named, sm).expos; };
     const auto expos_name = [&sm](const clang::NamedDecl* named) {
         const beman::specgen::lowering::ItemDirectives dirs = docblock_directives(named, sm);
@@ -4606,14 +4658,24 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
     };
     // Anonymous records are transparent here: their source members are the
     // candidates, while Clang's implicit injected projections are not.
-    const auto expos_members_of = [&](const clang::CXXRecordDecl* record) {
-        return real_record_members(record) |
-               std::views::transform([](const RealRecordMember& member) { return as_field_or_method(member.decl); }) |
-               std::views::filter([](const clang::NamedDecl* named) { return named != nullptr; }) |
-               std::views::filter(is_marked) | std::views::transform([&expos_name](const clang::NamedDecl* named) {
-                   return std::pair<const clang::Decl*, std::string>{named->getCanonicalDecl(), expos_name(named)};
-               }) |
-               std::ranges::to<std::vector<std::pair<const clang::Decl*, std::string>>>();
+    // The marked members of a record, and of the records nested in it: a
+    // nested class's own state is exposition for the same reason its class's
+    // is, and an extracted body that names it has to say the exposition name
+    // (issue #80).
+    const auto expos_members_of = [&](this const auto&            self,
+                                      const clang::CXXRecordDecl* record) -> std::vector<ExposEntry> {
+        std::vector<ExposEntry> out;
+        // substrate generic algorithm: a filter-map over one record's members
+        // that also descends -- the recursion is why this is a loop and not a
+        // pipeline built in place.
+        for (const RealRecordMember& member : real_record_members(record)) {
+            if (const clang::NamedDecl* named = as_field_or_method(member.decl); named != nullptr && is_marked(named))
+                out.emplace_back(named->getCanonicalDecl(), expos_name(named));
+            if (const clang::CXXRecordDecl* nested = as_record_decl(member.decl);
+                nested != nullptr && nested->isThisDeclarationADefinition())
+                out.append_range(self(nested));
+        }
+        return out;
     };
 
     std::map<const clang::Decl*, std::string> expos;

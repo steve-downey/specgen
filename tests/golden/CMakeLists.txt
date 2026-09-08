@@ -943,6 +943,23 @@ specgen_add_golden(
 # `expected.json` (an unlinked out-of-line definition renders with its
 # `gadget::` qualification and an `undocumented` roster entry, rather than
 # the clean in-class itemdecl `expected.json` pins), not merely absent.
+# `\expos` on a nested class (issue #80): a view's iterator, which is private
+# and named by every signature the class publishes.  Marked, it renders under
+# its exposition name; marked bare `\seebelow` as well, as a declaration --
+# the shape [range.transform.view] prints -- and its own members are exposition
+# too, so an extracted body that names one says the exposition name.
+specgen_add_golden(
+    expos_nested_class_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_nested_class.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_nested_class"
+)
+specgen_add_golden(
+    expos_nested_class
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_nested_class/expected.json"
+)
+
 # A document that spans the headers it includes (issue #77): the gathered
 # `.syn` region names two, and a third included outside it is implementation
 # and stays invisible.  The generated IR is where the whole rule is visible at

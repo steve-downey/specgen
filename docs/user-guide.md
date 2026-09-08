@@ -356,7 +356,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   templates, as
   well as class members, can be exposed. An exposition-only enumeration's uses
   — its type, and a qualified enumerator — render under the exposition name
-  too. A partial or explicit specialization
+  too. A **nested class** can be exposed as well, and with bare `\seebelow`
+  it renders as a declaration — `class $iterator$; // exposition only` — which
+  is how the draft writes a view's iterator; its own members are exposition
+  with it, so an extracted body that names one says the exposition name. A partial or explicit specialization
   follows its primary and needs no marker of its own: it is the same entity,
   and renders under the same exposition name. The marked declaration may live in an
   included header: the uses in the header being specified still render as
