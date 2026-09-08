@@ -297,6 +297,10 @@ struct NameVisibility {
     // validate(Document) below), which is the only place it can come from:
     // the nodes carry no trace of it.
     std::map<std::string, std::string> foreign;
+    // The bare-name complement of `foreign` (issue #84, ir::ForeignDeclaration):
+    // a name used with no qualifier at all, mapped to the header that actually
+    // declares it. Seeded the same way and for the same reason.
+    std::map<std::string, std::string> foreign_decl;
 };
 
 const auto visibility_monoid = foundation::monoid{
@@ -306,6 +310,7 @@ const auto visibility_monoid = foundation::monoid{
         // therefore document-order-first -- disposition wins.
         a.hidden.insert(b.hidden.begin(), b.hidden.end());
         a.foreign.insert(b.foreign.begin(), b.foreign.end());
+        a.foreign_decl.insert(b.foreign_decl.begin(), b.foreign_decl.end());
         return a;
     },
     NameVisibility{},
@@ -471,23 +476,45 @@ std::optional<std::string> foreign_message(const IdentifierRun& run, const NameV
            "namespace";
 }
 
+// `foreign_message`'s complement for a name written with no qualifier at all
+// (issue #84): `foreign_decl` says the front end resolved it to a
+// declaration this run never documents, by where that declaration actually
+// lives rather than by what the use site wrote, so this fires whether or not
+// `run.namespace_qualifier` is set. `\expos` is the fixit named first because
+// it already reaches an included, non-system header (issue #36): marking the
+// declaration itself is usually the smaller edit than rewriting every use.
+std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const NameVisibility& visible) {
+    const auto entry = visible.foreign_decl.find(run.name);
+    if (entry == visible.foreign_decl.end() || visible.documented.contains(run.name))
+        return std::nullopt;
+    return "`" + run.name + "` appears in rendered output but is not a documented entity (declared in `" +
+           entry->second +
+           "`, which this run does not document): mark it `\\expos` where it is declared, document it in "
+           "this run, or rewrite the wording in documented terms";
+}
+
 // Design §9's leakage checker over one name: everything in rendered output
-// must resolve to something the reader can see. Two of §9's four resolutions
-// are answerable here -- the roster says whether a class-body declaration is
-// visible, and `foreign` says a qualifier resolved outside the
-// specification -- and the message says which one failed.
+// must resolve to something the reader can see. Three of §9's four
+// resolutions are answerable here -- the roster says whether a class-body
+// declaration is visible, `foreign` says a qualifier resolved outside the
+// specification, and `foreign_decl` says an unqualified name did too -- and
+// the message says which one failed.
 //
-// A name matching neither is left alone: it may be a std entity, a template
-// parameter, or a local of the extracted body, and as bare text those are
-// indistinguishable from each other. That is what keeps the imprecision of
-// `identifier_runs` one-directional -- it can cost a finding, never invent
-// one.
+// A name matching none of the three is left alone: it may be a std entity, a
+// template parameter, or a local of the extracted body, and as bare text
+// those are indistinguishable from each other. That is what keeps the
+// imprecision of `identifier_runs` one-directional for those cases -- it can
+// cost a finding, never invent one; `foreign_decl` is the one exception,
+// resolved by the front end rather than guessed from text (see
+// ir::ForeignDeclaration).
 std::optional<std::string> leak_message(const IdentifierRun& run, const NameVisibility& visible) {
     if (!visible.documented.contains(run.name) && visible.hidden.contains(run.name))
         return "`" + run.name + "` is used in wording but is not a documented entity (" +
                std::string(invisibility_reason(visible.hidden.at(run.name).disposition)) +
                "): mark it `\\expos`, rewrite the wording in documented terms, or demote it to authored prose";
-    return foreign_message(run, visible);
+    if (auto msg = foreign_message(run, visible))
+        return msg;
+    return foreign_decl_message(run, visible);
 }
 
 // Every name in @p code that @p classify calls a leak, as the message it
@@ -541,9 +568,11 @@ Diagnostics check_leakage(const std::string& context, const ir::CodeText& code, 
 // name, so a private member in one class made an unrelated public member of
 // the same name in another read as a leak at its own declaration, with fixits
 // pointing at a member of a class the reader was not looking at (issue #35).
-// The qualifier half stays document-wide: a namespace is not a class-body
-// declaration, and `foreign` is seeded from the document rather than from any
-// roster.
+// The qualifier and bare-declaration halves stay document-wide: neither
+// `foreign` nor `foreign_decl` is seeded from any roster, so neither has a
+// declaring-class to be ambiguous about -- a synopsis naming
+// `applicative_value_t<T>` in a member's declared type leaks the same way an
+// *Equivalent to:* body does.
 Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsis& v, const NameVisibility& visible) {
     const NameVisibility own = own_class_visibility(v);
     return report_leaks(context, v.code, [&own, &visible](const IdentifierRun& run) -> std::optional<std::string> {
@@ -553,7 +582,9 @@ Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsi
                    std::string(invisibility_reason(ir::Disposition::Private)) +
                    "): mark it `\\expos` so it can be named, or mask the declaration that names it (bare "
                    "`\\seebelow`, or `\\impdef` on an alias)";
-        return foreign_message(run, visible);
+        if (auto msg = foreign_message(run, visible))
+            return msg;
+        return foreign_decl_message(run, visible);
     });
 }
 
@@ -1492,6 +1523,10 @@ Diagnostics validate(const ir::Document& document) {
     visible.foreign =
         document.foreign_namespaces |
         std::views::transform([](const ir::ForeignNamespace& ns) { return std::pair{ns.name, ns.qualified}; }) |
+        std::ranges::to<std::map<std::string, std::string>>();
+    visible.foreign_decl =
+        document.foreign_declarations |
+        std::views::transform([](const ir::ForeignDeclaration& d) { return std::pair{d.name, d.header}; }) |
         std::ranges::to<std::map<std::string, std::string>>();
 
     Diagnostics findings = foundation::mconcat_map(

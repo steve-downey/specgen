@@ -4932,6 +4932,123 @@ std::vector<beman::specgen::ir::ForeignNamespace> collect_foreign_namespaces(con
            std::ranges::to<std::vector>();
 }
 
+// `ForeignQualifierCollector`'s complement for a name with no qualifier at
+// all (issue #84): a helper sharing the header's own namespace, so nothing
+// written at the use site ever names a foreign namespace, needs a check keyed
+// on where the *referenced declaration* lives rather than on what the use
+// site wrote. Same AST-node coverage `ExposUseFinder` reads a name from
+// (`DeclRefExpr`, a concept reference, an unresolved lookup's candidates, and
+// the three exposition-only type-use shapes) -- reused here for the opposite
+// question: not "is this decl `\expos`-marked", but "is this decl invisible
+// to the reader for a reason `\expos` was never asked to fix".
+//
+// Two guards keep this one-directional the same way `ForeignQualifierCollector`
+// is:
+//
+//   - a decl already in `expos_` is skipped: it renders under its
+//     `\exposid` sentinel, which is design §9's own escape hatch, and the
+//     fix for a name this check *would* otherwise flag is exactly to mark it
+//     `\expos` where it is actually declared -- `\expos` already reaches an
+//     included, non-system header (issue #36), so no separate "trust me"
+//     marker is needed;
+//   - a decl in a system header is skipped: nothing under one carries specgen
+//     markup, and a system header is the standard's own vocabulary, the same
+//     boundary `collect_expos_scope_decl` already draws.
+//
+// A decl `DocumentFiles::contains` (this run's main file, or one of its
+// gathered `.syn` follows, issue #77) is not "foreign" by construction: it is
+// either documented through the ordinary path or reported by some other §9
+// check (undocumented, `\omit`ted, private) -- this check is only about a
+// declaration this run never had a chance to say anything about at all.
+class ForeignDeclCollector : public clang::RecursiveASTVisitor<ForeignDeclCollector> {
+  public:
+    ForeignDeclCollector(const std::map<const clang::Decl*, std::string>& expos,
+                         const clang::SourceManager&                      sm,
+                         const DocumentFiles&                             doc,
+                         std::map<std::string, std::string>&              out)
+        : expos_(expos), sm_(sm), doc_(doc), out_(out) {}
+
+    bool VisitDeclRefExpr(clang::DeclRefExpr* expr) {
+        if (expr != nullptr)
+            record(expr->getDecl());
+        return true;
+    }
+
+    bool VisitConceptReference(clang::ConceptReference* ref) {
+        if (ref != nullptr)
+            record(ref->getNamedConcept());
+        return true;
+    }
+
+    bool VisitUnresolvedLookupExpr(clang::UnresolvedLookupExpr* expr) {
+        if (expr != nullptr)
+            for (clang::NamedDecl* candidate : expr->decls()) // substrate generic algorithm
+                record(candidate);
+        return true;
+    }
+
+    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc tl) {
+        record(tl.getDecl());
+        return true;
+    }
+
+    bool VisitTemplateSpecializationTypeLoc(clang::TemplateSpecializationTypeLoc tl) {
+        record(tl.getTypePtr()->getTemplateName().getAsTemplateDecl());
+        return true;
+    }
+
+    bool VisitTagTypeLoc(clang::TagTypeLoc tl) {
+        record(tl.getDecl());
+        return true;
+    }
+
+  private:
+    void record(const clang::NamedDecl* decl) {
+        if (decl == nullptr)
+            return;
+        const clang::Decl* canonical = decl->getCanonicalDecl();
+        if (const auto* specialization = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl))
+            canonical = specialization->getSpecializedTemplate()->getCanonicalDecl();
+        if (expos_.contains(canonical))
+            return;
+        const clang::SourceLocation loc = decl->getLocation();
+        if (!loc.isValid() || sm_.isInSystemHeader(loc) || doc_.contains(sm_.getDecomposedLoc(loc).first))
+            return;
+        const std::string name = decl->getNameAsString();
+        // Bare filename, not `diagnostic_file_name`'s path-relative-to-the-
+        // main-file convention: that convention assumes the file it names
+        // moves in lockstep with the main file (true for a `.syn` follow,
+        // which is fixed relative to it by the very `#include` that pulled it
+        // in), and this decl's declaring header is under no such constraint
+        // -- reached by an arbitrary `-I` or quoted-relative search, so a
+        // main file relocated on its own (as the east-const golden's flipped
+        // copy is) would report a different relative path for the identical
+        // fact.
+        if (!name.empty())
+            out_.emplace(name, llvm::sys::path::filename(sm_.getFilename(loc)).str());
+    }
+
+    const std::map<const clang::Decl*, std::string>& expos_;
+    const clang::SourceManager&                      sm_;
+    const DocumentFiles&                             doc_;
+    std::map<std::string, std::string>&              out_;
+};
+
+std::vector<beman::specgen::ir::ForeignDeclaration>
+collect_foreign_declarations(const std::vector<clang::Decl*>&                 decls,
+                             const std::map<const clang::Decl*, std::string>& expos,
+                             const clang::SourceManager&                      sm,
+                             const DocumentFiles&                             doc) {
+    std::map<std::string, std::string> found;
+    ForeignDeclCollector               collector(expos, sm, doc, found);
+    for (clang::Decl* decl : decls) // substrate generic algorithm
+        collector.TraverseDecl(decl);
+    return found | std::views::transform([](const auto& kv) {
+               return beman::specgen::ir::ForeignDeclaration{kv.first, kv.second};
+           }) |
+           std::ranges::to<std::vector>();
+}
+
 // --- what a non-extracted body names (design §9) ----------------------------
 //
 // Design §9 gives its leakage checker two severities, and the note one is
@@ -6295,6 +6412,12 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // through it — no DocEvent carries it and no node owns it.
     const std::vector<ir::ForeignNamespace> foreign = collect_foreign_namespaces(decls, ns_drop_set);
 
+    // The bare-name complement (issue #84), collected the same way and for
+    // the same reason: a name whose declaration this run never documents,
+    // found by where the reference actually resolves rather than by what the
+    // use site wrote.
+    const std::vector<ir::ForeignDeclaration> foreign_decls = collect_foreign_declarations(decls, expos_set, sm, doc);
+
     // And the members named by the bodies this pipeline never renders,
     // collected here for the same reason and carried the same way — the one
     // thing design §9's leakage checker needs that no node can hold.
@@ -6584,9 +6707,10 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // rather than as a separate pass over the finished tree. Both clang-free,
     // both unit-tested with synthetic events in
     // tests/beman/specgen/document_build.test.cpp.
-    db::BuildResult built             = db::build_tree(events);
-    built.document.foreign_namespaces = foreign;
-    built.document.unextracted_uses   = body_uses;
+    db::BuildResult built               = db::build_tree(events);
+    built.document.foreign_namespaces   = foreign;
+    built.document.foreign_declarations = foreign_decls;
+    built.document.unextracted_uses     = body_uses;
     return built;
 }
 

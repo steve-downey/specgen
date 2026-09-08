@@ -367,14 +367,18 @@ TEST_CASE("ir - round-trip preserves the document-level validator channels") {
     // no golden's *rendered* output can tell whether they survived emission.
     Document doc;
     doc.nodes.push_back(Synopsis{.name = "widget", .code = {"class widget;", {}}, .roster = {}});
-    doc.foreign_namespaces = {{"detail", "demo::detail"}};
-    doc.unextracted_uses   = {{"widget::widget", "hard_reset"}, {"widget::reset", "clone"}};
+    doc.foreign_namespaces   = {{"detail", "demo::detail"}};
+    doc.foreign_declarations = {{"probe_witness", "typeclass_base.hpp"}};
+    doc.unextracted_uses     = {{"widget::widget", "hard_reset"}, {"widget::reset", "clone"}};
     check_round_trip(doc);
 
     const auto parsed = parse_document(to_json(doc));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->foreign_namespaces.size() == 1);
     CHECK(parsed->foreign_namespaces.at(0).qualified == "demo::detail");
+    REQUIRE(parsed->foreign_declarations.size() == 1);
+    CHECK(parsed->foreign_declarations.at(0).name == "probe_witness");
+    CHECK(parsed->foreign_declarations.at(0).header == "typeclass_base.hpp");
     REQUIRE(parsed->unextracted_uses.size() == 2);
     CHECK(parsed->unextracted_uses.at(0).function == "widget::widget");
     CHECK(parsed->unextracted_uses.at(0).member == "hard_reset");

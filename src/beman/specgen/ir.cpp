@@ -217,6 +217,7 @@ using beman::specgen::ir::Document;
 using beman::specgen::ir::element_from_name;
 using beman::specgen::ir::element_name;
 using beman::specgen::ir::EquivalentTo;
+using beman::specgen::ir::ForeignDeclaration;
 using beman::specgen::ir::ForeignNamespace;
 using beman::specgen::ir::FreeParagraph;
 using beman::specgen::ir::index_kind_from_name;
@@ -420,6 +421,14 @@ struct json_descriptor<ForeignNamespace> {
 };
 
 template <>
+struct json_descriptor<ForeignDeclaration> {
+    static constexpr auto members = std::tuple{
+        field("name", &ForeignDeclaration::name),
+        field("header", &ForeignDeclaration::header),
+    };
+};
+
+template <>
 struct json_descriptor<BodyUse> {
     static constexpr auto members = std::tuple{
         field("function", &BodyUse::function),
@@ -432,6 +441,7 @@ struct json_descriptor<Document> {
     static constexpr auto members = std::tuple{
         field("nodes", &Document::nodes),
         field("foreign", &Document::foreign_namespaces),
+        field("foreign_decls", &Document::foreign_declarations),
         field("body_uses", &Document::unextracted_uses),
     };
 };
