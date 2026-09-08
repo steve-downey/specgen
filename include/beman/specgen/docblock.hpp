@@ -60,11 +60,29 @@ struct Table2D {
     std::vector<Table2DRow> rows    = {};
 };
 
+// A draft flat two-column table (\libtab2): one row per entry, no row-heading
+// column. This is what an enumeration's meanings table needs (issue #74) --
+// \lib2dtab2 is a cross-product table (a row-heading column plus two data
+// columns) and has nothing narrower to offer.
+struct Table1DRow {
+    ProseParagraph cell1;
+    ProseParagraph cell2;
+};
+
+struct Table1D {
+    std::string             stable_name;
+    ProseParagraph          caption = {};
+    ProseParagraph          column1 = {};
+    ProseParagraph          column2 = {};
+    std::vector<Table1DRow> rows    = {};
+};
+
 struct Element {
     ir::ElementKind             kind       = ir::ElementKind::Effects;
     std::vector<ProseParagraph> paragraphs = {};
     std::vector<ProseParagraph> items      = {}; // authored \item entries, in source order
     std::optional<Table2D>      table      = {};
+    std::optional<Table1D>      flat_table = {};
     int                         line       = 0; // line of the tag
 };
 

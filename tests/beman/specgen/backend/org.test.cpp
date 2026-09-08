@@ -357,6 +357,31 @@ TEST_CASE("org - an authored two-dimensional table is a named native table") {
     CHECK(first_table < second_table);
 }
 
+TEST_CASE("org - an authored flat two-column table is a named native table") {
+    DescriptionElement remarks;
+    remarks.kind       = ElementKind::Remarks;
+    remarks.flat_table = Table1D{
+        .stable_name = "demo.errors.tab",
+        .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
+        .column1     = {TextInline{"Constant | ish"}},
+        .column2     = {TextInline{"Meaning"}},
+        .rows = {Table1DRow{.cell1 = {CodeInline{{"invalid_byte", {}}}}, .cell2 = {TextInline{"bad byte"}}},
+                 Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}}, .cell2 = {TextInline{"short read"}}}},
+    };
+    SpecItem item;
+    item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.find("/Remarks/:\n\n"
+                   "#+name: demo.errors.tab\n"
+                   "#+caption: ~whatwg_error~ meanings\n"
+                   "| Constant \\vert{} ish | Meaning |\n"
+                   "|-\n"
+                   "| ~invalid_byte~ | bad byte |\n"
+                   "| ~truncated_sequence~ | short read |\n") != std::string::npos);
+}
+
 // A derived element and its authored twin are one description, so the
 // label is emitted once -- the third backend to implement that fold.
 TEST_CASE("org - adjacent same-kind elements share one label") {

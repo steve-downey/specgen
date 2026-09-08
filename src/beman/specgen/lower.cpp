@@ -53,6 +53,19 @@ ir::DescriptionElement lower_element(const grammar::Element& element) {
                            std::ranges::to<std::vector>(),
         };
     }
+    if (element.flat_table) {
+        lowered.flat_table = ir::Table1D{
+            .stable_name = element.flat_table->stable_name,
+            .caption     = lower_paragraph(element.flat_table->caption),
+            .column1     = lower_paragraph(element.flat_table->column1),
+            .column2     = lower_paragraph(element.flat_table->column2),
+            .rows        = element.flat_table->rows | std::views::transform([](const grammar::Table1DRow& row) {
+                        return ir::Table1DRow{.cell1 = lower_paragraph(row.cell1),
+                                              .cell2 = lower_paragraph(row.cell2)};
+                           }) |
+                           std::ranges::to<std::vector>(),
+        };
+    }
     return lowered;
 }
 

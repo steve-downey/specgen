@@ -142,6 +142,25 @@ TEST_CASE("lower - authored two-dimensional tables become semantic IR") {
     CHECK(code_of(table->rows.front().cell2.at(1)) == "*rhs");
 }
 
+TEST_CASE("lower - authored flat two-column tables become semantic IR") {
+    auto out = lower_text("//! \\remarks\n"
+                          "//! \\libtab2[demo.errors.tab]{Enum class errors}\n"
+                          "//! \\column Constant\n"
+                          "//! \\column Meaning\n"
+                          "//! \\row `invalid_byte`\n"
+                          "//! \\cell the input holds an invalid `byte`.\n"
+                          "//! \\endlibtab2\n");
+    REQUIRE(out.descr.elements.size() == 1);
+    const auto& table = out.descr.elements.front().flat_table;
+    REQUIRE(table.has_value());
+    CHECK(table->stable_name == "demo.errors.tab");
+    CHECK(text_of(table->caption.front()) == "Enum class errors");
+    CHECK(text_of(table->column1.front()) == "Constant");
+    REQUIRE(table->rows.size() == 1);
+    CHECK(code_of(table->rows.front().cell1.front()) == "invalid_byte");
+    CHECK(code_of(table->rows.front().cell2.at(1)) == "byte");
+}
+
 TEST_CASE("lower - returns-equiv produces a Returns placeholder") {
     auto out = lower_text("//! \\returns-equiv\n");
     REQUIRE(out.descr.elements.size() == 1);

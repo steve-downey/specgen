@@ -594,6 +594,15 @@ std::vector<const ir::Paragraph*> table_paragraphs(const ir::Table2D& table) {
     return out;
 }
 
+std::vector<const ir::Paragraph*> table_paragraphs(const ir::Table1D& table) {
+    std::vector<const ir::Paragraph*> out{&table.caption, &table.column1, &table.column2};
+    out.append_range(table.rows | std::views::transform([](const ir::Table1DRow& row) {
+                         return std::array{&row.cell1, &row.cell2};
+                     }) |
+                     std::views::join);
+    return out;
+}
+
 bool paragraph_has_content(const ir::Paragraph& paragraph) {
     const auto has_non_whitespace = [](std::string_view text) {
         return std::ranges::any_of(text, [](char ch) { return ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r'; });
@@ -610,37 +619,71 @@ bool paragraph_has_content(const ir::Paragraph& paragraph) {
 }
 
 Diagnostics check_table_structure(const ir::DescriptionElement& element) {
-    if (!element.table)
-        return {};
+    Diagnostics out;
 
-    const ir::Table2D& table   = *element.table;
-    const std::string  context = std::string(ir::element_name(element.kind)) + "/table";
-    Diagnostics        out;
-    const auto         require = [&](bool condition, std::string message) {
-        if (!condition)
-            out.push_back({Severity::Error, context, std::move(message)});
-    };
+    if (element.table) {
+        const ir::Table2D& table   = *element.table;
+        const std::string  context = std::string(ir::element_name(element.kind)) + "/table";
+        const auto         require = [&](bool condition, std::string message) {
+            if (!condition)
+                out.push_back({Severity::Error, context, std::move(message)});
+        };
 
-    require(paragraph_has_content({ir::TextInline{table.stable_name}}), "table stable name is empty");
-    require(paragraph_has_content(table.caption), "table caption is empty");
-    require(paragraph_has_content(table.column1), "table first column header is empty");
-    require(paragraph_has_content(table.column2), "table second column header is empty");
-    require(!table.rows.empty(), "table requires at least one row");
-    out.append_range(foundation::mconcat_map(
-        table.rows | std::views::enumerate,
-        [&](const auto& entry) {
-            const auto& [index, row] = entry;
-            Diagnostics row_findings;
-            const auto  require_row = [&](bool condition, std::string message) {
-                if (!condition)
-                    row_findings.push_back({Severity::Error, context, std::move(message)});
-            };
-            require_row(paragraph_has_content(row.header), std::format("table row {} header is empty", index + 1));
-            require_row(paragraph_has_content(row.cell1), std::format("table row {} first cell is empty", index + 1));
-            require_row(paragraph_has_content(row.cell2), std::format("table row {} second cell is empty", index + 1));
-            return row_findings;
-        },
-        diagnostics_monoid));
+        require(paragraph_has_content({ir::TextInline{table.stable_name}}), "table stable name is empty");
+        require(paragraph_has_content(table.caption), "table caption is empty");
+        require(paragraph_has_content(table.column1), "table first column header is empty");
+        require(paragraph_has_content(table.column2), "table second column header is empty");
+        require(!table.rows.empty(), "table requires at least one row");
+        out.append_range(foundation::mconcat_map(
+            table.rows | std::views::enumerate,
+            [&](const auto& entry) {
+                const auto& [index, row] = entry;
+                Diagnostics row_findings;
+                const auto  require_row = [&](bool condition, std::string message) {
+                    if (!condition)
+                        row_findings.push_back({Severity::Error, context, std::move(message)});
+                };
+                require_row(paragraph_has_content(row.header), std::format("table row {} header is empty", index + 1));
+                require_row(paragraph_has_content(row.cell1),
+                            std::format("table row {} first cell is empty", index + 1));
+                require_row(paragraph_has_content(row.cell2),
+                            std::format("table row {} second cell is empty", index + 1));
+                return row_findings;
+            },
+            diagnostics_monoid));
+    }
+
+    if (element.flat_table) {
+        const ir::Table1D& table   = *element.flat_table;
+        const std::string  context = std::string(ir::element_name(element.kind)) + "/flat_table";
+        const auto         require = [&](bool condition, std::string message) {
+            if (!condition)
+                out.push_back({Severity::Error, context, std::move(message)});
+        };
+
+        require(paragraph_has_content({ir::TextInline{table.stable_name}}), "flat table stable name is empty");
+        require(paragraph_has_content(table.caption), "flat table caption is empty");
+        require(paragraph_has_content(table.column1), "flat table first column header is empty");
+        require(paragraph_has_content(table.column2), "flat table second column header is empty");
+        require(!table.rows.empty(), "flat table requires at least one row");
+        out.append_range(foundation::mconcat_map(
+            table.rows | std::views::enumerate,
+            [&](const auto& entry) {
+                const auto& [index, row] = entry;
+                Diagnostics row_findings;
+                const auto  require_row = [&](bool condition, std::string message) {
+                    if (!condition)
+                        row_findings.push_back({Severity::Error, context, std::move(message)});
+                };
+                require_row(paragraph_has_content(row.cell1),
+                            std::format("flat table row {} first cell is empty", index + 1));
+                require_row(paragraph_has_content(row.cell2),
+                            std::format("flat table row {} second cell is empty", index + 1));
+                return row_findings;
+            },
+            diagnostics_monoid));
+    }
+
     return out;
 }
 
@@ -662,6 +705,13 @@ Diagnostics check_element_spans(const ir::DescriptionElement& element) {
             std::move(out),
             foundation::mconcat_map(
                 table_paragraphs(*element.table),
+                [&](const ir::Paragraph* paragraph) { return check_paragraph_spans(context, *paragraph); },
+                diagnostics_monoid));
+    if (element.flat_table)
+        out = diagnostics_monoid.combine(
+            std::move(out),
+            foundation::mconcat_map(
+                table_paragraphs(*element.flat_table),
                 [&](const ir::Paragraph* paragraph) { return check_paragraph_spans(context, *paragraph); },
                 diagnostics_monoid));
     if (element.equivalent)
@@ -699,12 +749,23 @@ Diagnostics check_element_leakage(const ir::DescriptionElement& element, const N
                                   diagnostics_monoid)
                             : Diagnostics{};
 
+    Diagnostics flat_table = element.flat_table.has_value()
+                                 ? foundation::mconcat_map(
+                                       table_paragraphs(*element.flat_table),
+                                       [&](const ir::Paragraph* paragraph) {
+                                           return check_paragraph_leakage(context, *paragraph, visible);
+                                       },
+                                       diagnostics_monoid)
+                                 : Diagnostics{};
+
     Diagnostics equivalent = element.equivalent.has_value()
                                  ? check_leakage(context + "-equiv", element.equivalent->code, visible)
                                  : Diagnostics{};
 
     return diagnostics_monoid.combine(
-        diagnostics_monoid.combine(diagnostics_monoid.combine(std::move(prose), itemized), table), equivalent);
+        diagnostics_monoid.combine(
+            diagnostics_monoid.combine(diagnostics_monoid.combine(std::move(prose), itemized), table), flat_table),
+        equivalent);
 }
 
 // --- a helper named only by a body the tool never renders (design §9) --------
@@ -741,6 +802,12 @@ std::set<std::string> element_names(const ir::DescriptionElement& element) {
         names = names_monoid.combine(std::move(names),
                                      foundation::mconcat_map(
                                          table_paragraphs(*element.table),
+                                         [](const ir::Paragraph* paragraph) { return paragraph_names(*paragraph); },
+                                         names_monoid));
+    if (element.flat_table)
+        names = names_monoid.combine(std::move(names),
+                                     foundation::mconcat_map(
+                                         table_paragraphs(*element.flat_table),
                                          [](const ir::Paragraph* paragraph) { return paragraph_names(*paragraph); },
                                          names_monoid));
     if (element.equivalent)
@@ -906,6 +973,8 @@ std::vector<const ir::Paragraph*> element_paragraphs(const ir::DescriptionElemen
         out.append_range(element.itemize->items | std::views::transform(address_of));
     if (element.table)
         out.append_range(table_paragraphs(*element.table));
+    if (element.flat_table)
+        out.append_range(table_paragraphs(*element.flat_table));
     return out;
 }
 
@@ -1119,7 +1188,8 @@ std::string paragraph_text(const ir::Paragraph& paragraph) {
 // An element carrying itemized conditions or an "Equivalent to:" body is
 // saying more than that by construction.
 bool reads_as_nothing(const ir::DescriptionElement& element) {
-    if (element.itemize.has_value() || element.table.has_value() || element.equivalent.has_value())
+    if (element.itemize.has_value() || element.table.has_value() || element.flat_table.has_value() ||
+        element.equivalent.has_value())
         return false;
     const std::string joined = foundation::mconcat_map(
         element.paragraphs,
@@ -1178,7 +1248,8 @@ Diagnostics check_noexcept_throws(const ir::SpecItem& item) {
         [&subject](const ir::DescriptionElement& element) -> Diagnostics {
             if (element.kind != ir::ElementKind::Throws)
                 return {};
-            if (element.paragraphs.empty() && !element.itemize && !element.table && !element.equivalent)
+            if (element.paragraphs.empty() && !element.itemize && !element.table && !element.flat_table &&
+                !element.equivalent)
                 return {}; // says nothing at all; nothing to contradict
             const std::string context = std::string(ir::element_name(element.kind));
             if (reads_as_nothing(element))

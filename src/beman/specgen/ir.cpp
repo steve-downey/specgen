@@ -238,6 +238,8 @@ using beman::specgen::ir::span_kind_name;
 using beman::specgen::ir::SpecItem;
 using beman::specgen::ir::Synopsis;
 using beman::specgen::ir::SynopsisEntry;
+using beman::specgen::ir::Table1D;
+using beman::specgen::ir::Table1DRow;
 using beman::specgen::ir::Table2D;
 using beman::specgen::ir::Table2DRow;
 using beman::specgen::ir::TextInline;
@@ -293,12 +295,32 @@ struct json_descriptor<Table2D> {
 };
 
 template <>
+struct json_descriptor<Table1DRow> {
+    static constexpr auto members = std::tuple{
+        field("cell1", &Table1DRow::cell1),
+        field("cell2", &Table1DRow::cell2),
+    };
+};
+
+template <>
+struct json_descriptor<Table1D> {
+    static constexpr auto members = std::tuple{
+        field("stable", &Table1D::stable_name),
+        field("caption", &Table1D::caption),
+        field("column1", &Table1D::column1),
+        field("column2", &Table1D::column2),
+        field("rows", &Table1D::rows),
+    };
+};
+
+template <>
 struct json_descriptor<DescriptionElement> {
     static constexpr auto members = std::tuple{
         enum_field("kind", &DescriptionElement::kind, element_name, element_from_name, "element kind"),
         field("paragraphs", &DescriptionElement::paragraphs),
         optional_projected_field("itemize", &DescriptionElement::itemize, &Itemize::items),
         optional_field("table", &DescriptionElement::table),
+        optional_field("flat_table", &DescriptionElement::flat_table),
         optional_projected_field("equivalent", &DescriptionElement::equivalent, &EquivalentTo::code),
         field("derived", &DescriptionElement::derived),
         field("conjuncts", &DescriptionElement::conjuncts),

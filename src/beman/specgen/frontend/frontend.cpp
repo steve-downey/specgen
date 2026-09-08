@@ -1763,6 +1763,18 @@ void rewrite_prose_expos(beman::specgen::ir::ItemDescr& descr, const std::map<st
                                 }) |
                                 std::ranges::to<std::vector<ir::Table2DRow>>();
         }
+        if (el.flat_table) {
+            el.flat_table->caption = fix_paragraph(std::move(el.flat_table->caption));
+            el.flat_table->column1 = fix_paragraph(std::move(el.flat_table->column1));
+            el.flat_table->column2 = fix_paragraph(std::move(el.flat_table->column2));
+            el.flat_table->rows    = std::move(el.flat_table->rows) | std::views::as_rvalue |
+                                     std::views::transform([&](ir::Table1DRow row) {
+                                      row.cell1 = fix_paragraph(std::move(row.cell1));
+                                      row.cell2 = fix_paragraph(std::move(row.cell2));
+                                      return row;
+                                     }) |
+                                     std::ranges::to<std::vector<ir::Table1DRow>>();
+        }
         return el;
     };
     descr.elements = std::move(descr.elements) | std::views::as_rvalue | std::views::transform(fix_element) |
