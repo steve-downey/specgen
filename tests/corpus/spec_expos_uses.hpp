@@ -95,6 +95,20 @@ int gauge<U, T>::level() const
     return 0;
 }
 
+// The same concept and variable with their qualifier written in full, as a
+// declaration outside the namespace has to write it. `demo::detail::` is one
+// nested-name-specifier whose head is droppable and whose whole is not:
+// stripping only the head leaves `detail::`, a spelling in no source, and that
+// nested edit then suppresses the deletion the exposition-only use asked for.
+// The rendered name is the exposid alone, exactly as the unqualified uses
+// above.
+//! \returns `true`.
+template <class T>
+    requires demo::detail::enabled_for<T>
+bool fully_qualified_use() {
+    return demo::detail::exposed_limit > 0;
+}
+
 } // namespace demo
 
 #endif // BEMAN_SPECGEN_CORPUS_SPEC_EXPOS_USES_HPP
