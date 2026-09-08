@@ -28,6 +28,7 @@ namespace {
 
 const std::string kCorpusHeader            = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_constraints.hpp";
 const std::string kImportedQualifierHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_imported_qualifier.hpp";
+const std::string kForeignIncludeHeader    = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_foreign_include.hpp";
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
@@ -72,6 +73,28 @@ TEST_CASE("build_document - a qualifier naming an imported standard declaration 
                                [](const ir::ForeignNamespace& ns) { return ns.name == "imported_detail"; }));
     CHECK(std::ranges::any_of(built->document.foreign_namespaces,
                               [](const ir::ForeignNamespace& ns) { return ns.name == "detail"; }));
+}
+
+// The bare-name complement of the qualifier check (issue #84): `eval` and
+// `probe_t` are used unqualified-of-anything-but-their-own-namespace, so no
+// written qualifier ever names them foreign, but both resolve to a
+// declaration in the included `spec_foreign_detail.hpp` -- and `steppable`,
+// declared right beside them, carries `\expos` there and must not join the
+// list its uses render under an `\exposid` sentinel instead of its name.
+TEST_CASE("build_document - names resolving outside the run, with no qualifier to catch them, are recorded") {
+    const auto built = frontend::build_document(kForeignIncludeHeader);
+    REQUIRE(built.has_value());
+    CHECK(built->diagnostics.empty());
+
+    const auto& found   = built->document.foreign_declarations;
+    const auto  names_a = [&](const char* name) {
+        return std::ranges::any_of(found, [&](const ir::ForeignDeclaration& d) { return d.name == name; });
+    };
+    CHECK(names_a("eval"));
+    CHECK(names_a("probe_t"));
+    CHECK(std::ranges::none_of(found, [](const ir::ForeignDeclaration& d) { return d.name == "steppable"; }));
+    CHECK(std::ranges::all_of(found,
+                              [](const ir::ForeignDeclaration& d) { return d.header == "spec_foreign_detail.hpp"; }));
 }
 
 TEST_CASE("build_document - spec_constraints.hpp derives Constraints from the trailing requires-clause") {

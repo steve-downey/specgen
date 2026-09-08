@@ -652,11 +652,13 @@ deliberate.
   [visitation-rules](decisions/visitation-rules.md)).
 - A `Synopsis` carries a **coverage roster**: its class's name plus one `SynopsisEntry`
   (disposition + `MemberKind`) per declaration. The roster is the validator's input for the
-  coverage invariant and the hidden-name checks (§9). The document additionally carries two
+  coverage invariant and the hidden-name checks (§9). The document additionally carries three
   validator channels the front end alone can populate: `foreign_namespaces` (the
   implementation namespaces whose qualifiers survive the mapping, wherever their
   declarations live — only a `std`-rooted qualifier like `std::ranges::` is exempt, being
-  the standard's own vocabulary) and `unextracted_uses` (`BodyUse`
+  the standard's own vocabulary), `foreign_declarations` (`ForeignDeclaration` records naming
+  a *bare* reference whose declaration this run never documents — the unqualified complement
+  of `foreign_namespaces`, issue #84), and `unextracted_uses` (`BodyUse`
   records naming the members reached by bodies that never become wording).
 - Itemdecl index entries are optional metadata with the draft's eight editorial
   kinds: global, constructor, destructor, member, memberx, memberexpos, zombie,
@@ -788,7 +790,7 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    itself names none (issue #45).
 2. **Leakage checker**: every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
-   body. Three clauses at two severities:
+   body. Four clauses at two severities:
    - **Error** if the leak lands in wording text: an itemdecl, an *Equivalent to:* body, or
      backticked prose naming a member the reader cannot see (e.g. an extracted body calling a
      private `hard_reset()`).
@@ -807,6 +809,19 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      all — its code is several classes' concatenated, and a bare name there cannot be
      attributed to one of them. The qualifier half stays document-wide, a namespace being
      no class's member.
+   - **Error** for a *bare* name whose reference-resolved declaration this run never
+     documents (issue #84; `ir::ForeignDeclaration`): the unqualified complement of the
+     qualifier clause above, for a helper sharing the header's own namespace so no written
+     qualifier ever names it foreign — declared in an included, non-system header, one
+     `#include` transitively reaches within this one specgen invocation (no cross-invocation
+     reach: two headers generated in separate runs are still two runs). Resolved by the front
+     end walking every reference in the main file the same way the qualifier clause's
+     `ForeignQualifierCollector` does, classified by where the referenced declaration actually
+     lives — main file or a `.syn`-gathered follow (§3.2, not foreign), a system header (the
+     standard's own vocabulary, not foreign), or elsewhere (foreign) — never by guessing from
+     rendered text alone the way `identifier_runs` does for the other clauses. `\expos`
+     already reaches such a header (issue #36), so it is the fixit named first: unlike the
+     qualifier clause, there usually *is* a declaration to mark.
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any
@@ -933,7 +948,8 @@ The build assembles the tool from these components, each following the shared CM
   `ElementKind`s in canonical order, `DescriptionElement` + `EquivalentTo`,
   `ItemDecl`/`ItemDescr`/`SpecItem`, `IndexEntry`, `Section`/`Synopsis`/`FreeParagraph`/
   `Document`, the coverage roster (`Disposition`, `MemberKind`, `SynopsisEntry`), the
-  validator channels (`foreign_namespaces`, `unextracted_uses`), and `canonicalize()`.
+  validator channels (`foreign_namespaces`, `foreign_declarations`, `unextracted_uses`), and
+  `canonicalize()`.
 - **IR serialization** — same files. JSON round trip: `emit_json` (returns a `std::string`)
   and `parse_json_document`/`_item`/`_code`; one schema for both directions.
 - **Docblock grammar** — `include/beman/specgen/docblock.hpp`,

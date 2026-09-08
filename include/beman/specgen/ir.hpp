@@ -292,6 +292,20 @@ struct ForeignNamespace {
     std::string qualified; // what it resolved to: `demo::detail`
 };
 
+// A bare (unqualified) name whose reference-resolved declaration this run
+// never documents (issue #84): declared neither in the main file nor in a
+// system header, so nothing in the rendered output declares it and no
+// `\expos` sentinel stands in for it either. `ForeignNamespace`'s qualifier
+// is the same idea for a *written* namespace prefix; this is the version for
+// a name with no qualifier at all -- a helper sharing the header's own
+// namespace, declared in an included implementation header, used bare
+// because it needs no prefix to be found. A reader of the wording meets it
+// with no declaration, no exposition-only entry, and no cross-reference.
+struct ForeignDeclaration {
+    std::string name;   // as used: `probe_witness`
+    std::string header; // the header that actually declares it
+};
+
 // A class member named by the body of a documented function whose body the
 // tool never renders (design §9): one with no `\effects-equiv` /
 // `\returns-equiv` marker, so nothing it does reaches the wording.
@@ -321,6 +335,9 @@ struct Document {
     // written: the check that reads it reports each *occurrence* in rendered
     // output, and locating those is a text match the validator already does.
     std::vector<ForeignNamespace> foreign_namespaces = {};
+    // The same validator-only side channel one more time, for the bare-name
+    // case `foreign_namespaces` cannot express (see `ForeignDeclaration`).
+    std::vector<ForeignDeclaration> foreign_declarations = {};
     // The same validator-only side channel one more time, and
     // document-level for the same reason `foreign_namespaces` is — no node
     // owns a body the tool did not render, so there is nowhere else to hang

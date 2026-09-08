@@ -32,8 +32,13 @@ class gadget {
 
 // \rSec3[gadget.observers]{Observers}
 
+//! \seebelow
 //! \effects None.
 //! \returns `0`.
+//! \remarks The return type is a trait type this run does not itself
+//! document (issue #84): masking it here, rather than naming it in wording
+//! this run cannot back with a declaration, is the same trade an
+//! implementation-defined return type makes.
 widget_traits::value_type demo::gadget::value() const { return 0; }
 
 } // namespace demo
