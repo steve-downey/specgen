@@ -276,7 +276,10 @@ back to name match within the class's fragments only):
 - Expos renaming: referents in the expos set → an ExposId sentinel, rendered as
   `\exposidnc{kebab-name}` in code contexts and `\exposid{kebab-name}` in prose.
   Namespace-scope concepts, variable templates, ordinary variables, enumerations, aliases,
-  and alias templates can enter that set; their resolved uses — expression and type uses alike — are
+  and alias templates can enter that set, and so can a **nested class and its own members**
+  (issue #80) -- a view's iterator is one, private and named by every signature its class
+  publishes; with bare `\seebelow` the nested class renders as a declaration rather than a
+  definition, which is [range.transform.view]'s shape; their resolved uses — expression and type uses alike — are
   rewritten inside extracted bodies as well as synopses, itemdecls, and derived conjuncts. `\expos` also applies to **member
   function templates**: the helper survives private-member filtering, its declared name is
   rewritten as an exposid in the class synopsis and its routed itemdecl, and extracted bodies
