@@ -320,6 +320,7 @@ bool names_a_visible_entity(ir::Disposition disposition) {
     switch (disposition) {
     case ir::Disposition::Described:
     case ir::Disposition::Routed:
+    case ir::Disposition::Declared:  // a public data member, in the synopsis
     case ir::Disposition::Defaulted: // in the synopsis, just without wording
     case ir::Disposition::Expos:     // §9's own escape hatch
         return true;

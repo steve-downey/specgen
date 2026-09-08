@@ -411,7 +411,9 @@ Run `render --validate` in the normal authoring loop. Validation checks:
 - IR span and authored table structure.
 - Coverage: each declaration must be described, exposition-only, defaulted or
   deleted, explicitly omitted, or represented by a merged declaration; routed
-  wording must name a section that exists.
+  wording must name a section that exists. A *public data member* needs none of
+  those: its declaration is its specification, the way the draft writes
+  `from_chars_result`, and a class's own description may name it.
 - Leakage: wording, item declarations, equivalent-to bodies, tables, and
   synopses must not name invisible members or surviving implementation
   namespace qualifiers.

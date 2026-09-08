@@ -943,6 +943,21 @@ specgen_add_golden(
 # `expected.json` (an unlinked out-of-line definition renders with its
 # `gadget::` qualification and an `undocumented` roster entry, rather than
 # the clean in-class itemdecl `expected.json` pins), not merely absent.
+# A public data member is specification (issue #82): its declaration is what
+# specifies it, and its class's own description may name it.  A private one is
+# exposition, and `\expos` is what says so.
+specgen_add_golden(
+    public_data_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_public_data.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/public_data"
+)
+specgen_add_golden(
+    public_data
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/public_data/expected.json"
+)
+
 # `\expos` on a nested class (issue #80): a view's iterator, which is private
 # and named by every signature the class publishes.  Marked, it renders under
 # its exposition name; marked bare `\seebelow` as well, as a declaration --

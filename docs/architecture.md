@@ -760,8 +760,10 @@ rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
 
 1. **Coverage invariant** (Error, either direction): every class-body declaration is exactly
-   one of: merged twin, defaulted/deleted, `\omit`ted, or paired with a markup block; every
-   markup block resolves to a declaration; and every `\ref` group a header uses has a matching
+   one of: merged twin, defaulted/deleted, `\omit`ted, a *public data member* — whose
+   declaration is its specification, so there is no itemdescr to ask for
+   (issue #82) — or paired with a markup block; every markup block resolves to a
+   declaration; and every `\ref` group a header uses has a matching
    `\rSec`. The check reads the synopsis roster (§7), and a gathered header synopsis (§3.4)
    is checked like any other: it carries the folded-in classes' rosters, each entry naming
    its declaring class, so a finding says which class it is about even though the node

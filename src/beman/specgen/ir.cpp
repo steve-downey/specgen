@@ -37,12 +37,13 @@ constexpr std::array<std::pair<ElementKind, std::string_view>, 13> kElementNames
 // Table-driven like kElementNames rather than a switch pair, because
 // this enum's names are part of the JSON schema a hand-written validate-mode
 // golden spells out, and one table cannot drift the way two switches can.
-constexpr std::array<std::pair<Disposition, std::string_view>, 8> kDispositionNames{{
+constexpr std::array<std::pair<Disposition, std::string_view>, 9> kDispositionNames{{
     {Disposition::Described, "described"},
     {Disposition::Routed, "routed"},
     {Disposition::Merged, "merged"},
     {Disposition::Omitted, "omitted"},
     {Disposition::Defaulted, "defaulted"},
+    {Disposition::Declared, "declared"},
     {Disposition::Expos, "expos"},
     {Disposition::Private, "private"},
     {Disposition::Undocumented, "undocumented"},
