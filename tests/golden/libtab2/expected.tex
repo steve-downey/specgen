@@ -1,0 +1,21 @@
+\rSec3[demo.errors]{Errors}
+
+\indexlibraryglobal{whatwg_error}%
+\begin{itemdecl}
+enum class whatwg_error { invalid_byte, truncated_sequence };
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The enumerators have the meanings in the following table.
+\begin{libtab2}{Enum class \tcode{whatwg_error}}{demo.errors.tab}{lp{4.5in}}{Constant}{Meaning}
+
+\tcode{invalid_byte} &
+the input holds a byte the encoding does not allow in that position. \\
+\rowsep
+
+\tcode{truncated_sequence} &
+the input ends in the middle of a sequence. \\
+\end{libtab2}
+\end{itemdescr}

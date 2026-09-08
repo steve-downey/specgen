@@ -120,6 +120,26 @@ std::string render_table(const ir::Table2D& table) {
     return out + "\\end{lib2dtab2}\n";
 }
 
+// \libtab2's flat two-column table (issue #74): the draft's own
+// [fs.enum.file.type]-shaped tables (`\begin{floattable}{...}{...}{lp{4.5in}}`
+// with plain `\lhdr`/`\rhdr` headers) are exactly what the real `\libtab2`
+// macro wraps, at the same 4.5in data-column width `LibEffTab` uses.
+std::string render_flat_table(const ir::Table1D& table) {
+    std::string       out = std::format("\\begin{{libtab2}}{{{}}}{{{}}}{{lp{{4.5in}}}}{{{}}}{{{}}}\n",
+                                        render_table_field(table.caption),
+                                        table.stable_name,
+                                        render_table_field(table.column1),
+                                        render_table_field(table.column2));
+    const std::string rows =
+        table.rows | std::views::transform([](const ir::Table1DRow& row) {
+            return std::format("{} &\n{} \\\\\n", render_table_field(row.cell1), render_table_field(row.cell2));
+        }) |
+        std::views::join_with(std::string_view{"\\rowsep\n\n"}) | std::ranges::to<std::string>();
+    if (!rows.empty())
+        out += '\n' + rows;
+    return out + "\\end{libtab2}\n";
+}
+
 // --- items --------------------------------------------------------------
 
 std::string render_index(const ir::IndexEntry& entry) {
@@ -154,7 +174,8 @@ std::string render_index(const ir::IndexEntry& entry) {
 // The element macro name (\constraints, \mandates, ...) is ElementKind's own
 // spelling; it appears exactly once, on whichever block is emitted first.
 std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
-                                        const std::vector<ir::Table2D>& tables) {
+                                        const std::vector<ir::Table2D>& tables,
+                                        const std::vector<ir::Table1D>& flat_tables) {
     std::vector<std::string> blocks;
     const std::string        macro = "\\" + std::string(ir::element_name(element.kind)) + '\n';
 
@@ -193,6 +214,15 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
             blocks.push_back("\\pnum\n" + macro + rendered_tables);
         else
             blocks.back() += rendered_tables;
+    }
+
+    const std::string rendered_flat_tables =
+        flat_tables | std::views::transform(render_flat_table) | std::views::join | std::ranges::to<std::string>();
+    if (!rendered_flat_tables.empty()) {
+        if (blocks.empty())
+            blocks.push_back("\\pnum\n" + macro + rendered_flat_tables);
+        else
+            blocks.back() += rendered_flat_tables;
     }
 
     if (element.equivalent) {
@@ -245,7 +275,11 @@ std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
         group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
         std::views::transform([](const auto& e) -> const ir::Table2D& { return *e.table; }) |
         std::ranges::to<std::vector>();
-    return element_blocks(merge_element_group(group), tables);
+    const std::vector<ir::Table1D> flat_tables =
+        group | std::views::filter([](const auto& e) { return e.flat_table.has_value(); }) |
+        std::views::transform([](const auto& e) -> const ir::Table1D& { return *e.flat_table; }) |
+        std::ranges::to<std::vector>();
+    return element_blocks(merge_element_group(group), tables, flat_tables);
 }
 
 std::string render_item(const ir::SpecItem& item) {

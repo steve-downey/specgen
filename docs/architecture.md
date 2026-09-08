@@ -374,6 +374,22 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   element, and backend same-kind folds preserve every table if diagnostic or
   hand-authored IR nevertheless contains more than one. Table prose participates in expos
   rewriting, leakage, drift, and *Throws:* validation like every other authored paragraph.
+- `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
+  current element (issue #74) -- the shape [fs.enum.file.type] and its
+  neighbours use for an enumeration's meanings, one row per enumerator, with
+  no row-heading column. `\lib2dtab2` is a cross-product table (a row-heading
+  column plus two data columns) and cannot represent this without a wasted
+  third column or a row heading pressed into service as the constant.
+  `\libtab2` shares `\column`/`\row`/`\cell` with `\lib2dtab2`: exactly two
+  `\column` entries precede one or more `\row` entries, but each row has
+  exactly *one* `\cell` entry (the `\row` tag's own trailing text is the
+  row's first column) before `\endlibtab2`. In every other respect --
+  terminal within its element, one table of a given kind per element kind,
+  duplicate rows joining the existing table, expos/leakage/drift/*Throws:*
+  participation -- it follows `\lib2dtab2`'s rules exactly; the two table
+  kinds do not count against each other's "one table per element kind" limit.
+  Semantic IR keeps a separate optional flat table alongside the
+  two-dimensional one, so an element can in principle carry both.
 
 All three backends render authored itemizations, prose references, and tables.
 
@@ -605,7 +621,9 @@ masking rules (`\impdef`, bare `\seebelow`) and group with `\also`. `\expos` on 
 candidate kinds still takes the standalone-synopsis path above instead. An enumeration is
 the one of them whose *definition* is what the wording shows — scoped or not, enum-base or
 none — so its itemdecl is the enumerator list and its description says what the enumerators
-mean, the shape [fs.enum.file.type] writes. It is an exposition candidate like the others:
+mean, in a `\remarks` element carrying a `\libtab2` meanings table (§4.1), the shape
+[fs.enum.file.type] writes (issue #74; a short authored `\item` list remains available and
+renders equivalently). It is an exposition candidate like the others:
 marked `\expos` it renders as a standalone exposition-only synopsis and its uses — its type,
 and a qualified enumerator — take the exposid name (§3.5's TagTypeLoc hook). It is the one
 kind bare `\seebelow` has nothing to write on, so the marker is an Error there rather than

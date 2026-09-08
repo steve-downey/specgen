@@ -578,6 +578,34 @@ TEST_CASE("validate - every two-dimensional table field is a leakage site") {
     CHECK(std::ranges::all_of(diags, [](const Diagnostic& diag) { return diag.context == "widget.effects/effects"; }));
 }
 
+TEST_CASE("validate - every flat two-column table field is a leakage site") {
+    ir::DescriptionElement remarks;
+    remarks.kind       = ir::ElementKind::Remarks;
+    remarks.flat_table = ir::Table1D{
+        .stable_name = "widget.remarks",
+        .caption     = {ir::CodeInline{{"caption_hidden", {}}}},
+        .column1     = {ir::CodeInline{{"column_hidden", {}}}},
+        .column2     = {ir::TextInline{"visible"}},
+        .rows = {{.cell1 = {ir::CodeInline{{"cell1_hidden", {}}}}, .cell2 = {ir::CodeInline{{"cell2_hidden", {}}}}}},
+    };
+
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    ir::Document doc;
+    doc.nodes.push_back(synopsis_with("widget",
+                                      {{"caption_hidden", ir::Disposition::Private, ""},
+                                       {"column_hidden", ir::Disposition::Private, ""},
+                                       {"cell1_hidden", ir::Disposition::Private, ""},
+                                       {"cell2_hidden", ir::Disposition::Private, ""}}));
+    doc.nodes.push_back(ir::Section{"widget.remarks", "Remarks", {ir::Node{std::move(item)}}});
+
+    const Diagnostics diags = validate(doc);
+    REQUIRE(diags.size() == 4);
+    CHECK(std::ranges::all_of(diags, [](const Diagnostic& diag) { return diag.context == "widget.remarks/remarks"; }));
+}
+
 TEST_CASE("validate - spans are checked in every description CodeText") {
     const auto malformed_inline = [] {
         return ir::CodeInline{ir::CodeText{"x", {{0, 2, ir::SpanKind::ExposId, "x"}}}};
@@ -634,6 +662,33 @@ TEST_CASE("validate - malformed tables remain invalid after a JSON round trip") 
     const Diagnostics missing_row = validate(ir::Node{*reparsed});
     REQUIRE(missing_row.size() == 5);
     CHECK(missing_row.back().message == "table requires at least one row");
+}
+
+TEST_CASE("validate - malformed flat tables remain invalid after a JSON round trip") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    ir::DescriptionElement remarks;
+    remarks.kind       = ir::ElementKind::Remarks;
+    remarks.flat_table = ir::Table1D{.rows = {ir::Table1DRow{}}};
+    item.descr.elements.push_back(std::move(remarks));
+
+    const auto parsed = ir::parse_item(ir::emit_json(item));
+    REQUIRE(parsed.has_value());
+    const Diagnostics empty_fields = validate(ir::Node{*parsed});
+    REQUIRE(empty_fields.size() == 6);
+    CHECK(std::ranges::all_of(empty_fields, [](const Diagnostic& diag) {
+        return diag.context == "remarks/flat_table" && diag.severity == Severity::Error;
+    }));
+    CHECK(empty_fields.at(4).message == "flat table row 1 first cell is empty");
+    CHECK(empty_fields.at(5).message == "flat table row 1 second cell is empty");
+
+    ir::SpecItem no_rows = *parsed;
+    no_rows.descr.elements.front().flat_table->rows.clear();
+    const auto reparsed = ir::parse_item(ir::emit_json(no_rows));
+    REQUIRE(reparsed.has_value());
+    const Diagnostics missing_row = validate(ir::Node{*reparsed});
+    REQUIRE(missing_row.size() == 5);
+    CHECK(missing_row.back().message == "flat table requires at least one row");
 }
 
 TEST_CASE("validate - an itemdecl and a free paragraph are leakage sites too") {
@@ -921,6 +976,27 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
         .rows        = {{.header = {ir::TextInline{"T"}},
                          .cell1  = authored_paragraph("copyable<T>", "true"),
                          .cell2  = {ir::TextInline{"otherwise"}}}},
+    };
+
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f(T);", {}});
+    item.descr.elements = {authored};
+
+    const Diagnostics diags = validate(ir::Node{item});
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().message.find("duplicates") != std::string::npos);
+}
+
+TEST_CASE("validate - drift comparison reads authored flat table cells") {
+    ir::DescriptionElement authored;
+    authored.kind       = ir::ElementKind::Constraints;
+    authored.conjuncts  = {conjunct_paragraph("copyable<T>", "true")};
+    authored.flat_table = ir::Table1D{
+        .stable_name = "widget.constraints",
+        .caption     = {ir::TextInline{"Conditions"}},
+        .column1     = {ir::TextInline{"Constant"}},
+        .column2     = {ir::TextInline{"Meaning"}},
+        .rows        = {{.cell1 = {ir::TextInline{"T"}}, .cell2 = authored_paragraph("copyable<T>", "true")}},
     };
 
     ir::SpecItem item;

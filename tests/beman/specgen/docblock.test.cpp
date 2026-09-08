@@ -327,6 +327,106 @@ TEST_CASE("docblock - malformed two-dimensional table structure is diagnosed") {
     CHECK(has_diag(duplicate, Severity::Error, "only one \\lib2dtab2"));
 }
 
+TEST_CASE("docblock - an authored flat two-column table is terminal element content") {
+    auto r = parse_docblock("//! \\remarks The enumerators have the meanings in the table.\n"
+                            "//! \\libtab2[demo.errors.tab]{Enum class `whatwg_error`}\n"
+                            "//! \\column Constant\n"
+                            "//! \\column Meaning\n"
+                            "//! \\row `invalid_byte`\n"
+                            "//! \\cell the input holds a byte the encoding does not allow,\n"
+                            "//! in that position.\n"
+                            "//! \\row `truncated_sequence`\n"
+                            "//! \\cell the input ends in the middle of a sequence.\n"
+                            "//! \\endlibtab2\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const auto& table = r.block.elements.front().flat_table;
+    REQUIRE(table.has_value());
+    CHECK(table->stable_name == "demo.errors.tab");
+    CHECK(std::get<InlineText>(table->column1.front()).text == "Constant");
+    CHECK(std::get<InlineText>(table->column2.front()).text == "Meaning");
+    REQUIRE(table->rows.size() == 2);
+    CHECK(std::get<InlineCode>(table->rows.front().cell1.front()).code == "invalid_byte");
+    CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text ==
+          "the input holds a byte the encoding does not allow, in that position.");
+    CHECK(std::get<InlineCode>(table->rows.back().cell1.front()).code == "truncated_sequence");
+}
+
+TEST_CASE("docblock - malformed flat two-column table structure is diagnosed") {
+    const auto orphan = parse_docblock("//! \\libtab2[x]{caption}\n//! \\endlibtab2\n");
+    CHECK(!orphan.ok());
+    CHECK(has_diag(orphan, Severity::Error, "requires a preceding element"));
+
+    const auto nested = parse_docblock("//! \\remarks\n"
+                                       "//! \\libtab2[x]{caption}\n"
+                                       "//! \\libtab2[y]{nested}\n"
+                                       "//! \\row row\n"
+                                       "//! \\endlibtab2\n");
+    CHECK(!nested.ok());
+    CHECK(has_diag(nested, Severity::Error, "nested"));
+    CHECK(has_diag(nested, Severity::Error, "two preceding"));
+    CHECK(has_diag(nested, Severity::Error, "exactly two \\column"));
+    CHECK(has_diag(nested, Severity::Error, "exactly one \\cell"));
+
+    const auto missing_end = parse_docblock("//! \\remarks\n"
+                                            "//! \\libtab2[x]{caption}\n"
+                                            "//! \\column one\n"
+                                            "//! \\column two\n"
+                                            "//! \\row row\n"
+                                            "//! \\cell one\n");
+    CHECK(!missing_end.ok());
+    CHECK(has_diag(missing_end, Severity::Error, "missing \\endlibtab2"));
+
+    const auto too_many_cells = parse_docblock("//! \\remarks\n"
+                                               "//! \\libtab2[x]{caption}\n"
+                                               "//! \\column one\n"
+                                               "//! \\column two\n"
+                                               "//! \\row row\n"
+                                               "//! \\cell one\n"
+                                               "//! \\cell two\n"
+                                               "//! \\endlibtab2\n");
+    CHECK(!too_many_cells.ok());
+    CHECK(has_diag(too_many_cells, Severity::Error, "exactly one \\cell"));
+
+    const auto trailing = parse_docblock("//! \\remarks\n"
+                                         "//! \\libtab2[x]{caption}\n"
+                                         "//! \\column one\n"
+                                         "//! \\column two\n"
+                                         "//! \\row row\n"
+                                         "//! \\cell one\n"
+                                         "//! \\endlibtab2\n"
+                                         "//! more prose\n");
+    CHECK(!trailing.ok());
+    CHECK(has_diag(trailing, Severity::Error, "prose after \\libtab2"));
+
+    const auto duplicate = parse_docblock("//! \\remarks\n"
+                                          "//! \\libtab2[x]{first}\n"
+                                          "//! \\column one\n//! \\column two\n"
+                                          "//! \\row row\n//! \\cell one\n"
+                                          "//! \\endlibtab2\n"
+                                          "//! \\remarks\n"
+                                          "//! \\libtab2[y]{second}\n"
+                                          "//! \\column one\n//! \\column two\n"
+                                          "//! \\row row\n//! \\cell one\n"
+                                          "//! \\endlibtab2\n");
+    CHECK(!duplicate.ok());
+    CHECK(has_diag(duplicate, Severity::Error, "only one \\libtab2"));
+
+    // The two table kinds are independent constructs: \lib2dtab2 and \libtab2
+    // do not collide with each other's "one table per element kind" check.
+    const auto mixed = parse_docblock("//! \\remarks\n"
+                                      "//! \\lib2dtab2[x]{2d}\n"
+                                      "//! \\column one\n//! \\column two\n"
+                                      "//! \\row row\n//! \\cell one\n//! \\cell two\n"
+                                      "//! \\endlib2dtab2\n"
+                                      "//! \\remarks\n"
+                                      "//! \\libtab2[y]{flat}\n"
+                                      "//! \\column one\n//! \\column two\n"
+                                      "//! \\row row\n//! \\cell one\n"
+                                      "//! \\endlibtab2\n");
+    CHECK(mixed.ok());
+}
+
 TEST_CASE("docblock - duplicate element warns but keeps both") {
     auto r = parse_docblock("//! \\remarks One.\n"
                             "//! \\remarks Two.\n");

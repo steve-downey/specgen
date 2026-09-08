@@ -146,6 +146,35 @@ TEST_CASE("ir - two-dimensional tables round-trip through JSON") {
     CHECK(emit_json(*parsed) == json);
 }
 
+TEST_CASE("ir - flat two-column tables round-trip through JSON") {
+    SpecItem item;
+    item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
+
+    DescriptionElement remarks;
+    remarks.kind       = ElementKind::Remarks;
+    remarks.flat_table = Table1D{
+        .stable_name = "demo.errors.tab",
+        .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
+        .column1     = {TextInline{"Constant"}},
+        .column2     = {TextInline{"Meaning"}},
+        .rows        = {{.cell1 = {CodeInline{{"invalid_byte", {}}}},
+                         .cell2 = {TextInline{"the input holds an invalid byte"}}}},
+    };
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string json = emit_json(item);
+    CHECK(json.find("\"flat_table\"") != std::string::npos);
+    CHECK(json.find("\"stable\":\"demo.errors.tab\"") != std::string::npos);
+    const auto parsed = parse_item(json);
+    REQUIRE(parsed.has_value());
+    const auto& table = parsed->descr.elements.front().flat_table;
+    REQUIRE(table.has_value());
+    CHECK(table->stable_name == "demo.errors.tab");
+    REQUIRE(table->rows.size() == 1);
+    CHECK(std::get<CodeInline>(table->rows.front().cell1.front()).code.text == "invalid_byte");
+    CHECK(emit_json(*parsed) == json);
+}
+
 TEST_CASE("ir - document structure emission") {
     Document doc;
     Section  sec;

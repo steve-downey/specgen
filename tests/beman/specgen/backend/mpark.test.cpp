@@ -313,6 +313,30 @@ TEST_CASE("mpark - an authored two-dimensional table is a native pipe table") {
     CHECK(first_table < second_table);
 }
 
+TEST_CASE("mpark - an authored flat two-column table is a native pipe table") {
+    DescriptionElement remarks;
+    remarks.kind       = ElementKind::Remarks;
+    remarks.flat_table = Table1D{
+        .stable_name = "demo.errors.tab",
+        .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
+        .column1     = {TextInline{"Constant | ish"}},
+        .column2     = {TextInline{"Meaning"}},
+        .rows = {Table1DRow{.cell1 = {CodeInline{{"invalid_byte", {}}}}, .cell2 = {TextInline{"bad byte"}}},
+                 Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}}, .cell2 = {TextInline{"short read"}}}},
+    };
+    SpecItem item;
+    item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.find("[#]{.pnum} *Remarks*:\n\n"
+                   "| Constant \\| ish | Meaning |\n"
+                   "|---|---|\n"
+                   "| `invalid_byte` | bad byte |\n"
+                   "| `truncated_sequence` | short read |\n"
+                   ": [`whatwg_error` meanings]{#demo.errors.tab}\n") != std::string::npos);
+}
+
 // An authored element and its derived twin are one description, so the
 // label is emitted once for the run — the same fold latex.cpp performs.
 TEST_CASE("mpark - adjacent same-kind elements share one label") {

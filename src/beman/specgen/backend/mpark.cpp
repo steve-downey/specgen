@@ -163,6 +163,18 @@ std::string render_table(const ir::Table2D& table) {
     return out + std::format(": [{}]{{#{}}}\n", render_paragraph(table.caption), table.stable_name);
 }
 
+// \libtab2's flat two-column table (issue #74): a plain pandoc pipe table,
+// column for column, with no row-heading column to spare.
+std::string render_flat_table(const ir::Table1D& table) {
+    std::string out =
+        std::format("| {} | {} |\n|---|---|\n", render_table_cell(table.column1), render_table_cell(table.column2));
+    out += table.rows | std::views::transform([](const ir::Table1DRow& row) {
+               return std::format("| {} | {} |\n", render_table_cell(row.cell1), render_table_cell(row.cell2));
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+    return out + std::format(": [{}]{{#{}}}\n", render_paragraph(table.caption), table.stable_name);
+}
+
 // --- items --------------------------------------------------------------
 
 // One DescriptionElement's numbered paragraphs, in emission order -- the
@@ -174,7 +186,8 @@ std::string render_table(const ir::Table2D& table) {
 // appears exactly once, on whichever block is emitted first -- the same rule
 // the LaTeX backend applies to its `\effects` macro.
 std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
-                                        const std::vector<ir::Table2D>& tables) {
+                                        const std::vector<ir::Table2D>& tables,
+                                        const std::vector<ir::Table1D>& flat_tables) {
     std::vector<std::string> blocks;
     const std::string        label = std::format("*{}*: ", common::element_label(element.kind));
 
@@ -216,6 +229,16 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                              rendered_tables);
         else
             blocks.back() += '\n' + rendered_tables;
+    }
+
+    const std::string rendered_flat_tables = flat_tables | std::views::transform(render_flat_table) |
+                                             std::views::join_with('\n') | std::ranges::to<std::string>();
+    if (!rendered_flat_tables.empty()) {
+        if (blocks.empty())
+            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", common::element_label(element.kind)) +
+                             rendered_flat_tables);
+        else
+            blocks.back() += '\n' + rendered_flat_tables;
     }
 
     if (element.equivalent) {
@@ -265,7 +288,11 @@ std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
         group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
         std::views::transform([](const auto& e) -> const ir::Table2D& { return *e.table; }) |
         std::ranges::to<std::vector>();
-    return element_blocks(merge_element_group(group), tables);
+    const std::vector<ir::Table1D> flat_tables =
+        group | std::views::filter([](const auto& e) { return e.flat_table.has_value(); }) |
+        std::views::transform([](const auto& e) -> const ir::Table1D& { return *e.flat_table; }) |
+        std::ranges::to<std::vector>();
+    return element_blocks(merge_element_group(group), tables, flat_tables);
 }
 
 std::string render_item(const ir::SpecItem& item) {

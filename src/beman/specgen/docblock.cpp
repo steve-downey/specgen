@@ -270,38 +270,56 @@ struct TableHead {
     std::string caption;
 };
 
-TableHead parse_table_head(std::string_view after, int line, std::vector<Diagnostic>& diags) {
+// Two table kinds share this grammar shell: \lib2dtab2 (a row-heading column
+// plus two data columns) and \libtab2 (a flat two-column table, one row per
+// entry -- issue #74). `tag` names whichever one is open, purely for
+// diagnostic text.
+enum class TableKind { None, TwoD, Flat };
+
+constexpr std::string_view table_open_name(TableKind kind) {
+    return kind == TableKind::TwoD ? "lib2dtab2" : "libtab2";
+}
+constexpr std::string_view table_end_name(TableKind kind) {
+    return kind == TableKind::TwoD ? "endlib2dtab2" : "endlibtab2";
+}
+// \cell entries a completed \row requires: two for \lib2dtab2's data
+// columns, one for \libtab2's single data column.
+constexpr std::size_t      table_cell_arity(TableKind kind) { return kind == TableKind::TwoD ? 2 : 1; }
+constexpr std::string_view cell_noun(std::size_t arity) { return arity == 1 ? "entry" : "entries"; }
+constexpr std::string_view cell_arity_word(std::size_t arity) { return arity == 1 ? "one" : "two"; }
+
+TableHead parse_table_head(std::string_view after, int line, std::vector<Diagnostic>& diags, std::string_view tag) {
     TableHead        out;
     std::string_view rest = trim(after);
     if (!rest.starts_with('[')) {
-        diags.push_back({Severity::Error, line, "\\lib2dtab2 requires [stable.name]{caption}"});
+        diags.push_back({Severity::Error, line, std::format("\\{} requires [stable.name]{{caption}}", tag)});
         return out;
     }
     const std::size_t close = rest.find(']');
     if (close == std::string_view::npos) {
-        diags.push_back({Severity::Error, line, "unterminated '[' in \\lib2dtab2"});
+        diags.push_back({Severity::Error, line, std::format("unterminated '[' in \\{}", tag)});
         return out;
     }
     out.stable_name = std::string(trim(rest.substr(1, close - 1)));
     if (out.stable_name.empty())
-        diags.push_back({Severity::Error, line, "\\lib2dtab2 requires a stable name"});
+        diags.push_back({Severity::Error, line, std::format("\\{} requires a stable name", tag)});
 
     rest = trim(rest.substr(close + 1));
     if (!rest.starts_with('{')) {
-        diags.push_back({Severity::Error, line, "\\lib2dtab2 requires a {caption}"});
+        diags.push_back({Severity::Error, line, std::format("\\{} requires a {{caption}}", tag)});
         return out;
     }
     const std::size_t caption_end = rest.rfind('}');
     if (caption_end == std::string_view::npos) {
-        diags.push_back({Severity::Error, line, "unterminated '{' in \\lib2dtab2"});
+        diags.push_back({Severity::Error, line, std::format("unterminated '{{' in \\{}", tag)});
         out.caption = std::string(trim(rest.substr(1)));
         return out;
     }
     out.caption = std::string(trim(rest.substr(1, caption_end - 1)));
     if (out.caption.empty())
-        diags.push_back({Severity::Error, line, "\\lib2dtab2 requires a caption"});
+        diags.push_back({Severity::Error, line, std::format("\\{} requires a caption", tag)});
     if (!trim(rest.substr(caption_end + 1)).empty())
-        diags.push_back({Severity::Warning, line, "trailing text after \\lib2dtab2 ignored"});
+        diags.push_back({Severity::Warning, line, std::format("trailing text after \\{} ignored", tag)});
     return out;
 }
 
@@ -376,6 +394,7 @@ ParseResult parse_docblock(std::string_view raw) {
     enum class TablePart { None, Caption, Column1, Column2, RowHeader, Cell1, Cell2 };
     bool                     in_table       = false;
     bool                     table_terminal = false;
+    TableKind                table_kind     = TableKind::None;
     TablePart                table_part     = TablePart::None;
     std::vector<std::string> table_lines;
     int                      table_part_line = 0;
@@ -434,7 +453,8 @@ ParseResult parse_docblock(std::string_view raw) {
             table_part = TablePart::None;
             return;
         }
-        if (Element* element = current_element(); element != nullptr && element->table) {
+        Element* element = current_element();
+        if (element != nullptr && table_kind == TableKind::TwoD && element->table) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
             switch (table_part) {
             case TablePart::Caption:
@@ -458,26 +478,52 @@ ParseResult parse_docblock(std::string_view raw) {
             case TablePart::None:
                 std::unreachable();
             }
+        } else if (element != nullptr && table_kind == TableKind::Flat && element->flat_table) {
+            ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
+            switch (table_part) {
+            case TablePart::Caption:
+                element->flat_table->caption = std::move(paragraph);
+                break;
+            case TablePart::Column1:
+                element->flat_table->column1 = std::move(paragraph);
+                break;
+            case TablePart::Column2:
+                element->flat_table->column2 = std::move(paragraph);
+                break;
+            case TablePart::RowHeader: // \row's own text: the flat table's first column
+                element->flat_table->rows.back().cell1 = std::move(paragraph);
+                break;
+            case TablePart::Cell1: // \libtab2's one \cell: the second column
+                element->flat_table->rows.back().cell2 = std::move(paragraph);
+                break;
+            case TablePart::Cell2: // arity 1: \cell never reaches a second slot (see table_cell_arity)
+            case TablePart::None:
+                std::unreachable();
+            }
         }
         table_part = TablePart::None;
     };
 
     auto finish_table = [&](int lineno, bool missing_end) {
         flush_table_part();
+        const std::string_view open_tag = table_open_name(table_kind);
+        const std::size_t      arity    = table_cell_arity(table_kind);
         if (missing_end)
-            diags.push_back({Severity::Error, lineno, "missing \\endlib2dtab2"});
+            diags.push_back({Severity::Error, lineno, std::format("missing \\{}", table_end_name(table_kind))});
         if (table_columns != 2)
             diags.push_back(
                 {Severity::Error,
                  lineno,
-                 std::format("\\lib2dtab2 requires exactly two \\column entries; found {}", table_columns)});
+                 std::format("\\{} requires exactly two \\column entries; found {}", open_tag, table_columns)});
         if (table_rows == 0)
-            diags.push_back({Severity::Error, lineno, "\\lib2dtab2 requires at least one \\row"});
-        else if (table_cells != 2)
-            diags.push_back(
-                {Severity::Error,
-                 lineno,
-                 std::format("the final \\row requires exactly two \\cell entries; found {}", table_cells)});
+            diags.push_back({Severity::Error, lineno, std::format("\\{} requires at least one \\row", open_tag)});
+        else if (table_cells != arity)
+            diags.push_back({Severity::Error,
+                             lineno,
+                             std::format("the final \\row requires exactly {} \\cell {}; found {}",
+                                         cell_arity_word(arity),
+                                         cell_noun(arity),
+                                         table_cells)});
         in_table       = false;
         table_terminal = true;
         table_part     = TablePart::None;
@@ -573,8 +619,8 @@ ParseResult parse_docblock(std::string_view raw) {
         if (tag->value && in_table && *tag->value != "iref") {
             const std::string_view name  = *tag->value;
             const std::string_view after = trim(tag->rest.remaining());
-            if (name == "lib2dtab2") {
-                diags.push_back({Severity::Error, lineno, "nested \\lib2dtab2 is not allowed"});
+            if (name == "lib2dtab2" || name == "libtab2") {
+                diags.push_back({Severity::Error, lineno, std::format("nested \\{} is not allowed", name)});
                 continue;
             }
             if (name == "column") {
@@ -583,7 +629,10 @@ ParseResult parse_docblock(std::string_view raw) {
                     diags.push_back({Severity::Error, lineno, "\\column must precede every \\row"});
                 ++table_columns;
                 if (table_columns > 2) {
-                    diags.push_back({Severity::Error, lineno, "\\lib2dtab2 accepts exactly two \\column entries"});
+                    diags.push_back(
+                        {Severity::Error,
+                         lineno,
+                         std::format("\\{} accepts exactly two \\column entries", table_open_name(table_kind))});
                     table_part = TablePart::None;
                 } else {
                     table_part = table_columns == 1 ? TablePart::Column1 : TablePart::Column2;
@@ -597,15 +646,22 @@ ParseResult parse_docblock(std::string_view raw) {
                 flush_table_part();
                 if (table_columns != 2)
                     diags.push_back({Severity::Error, lineno, "\\row requires two preceding \\column entries"});
-                if (table_rows != 0 && table_cells != 2)
+                const std::size_t arity = table_cell_arity(table_kind);
+                if (table_rows != 0 && table_cells != arity)
                     diags.push_back({Severity::Error,
                                      lineno,
-                                     std::format("the preceding \\row requires exactly two \\cell entries; found {}",
+                                     std::format("the preceding \\row requires exactly {} \\cell {}; found {}",
+                                                 cell_arity_word(arity),
+                                                 cell_noun(arity),
                                                  table_cells)});
                 ++table_rows;
                 table_cells = 0;
-                if (Element* element = current_element(); element != nullptr && element->table)
-                    element->table->rows.emplace_back();
+                if (Element* element = current_element(); element != nullptr) {
+                    if (table_kind == TableKind::TwoD && element->table)
+                        element->table->rows.emplace_back();
+                    else if (table_kind == TableKind::Flat && element->flat_table)
+                        element->flat_table->rows.emplace_back();
+                }
                 table_part      = TablePart::RowHeader;
                 table_part_line = lineno;
                 table_lines.emplace_back(after);
@@ -618,8 +674,13 @@ ParseResult parse_docblock(std::string_view raw) {
                     continue;
                 }
                 ++table_cells;
-                if (table_cells > 2) {
-                    diags.push_back({Severity::Error, lineno, "each \\row accepts exactly two \\cell entries"});
+                const std::size_t arity = table_cell_arity(table_kind);
+                if (table_cells > arity) {
+                    diags.push_back({Severity::Error,
+                                     lineno,
+                                     std::format("each \\row accepts exactly {} \\cell {}",
+                                                 cell_arity_word(arity),
+                                                 cell_noun(arity))});
                     table_part = TablePart::None;
                 } else {
                     table_part = table_cells == 1 ? TablePart::Cell1 : TablePart::Cell2;
@@ -629,9 +690,10 @@ ParseResult parse_docblock(std::string_view raw) {
                     table_lines.emplace_back(after);
                 continue;
             }
-            if (name == "endlib2dtab2") {
+            if (name == table_end_name(table_kind)) {
                 if (!after.empty())
-                    diags.push_back({Severity::Warning, lineno, "trailing text after \\endlib2dtab2 ignored"});
+                    diags.push_back(
+                        {Severity::Warning, lineno, std::format("trailing text after \\{} ignored", name)});
                 finish_table(lineno, false);
                 continue;
             }
@@ -639,7 +701,9 @@ ParseResult parse_docblock(std::string_view raw) {
                 finish_table(lineno, true);
                 // Process the new element below after closing the malformed table.
             } else {
-                diags.push_back({Severity::Error, lineno, std::format("unexpected \\{} inside \\lib2dtab2", name)});
+                diags.push_back({Severity::Error,
+                                 lineno,
+                                 std::format("unexpected \\{} inside \\{}", name, table_open_name(table_kind))});
                 continue;
             }
         }
@@ -666,33 +730,46 @@ ParseResult parse_docblock(std::string_view raw) {
                 block.elements.push_back(Element{.kind = *kind, .line = lineno});
                 in_itemize            = false;
                 table_terminal        = false;
+                table_kind            = TableKind::None;
                 std::string_view lead = trim(after);
                 if (!lead.empty()) {
                     para_lines.emplace_back(lead);
                     para_line = lineno;
                 }
-            } else if (name == "lib2dtab2") {
+            } else if (name == "lib2dtab2" || name == "libtab2") {
                 flush_item();
                 flush_paragraph();
+                const TableKind        kind     = name == "lib2dtab2" ? TableKind::TwoD : TableKind::Flat;
+                const std::string_view open_tag = table_open_name(kind);
                 if (table_terminal) {
-                    diags.push_back({Severity::Error, lineno, "an element can carry only one terminal \\lib2dtab2"});
+                    diags.push_back({Severity::Error,
+                                     lineno,
+                                     std::format("an element can carry only one terminal \\{}", open_tag)});
                     continue;
                 }
-                const TableHead head = parse_table_head(after, lineno, diags);
+                const TableHead head = parse_table_head(after, lineno, diags, open_tag);
                 if (current_element() == nullptr)
-                    diags.push_back({Severity::Error, lineno, "\\lib2dtab2 requires a preceding element tag"});
+                    diags.push_back(
+                        {Severity::Error, lineno, std::format("\\{} requires a preceding element tag", open_tag)});
                 else {
-                    const ir::ElementKind kind = current_element()->kind;
-                    if (std::ranges::any_of(block.elements | std::views::take(block.elements.size() - 1),
-                                            [kind](const Element& element) {
-                                                return element.kind == kind && element.table.has_value();
-                                            }))
-                        diags.push_back({Severity::Error,
-                                         lineno,
-                                         "an element kind can carry only one \\lib2dtab2; combine the rows"});
-                    current_element()->table = Table2D{.stable_name = head.stable_name};
+                    const ir::ElementKind ek        = current_element()->kind;
+                    const bool            duplicate = std::ranges::any_of(
+                        block.elements | std::views::take(block.elements.size() - 1), [&](const Element& element) {
+                            return element.kind == ek && (kind == TableKind::TwoD ? element.table.has_value()
+                                                                                  : element.flat_table.has_value());
+                        });
+                    if (duplicate)
+                        diags.push_back(
+                            {Severity::Error,
+                             lineno,
+                             std::format("an element kind can carry only one \\{}; combine the rows", open_tag)});
+                    if (kind == TableKind::TwoD)
+                        current_element()->table = Table2D{.stable_name = head.stable_name};
+                    else
+                        current_element()->flat_table = Table1D{.stable_name = head.stable_name};
                 }
                 in_table        = true;
+                table_kind      = kind;
                 in_itemize      = false;
                 table_columns   = 0;
                 table_rows      = 0;
@@ -700,12 +777,14 @@ ParseResult parse_docblock(std::string_view raw) {
                 table_part      = TablePart::Caption;
                 table_part_line = lineno;
                 table_lines.emplace_back(head.caption);
-            } else if (name == "endlib2dtab2" || name == "column" || name == "row" || name == "cell") {
-                diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside \\lib2dtab2", name)});
+            } else if (name == "endlib2dtab2" || name == "endlibtab2" || name == "column" || name == "row" ||
+                       name == "cell") {
+                diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside a table", name)});
             } else if (table_terminal) {
                 diags.push_back({Severity::Error,
                                  lineno,
-                                 "a \\lib2dtab2 is terminal within its element; start a new element tag"});
+                                 std::format("a \\{} is terminal within its element; start a new element tag",
+                                             table_open_name(table_kind))});
             } else if (name == "item") {
                 flush_paragraph();
                 if (current_element() == nullptr) {
@@ -756,8 +835,10 @@ ParseResult parse_docblock(std::string_view raw) {
         }
 
         if (table_terminal) {
-            diags.push_back(
-                {Severity::Error, lineno, "prose after \\lib2dtab2 cannot be represented; start a new element tag"});
+            diags.push_back({Severity::Error,
+                             lineno,
+                             std::format("prose after \\{} cannot be represented; start a new element tag",
+                                         table_open_name(table_kind))});
             continue;
         }
 

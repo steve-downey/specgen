@@ -243,6 +243,37 @@ TEST_CASE("latex - an authored two-dimensional table uses lib2dtab2") {
     CHECK(first_table < second_table);
 }
 
+TEST_CASE("latex - an authored flat two-column table uses libtab2") {
+    DescriptionElement remarks;
+    remarks.kind       = ElementKind::Remarks;
+    remarks.paragraphs = {{TextInline{"The enumerators have the meanings in the table."}}};
+    remarks.flat_table = Table1D{
+        .stable_name = "demo.errors.tab",
+        .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
+        .column1     = {TextInline{"Constant"}},
+        .column2     = {TextInline{"Meaning"}},
+        .rows        = {Table1DRow{.cell1 = {CodeInline{{"invalid_byte", {}}}},
+                                   .cell2 = {TextInline{"the input holds an invalid byte."}}},
+                        Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}},
+                                   .cell2 = {TextInline{"the input ends mid-sequence."}}}},
+    };
+    SpecItem item;
+    item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.find("\\begin{libtab2}{\\tcode{whatwg_error} meanings}{demo.errors.tab}{lp{4.5in}}"
+                   "{Constant}{Meaning}\n"
+                   "\n"
+                   "\\tcode{invalid_byte} &\n"
+                   "the input holds an invalid byte. \\\\\n"
+                   "\\rowsep\n"
+                   "\n"
+                   "\\tcode{truncated_sequence} &\n"
+                   "the input ends mid-sequence. \\\\\n"
+                   "\\end{libtab2}\n") != std::string::npos);
+}
+
 TEST_CASE("latex - grouped overloads share one itemdecl block") {
     SpecItem item;
     item.decl.signatures.push_back({"constexpr optional() noexcept;", {}});

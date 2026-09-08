@@ -113,11 +113,30 @@ struct Table2D {
     std::vector<Table2DRow> rows        = {};
 };
 
+// A draft flat two-column library table (\libtab2): one row per entry, no
+// row-heading column -- the shape [fs.enum.file.type] and its neighbours use
+// for an enumeration's meanings table (issue #74). \lib2dtab2 is a
+// cross-product table and cannot represent this without a wasted third
+// column or a row heading pressed into service as the constant.
+struct Table1DRow {
+    Paragraph cell1;
+    Paragraph cell2;
+};
+
+struct Table1D {
+    std::string             stable_name = {};
+    Paragraph               caption     = {};
+    Paragraph               column1     = {};
+    Paragraph               column2     = {};
+    std::vector<Table1DRow> rows        = {};
+};
+
 struct DescriptionElement {
     ElementKind                 kind = ElementKind::Effects;
     std::vector<Paragraph>      paragraphs;      // prose (possibly empty)
     std::optional<Itemize>      itemize;         // enumerated conditions
     std::optional<Table2D>      table      = {}; // authored two-dimensional table
+    std::optional<Table1D>      flat_table = {}; // authored flat two-column table
     std::optional<EquivalentTo> equivalent = {}; // "Equivalent to:" code
     // Produced by derive_constraints/derive_mandates (design §5.2)
     // rather than authored in a docblock. `conjuncts` -- one paragraph per

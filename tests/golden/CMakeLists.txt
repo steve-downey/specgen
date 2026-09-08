@@ -689,6 +689,17 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/table2d"
 )
 
+# Authored flat two-column tables (\libtab2, issue #74) on an enumeration's
+# meanings -- the shape [fs.enum.file.type] uses -- lower from a real
+# docblock and survive generate, JSON round-trip, and validation without
+# findings.
+specgen_add_golden(
+    libtab2_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_libtab2.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/libtab2"
+)
+
 # Mandates derivation (design §5.2) — a maximal static_assert prefix
 # (one plain trait, then a top-level `&&` split into a trait and a negation)
 # derived into an "and"-joined sentence; a later static_assert past a real
@@ -1181,6 +1192,22 @@ specgen_add_golden(
     table2d
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/table2d/expected.json"
+)
+
+# The generated flat-table (\libtab2) IR rendered through every backend.
+specgen_add_golden(
+    libtab2
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/libtab2/expected.json"
+)
+specgen_add_golden(
+    libtab2
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/libtab2/expected.json"
+)
+specgen_add_golden(
+    libtab2
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/libtab2/expected.json"
 )
 specgen_add_golden(
     authored_itemize
