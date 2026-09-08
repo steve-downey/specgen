@@ -727,6 +727,17 @@ ir::Document document_with_foreign(std::vector<ir::SynopsisEntry>    roster,
     return doc;
 }
 
+// `document_with_foreign`'s bare-name complement (issue #84): a resolved
+// declaration this run never documents, with no qualifier for the check
+// above to catch at all.
+ir::Document document_with_foreign_decl(std::vector<ir::SynopsisEntry>      roster,
+                                        std::string                         body,
+                                        std::vector<ir::ForeignDeclaration> foreign) {
+    ir::Document doc         = document_with_equiv(std::move(roster), std::move(body));
+    doc.foreign_declarations = std::move(foreign);
+    return doc;
+}
+
 } // namespace
 
 TEST_CASE("validate - a surviving namespace qualifier in an extracted body is an error naming what it resolved to") {
@@ -783,6 +794,39 @@ TEST_CASE("validate - a documented declaration outweighs a foreign namespace of 
 
 TEST_CASE("validate - a name in neither the roster nor the foreign list is left alone") {
     CHECK(validate(document_with_foreign({}, "return move(tmp);", {{"detail", "demo::detail"}})).empty());
+}
+
+// --- the bare-name complement (issue #84) ------------------------------------
+
+TEST_CASE("validate - a name resolving outside the run is an error naming where it is declared") {
+    const Diagnostics diags = validate(
+        document_with_foreign_decl({}, "return probe_witness(x);", {{"probe_witness", "typeclass_base.hpp"}}));
+
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Error);
+    CHECK(diags.front().context == "widget.mod/effects-equiv");
+    CHECK(diags.front().message.find("`probe_witness` appears in rendered output") != std::string::npos);
+    CHECK(diags.front().message.find("declared in `typeclass_base.hpp`") != std::string::npos);
+    CHECK(diags.front().message.find("mark it `\\expos` where it is declared") != std::string::npos);
+}
+
+TEST_CASE("validate - a documented declaration outweighs a foreign declaration of the same name") {
+    ir::Document doc = document_with_foreign_decl({}, "return probe_witness(x);", {{"probe_witness", "t.hpp"}});
+    doc.nodes.push_back(ir::Synopsis{.name = "probe_witness", .code = {"struct probe_witness {};", {}}, .roster = {}});
+
+    CHECK(validate(doc).empty());
+}
+
+TEST_CASE("validate - a synopsis is checked for a foreign declaration too") {
+    ir::Document doc;
+    doc.nodes.push_back(
+        ir::Synopsis{.name = "widget", .code = {"class widget {\n  probe_witness_t val_;\n};", {}}, .roster = {}});
+    doc.foreign_declarations = {{"probe_witness_t", "typeclass_base.hpp"}};
+
+    const Diagnostics diags = validate(doc);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().context == "widget/synopsis");
+    CHECK(diags.front().message.find("`probe_witness_t` appears in rendered output") != std::string::npos);
 }
 
 TEST_CASE("validate - one qualifier finding per fragment, however often the name appears") {
