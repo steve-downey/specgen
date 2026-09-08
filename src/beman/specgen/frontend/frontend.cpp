@@ -964,28 +964,64 @@ std::vector<ExposUse> expos_uses(AstNode*                                       
     return out;
 }
 
+// A use of an exposition-only entity deletes its *whole* qualifier, so a
+// namespace-qualifier edit nested inside that range has nothing left to do --
+// and doing it is worse than redundant. The apply loops scatter edits in
+// descending offset order and skip anything inside a range already consumed
+// (design 3.4), so the nested edit is taken first and its watermark then
+// suppresses the deletion it sits inside. The name replacement is a separate,
+// non-overlapping range and still lands, which is how `detail::` survives
+// beside an exposid that was supposed to take it along.
+//
+// The shape that reaches this is a qualifier whose head is droppable and whose
+// whole is not: `beman::transcoding::detail::` written by a specialization
+// declared in another namespace, where writing it relative to the specified
+// namespace is not an option. Written as `detail::` from inside, there is no
+// prefix to strip, no nested edit, and the deletion has always worked -- which
+// is how one entity came to render two ways in one synopsis.
+//
+// Only exposition-only uses are filtered. A qualifier on anything else is the
+// leakage checker's business, and `std::ranges::` must still lose its `std::`.
+void drop_edits_inside_expos_qualifiers(std::vector<std::pair<unsigned, unsigned>>& edits,
+                                        const std::vector<ExposUse>&                uses) {
+    std::erase_if(edits, [&uses](const std::pair<unsigned, unsigned>& edit) {
+        // substrate generic algorithm: a containment search over the uses, not
+        // an index into them -- the qualifier ranges do not nest in each other.
+        return std::ranges::any_of(uses, [&edit](const ExposUse& use) {
+            return use.qualifier_end > use.qualifier_begin && edit.first >= use.qualifier_begin &&
+                   edit.second <= use.qualifier_end;
+        });
+    });
+}
+
 // Same, over a statement/expression subtree (a requires-clause condition, a
 // static_assert condition, an extracted body).
-std::vector<std::pair<unsigned, unsigned>> namespace_qualifier_edits(clang::Stmt*                 root,
-                                                                     const std::set<std::string>& drop,
-                                                                     const clang::SourceManager&  sm,
-                                                                     const clang::LangOptions&    lang_opts) {
+std::vector<std::pair<unsigned, unsigned>>
+namespace_qualifier_edits(clang::Stmt*                                     root,
+                          const std::set<std::string>&                     drop,
+                          const clang::SourceManager&                      sm,
+                          const clang::LangOptions&                        lang_opts,
+                          const std::map<const clang::Decl*, std::string>& expos) {
     std::vector<std::pair<unsigned, unsigned>> out;
     if (root != nullptr && !drop.empty()) {
         QualifierDropper dropper(drop, sm, lang_opts, out);
         dropper.TraverseStmt(root);
+        drop_edits_inside_expos_qualifiers(out, expos_uses(root, expos, sm, lang_opts));
     }
     return out;
 }
 
-std::vector<std::pair<unsigned, unsigned>> namespace_qualifier_edits(clang::Decl*                 root,
-                                                                     const std::set<std::string>& drop,
-                                                                     const clang::SourceManager&  sm,
-                                                                     const clang::LangOptions&    lang_opts) {
+std::vector<std::pair<unsigned, unsigned>>
+namespace_qualifier_edits(clang::Decl*                                     root,
+                          const std::set<std::string>&                     drop,
+                          const clang::SourceManager&                      sm,
+                          const clang::LangOptions&                        lang_opts,
+                          const std::map<const clang::Decl*, std::string>& expos) {
     std::vector<std::pair<unsigned, unsigned>> out;
     if (root != nullptr && !drop.empty()) {
         QualifierDropper dropper(drop, sm, lang_opts, out);
         dropper.TraverseDecl(root);
+        drop_edits_inside_expos_qualifiers(out, expos_uses(root, expos, sm, lang_opts));
     }
     return out;
 }
@@ -2352,11 +2388,11 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // The record's own rewrites, plus the template head's: two roots, because
     // no single AST node spans both without spanning the record twice.
     std::vector<std::pair<unsigned, unsigned>> qualifier_edits =
-        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts);
+        namespace_qualifier_edits(const_cast<clang::CXXRecordDecl*>(record), ns_drop_set, sm, lang_opts, expos_set);
     std::vector<ExposUse> uses = expos_uses(const_cast<clang::CXXRecordDecl*>(record), expos_set, sm, lang_opts);
     if (const clang::TemplateParameterList* head_params = head_parameters(head_decl)) {
         const auto gather = [&](auto* node) {
-            qualifier_edits.append_range(namespace_qualifier_edits(node, ns_drop_set, sm, lang_opts));
+            qualifier_edits.append_range(namespace_qualifier_edits(node, ns_drop_set, sm, lang_opts, expos_set));
             uses.append_range(expos_uses(node, expos_set, sm, lang_opts));
         };
         // substrate generic algorithm: a for_each-shaped walk driving the
@@ -2653,7 +2689,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     }
 
     edits.append_range(
-        namespace_qualifier_edits(const_cast<clang::NamedDecl*>(named), ns_drop_set, sm, lang_opts) |
+        namespace_qualifier_edits(const_cast<clang::NamedDecl*>(named), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& range) { return range.first >= decl_begin && range.second <= decl_end; }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));
     // substrate generic algorithm: the declaration's resolved uses allocate
@@ -2823,9 +2859,10 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
             }
         }
     }
-    edits.append_range(namespace_qualifier_edits(const_cast<clang::Decl*>(range_decl), ns_drop_set, sm, lang_opts) |
-                       std::views::filter([&](const auto& p) { return p.first >= decl_begin; }) |
-                       std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
+    edits.append_range(
+        namespace_qualifier_edits(const_cast<clang::Decl*>(range_decl), ns_drop_set, sm, lang_opts, expos_set) |
+        std::views::filter([&](const auto& p) { return p.first >= decl_begin; }) |
+        std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
     unsigned span_n = sentinels.size();
     if (const auto marked = expos_set.find(in_class->getCanonicalDecl()); marked != expos_set.end()) {
         const clang::SourceRange name_range = in_class->getNameInfo().getSourceRange();
@@ -2900,7 +2937,7 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
     std::map<std::string, SpanInfo> sentinels;
     std::vector<SynopsisEdit>       edits;
     edits.append_range(
-        namespace_qualifier_edits(const_cast<clang::TypeAliasDecl*>(alias), ns_drop_set, sm, lang_opts) |
+        namespace_qualifier_edits(const_cast<clang::TypeAliasDecl*>(alias), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& range) { return range.first >= decl_begin; }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));
 
@@ -3034,7 +3071,7 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
     const unsigned            text_begin = sm.getDecomposedLoc(e->getSourceRange().getBegin()).second;
     std::string               text       = expr_text(e, sm, lang_opts).str();
     std::vector<SynopsisEdit> edits =
-        namespace_qualifier_edits(const_cast<clang::Expr*>(e), ns_drop_set, sm, lang_opts) |
+        namespace_qualifier_edits(const_cast<clang::Expr*>(e), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }) |
         std::ranges::to<std::vector<SynopsisEdit>>();
     std::map<std::string, SpanInfo> sentinels;
@@ -3589,7 +3626,7 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
 
     const llvm::StringRef                      buffer = file_buffer(sm, prologue.extraction_first->getBeginLoc());
     std::vector<std::pair<unsigned, unsigned>> deletions =
-        namespace_qualifier_edits(const_cast<clang::CompoundStmt*>(body), ns_drop_set, sm, lang_opts);
+        namespace_qualifier_edits(const_cast<clang::CompoundStmt*>(body), ns_drop_set, sm, lang_opts, expos_set);
     deletions.append_range(
         conditional_body_edits(buffer, sm.getFileID(prologue.extraction_first->getBeginLoc()), begin, end, skipped));
     deletions.append_range(
@@ -5916,7 +5953,8 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
     };
 
     edits.append_range(
-        namespace_qualifier_edits(decl, ns_drop_set, sm, lang_opts) | std::views::filter([&](const auto& range) {
+        namespace_qualifier_edits(decl, ns_drop_set, sm, lang_opts, expos_set) |
+        std::views::filter([&](const auto& range) {
             return range.first >= decl_begin && range.second <= decl_end && outside_body(range.first, range.second);
         }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));

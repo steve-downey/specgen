@@ -82,3 +82,11 @@ int level() const;
 /Constraints/: ~U~ models @@latex:\exposid{enabled}@@.
 
 /Returns/: ~0~.
+
+#+begin_itemdecl
+template<class T>
+  requires @\exposidnc{enabled}@<T>
+bool fully_qualified_use();
+#+end_itemdecl
+
+/Returns/: ~true~.
