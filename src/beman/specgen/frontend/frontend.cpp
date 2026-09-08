@@ -381,6 +381,15 @@ void collect_top_level_decl(clang::Decl*                decl,
         llvm::cast<clang::ClassTemplateSpecializationDecl>(decl)->getSpecializationKind() !=
             clang::TSK_ExplicitSpecialization)
         return;
+    // A variable template's instantiations arrive the same way, reporting the
+    // template's own location: `whatwg_decode<C>` used at thirty-eight codecs
+    // rendered thirty-eight identical declarations into one synopsis.  A
+    // *partial* specialization is authored and stays -- that is how
+    // `enable_borrowed_range` is written.
+    if (const auto* var_spec = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl);
+        var_spec != nullptr && !llvm::isa<clang::VarTemplatePartialSpecializationDecl>(var_spec) &&
+        var_spec->getSpecializationKind() != clang::TSK_ExplicitSpecialization)
+        return;
 
     out.push_back(decl);
 }
