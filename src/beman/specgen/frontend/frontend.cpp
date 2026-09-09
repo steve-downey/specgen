@@ -1908,7 +1908,7 @@ clang::SourceLocation deleted_or_defaulted_end(clang::SourceLocation       end,
     // both keywords come back as a plain `tok::raw_identifier` and can only
     // be told apart by spelling.
     if (kw && kw->is(clang::tok::raw_identifier)) {
-        const llvm::StringRef spelling = clang::Lexer::getSpelling(*kw, sm, lang_opts);
+        const std::string spelling = clang::Lexer::getSpelling(*kw, sm, lang_opts);
         if (spelling == "delete" || spelling == "default")
             return kw->getLocation();
     }
