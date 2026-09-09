@@ -89,6 +89,10 @@ generate options:
                              (exit 1) instead
   --paper                   wrap the fragment in an `::: add` editing-instruction
                              div and number its paragraphs as added (mpark only)
+  --new-root <name>         drop the `.sref` class from a stable name equal to
+                             <name> or one dotted segment under it (mpark
+                             only): the paper's own proposed clause, not yet in
+                             the srefs database `.sref` looks up
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -114,6 +118,10 @@ render options:
                        at error severity aborts the render (exit 1) instead
   --paper             wrap the fragment in an `::: add` editing-instruction div
                        and number its paragraphs as added (mpark only)
+  --new-root <name>   drop the `.sref` class from a stable name equal to
+                       <name> or one dotted segment under it (mpark only): the
+                       paper's own proposed clause, not yet in the srefs
+                       database `.sref` looks up
   --split <dir>       write one fragment per top-level section into <dir>,
                        named from its stable name (optional.ctor.tex), and
                        list the paths written on standard output
@@ -171,6 +179,7 @@ struct WordingOptions {
     std::string root;             // --root <name>, with --split
     bool        validate = false; // --validate
     bool        paper    = false; // --paper (mpark only)
+    std::string new_root;         // --new-root <name> (mpark only)
 };
 
 // `render`'s options, as the accumulator of the fold below. `awaiting` is the
@@ -194,11 +203,12 @@ struct OptionError {
 // One step of the scan (decision expected-error-taxonomy: the fold's effectful step function).
 std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, const std::string& arg) {
     if (!opts.awaiting.empty()) {
-        std::string& dest = opts.awaiting == "--from-ir"   ? opts.input
-                            : opts.awaiting == "--backend" ? opts.wording.backend
-                            : opts.awaiting == "--split"   ? opts.wording.split_dir
-                            : opts.awaiting == "--root"    ? opts.wording.root
-                                                           : opts.wording.output;
+        std::string& dest = opts.awaiting == "--from-ir"    ? opts.input
+                            : opts.awaiting == "--backend"  ? opts.wording.backend
+                            : opts.awaiting == "--split"    ? opts.wording.split_dir
+                            : opts.awaiting == "--root"     ? opts.wording.root
+                            : opts.awaiting == "--new-root" ? opts.wording.new_root
+                                                            : opts.wording.output;
         dest              = arg;
         opts.awaiting.clear();
         return opts;
@@ -211,8 +221,8 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
         opts.wording.paper = true;
         return opts;
     }
-    if (arg == "--from-ir" || arg == "--backend" || arg == "--split" || arg == "--root" || arg == "-o" ||
-        arg == "--output") {
+    if (arg == "--from-ir" || arg == "--backend" || arg == "--split" || arg == "--root" || arg == "--new-root" ||
+        arg == "-o" || arg == "--output") {
         opts.awaiting = arg;
         return opts;
     }
@@ -233,6 +243,10 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // when it was not.
     if (options.paper && options.backend != "mpark")
         return std::format("specgen: --paper applies only to the mpark backend, not '{}'", options.backend);
+    // `.sref` is an mpark/wg21 construct; the other two backends have no
+    // stable-name class to drop.
+    if (!options.new_root.empty() && options.backend != "mpark")
+        return std::format("specgen: --new-root applies only to the mpark backend, not '{}'", options.backend);
     // --split writes a *set* of files whose names it derives, so there is
     // nothing for a single output path to mean beside it; and --root names one
     // of those files, so it means nothing without them.
@@ -296,7 +310,7 @@ std::expected<int, std::string> emit_wording(const ir::Document& document, const
     // path calls it once per fragment.
     auto render_document = [&](const ir::Document& fragment) {
         if (options.backend == "mpark")
-            return mpark::render_to_string(fragment, {.paper_mode = options.paper});
+            return mpark::render_to_string(fragment, {.paper_mode = options.paper, .new_root = options.new_root});
         if (options.backend == "org")
             return org::render_to_string(fragment);
         return latex::render_to_string(fragment);
@@ -504,6 +518,10 @@ int generate_command(const std::vector<std::string>& args) {
         } else if (arg == "--paper") {
             wording_only();
             wording.paper = true;
+        } else if (arg == "--new-root") {
+            wording_only();
+            if (!next(wording.new_root))
+                return 2;
         } else if (arg == "--compile-commands") {
             if (!next(compile_commands_dir))
                 return 2;

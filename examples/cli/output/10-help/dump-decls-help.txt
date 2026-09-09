@@ -30,6 +30,10 @@ generate options:
                              (exit 1) instead
   --paper                   wrap the fragment in an `::: add` editing-instruction
                              div and number its paragraphs as added (mpark only)
+  --new-root <name>         drop the `.sref` class from a stable name equal to
+                             <name> or one dotted segment under it (mpark
+                             only): the paper's own proposed clause, not yet in
+                             the srefs database `.sref` looks up
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -55,6 +59,10 @@ render options:
                        at error severity aborts the render (exit 1) instead
   --paper             wrap the fragment in an `::: add` editing-instruction div
                        and number its paragraphs as added (mpark only)
+  --new-root <name>   drop the `.sref` class from a stable name equal to
+                       <name> or one dotted segment under it (mpark only): the
+                       paper's own proposed clause, not yet in the srefs
+                       database `.sref` looks up
   --split <dir>       write one fragment per top-level section into <dir>,
                        named from its stable name (optional.ctor.tex), and
                        list the paths written on standard output
