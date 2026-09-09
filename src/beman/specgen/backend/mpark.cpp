@@ -499,6 +499,67 @@ std::string renumber_added(const std::string& text) {
     return out;
 }
 
+// Whether a stable name is `--new-root`'s own clause (issue #89): equal to
+// it, or one dotted segment deeper. `demo.detail` is under `demo`;
+// `demolition` is not -- the trailing `.` in the second branch is what
+// keeps a prefix match from also matching an unrelated longer name that
+// merely starts with the same characters.
+bool under_new_root(std::string_view name, std::string_view new_root) {
+    return name == new_root ||
+           (name.starts_with(new_root) && name.size() > new_root.size() && name[new_root.size()] == '.');
+}
+
+// Strips the `.sref` class from every `[name]{- .sref}` this fragment wrote
+// for a name under `new_root` (issue #89): a paper's own proposed clause is
+// not yet in the srefs database `.sref` looks up, so keeping the class there
+// buys nothing but a build-time warning and a dead link to
+// eel.is/c++draft/<name>. `new_root` empty (the default) leaves every
+// occurrence untouched.
+//
+// Runs over already-rendered text rather than inside the algebra, for the
+// same reason `renumber_added` above does: this is a property of the
+// document (which names are the paper's own), not of any one node, and the
+// three call sites that write `{- .sref}` -- the `Ref` span inside a `@…@`
+// comment escape, `ir::RefInline`'s parenthesized form, and the Section
+// heading -- all write the exact same `{- .sref}` immediately after the
+// closing `]`, so one pass here covers all three without threading
+// `new_root` through the render algebra at all.
+std::string drop_sref_for_new_root(const std::string& text, std::string_view new_root) {
+    if (new_root.empty())
+        return text;
+    constexpr std::string_view kSref = "]{- .sref}";
+    std::string                out;
+    out.reserve(text.size());
+    std::size_t pos = 0;
+    // substrate generic algorithm: the same position-tracking left-to-right
+    // walk renumber_added performs, substituting a bracketed name's own
+    // trailing class rather than a paragraph-number token.
+    while (pos < text.size()) {
+        const std::size_t close = text.find(kSref, pos);
+        if (close == std::string::npos)
+            break;
+        const std::size_t open = text.rfind('[', close);
+        // No matching `[` in the unconsumed text: not one of this backend's
+        // own `.sref` emissions after all, so this occurrence is left alone
+        // rather than guessed at.
+        if (open == std::string::npos || open < pos) {
+            out += text.substr(pos, close + kSref.size() - pos);
+            pos = close + kSref.size();
+            continue;
+        }
+        const std::string_view name = std::string_view(text).substr(open + 1, close - open - 1);
+        out += text.substr(pos, open - pos);
+        out += '[';
+        out += name;
+        out += ']';
+        if (!under_new_root(name, new_root))
+            out += "{- .sref}";
+        pos = close + kSref.size();
+    }
+    out += text.substr(pos);
+    return out;
+}
+
 } // namespace
 
 // The editing-instruction div, wrapping the whole fragment. One per
@@ -524,6 +585,7 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
                                               }) |
                                               std::ranges::to<std::vector>();
     std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    out                                     = drop_sref_for_new_root(out, options.new_root);
     // Renumbered once, over the joined document, so the added-paragraph run
     // ascends across every wording div in it rather than restarting inside
     // each (issue #57). Rendering a fragment renders a document, so this is
@@ -532,7 +594,7 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {
-    std::string text = render_item(item);
+    std::string text = drop_sref_for_new_root(render_item(item), options.new_root);
     if (!options.paper_mode)
         return wrap_wording(std::move(text));
     return wrap_added(wrap_wording(renumber_added(text)));

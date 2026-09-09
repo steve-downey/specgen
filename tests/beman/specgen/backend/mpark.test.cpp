@@ -453,6 +453,89 @@ TEST_CASE("mpark - a titleless section emits no double space") {
     CHECK(mpark::render_to_string(doc) == "::: wording\n\n## [optional.ctor]{- .sref} {-}\n\n:::\n");
 }
 
+// --- --new-root (issue #89): a paper's own proposed clause is not yet in
+// the srefs database `.sref` looks up, so its class is dropped everywhere a
+// stable name is rendered; a citation of a name outside the root keeps it.
+
+TEST_CASE("new-root - a Section heading under the root drops .sref, one outside it does not") {
+    Document doc;
+    Section  root;
+    root.stable_name = "transcode";
+    root.title       = "Header <transcode> synopsis";
+    Section under;
+    under.stable_name = "transcode.errors";
+    under.title       = "Errors";
+    root.children.push_back(std::move(under));
+    doc.nodes.push_back(std::move(root));
+    Section outside;
+    outside.stable_name = "range.utility";
+    outside.title       = "General utilities";
+    doc.nodes.push_back(std::move(outside));
+
+    const std::string out = mpark::render_to_string(doc, {.new_root = "transcode"});
+    CHECK(out.find("## Header <transcode> synopsis [transcode] {-}") != std::string::npos);
+    CHECK(out.find("### Errors [transcode.errors] {-}") != std::string::npos);
+    CHECK(out.find("## General utilities [range.utility]{- .sref} {-}") != std::string::npos);
+}
+
+TEST_CASE("new-root - a Ref span under the root drops .sref, in the synopsis comment") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{
+        .name   = "widget",
+        .code   = {"class widget {\n  // [transcode.ctor], constructors\n  widget();\n};",
+                   {{20, 36, SpanKind::Ref, "transcode.ctor"}}},
+        .roster = {},
+    });
+
+    const std::string out = mpark::render_to_string(doc, {.new_root = "transcode"});
+    CHECK(out.find("// @[transcode.ctor]@, constructors") != std::string::npos);
+    CHECK(out.find(".sref") == std::string::npos);
+}
+
+TEST_CASE("new-root - a RefInline citation outside the root keeps .sref, one under it does not") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.paragraphs.push_back({TextInline{"See "},
+                                  RefInline{"transcode.errors"},
+                                  TextInline{" and "},
+                                  RefInline{"range.utility"},
+                                  TextInline{"."}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item, {.new_root = "transcode"});
+    CHECK(out.find("([transcode.errors])") != std::string::npos);
+    CHECK(out.find("([range.utility]{- .sref})") != std::string::npos);
+}
+
+TEST_CASE("new-root - an exact match and a one-segment-deeper name are under the root; a longer prefix is not") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.paragraphs.push_back({RefInline{"transcode"},
+                                  TextInline{" "},
+                                  RefInline{"transcode.errors"},
+                                  TextInline{" "},
+                                  RefInline{"transcoded.other"}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item, {.new_root = "transcode"});
+    CHECK(out.find("([transcode])") != std::string::npos);
+    CHECK(out.find("([transcode.errors])") != std::string::npos);
+    CHECK(out.find("([transcoded.other]{- .sref})") != std::string::npos);
+}
+
+TEST_CASE("new-root - empty (the default) changes nothing") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.paragraphs.push_back({RefInline{"transcode.errors"}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    CHECK(mpark::render_to_string(item).find("([transcode.errors]{- .sref})") != std::string::npos);
+    CHECK(mpark::render_to_string(item, {.new_root = ""}).find("([transcode.errors]{- .sref})") != std::string::npos);
+}
+
 // A synopsis holds no numbered paragraph, so wrapping one would leave an empty
 // wording div around a code fence.
 TEST_CASE("mpark - a top-level synopsis takes no wording div") {

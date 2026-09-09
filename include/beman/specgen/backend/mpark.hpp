@@ -42,6 +42,19 @@ struct Options {
     // instruction that says where the wording goes; this supplies the div and
     // the numbering, which are the mechanical halves.
     bool paper_mode = false;
+
+    // A stable name under this dotted prefix (equal to it, or one segment
+    // deeper) is the paper's own proposed clause, not yet in the srefs
+    // database `.sref` looks up -- so its class is dropped everywhere a
+    // stable name is rendered (a `\ref` in a synopsis comment, an `\iref`
+    // cross-reference, a Section heading), leaving the bare `[name]` the
+    // draft itself prints for a clause with no number yet (issue #89).
+    // Empty (the default) changes nothing: every stable name keeps `.sref`,
+    // exactly as before this option existed. A name outside the prefix --
+    // a citation of a clause the draft already has -- is unaffected either
+    // way, which is the point: this says which names are new, not which
+    // backend feature to turn off.
+    std::string new_root;
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once
