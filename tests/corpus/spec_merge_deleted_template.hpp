@@ -29,7 +29,7 @@ class widget {
 
     //! \merge
     template <class G>
-    requires(sizeof(G) > 0)
+        requires(sizeof(G) > 0)
     constexpr widget(G) = delete;
 
   private:
