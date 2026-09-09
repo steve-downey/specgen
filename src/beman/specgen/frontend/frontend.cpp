@@ -1884,6 +1884,37 @@ unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* bo
     return static_cast<unsigned>(colon);
 }
 
+// Where a `= delete`/`= default` member's declaration actually ends (issue
+// #85). Clang's parser (ParseCXXInlineMethods.cpp) extends a deleted or
+// defaulted function's recorded end location past the keyword only when the
+// declarator Sema handed back is itself a FunctionDecl; for a member
+// function *template* that declarator is the FunctionTemplateDecl, the cast
+// fails silently, and the templated FunctionDecl's own end is left at the
+// parameter-list's closing `)` -- never advanced to `delete`/`default` at
+// all. Nothing legitimately follows a member function declarator's recorded
+// end with a bare `=` other than that tail, so detecting it here (rather
+// than trusting `getEndLoc()`) is safe for the ordinary, already-correct
+// case too: there the token right past `end` is `;`, not `=`, and this
+// returns `end` unchanged.
+clang::SourceLocation deleted_or_defaulted_end(clang::SourceLocation       end,
+                                               const clang::SourceManager& sm,
+                                               const clang::LangOptions&   lang_opts) {
+    const std::optional<clang::Token> eq = clang::Lexer::findNextToken(end, sm, lang_opts);
+    if (!eq || !eq->is(clang::tok::equal))
+        return end;
+    const std::optional<clang::Token> kw = clang::Lexer::findNextToken(eq->getLocation(), sm, lang_opts);
+    // `findNextToken` raw-lexes: it never runs the identifier-table pass that
+    // turns `delete`/`default` into `tok::kw_delete`/`tok::kw_default`, so
+    // both keywords come back as a plain `tok::raw_identifier` and can only
+    // be told apart by spelling.
+    if (kw && kw->is(clang::tok::raw_identifier)) {
+        const llvm::StringRef spelling = clang::Lexer::getSpelling(*kw, sm, lang_opts);
+        if (spelling == "delete" || spelling == "default")
+            return kw->getLocation();
+    }
+    return end;
+}
+
 // Subtractive synopsis extraction (design §3.4): lex the class's own text out
 // of the main file, then remove/splice exactly two things — nothing else —
 // and (design §3.6 step 2) reformat the result with the draft
@@ -2081,10 +2112,10 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // was spliced to `;` (issue #5).
     std::vector<std::pair<unsigned, unsigned>> removed_ranges;
     const auto                                 omit_line = [&](const clang::Decl* outer) {
-        const unsigned remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
-        unsigned       remove_end =
-            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(outer->getEndLoc(), 0, sm, lang_opts)).second;
-        if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(outer->getEndLoc(), sm, lang_opts);
+        const unsigned              remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
+        const clang::SourceLocation end_loc      = deleted_or_defaulted_end(outer->getEndLoc(), sm, lang_opts);
+        unsigned remove_end = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end_loc, 0, sm, lang_opts)).second;
+        if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(end_loc, sm, lang_opts);
             semi && semi->is(clang::tok::semi))
             remove_end = sm.getDecomposedLoc(semi->getLocation()).second + 1;
         if (remove_end < class_end && buffer[remove_end] == '\r')
@@ -2345,10 +2376,10 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // would turn `= default;` into `= defaul;;`.
         if (fn->isDefaulted() || fn->isDeleted() || !fn->doesThisDeclarationHaveABody()) {
             if (!freestanding_comment.empty()) {
-                unsigned semi_end =
-                    sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(fn->getEndLoc(), 0, sm, lang_opts)).second;
-                if (const std::optional<clang::Token> semi =
-                        clang::Lexer::findNextToken(fn->getEndLoc(), sm, lang_opts);
+                const clang::SourceLocation end_loc = deleted_or_defaulted_end(fn->getEndLoc(), sm, lang_opts);
+                unsigned                    semi_end =
+                    sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end_loc, 0, sm, lang_opts)).second;
+                if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(end_loc, sm, lang_opts);
                     semi && semi->is(clang::tok::semi))
                     semi_end = sm.getDecomposedLoc(semi->getLocation()).second + 1;
                 edits.push_back(SynopsisEdit{semi_end, semi_end, std::string(freestanding_comment)});

@@ -850,6 +850,17 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_inclass_markers.hpp"
 )
 
+# `\merge` on a deleted *function template* (issue #85) must remove the
+# whole declaration from the synopsis, not just the declarator: Clang leaves
+# a deleted/defaulted function template's own recorded end short of the
+# `= delete`/`= default` keyword, and the front end has to find the true end
+# itself rather than trust it.
+specgen_add_golden(
+    merge_deleted_template
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_merge_deleted_template.hpp"
+)
+
 # Exposition-only members (design §3.5/§4.3) — `\expos` and
 # `\expos(name)` data members render with an `\exposid` span (via the §3.6
 # sentinel pipeline) and a `// exposition only` comment in the synopsis.
