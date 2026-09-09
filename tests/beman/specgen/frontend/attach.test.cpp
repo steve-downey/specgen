@@ -26,6 +26,8 @@ namespace {
 const std::string kCorpusHeader          = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_attach.hpp";
 const std::string kInclassTemplateHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_inclass_template.hpp";
 const std::string kFreeFunctionsHeader   = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_free_functions.hpp";
+const std::string kMergeDeletedTemplateHeader =
+    std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_merge_deleted_template.hpp";
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
@@ -114,6 +116,31 @@ TEST_CASE("build_document - marked in-class function templates attach and mixed-
     CHECK_FALSE(contains(item->decl.signatures.front().text, "template <"));
     REQUIRE(item->descr.elements.size() == 1);
     CHECK(item->descr.elements.front().kind == ir::ElementKind::Effects);
+}
+
+// A `\merge`d deleted function *template* used to leave a dangling
+// `= delete;` fragment behind: Clang's own parser never extends the
+// templated FunctionDecl's recorded end past the keyword the way it does
+// for a plain FunctionDecl, so trusting that end location stopped the
+// removal at the declarator's closing `)` (issue #85).
+TEST_CASE("build_document - a merged deleted function template is removed whole, not left as a `= delete;` stub") {
+    const auto built = frontend::build_document(kMergeDeletedTemplateHeader);
+    REQUIRE(built.has_value());
+    CHECK(built->diagnostics.empty());
+
+    const auto section = std::ranges::find_if(built->document.nodes, [](const ir::Node& node) {
+        const auto* found = std::get_if<ir::Section>(&node);
+        return found != nullptr && found->stable_name == "demo.widget";
+    });
+    REQUIRE(section != built->document.nodes.end());
+    const ir::Section& widget_section = std::get<ir::Section>(*section);
+    const auto         synopsis       = std::ranges::find_if(
+        widget_section.children, [](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); });
+    REQUIRE(synopsis != widget_section.children.end());
+    const ir::Synopsis& syn = std::get<ir::Synopsis>(*synopsis);
+    CHECK_FALSE(contains(syn.code.text, "delete"));
+    CHECK_FALSE(contains(syn.code.text, "template <class G>"));
+    CHECK(contains(syn.code.text, "constexpr explicit widget(int g);"));
 }
 
 TEST_CASE("build_document - spec_attach.hpp attaches itemdecl/itemdescr to each out-of-line overload") {
