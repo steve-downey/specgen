@@ -1884,35 +1884,81 @@ unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* bo
     return static_cast<unsigned>(colon);
 }
 
-// Where a `= delete`/`= default` member's declaration actually ends (issue
-// #85). Clang's parser (ParseCXXInlineMethods.cpp) extends a deleted or
-// defaulted function's recorded end location past the keyword only when the
-// declarator Sema handed back is itself a FunctionDecl; for a member
-// function *template* that declarator is the FunctionTemplateDecl, the cast
-// fails silently, and the templated FunctionDecl's own end is left at the
-// parameter-list's closing `)` -- never advanced to `delete`/`default` at
-// all. Nothing legitimately follows a member function declarator's recorded
-// end with a bare `=` other than that tail, so detecting it here (rather
-// than trusting `getEndLoc()`) is safe for the ordinary, already-correct
-// case too: there the token right past `end` is `;`, not `=`, and this
-// returns `end` unchanged.
-clang::SourceLocation deleted_or_defaulted_end(clang::SourceLocation       end,
-                                               const clang::SourceManager& sm,
-                                               const clang::LangOptions&   lang_opts) {
-    const std::optional<clang::Token> eq = clang::Lexer::findNextToken(end, sm, lang_opts);
-    if (!eq || !eq->is(clang::tok::equal))
-        return end;
-    const std::optional<clang::Token> kw = clang::Lexer::findNextToken(eq->getLocation(), sm, lang_opts);
-    // `findNextToken` raw-lexes: it never runs the identifier-table pass that
-    // turns `delete`/`default` into `tok::kw_delete`/`tok::kw_default`, so
-    // both keywords come back as a plain `tok::raw_identifier` and can only
-    // be told apart by spelling.
-    if (kw && kw->is(clang::tok::raw_identifier)) {
-        const std::string spelling = clang::Lexer::getSpelling(*kw, sm, lang_opts);
-        if (spelling == "delete" || spelling == "default")
-            return kw->getLocation();
+// The `;` that terminates a `= delete`/`= default` tail, found by raw-lexing
+// forward from a declaration's recorded end to the first semicolon at
+// bracket depth zero. The caller has already established from the AST that
+// such a tail is there; this only measures how far it reaches, so everything
+// crossed on the way belongs to it.
+//
+// Depth tracking is what makes the walk indifferent to how the tail is
+// spelled: P2573's `= delete("reason")` and a macro invocation's argument
+// list are both balanced parentheses to skip over, and the `;` is in the
+// file's own text either way -- which is the whole reason the extent is
+// lexed rather than derived from the expansion.
+std::optional<clang::SourceLocation> deleted_or_defaulted_semi(clang::SourceLocation       end,
+                                                               const clang::SourceManager& sm,
+                                                               const clang::LangOptions&   lang_opts) {
+    int depth = 0;
+    // substrate generic algorithm: a token-at-a-time scan whose stepping
+    // primitive, `Lexer::findNextToken`, is also its termination condition --
+    // it returns nothing at end of file. There is no token range to fold
+    // over, and the depth counter is state the walk carries, not a result it
+    // accumulates.
+    for (std::optional<clang::Token> tok = clang::Lexer::findNextToken(end, sm, lang_opts); tok.has_value();
+         tok                             = clang::Lexer::findNextToken(tok->getLocation(), sm, lang_opts)) {
+        if (tok->isOneOf(clang::tok::l_paren, clang::tok::l_square, clang::tok::l_brace))
+            ++depth;
+        else if (tok->isOneOf(clang::tok::r_paren, clang::tok::r_square, clang::tok::r_brace))
+            --depth;
+        else if (depth == 0 && tok->is(clang::tok::semi))
+            return tok->getLocation();
     }
-    return end;
+    return std::nullopt;
+}
+
+// The offset just past a class member declaration's terminating `;`: where a
+// whole-declaration removal (`\merge`/`\omit`) has to stop, and where the
+// `\freestanding` comment suffix is inserted (issues #85, #99).
+//
+// `getEndLoc()` does not reach it when the declaration carries a
+// `= delete`/`= default` tail, for two independent reasons. Clang's parser
+// (ParseCXXInlineMethods.cpp) extends a deleted or defaulted function's
+// recorded end past the keyword only when the declarator Sema handed back is
+// itself a FunctionDecl; for a member function *template* that declarator is
+// the FunctionTemplateDecl, the cast fails silently, and the templated
+// FunctionDecl's own end is left at the parameter list's closing `)` --
+// never advanced at all (issue #85). And even where it is advanced, it stops
+// at the keyword, so P2573's `= delete("reason")` leaves `("reason")`
+// stranded behind the removal (issue #99).
+//
+// Reading the tail out of the source text does not repair either: it may be
+// spelled through a macro -- `= BEMAN_EXPECTED_DELETE_MSG("...")`, which
+// bemanproject/expected uses so a pre-C++26 build still gets a plain
+// `delete` -- and raw-lexing forward then finds the macro's own identifier,
+// never a keyword. So the *presence* of a tail is asked of the AST, whose
+// answer Sema already resolved the macro for and which is therefore
+// indifferent to spelling and to which preprocessor branch is live, and only
+// its *extent* is lexed (decision construct-recognition).
+//
+// A member with no such tail keeps exactly the answer this returned before:
+// the `;` right past the recorded end, or the end of that token when even
+// that is not there (an in-class body, whose `}` no semicolon follows).
+unsigned
+member_declaration_end(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    // A tail spelled through a macro can leave the recorded end inside the
+    // expansion, which the raw lexer cannot walk. The file location is the
+    // invocation in the source text, which is what the scans below read; for
+    // every other declaration it is the recorded end unchanged.
+    const clang::SourceLocation end = sm.getFileLoc(decl->getEndLoc());
+    const clang::FunctionDecl*  fn  = member_function_or_template(decl);
+    if (fn != nullptr && (fn->isDeletedAsWritten() || fn->isDefaulted())) {
+        if (const std::optional<clang::SourceLocation> semi = deleted_or_defaulted_semi(end, sm, lang_opts))
+            return sm.getDecomposedLoc(*semi).second + 1;
+    }
+    if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(end, sm, lang_opts);
+        semi && semi->is(clang::tok::semi))
+        return sm.getDecomposedLoc(semi->getLocation()).second + 1;
+    return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts)).second;
 }
 
 // Subtractive synopsis extraction (design §3.4): lex the class's own text out
@@ -2112,12 +2158,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // was spliced to `;` (issue #5).
     std::vector<std::pair<unsigned, unsigned>> removed_ranges;
     const auto                                 omit_line = [&](const clang::Decl* outer) {
-        const unsigned              remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
-        const clang::SourceLocation end_loc      = deleted_or_defaulted_end(outer->getEndLoc(), sm, lang_opts);
-        unsigned remove_end = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end_loc, 0, sm, lang_opts)).second;
-        if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(end_loc, sm, lang_opts);
-            semi && semi->is(clang::tok::semi))
-            remove_end = sm.getDecomposedLoc(semi->getLocation()).second + 1;
+        const unsigned remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
+        unsigned       remove_end   = member_declaration_end(outer, sm, lang_opts);
         if (remove_end < class_end && buffer[remove_end] == '\r')
             ++remove_end;
         if (remove_end < class_end && buffer[remove_end] == '\n')
@@ -2376,12 +2418,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // would turn `= default;` into `= defaul;;`.
         if (fn->isDefaulted() || fn->isDeleted() || !fn->doesThisDeclarationHaveABody()) {
             if (!freestanding_comment.empty()) {
-                const clang::SourceLocation end_loc = deleted_or_defaulted_end(fn->getEndLoc(), sm, lang_opts);
-                unsigned                    semi_end =
-                    sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end_loc, 0, sm, lang_opts)).second;
-                if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(end_loc, sm, lang_opts);
-                    semi && semi->is(clang::tok::semi))
-                    semi_end = sm.getDecomposedLoc(semi->getLocation()).second + 1;
+                const unsigned semi_end = member_declaration_end(fn, sm, lang_opts);
                 edits.push_back(SynopsisEdit{semi_end, semi_end, std::string(freestanding_comment)});
             }
             continue;

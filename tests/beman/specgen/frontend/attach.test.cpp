@@ -28,6 +28,8 @@ const std::string kInclassTemplateHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR)
 const std::string kFreeFunctionsHeader   = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_free_functions.hpp";
 const std::string kMergeDeletedTemplateHeader =
     std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_merge_deleted_template.hpp";
+const std::string kDeletedTailSpellingHeader =
+    std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_deleted_tail_spelling.hpp";
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
@@ -141,6 +143,45 @@ TEST_CASE("build_document - a merged deleted function template is removed whole,
     CHECK_FALSE(contains(syn.code.text, "delete"));
     CHECK_FALSE(contains(syn.code.text, "template <class G>"));
     CHECK(contains(syn.code.text, "constexpr explicit widget(int g);"));
+}
+
+// The same removal, for the two spellings of the tail that reading the
+// source text cannot recognize (issue #99): one written through a macro,
+// where raw-lexing forward finds the macro's own identifier instead of a
+// keyword, and P2573's `= delete("reason")`, where the keyword is found but
+// the parenthesized message sits past it and used to be left behind on its
+// own. Both are asked of the AST now, so only the tail's extent is lexed.
+TEST_CASE("build_document - a merged deleted member goes whole however its `= delete` tail is spelled") {
+    const auto built = frontend::build_document(kDeletedTailSpellingHeader);
+    REQUIRE(built.has_value());
+    CHECK(built->diagnostics.empty());
+
+    const auto section = std::ranges::find_if(built->document.nodes, [](const ir::Node& node) {
+        const auto* found = std::get_if<ir::Section>(&node);
+        return found != nullptr && found->stable_name == "demo.gauge";
+    });
+    REQUIRE(section != built->document.nodes.end());
+    const ir::Section& gauge_section = std::get<ir::Section>(*section);
+    const auto         synopsis      = std::ranges::find_if(
+        gauge_section.children, [](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); });
+    REQUIRE(synopsis != gauge_section.children.end());
+    const ir::Synopsis& syn = std::get<ir::Synopsis>(*synopsis);
+
+    // Nothing of any merged declaration survives: not the macro's name, not
+    // the message that would have been stranded behind the keyword, and not
+    // the `= ` that introduced either.
+    CHECK_FALSE(contains(syn.code.text, "BEMAN_SPECGEN_CORPUS_DELETE_MSG"));
+    CHECK_FALSE(contains(syn.code.text, "BEMAN_SPECGEN_CORPUS_DEFAULT"));
+    CHECK_FALSE(contains(syn.code.text, "only int is accepted"));
+    CHECK_FALSE(contains(syn.code.text, "gauge(double)"));
+    CHECK_FALSE(contains(syn.code.text, "gauge(const gauge&)"));
+
+    // The literal spellings render exactly as they did before, and the
+    // `\freestanding-deleted` suffix lands past the whole tail rather than
+    // between the keyword and its message.
+    CHECK(contains(syn.code.text, "constexpr gauge() = default;"));
+    CHECK(contains(syn.code.text, "constexpr gauge(gauge&&) = delete;"));
+    CHECK(contains(syn.code.text, "\"gauge: not assignable\"); // freestanding-deleted"));
 }
 
 TEST_CASE("build_document - spec_attach.hpp attaches itemdecl/itemdescr to each out-of-line overload") {
