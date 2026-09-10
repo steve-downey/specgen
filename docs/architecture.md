@@ -821,7 +821,14 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      standard's own vocabulary, not foreign), or elsewhere (foreign) — never by guessing from
      rendered text alone the way `identifier_runs` does for the other clauses. `\expos`
      already reaches such a header (issue #36), so it is the fixit named first: unlike the
-     qualifier clause, there usually *is* a declaration to mark.
+     qualifier clause, there usually *is* a declaration to mark. The clause is resolved but
+     *reported* by text, so a spelling this run declares anywhere — an enumerator, a private
+     member, an `\omit`ted one — is withheld by the front end and never reaches the validator
+     (issue #93,
+     [shared-spelling-foreign-name](decisions/shared-spelling-foreign-name.md)): two entities
+     may share a word deliberately, and only one of them is foreign. The roster's own
+     `documented` set does not settle it, an enumeration's enumerators being text inside an
+     itemdecl rather than roster rows.
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any

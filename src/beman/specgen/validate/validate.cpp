@@ -483,6 +483,14 @@ std::optional<std::string> foreign_message(const IdentifierRun& run, const NameV
 // `run.namespace_qualifier` is set. `\expos` is the fixit named first because
 // it already reaches an included, non-system header (issue #36): marking the
 // declaration itself is usually the smaller edit than rewriting every use.
+//
+// The `documented` guard below is the roster's answer and not the whole of
+// it: a roster records an enumeration, never its enumerators, so a spelling
+// this run declares can be absent from it (issue #93). The front end
+// therefore never records a name the document declares at all (decision
+// shared-spelling-foreign-name), which is why this map may be read as a
+// settled fact rather than second-guessed here -- the question is where a
+// declaration lives, and this side of the boundary knows only text.
 std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const NameVisibility& visible) {
     const auto entry = visible.foreign_decl.find(run.name);
     if (entry == visible.foreign_decl.end() || visible.documented.contains(run.name))
@@ -506,7 +514,10 @@ std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const 
 // imprecision of `identifier_runs` one-directional for those cases -- it can
 // cost a finding, never invent one; `foreign_decl` is the one exception,
 // resolved by the front end rather than guessed from text (see
-// ir::ForeignDeclaration).
+// ir::ForeignDeclaration). It is reported by text all the same, which is
+// how a spelling shared with an entity of this run came to be invented as a
+// finding (issue #93) -- so the front end withholds a shared spelling
+// entirely, putting that exception back on the safe side of the rule.
 std::optional<std::string> leak_message(const IdentifierRun& run, const NameVisibility& visible) {
     if (!visible.documented.contains(run.name) && visible.hidden.contains(run.name))
         return "`" + run.name + "` is used in wording but is not a documented entity (" +
