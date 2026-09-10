@@ -28,7 +28,10 @@ struct Options {
     // This is the counterpart of latex::Options::base_section_depth and not
     // the same number: `\rSec3` is the draft's default library split
     // granularity, while a paper's wording sections start one or two levels
-    // down from its title.
+    // down from its title. Which is why the driver spells them as two
+    // separate options -- `--base-heading-level` reaches this field and
+    // org's, `--base-section-depth` reaches LaTeX's, and each is a usage error
+    // on the other's backends (decision wording-base-level).
     int base_heading_level = 2;
 
     // Wrap the fragment in an `::: add` editing-instruction div and

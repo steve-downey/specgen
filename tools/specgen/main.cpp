@@ -28,6 +28,7 @@
 #include <beman/specgen/frontend/frontend.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <cstdio>
 #include <expected>
 #include <filesystem>
@@ -40,6 +41,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -96,6 +98,13 @@ generate options:
                              the srefs database `.sref` looks up. May be
                              repeated; a name under any of the roots given
                              loses the class
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -115,28 +124,37 @@ generate options:
                              option parsing
 
 render options:
-  --from-ir <file>    IR JSON to read; "-" for standard input (required)
-  --backend <name>    latex (default), mpark, or org
-  --validate          run the wording validators before rendering; a finding
-                       at error severity aborts the render (exit 1) instead
-  --paper             wrap the fragment in an `::: add` editing-instruction div
-                       and number its paragraphs as added (mpark only)
-  --new-root <name>   drop the `.sref` class from <name> and every stable name
-                       beneath it, at any depth (mpark only): the paper's own
-                       proposed clause, not yet in the srefs database `.sref`
-                       looks up. May be repeated; a name under any of the roots
-                       given loses the class
-  --split <dir>       write one fragment per top-level section into <dir>,
-                       named from its stable name (optional.ctor.tex), and
-                       list the paths written on standard output
-  --root <name>       name the fragment holding the nodes outside every
-                       section (--split only); derived from the sections'
-                       common stable-name prefix when omitted
-  -o, --output <file> write here instead of standard output
+  --from-ir <file>          IR JSON to read; "-" for standard input (required)
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --paper                   wrap the fragment in an `::: add` editing-instruction
+                             div and number its paragraphs as added (mpark only)
+  --new-root <name>         drop the `.sref` class from <name> and every
+                             stable name beneath it, at any depth (mpark
+                             only): the paper's own proposed clause, not yet in
+                             the srefs database `.sref` looks up. May be
+                             repeated; a name under any of the roots given
+                             loses the class
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --split <dir>             write one fragment per top-level section into <dir>,
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted
+  -o, --output <file>       write here instead of standard output
 
 general:
-  -h, --help          show this message
-  --version           show the version
+  -h, --help                show this message
+  --version                 show the version
 )";
 
 int usage(std::FILE* out, int code) {
@@ -186,7 +204,42 @@ struct WordingOptions {
     // --new-root <name> (mpark only), accumulated: the flag repeats, once per
     // header the paper proposes, and every occurrence adds a root (issue #94).
     std::vector<std::string> new_roots;
+    // Where a top-level section starts, in the two units the backends measure
+    // it in: --base-heading-level <n> (mpark and org) and
+    // --base-section-depth <n> (latex). Two options rather than one because
+    // the fields are two quantities and not one -- `\rSec3` is the *draft's*
+    // library split granularity, while a markdown or org base is where a
+    // paper's wording sits under the heading that introduces it -- which is
+    // what mpark.hpp and org.hpp go out of their way to say. One flag feeding
+    // both would collapse exactly that distinction (decision
+    // wording-base-level, issue #97).
+    //
+    // Unset rather than defaulted here: what an unset flag means is the
+    // backend's own default, and a copy of that number in the driver would be
+    // a second place for it to drift from the header that documents it. See
+    // render_document below, which reads it off a default-constructed Options.
+    std::optional<int> base_heading_level;
+    std::optional<int> base_section_depth;
 };
+
+// The driver's only integer-valued options, parsed once for both commands so a
+// mistyped level reads the same from either. std::from_chars rather than
+// std::stoi for the reason the parser combinators give (decision
+// parser-combinators): what the user typed has to become a diagnostic naming
+// the option they typed, never an exception and never a silent zero. The whole
+// argument must be consumed -- `3x` is a typo, not a 3 -- and the lower bound
+// lives here rather than in wording_option_error because it is a fact about
+// headings rather than about any one backend: a top-level section has to *be*
+// a heading, and there is no zeroth one.
+std::expected<int, std::string> parse_level(std::string_view option, const std::string& text) {
+    int value{};
+    const auto [end, ec] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (ec != std::errc{} || end != text.data() + text.size())
+        return std::unexpected(std::format("specgen: {} takes a whole number, not '{}'", option, text));
+    if (value < 1)
+        return std::unexpected(std::format("specgen: {} must be at least 1, not {}", option, value));
+    return value;
+}
 
 // `render`'s options, as the accumulator of the fold below. `awaiting` is the
 // spelling of the option whose value the *next* argument supplies — what an
@@ -217,6 +270,20 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
             opts.awaiting.clear();
             return opts;
         }
+        // The two base-level options are settled here for the same kind of
+        // reason: the reference chain below can only name a `std::string&`,
+        // and these carry a number, whose failure to be one has to leave the
+        // scan rather than assign through it.
+        if (opts.awaiting == "--base-heading-level" || opts.awaiting == "--base-section-depth") {
+            const std::expected<int, std::string> level = parse_level(opts.awaiting, arg);
+            if (!level)
+                return std::unexpected(OptionError{level.error()});
+            std::optional<int>& target = opts.awaiting == "--base-heading-level" ? opts.wording.base_heading_level
+                                                                                 : opts.wording.base_section_depth;
+            target                     = *level;
+            opts.awaiting.clear();
+            return opts;
+        }
         std::string& dest = opts.awaiting == "--from-ir"   ? opts.input
                             : opts.awaiting == "--backend" ? opts.wording.backend
                             : opts.awaiting == "--split"   ? opts.wording.split_dir
@@ -235,7 +302,7 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
         return opts;
     }
     if (arg == "--from-ir" || arg == "--backend" || arg == "--split" || arg == "--root" || arg == "--new-root" ||
-        arg == "-o" || arg == "--output") {
+        arg == "--base-heading-level" || arg == "--base-section-depth" || arg == "-o" || arg == "--output") {
         opts.awaiting = arg;
         return opts;
     }
@@ -260,6 +327,29 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // stable-name class to drop.
     if (!options.new_roots.empty() && options.backend != "mpark")
         return std::format("specgen: --new-root applies only to the mpark backend, not '{}'", options.backend);
+    // The two base-level options measure two different things, so each is a
+    // usage error where the other one belongs -- and each message names the
+    // one that does. Accepting either spelling everywhere would be the flag
+    // that collapses the distinction, arriving by the back door; ignoring the
+    // wrong one silently would leave an author believing wording was placed
+    // under their own headings when it was not, which is what --paper and
+    // --new-root are reported for.
+    if (options.base_heading_level && options.backend == "latex")
+        return std::string("specgen: --base-heading-level applies to the mpark and org backends; "
+                           "the latex backend takes --base-section-depth");
+    if (options.base_section_depth && options.backend != "latex")
+        return std::format("specgen: --base-section-depth applies only to the latex backend, not '{}'; "
+                           "that backend takes --base-heading-level",
+                           options.backend);
+    // Markdown stops at six heading levels. The backend saturates *descent*
+    // there, because how deep a document nests is the document's business, but
+    // a base is the one level the author chose, and a chosen level that did
+    // nothing is worth saying out loud rather than clamping. Org has no such
+    // limit, so neither does this.
+    if (options.base_heading_level && *options.base_heading_level > 6 && options.backend == "mpark")
+        return std::format("specgen: --base-heading-level {} is past markdown's deepest heading; "
+                           "the mpark backend takes 1 to 6",
+                           *options.base_heading_level);
     // --split writes a *set* of files whose names it derives, so there is
     // nothing for a single output path to mean beside it; and --root names one
     // of those files, so it means nothing without them.
@@ -321,12 +411,31 @@ std::expected<int, std::string> emit_wording(const ir::Document& document, const
     // name. Validated by wording_option_error above, so there is no fourth
     // case. A lambda rather than the tail of the pipeline because the split
     // path calls it once per fragment.
+    //
+    // An unset base level is the backend's own default, read off a
+    // default-constructed Options rather than restated here: the number an
+    // omitted flag means is documented in the backend's header, and a copy of
+    // it in the driver would be a second place for it to drift from.
+    //
+    // This lambda is also the only place either path renders, so --split needs
+    // nothing of its own: a fragment *is* a document (design §8), and it
+    // therefore starts at the same base a whole render does. The alternative --
+    // a fragment measuring from its own top-level section -- would make the
+    // base mean one thing in a document and another in a piece of one.
     auto render_document = [&](const ir::Document& fragment) {
         if (options.backend == "mpark")
-            return mpark::render_to_string(fragment, {.paper_mode = options.paper, .new_roots = options.new_roots});
+            return mpark::render_to_string(
+                fragment,
+                {.base_heading_level = options.base_heading_level.value_or(mpark::Options{}.base_heading_level),
+                 .paper_mode         = options.paper,
+                 .new_roots          = options.new_roots});
         if (options.backend == "org")
-            return org::render_to_string(fragment);
-        return latex::render_to_string(fragment);
+            return org::render_to_string(
+                fragment,
+                {.base_heading_level = options.base_heading_level.value_or(org::Options{}.base_heading_level)});
+        return latex::render_to_string(
+            fragment,
+            {.base_section_depth = options.base_section_depth.value_or(latex::Options{}.base_section_depth)});
     };
 
     // The extension is the only part of design §8's fragment-path scheme
@@ -539,6 +648,22 @@ int generate_command(const std::vector<std::string>& args) {
             if (!next(new_root))
                 return 2;
             wording.new_roots.push_back(std::move(new_root));
+        } else if (arg == "--base-heading-level" || arg == "--base-section-depth") {
+            wording_only();
+            // `next` fills a string; the number comes out of the same helper
+            // `render` uses, so a mistyped level reads identically from either
+            // command rather than from two hand-written conversions.
+            std::string text;
+            if (!next(text))
+                return 2;
+            const std::expected<int, std::string> level = parse_level(arg, text);
+            if (!level) {
+                std::println(stderr, "{}", level.error());
+                return 2;
+            }
+            std::optional<int>& target =
+                arg == "--base-heading-level" ? wording.base_heading_level : wording.base_section_depth;
+            target = *level;
         } else if (arg == "--compile-commands") {
             if (!next(compile_commands_dir))
                 return 2;

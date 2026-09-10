@@ -444,6 +444,65 @@ TEST_CASE("mpark - base heading level is an option") {
           std::string::npos);
 }
 
+// The base moves the *origin*, not the descent: at any base a nested section
+// is still one `#` deeper than its parent. Issue #97 is what happens when the
+// origin cannot be moved -- a paper writing its own sections at `##` gets its
+// generated clauses at `##` too, as siblings of "Abstract" rather than as
+// children of the "Wording" heading that introduces them.
+TEST_CASE("mpark - a nested section descends from a non-default base") {
+    Document doc;
+    Section  outer;
+    outer.stable_name = "transcode";
+    outer.title       = "Transcoding";
+    Section inner;
+    inner.stable_name = "transcode.errors";
+    inner.title       = "Error types";
+    Section deepest;
+    deepest.stable_name = "transcode.errors.enum";
+    deepest.title       = "Enumerators";
+    inner.children.push_back(std::move(deepest));
+    outer.children.push_back(std::move(inner));
+    doc.nodes.push_back(std::move(outer));
+
+    const std::string expected =
+        R"(::: wording
+
+### Transcoding [transcode]{- .sref} {-}
+
+#### Error types [transcode.errors]{- .sref} {-}
+
+##### Enumerators [transcode.errors.enum]{- .sref} {-}
+
+:::
+)";
+    CHECK(mpark::render_to_string(doc, {.base_heading_level = 3}) == expected);
+}
+
+// The cap is on the *descent*, which is the document's business, not on the
+// base, which is the author's: the driver refuses a base past six outright
+// (issue #97), so what saturates here is a document that nests below whatever
+// base it was given.
+TEST_CASE("mpark - heading level saturates at six on the way down") {
+    Document doc;
+    Section  outer;
+    outer.stable_name = "deep";
+    Section inner;
+    inner.stable_name = "deep.deeper";
+    outer.children.push_back(std::move(inner));
+    doc.nodes.push_back(std::move(outer));
+
+    const std::string expected =
+        R"(::: wording
+
+###### [deep]{- .sref} {-}
+
+###### [deep.deeper]{- .sref} {-}
+
+:::
+)";
+    CHECK(mpark::render_to_string(doc, {.base_heading_level = 6}) == expected);
+}
+
 TEST_CASE("mpark - a titleless section emits no double space") {
     Document doc;
     Section  sec;

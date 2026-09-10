@@ -1,0 +1,22 @@
+*** Header synopsis [gadget.syn]
+
+#+begin_codeblock
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+};
+#+end_codeblock
+
+*** Observers [gadget.observe]
+
+**** Readiness [gadget.observe.ready]
+
+#+begin_itemdecl
+constexpr bool ready() const noexcept;
+#+end_itemdecl
+
+/Returns/: ~true~ if and only if the gadget is ready.
+
+***** Notes [gadget.observe.ready.notes]
+
+A third level of section, so the descent below the base is visible.

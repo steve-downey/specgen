@@ -33,7 +33,9 @@ struct Options {
     // wording starts a level or two below its title).
     //
     // Unlike the mpark backend there is no cap: markdown stops at six heading
-    // levels and org does not.
+    // levels and org does not -- which the driver's `--base-heading-level`
+    // follows, refusing a base above six for mpark and accepting one here
+    // (decision wording-base-level).
     int base_heading_level = 2;
 };
 

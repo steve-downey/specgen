@@ -1,0 +1,69 @@
+{
+  "nodes": [
+    {
+      "type": "section",
+      "stable": "gadget.syn",
+      "title": "Header synopsis",
+      "children": [
+        {
+          "type": "synopsis",
+          "name": "gadget",
+          "code": {
+            "text": "class gadget {\npublic:\n  constexpr bool ready() const noexcept;\n};",
+            "spans": []
+          },
+          "roster": []
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "stable": "gadget.observe",
+      "title": "Observers",
+      "children": [
+        {
+          "type": "section",
+          "stable": "gadget.observe.ready",
+          "title": "Readiness",
+          "children": [
+            {
+              "type": "item",
+              "decl": {
+                "signatures": [
+                  { "text": "constexpr bool ready() const noexcept;", "spans": [] }
+                ],
+                "index": []
+              },
+              "descr": {
+                "elements": [
+                  {
+                    "kind": "returns",
+                    "paragraphs": [
+                      [
+                        { "t": "code", "code": { "text": "true", "spans": [] } },
+                        { "t": "text", "text": " if and only if the gadget is ready." }
+                      ]
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "section",
+              "stable": "gadget.observe.ready.notes",
+              "title": "Notes",
+              "children": [
+                {
+                  "type": "para",
+                  "content": [
+                    { "t": "text", "text": "A third level of section, so the descent below the base is visible." }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

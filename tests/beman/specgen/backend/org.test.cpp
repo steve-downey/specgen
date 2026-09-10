@@ -498,6 +498,36 @@ TEST_CASE("org - outline level is not capped at six") {
     CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == "******** [deep]\n");
 }
 
+// The base moves the *origin*, not the descent: at any base a nested section
+// is still one star deeper than its parent. Issue #97 is what happens when the
+// origin cannot be moved -- a paper's generated clauses come out as siblings
+// of its own prose sections rather than as children of the heading that
+// introduces them.
+TEST_CASE("org - a nested section descends from a non-default base") {
+    Document doc;
+    Section  outer;
+    outer.stable_name = "transcode";
+    outer.title       = "Transcoding";
+    Section inner;
+    inner.stable_name = "transcode.errors";
+    inner.title       = "Error types";
+    Section deepest;
+    deepest.stable_name = "transcode.errors.enum";
+    deepest.title       = "Enumerators";
+    inner.children.push_back(std::move(deepest));
+    outer.children.push_back(std::move(inner));
+    doc.nodes.push_back(std::move(outer));
+
+    const std::string expected =
+        R"(*** Transcoding [transcode]
+
+**** Error types [transcode.errors]
+
+***** Enumerators [transcode.errors.enum]
+)";
+    CHECK(org::render_to_string(doc, {.base_heading_level = 3}) == expected);
+}
+
 TEST_CASE("org - a titleless section emits no double space") {
     Document doc;
     Section  sec;

@@ -377,3 +377,33 @@ TEST_CASE("latex - base section depth is configurable") {
     options.base_section_depth = 2;
     CHECK(latex::render_to_string(doc, options) == "\\rSec2[optional]{Optional objects}\n");
 }
+
+// The base moves the *origin*, not the descent: at any base a nested section
+// is still one deeper than its parent. Issue #97 is what happens when the
+// origin cannot be moved -- a paper whose own sections sit at one level gets
+// its generated clauses at the same one, as siblings of its prose rather than
+// as children of the heading that introduces them.
+TEST_CASE("latex - a nested section descends from a non-default base") {
+    Document doc;
+    Section  outer;
+    outer.stable_name = "optional.observe";
+    outer.title       = "Observers";
+    Section inner;
+    inner.stable_name = "optional.observe.deep";
+    inner.title       = "Deeper";
+    Section deepest;
+    deepest.stable_name = "optional.observe.deep.deeper";
+    deepest.title       = "Deeper still";
+    inner.children.push_back(std::move(deepest));
+    outer.children.push_back(std::move(inner));
+    doc.nodes.push_back(std::move(outer));
+
+    const std::string expected =
+        R"(\rSec2[optional.observe]{Observers}
+
+\rSec3[optional.observe.deep]{Deeper}
+
+\rSec4[optional.observe.deep.deeper]{Deeper still}
+)";
+    CHECK(latex::render_to_string(doc, {.base_section_depth = 2}) == expected);
+}

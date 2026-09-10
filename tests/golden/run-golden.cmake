@@ -119,10 +119,22 @@ elseif(MODE STREQUAL "render")
         set(paper_args "--paper")
     endif()
 
+    # Likewise the base level: one more render flag, in whichever of the two
+    # spellings this backend measures a top-level section in. A case passes the
+    # one that belongs to its BACKEND -- the driver rejects the other as a
+    # usage error, which is the point of there being two (issue #97).
+    set(level_args "")
+    if(BASE_HEADING_LEVEL)
+        set(level_args --base-heading-level "${BASE_HEADING_LEVEL}")
+    endif()
+    if(BASE_SECTION_DEPTH)
+        list(APPEND level_args --base-section-depth "${BASE_SECTION_DEPTH}")
+    endif()
+
     execute_process(
         COMMAND
             "${SPECGEN}" render --from-ir "${INPUT}" --backend "${BACKEND}"
-            ${paper_args} -o "${ACTUAL}"
+            ${paper_args} ${level_args} -o "${ACTUAL}"
         RESULT_VARIABLE render_result
         ERROR_VARIABLE render_error
     )

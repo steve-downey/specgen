@@ -73,17 +73,18 @@ Its supported generation path is:
 ```text
 specgen generate <header> [--emit-ir]
                  [--backend latex|mpark|org]
-                 [--validate] [--paper]
+                 [--validate] [--paper] [--new-root <name>]
+                 [--base-heading-level <n>] [--base-section-depth <n>]
                  [--split <dir> [--root <name>]]
                  [-o <file>]
                  [--compile-commands <dir> | --no-compile-commands]
                  [-- <clang arguments>...]
 ```
 
-Without `--emit-ir`, `generate` renders wording, and `--backend`, `--validate`,
-`--paper`, `--split` and `--root` mean exactly what they mean for `render`.
-`--emit-ir` emits the complete JSON document instead and stops before the
-backends, so it rejects those five options rather than ignoring them. `-o` and
+Without `--emit-ir`, `generate` renders wording, and every option above that
+steers a backend means exactly what it means for `render`. `--emit-ir` emits
+the complete JSON document instead and stops before the backends, so it rejects
+those options rather than ignoring them. `-o` and
 `--output` name the destination either way; otherwise output goes to standard
 output. With no header at all, `generate` parses a stock snippet as a
 front-end link probe and produces no wording.
@@ -132,7 +133,8 @@ specgen render --from-ir wording.json --backend org -o wording.org
 specgen render --from-ir <file|->
                [--backend latex|mpark|org]
                [--validate]
-               [--paper]
+               [--paper] [--new-root <name>]
+               [--base-heading-level <n>] [--base-section-depth <n>]
                [-o|--output <file>]
                [--split <dir> [--root <name>]]
 ```
@@ -152,6 +154,29 @@ be combined with `--output`.
 
 Splitting does not delete files left by an earlier run. Consumers should use
 the manifest, in document order, to reconcile the output directory.
+
+### Where a top-level section starts
+
+A fragment's sections have to sit under the heading in your paper that
+introduces them, and where that is depends on how your paper is written. Two
+options say so, one per unit, because the backends do not measure the same
+quantity:
+
+- `--base-heading-level <n>` is the markdown or org heading level of a
+  top-level section, for the `mpark` and `org` backends. It is `2` by default,
+  which is the level the mpark/wg21 examples write their own sections at. A
+  paper that writes its sections at `##` and introduces the wording with a
+  `##` heading wants `3` here, so the generated clauses become children of that
+  heading rather than siblings of it.
+- `--base-section-depth <n>` is the `\rSec` depth of a top-level section, for
+  the `latex` backend. It is `3` by default, the draft's own library split
+  granularity.
+
+Each is rejected on the backends that do not measure in its unit, rather than
+ignored. Both take a whole number of at least 1; under `mpark` the level may
+not exceed 6, markdown's deepest heading. The base moves only where the
+outermost section sits: nested sections still descend one step at a time from
+it, and `--split` starts every fragment at the same base a whole render would.
 
 ## Comment forms and document structure
 
