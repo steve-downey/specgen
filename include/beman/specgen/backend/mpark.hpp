@@ -15,6 +15,7 @@
 #include <beman/specgen/ir.hpp>
 
 #include <string>
+#include <vector>
 
 namespace beman::specgen::backend::mpark {
 
@@ -43,18 +44,25 @@ struct Options {
     // the numbering, which are the mechanical halves.
     bool paper_mode = false;
 
-    // A stable name under this dotted prefix (equal to it, or one segment
-    // deeper) is the paper's own proposed clause, not yet in the srefs
-    // database `.sref` looks up -- so its class is dropped everywhere a
-    // stable name is rendered (a `\ref` in a synopsis comment, an `\iref`
-    // cross-reference, a Section heading), leaving the bare `[name]` the
-    // draft itself prints for a clause with no number yet (issue #89).
+    // The dotted prefixes rooting the paper's own proposed clauses, which are
+    // not yet in the srefs database `.sref` looks up -- so the class is
+    // dropped everywhere such a name is rendered (a `\ref` in a synopsis
+    // comment, an `\iref` cross-reference, a Section heading), leaving the
+    // bare `[name]` the draft itself prints for a clause with no number yet
+    // (issue #89). A root covers its whole *subtree*: the prefix itself and
+    // every name at any depth beneath it, so `transcode` covers
+    // `transcode.whatwg.decode.iterator` as well as `transcode.errors`.
+    // Several roots because one paper may propose several headers, each with
+    // its own root (issue #94) -- `beman.transcode`'s `<transcode>` and
+    // `<null_term>` are `transcode` and `null.term` -- and a name under *any*
+    // of them loses the class.
+    //
     // Empty (the default) changes nothing: every stable name keeps `.sref`,
-    // exactly as before this option existed. A name outside the prefix --
+    // exactly as before this option existed. A name outside every root --
     // a citation of a clause the draft already has -- is unaffected either
     // way, which is the point: this says which names are new, not which
     // backend feature to turn off.
-    std::string new_root;
+    std::vector<std::string> new_roots;
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once
