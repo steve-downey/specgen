@@ -829,6 +829,29 @@ TEST_CASE("validate - a synopsis is checked for a foreign declaration too") {
     CHECK(diags.front().message.find("`probe_witness_t` appears in rendered output") != std::string::npos);
 }
 
+// Why a shared spelling has to be withheld by the front end and cannot be
+// argued away here (issue #93, decision shared-spelling-foreign-name). The
+// `documented` guard the two cases above lean on is the roster's, and a
+// roster holds an *enumeration*; its enumerators are text inside an
+// itemdecl. So this document declares `windows_1252` and says so nowhere a
+// validator can read, and the finding below is the false positive the report
+// opened with -- pinned here as the boundary, not as behaviour anyone wants.
+// Read the other way: if rosters ever gain enumerator rows this case fails,
+// and the decision record is where to record that the reason moved.
+TEST_CASE("validate - an enumerator is no roster row, so a shared spelling cannot be settled on this side") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"enum class codec { utf_8, windows_1252 };", {}});
+
+    ir::Document doc;
+    doc.nodes.push_back(ir::Section{"demo.codec", "Encodings", {ir::Node{std::move(item)}}});
+    doc.foreign_declarations = {{"windows_1252", "tables.hpp"}};
+
+    const Diagnostics diags = validate(doc);
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().context == "demo.codec/itemdecl[0]");
+    CHECK(diags.front().message.find("`windows_1252` appears in rendered output") != std::string::npos);
+}
+
 TEST_CASE("validate - one qualifier finding per fragment, however often the name appears") {
     const Diagnostics diags =
         validate(document_with_foreign({}, "detail::reset();\ndetail::seal();", {{"detail", "demo::detail"}}));

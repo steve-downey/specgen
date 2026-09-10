@@ -301,6 +301,14 @@ struct ForeignNamespace {
 // namespace, declared in an included implementation header, used bare
 // because it needs no prefix to be found. A reader of the wording meets it
 // with no declaration, no exposition-only entry, and no cross-reference.
+//
+// A spelling this run declares anywhere is never recorded here, however the
+// reference resolved (decision shared-spelling-foreign-name): the check
+// resolves a reference but reports it by text, and a word naming both a
+// documented entity and a foreign one is evidence about neither. The front
+// end drops those, so the validator never sees them -- there is no
+// declared-name channel beside this one, and every consumer of this vector
+// can read it as "no entity of this run answers to this name".
 struct ForeignDeclaration {
     std::string name;   // as used: `probe_witness`
     std::string header; // the header that actually declares it

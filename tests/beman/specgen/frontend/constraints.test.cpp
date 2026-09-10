@@ -29,6 +29,7 @@ namespace {
 const std::string kCorpusHeader            = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_constraints.hpp";
 const std::string kImportedQualifierHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_imported_qualifier.hpp";
 const std::string kForeignIncludeHeader    = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_foreign_include.hpp";
+const std::string kSharedSpellingHeader    = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_shared_spelling.hpp";
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
@@ -95,6 +96,29 @@ TEST_CASE("build_document - names resolving outside the run, with no qualifier t
     CHECK(std::ranges::none_of(found, [](const ir::ForeignDeclaration& d) { return d.name == "steppable"; }));
     CHECK(std::ranges::all_of(found,
                               [](const ir::ForeignDeclaration& d) { return d.header == "spec_foreign_detail.hpp"; }));
+}
+
+// The same channel asked about a spelling this run declares (issue #93,
+// decision shared-spelling-foreign-name): spec_shared_spelling.hpp documents
+// an enumerator `windows_1252` and includes a header declaring a generated
+// table of that name, so the resolved reference in the function body is
+// foreign and the word is not. Nothing is recorded, and the check the report
+// landed on is spared reporting an enumerator as undocumented at the
+// enumeration's own declaration.
+//
+// The namespaces that table sits in *are* still recorded: a written
+// `detail::` is wrong in rendered output whatever it qualifies, and it is
+// that asymmetry -- the qualifier half untouched, the bare-name half
+// filtered -- that makes the empty list a filter on names rather than a
+// check switched off.
+TEST_CASE("build_document - a foreign name spelled the same as one this run declares is not recorded") {
+    const auto built = frontend::build_document(kSharedSpellingHeader);
+    REQUIRE(built.has_value());
+    CHECK(built->diagnostics.empty());
+
+    CHECK(built->document.foreign_declarations.empty());
+    CHECK(std::ranges::any_of(built->document.foreign_namespaces,
+                              [](const ir::ForeignNamespace& ns) { return ns.name == "tables"; }));
 }
 
 TEST_CASE("build_document - spec_constraints.hpp derives Constraints from the trailing requires-clause") {

@@ -5065,6 +5065,59 @@ class ForeignDeclCollector : public clang::RecursiveASTVisitor<ForeignDeclCollec
     std::map<std::string, std::string>&              out_;
 };
 
+// Every name the document itself declares, at any depth (decision
+// shared-spelling-foreign-name). The check `ForeignDeclCollector` feeds
+// *resolves* a reference but *reports* it by text, and a spelling can name
+// two entities: a generated `detail::tables::windows_1252` and the
+// `codec::windows_1252` enumerator it is the table for are the same word and
+// different declarations, deliberately, because both are named after the
+// encoding. Text-matching the foreign one then fires at every occurrence of
+// the documented one -- starting with the enumeration's own declaration
+// (issue #93), where the check reports an enumerator as undocumented at the
+// point where the enumeration that documents it is being rendered.
+//
+// So this is deliberately wider than the roster's `documented` set the
+// validator already consults, which is what let the report through: a roster
+// records the enumeration, never its enumerators, so the run genuinely did
+// not know it declared that spelling. It is wider at the other end too -- a
+// private or `\omit`ted member's name suppresses the foreign report as well.
+// That is the direction to be wrong in. A name this run declares is this
+// run's to explain, and whether it explains it well is a question every
+// other design §9 check is *already* asking about that same declaration, by
+// disposition rather than by text; a foreign entity sharing its spelling is
+// evidence of nothing, and reporting it costs the author an `\expos` that
+// asserts something false about a header the document never reaches.
+//
+// Locations are checked, not decl contexts: a declaration written in the
+// document is the document's whatever its scope -- a class member, an
+// enumerator, a template parameter, a local of a body that never becomes
+// wording.
+class DocumentNameCollector : public clang::RecursiveASTVisitor<DocumentNameCollector> {
+  public:
+    DocumentNameCollector(const clang::SourceManager& sm, const DocumentFiles& doc, std::set<std::string>& out)
+        : sm_(sm), doc_(doc), out_(out) {}
+
+    bool VisitNamedDecl(clang::NamedDecl* decl) {
+        // Implicit declarations are compiler synthesis, not source, the same
+        // exclusion collect_top_level_decl draws: an implicit member reports
+        // its class's own location, so it would contribute a name the author
+        // never wrote at a place the author never wrote it.
+        if (decl == nullptr || decl->isImplicit())
+            return true;
+        const clang::SourceLocation loc = decl->getLocation();
+        if (!loc.isValid() || !doc_.contains(sm_.getDecomposedLoc(loc).first))
+            return true;
+        if (const std::string name = decl->getNameAsString(); !name.empty())
+            out_.insert(name);
+        return true;
+    }
+
+  private:
+    const clang::SourceManager& sm_;
+    const DocumentFiles&        doc_;
+    std::set<std::string>&      out_;
+};
+
 std::vector<beman::specgen::ir::ForeignDeclaration>
 collect_foreign_declarations(const std::vector<clang::Decl*>&                 decls,
                              const std::map<const clang::Decl*, std::string>& expos,
@@ -5074,9 +5127,20 @@ collect_foreign_declarations(const std::vector<clang::Decl*>&                 de
     ForeignDeclCollector               collector(expos, sm, doc, found);
     for (clang::Decl* decl : decls) // substrate generic algorithm
         collector.TraverseDecl(decl);
-    return found | std::views::transform([](const auto& kv) {
-               return beman::specgen::ir::ForeignDeclaration{kv.first, kv.second};
-           }) |
+
+    // The same walk over the same declarations, asking the other question:
+    // which spellings are the document's own. Two passes rather than one
+    // visitor answering both, because the two sets are keyed on opposite
+    // ends of a reference -- where a *referenced* declaration lives, and
+    // where a *written* declaration lives -- and only their names ever meet.
+    std::set<std::string> declared;
+    DocumentNameCollector names(sm, doc, declared);
+    for (clang::Decl* decl : decls) // substrate generic algorithm
+        names.TraverseDecl(decl);
+
+    return found | std::views::filter([&declared](const auto& kv) { return !declared.contains(kv.first); }) |
+           std::views::transform(
+               [](const auto& kv) { return beman::specgen::ir::ForeignDeclaration{kv.first, kv.second}; }) |
            std::ranges::to<std::vector>();
 }
 

@@ -912,6 +912,18 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_foreign_include.hpp"
 )
 
+# The bare-name half asked about a spelling this run declares (issue #93,
+# decision shared-spelling-foreign-name): a documented enumerator and a
+# generated lookup table in support/spec_shared_spelling_tables.hpp share a
+# word, because both are named after the encoding. No NO_VALIDATE and no
+# validate sibling — unlike the two cases above, the point of this fixture is
+# that it draws *nothing*, so the ordinary `.validate` gate is the assertion.
+specgen_add_golden(
+    shared_spelling
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_shared_spelling.hpp"
+)
+
 # Exposition-only *uses* (design §3.5/§4.1) — an expos member
 # referenced inside the class's own fragments renders as `\exposid`: in an
 # extracted `*-equiv` body and in backticked prose.
