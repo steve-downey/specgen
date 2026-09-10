@@ -13,6 +13,7 @@ foreach(
     attach
     markers
     aliases
+    class_at
     class_description
     constraints
     conditional_equiv

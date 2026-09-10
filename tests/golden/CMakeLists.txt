@@ -831,6 +831,28 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs"
 )
 
+# `\at` on a class *definition*'s own docblock (issue #98, decision
+# routed-wording-payload): the class-scope `static_assert` paragraph and the
+# class's own description travel together to the section it names, whether the
+# class is folded into a gathered `.syn` region or written outside one. The
+# unrouted folded-in class beside them is issue #41's behaviour, which the
+# route must not disturb.
+#
+# NO_VALIDATE for the same reason `foreign_include` takes it: one of the six
+# classes routes to a section no `\rSec` opens, which is the fixture --
+# without the `Routed` roster entry the route earns, design §9 would have
+# nothing left to report the typo by. `gathered_class_at_validate` (below the
+# Clang gate) pins the finding it draws. The distinct case name leaves
+# `gathered_class_at` free for the backend renderings below; all consume one
+# checked-in expected.json.
+specgen_add_golden(
+    gathered_class_at_generate
+    MODE generate
+    NO_VALIDATE
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_gathered_class_at.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/gathered_class_at"
+)
+
 # In-class-member attachment (design §3.3 sub-case, §6) — an
 # out-of-line member, an in-class-defined member, and a hidden friend under
 # one section, their itemdescrs interleaved in class-body order.
@@ -1403,6 +1425,24 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_refs/expected.json"
 )
 
+# The routed-class IR rendered through every backend: a routed folded-in
+# class's paragraph and description stand in the section its `\at` named, in
+# that order, and read exactly as the non-folded control's do in its own.
+specgen_add_golden(
+    gathered_class_at
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_class_at/expected.json"
+)
+specgen_add_golden(
+    gathered_class_at
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_class_at/expected.json"
+)
+specgen_add_golden(
+    gathered_class_at
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_class_at/expected.json"
+)
+
 # `spec_namespace.hpp`'s standing finding, read off its *own* generate
 # golden. Needs no Clang — the input is the checked-in expected.json — so it
 # runs on every lane, which is the point: the leakage rule is Tier A, and the
@@ -1428,6 +1468,20 @@ specgen_add_golden(
     foreign_include_validate
     MODE validate
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/foreign_include/expected.json"
+)
+
+# `spec_gathered_class_at.hpp`'s standing finding, read off its own generate
+# golden the same way `foreign_include_validate` reads its header's -- and
+# registered after the Clang-gated block for the same regeneration-ordering
+# reason. A class whose `\at` names a section no `\rSec` opens loses its
+# wording to `build_tree`, and the `Routed` roster entry is the only record
+# left that the route was asked for; this is what pins that the entry is
+# there, that design §9 reads it, and that the finding names the class it is
+# about even though the gathered node names none of them (issue #45).
+specgen_add_golden(
+    gathered_class_at_validate
+    MODE validate
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/gathered_class_at/expected.json"
 )
 
 # `spec_private_alias.hpp`'s standing finding, read off its own generate

@@ -1,0 +1,56 @@
+** Header <box> synopsis [box.syn]
+
+#+begin_codeblock
+struct crate {
+  int size;
+};
+
+template<class T>
+struct pallet {
+  T slot;
+};
+
+struct label {
+  int id;
+};
+
+struct crumb {
+  int weight;
+};
+
+struct strap {
+  int length;
+};
+#+end_codeblock
+
+A program that instantiates ~crumb~ is ill-formed unless ~sizeof(short) >= 2~ is ~true~.
+
+/Remarks/: A ~crumb~ is described where it is written.
+
+*** Class `crate` [box.crate]
+
+A program that instantiates ~crate~ is ill-formed unless ~sizeof(int) >= 2~ is ~true~.
+
+/Remarks/: A ~crate~ owns no storage.
+
+*** Class template `pallet` [box.pallet]
+
+A program that instantiates ~pallet<T>~ is ill-formed unless ~sizeof(char) == 1~ is ~true~.
+
+*** Class `label` [box.label]
+
+/Remarks/: A ~label~ names a ~crate~ and nothing else.
+
+*** Class `hinge` [box.hinge]
+
+#+begin_codeblock
+struct hinge {
+  int pin;
+};
+#+end_codeblock
+
+**** General [box.hinge.general]
+
+A program that instantiates ~hinge~ is ill-formed unless ~sizeof(int) >= 2~ is ~true~.
+
+/Remarks/: A ~hinge~ joins two crates.

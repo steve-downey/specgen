@@ -3499,6 +3499,58 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
         out.general = std::move(derived->text);
 }
 
+// `\at` on a class definition's own docblock: where the class's own wording
+// goes (issue #98, decision routed-wording-payload). Without it that wording
+// stays beside the synopsis, which is the right default and the only thing
+// #41 gave a folded-in class -- and which left the marker a silent no-op both
+// inside a gathered region and outside one, since a SynopsisDecl had no
+// routing channel of its own for the two nodes that are not its synopsis.
+//
+// It has one: `pending`, the same channel the class's members already route
+// through, whose payload is an ir::Node exactly so these two can take it. Both
+// nodes travel, keyed by the class's own offset, so they arrive in the target
+// section in the order they would have stood in beside the synopsis --
+// paragraph first, then description -- and ahead of any member of the same
+// class routed to that section, whose key is further into the file.
+//
+// The roster entry is what makes the route *checkable*, the same way it is
+// for a folded-in namespace entity: build_tree drops a pending item whose
+// stable name no `\rSec` opens, and the entry is the only record that the
+// request was made, which is what design §9's dangling-route rule reads. It
+// names the class in both fields -- `name`, because the wording is the
+// class's own, and `parent`, because a gathered header synopsis names no
+// class and the entry is then the only thing that says which one a finding is
+// about (issue #45). `kind` describes a member and a class is none of the
+// three, so it keeps the default: only design §6's private-data nudge reads
+// the field, and it reads it of a Private entry, never a Routed one.
+//
+// An `\at` on a class with no wording of its own routes nothing and is not
+// reported: there is no description to lose, so nothing is being ignored.
+void route_class_description(beman::specgen::document_build::SynopsisDecl&   out,
+                             const clang::CXXRecordDecl*                     record,
+                             const beman::specgen::lowering::ItemDirectives& directives) {
+    namespace db = beman::specgen::document_build;
+
+    if (!directives.at_anchor || directives.at_anchor->empty())
+        return;
+    if (!out.general && out.descr.elements.empty())
+        return;
+
+    const std::string name = record->getNameAsString();
+    out.synopsis.roster.push_back(
+        ir::SynopsisEntry{name, ir::Disposition::Routed, *directives.at_anchor, ir::MemberKind::Function, name});
+
+    if (out.general) {
+        out.pending.push_back(db::PendingItem{*directives.at_anchor, out.offset, std::move(*out.general)});
+        out.general.reset();
+    }
+    if (!out.descr.elements.empty()) {
+        out.pending.push_back(
+            db::PendingItem{*directives.at_anchor, out.offset, ir::SpecItem{{}, std::move(out.descr)}});
+        out.descr = {};
+    }
+}
+
 // --- \effects-equiv / \returns-equiv body extraction (design §4.2) ----------
 // An extraction marker lowers to a description element carrying an *empty*
 // EquivalentTo (lowering::append_extraction); the front end fills its code from
@@ -4469,7 +4521,13 @@ void group_adjacent_aliases(std::vector<beman::specgen::document_build::PendingI
     for (db::PendingItem& candidate : pending) {
         if (candidate.is_alias && candidate.wants_join && !grouped.empty() && grouped.back().is_alias &&
             grouped.back().stable == candidate.stable) {
-            db::append_grouped_itemdecl(grouped.back().item.decl, std::move(candidate.item.decl));
+            // `is_alias` is set only where a marked alias's SpecItem was
+            // pushed, so it is also the record of which alternative of the
+            // pending payload this item holds (decision
+            // routed-wording-payload); a class's own routed wording is never
+            // an alias and never reaches here.
+            db::append_grouped_itemdecl(std::get<ir::SpecItem>(grouped.back().item).decl,
+                                        std::move(std::get<ir::SpecItem>(candidate.item).decl));
             continue;
         }
         grouped.push_back(std::move(candidate));
@@ -5739,6 +5797,10 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.roster = build_roster(record, sm, expos_set, out.pending);
         group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), record, sm, lang_opts, ns_drop_set, expos_set);
+        // After the description exists, and after grouping, which has no
+        // opinion about it: `\at` on the class's own docblock sends both
+        // halves of that wording to the section it names (issue #98).
+        route_class_description(out, record, docblock_directives(ev.decl, sm));
         return out;
     }
     if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(ev.decl)) {
@@ -5772,6 +5834,9 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.roster = build_roster(templated, sm, expos_set, out.pending);
         group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), templated, sm, lang_opts, ns_drop_set, expos_set);
+        // Same `\at` routing as the plain-record arm above, read from the
+        // ClassTemplateDecl the arm's other docblock reads use.
+        route_class_description(out, templated, docblock_directives(ev.decl, sm));
         return out;
     }
 
@@ -6641,14 +6706,15 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
         unsigned consumed_end = 0;
         // What a folded-in declaration keeps that the gathered node cannot
         // hold. For a class: its class-general paragraph (design §5.2) and its
-        // own description (issue #18). Neither is routed -- both belong beside
-        // their class's synopsis, in whatever section is open -- and the
-        // gathered node has one slot for each while a region may hold several
-        // classes, so they travel on as their own events instead of being
-        // merged (issue #41). For a namespace entity: its whole wording, when
-        // nothing routes it elsewhere (issue #69). Pushed after the gathered
-        // node, in source order, which is where their offsets place them
-        // anyway.
+        // own description (issue #18), when an `\at` on the class has not
+        // routed them out through `pending` already (issue #98) -- unrouted,
+        // both belong beside their class's synopsis, in whatever section is
+        // open, and the gathered node has one slot for each while a region may
+        // hold several classes, so they travel on as their own events instead
+        // of being merged (issue #41). For a namespace entity: its whole
+        // wording, when nothing routes it elsewhere (issue #69). Pushed after
+        // the gathered node, in source order, which is where their offsets
+        // place them anyway.
         std::vector<db::DocEvent> extras;
         // The stable name of the `\ref` group header standing over the
         // declaration being folded, or empty. The in-class equivalent
@@ -6689,12 +6755,16 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     // classes' entries share this node without a finding
                     // losing track of whose member it is about.
                     gathered.synopsis.roster.append_range(std::move(synopsis->synopsis.roster));
-                    // Only the class's own wording travels, in an event built
-                    // for it rather than the classified one with its taken
-                    // fields left behind: append_range over an rvalue
-                    // container copies, so forwarding the whole event would
-                    // scatter every routed member and report every finding a
-                    // second time. build_tree pushes no node for the synopsis
+                    // Only the class's own *unrouted* wording travels this
+                    // way, in an event built for it rather than the classified
+                    // one with its taken fields left behind: append_range over
+                    // an rvalue container copies, so forwarding the whole event
+                    // would scatter every routed member and report every
+                    // finding a second time. An `\at` on the class emptied
+                    // both fields into `pending` before the fold saw them, so
+                    // this pushes nothing then and the wording rides the
+                    // gathered node's own pending list to the section it named
+                    // (issue #98). build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
                     if (synopsis->general || !synopsis->descr.elements.empty()) {
                         db::SynopsisDecl class_extra;

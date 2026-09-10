@@ -231,10 +231,10 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   index spans retain their semantics; a terminal `\verbatim-synopsis` payload is appended
   byte-for-byte. A folded-in class keeps everything of its own that the gathered node cannot
   hold: its routed in-class members ride the gathered event to the `\rSec` each `\ref` names
-  (issue #34), and its class-general paragraph and own description — neither of them routed,
-  both belonging beside their class — travel as their own event, since the gathered node has
-  one slot for each and a region may hold several classes (issue #41). That event carries no
-  code, and `build_tree` pushes no node for a synopsis that has none. Its coverage roster
+  (issue #34), and its class-general paragraph and own description travel with them when an
+  `\at` on the class routes them (§6, issue #98), else as their own event, since the gathered
+  node has one slot for each and a region may hold several classes (issue #41). That event
+  carries no code, and `build_tree` pushes no node for a synopsis that has none. Its coverage roster
   rides the gathered event, so a class folded into a region is coverage-checked like any
   other (issue #45); each entry names the class that declared it, since the node names none
   of them. `\omit` and `\merge` also suppress
@@ -464,7 +464,9 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
-- `\at <anchor>` — explicit itemdescr placement for in-class-defined members.
+- `\at <anchor>` — explicit itemdescr placement for in-class-defined members, for a folded-in
+  namespace entity, and — on a class *definition*'s own docblock — for that class's own
+  wording, both nodes of it (§6, decision routed-wording-payload).
 - `\verbatim-synopsis` — terminal escape hatch for synopsis content that cannot
   be code (e.g., the `std::hash` specializations block). **Terminal means terminal**: every
   decorated line after the marker is exact synopsis code: the grammar does not parse it as
@@ -527,7 +529,8 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   still warn when the authored text duplicates or contradicts a specific assert.
 - Every direct class-scope static_assert routes, in source order, to one sibling
   paragraph immediately after the class synopsis in the active *general*
-  subclause: "A program that instantiates `C<T>` is ill-formed unless ...".
+  subclause — or to the section an `\at` on the class names, together with the
+  class's own description (§6): "A program that instantiates `C<T>` is ill-formed unless ...".
   Conditions use the same top-level `&&` flattening and phrasing as member
   Mandates; messages are stripped. The assertions themselves are omitted from
   the synopsis (§3.4). Assertions in a nested class belong to that class instead.
@@ -568,7 +571,7 @@ function un-`noexcept` even when it visibly never throws.
 | In-class type alias with markup | yes | routed itemdecl; `\also` groups an adjacent alias |
 | In-class type alias, unmarked | yes (synopsis-only) | none; absent from roster |
 | Direct class-scope `static_assert` | removed | one adjacent general paragraph (§5.2) |
-| Documented record/class-template *definition* | yes | its own description, beside the synopsis, with no itemdecl |
+| Documented record/class-template *definition* | yes | its own description, no itemdecl; `\at` moves it |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
 | Specialization of an `\expos` primary | the same, under the primary's name | its own markers do not apply |
@@ -594,7 +597,15 @@ A class or class-template **definition**'s own docblock describes the *type*. It
 description elements become a **description-only item** — an ItemDescr carrying no
 ItemDecl — placed immediately after the class synopsis and after the derived
 class-scope paragraph of §5.2, in the same frame and at the same placement key, so
-the three stay together through the placement sort and through a `--split`. It is an
+the three stay together through the placement sort and through a `--split`. An `\at`
+on that docblock sends both of the class's own nodes — the derived paragraph and this
+item, in that order — to the section it names instead, keyed by the class's own offset,
+which is the same route an in-class member and a folded-in namespace entity already take
+and the same one whether or not the class is folded into a gathered `.syn` region
+(issue #98, decision routed-wording-payload). The route earns a `Routed` roster entry
+naming the class in both `name` and `parent`, so §9's dangling-route rule reports an
+`\at` naming a section no `\rSec` opens rather than losing the wording silently; an
+`\at` on a class with no wording of its own routes nothing and reports nothing. It is an
 ordinary `SpecItem` node with an empty `signatures` list rather than a new node kind:
 that is what puts the class's own prose through the span, table, leakage and drift
 checks every other description already goes through, where a Synopsis deliberately is
