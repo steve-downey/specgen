@@ -40,6 +40,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -89,10 +90,12 @@ generate options:
                              (exit 1) instead
   --paper                   wrap the fragment in an `::: add` editing-instruction
                              div and number its paragraphs as added (mpark only)
-  --new-root <name>         drop the `.sref` class from a stable name equal to
-                             <name> or one dotted segment under it (mpark
+  --new-root <name>         drop the `.sref` class from <name> and every
+                             stable name beneath it, at any depth (mpark
                              only): the paper's own proposed clause, not yet in
-                             the srefs database `.sref` looks up
+                             the srefs database `.sref` looks up. May be
+                             repeated; a name under any of the roots given
+                             loses the class
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -118,10 +121,11 @@ render options:
                        at error severity aborts the render (exit 1) instead
   --paper             wrap the fragment in an `::: add` editing-instruction div
                        and number its paragraphs as added (mpark only)
-  --new-root <name>   drop the `.sref` class from a stable name equal to
-                       <name> or one dotted segment under it (mpark only): the
-                       paper's own proposed clause, not yet in the srefs
-                       database `.sref` looks up
+  --new-root <name>   drop the `.sref` class from <name> and every stable name
+                       beneath it, at any depth (mpark only): the paper's own
+                       proposed clause, not yet in the srefs database `.sref`
+                       looks up. May be repeated; a name under any of the roots
+                       given loses the class
   --split <dir>       write one fragment per top-level section into <dir>,
                        named from its stable name (optional.ctor.tex), and
                        list the paths written on standard output
@@ -179,7 +183,9 @@ struct WordingOptions {
     std::string root;             // --root <name>, with --split
     bool        validate = false; // --validate
     bool        paper    = false; // --paper (mpark only)
-    std::string new_root;         // --new-root <name> (mpark only)
+    // --new-root <name> (mpark only), accumulated: the flag repeats, once per
+    // header the paper proposes, and every occurrence adds a root (issue #94).
+    std::vector<std::string> new_roots;
 };
 
 // `render`'s options, as the accumulator of the fold below. `awaiting` is the
@@ -203,12 +209,19 @@ struct OptionError {
 // One step of the scan (decision expected-error-taxonomy: the fold's effectful step function).
 std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, const std::string& arg) {
     if (!opts.awaiting.empty()) {
-        std::string& dest = opts.awaiting == "--from-ir"    ? opts.input
-                            : opts.awaiting == "--backend"  ? opts.wording.backend
-                            : opts.awaiting == "--split"    ? opts.wording.split_dir
-                            : opts.awaiting == "--root"     ? opts.wording.root
-                            : opts.awaiting == "--new-root" ? opts.wording.new_root
-                                                            : opts.wording.output;
+        // --new-root accumulates instead of replacing, so it is settled here
+        // rather than in the reference chain below, which can only name a
+        // destination the last spelling of an option overwrites (issue #94).
+        if (opts.awaiting == "--new-root") {
+            opts.wording.new_roots.push_back(arg);
+            opts.awaiting.clear();
+            return opts;
+        }
+        std::string& dest = opts.awaiting == "--from-ir"   ? opts.input
+                            : opts.awaiting == "--backend" ? opts.wording.backend
+                            : opts.awaiting == "--split"   ? opts.wording.split_dir
+                            : opts.awaiting == "--root"    ? opts.wording.root
+                                                           : opts.wording.output;
         dest              = arg;
         opts.awaiting.clear();
         return opts;
@@ -245,7 +258,7 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
         return std::format("specgen: --paper applies only to the mpark backend, not '{}'", options.backend);
     // `.sref` is an mpark/wg21 construct; the other two backends have no
     // stable-name class to drop.
-    if (!options.new_root.empty() && options.backend != "mpark")
+    if (!options.new_roots.empty() && options.backend != "mpark")
         return std::format("specgen: --new-root applies only to the mpark backend, not '{}'", options.backend);
     // --split writes a *set* of files whose names it derives, so there is
     // nothing for a single output path to mean beside it; and --root names one
@@ -310,7 +323,7 @@ std::expected<int, std::string> emit_wording(const ir::Document& document, const
     // path calls it once per fragment.
     auto render_document = [&](const ir::Document& fragment) {
         if (options.backend == "mpark")
-            return mpark::render_to_string(fragment, {.paper_mode = options.paper, .new_root = options.new_root});
+            return mpark::render_to_string(fragment, {.paper_mode = options.paper, .new_roots = options.new_roots});
         if (options.backend == "org")
             return org::render_to_string(fragment);
         return latex::render_to_string(fragment);
@@ -520,8 +533,12 @@ int generate_command(const std::vector<std::string>& args) {
             wording.paper = true;
         } else if (arg == "--new-root") {
             wording_only();
-            if (!next(wording.new_root))
+            // One root per occurrence (issue #94): `next` fills a string, and
+            // the string joins the list rather than replacing it.
+            std::string new_root;
+            if (!next(new_root))
                 return 2;
+            wording.new_roots.push_back(std::move(new_root));
         } else if (arg == "--compile-commands") {
             if (!next(compile_commands_dir))
                 return 2;

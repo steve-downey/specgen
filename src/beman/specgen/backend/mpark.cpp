@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <format>
 #include <ranges>
+#include <span>
 #include <string>
 #include <utility>
 #include <variant>
@@ -499,21 +500,24 @@ std::string renumber_added(const std::string& text) {
     return out;
 }
 
-// Whether a stable name is `--new-root`'s own clause (issue #89): equal to
-// it, or one dotted segment deeper. `demo.detail` is under `demo`;
-// `demolition` is not -- the trailing `.` in the second branch is what
-// keeps a prefix match from also matching an unrelated longer name that
-// merely starts with the same characters.
-bool under_new_root(std::string_view name, std::string_view new_root) {
-    return name == new_root ||
-           (name.starts_with(new_root) && name.size() > new_root.size() && name[new_root.size()] == '.');
+// Whether a stable name is one of `--new-root`'s own clauses (issues #89,
+// #94): equal to a root, or anywhere in its subtree. `demo.detail` and
+// `demo.iter.deep.deeper` are both under `demo`; `demolition` is not -- the
+// trailing `.` in the second branch is what keeps a prefix match from also
+// matching an unrelated longer name that merely starts with the same
+// characters. Any root matching is enough, so a paper proposing two headers
+// passes `--new-root` twice and both subtrees are its own.
+bool under_new_root(std::string_view name, std::span<const std::string> new_roots) {
+    return std::ranges::any_of(new_roots, [name](std::string_view root) {
+        return name == root || (name.starts_with(root) && name.size() > root.size() && name[root.size()] == '.');
+    });
 }
 
 // Strips the `.sref` class from every `[name]{- .sref}` this fragment wrote
-// for a name under `new_root` (issue #89): a paper's own proposed clause is
-// not yet in the srefs database `.sref` looks up, so keeping the class there
-// buys nothing but a build-time warning and a dead link to
-// eel.is/c++draft/<name>. `new_root` empty (the default) leaves every
+// for a name under one of `new_roots` (issue #89): a paper's own proposed
+// clause is not yet in the srefs database `.sref` looks up, so keeping the
+// class there buys nothing but a build-time warning and a dead link to
+// eel.is/c++draft/<name>. `new_roots` empty (the default) leaves every
 // occurrence untouched.
 //
 // Runs over already-rendered text rather than inside the algebra, for the
@@ -523,9 +527,9 @@ bool under_new_root(std::string_view name, std::string_view new_root) {
 // comment escape, `ir::RefInline`'s parenthesized form, and the Section
 // heading -- all write the exact same `{- .sref}` immediately after the
 // closing `]`, so one pass here covers all three without threading
-// `new_root` through the render algebra at all.
-std::string drop_sref_for_new_root(const std::string& text, std::string_view new_root) {
-    if (new_root.empty())
+// `new_roots` through the render algebra at all.
+std::string drop_sref_for_new_root(const std::string& text, std::span<const std::string> new_roots) {
+    if (new_roots.empty())
         return text;
     constexpr std::string_view kSref = "]{- .sref}";
     std::string                out;
@@ -552,7 +556,7 @@ std::string drop_sref_for_new_root(const std::string& text, std::string_view new
         out += '[';
         out += name;
         out += ']';
-        if (!under_new_root(name, new_root))
+        if (!under_new_root(name, new_roots))
             out += "{- .sref}";
         pos = close + kSref.size();
     }
@@ -585,7 +589,7 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
                                               }) |
                                               std::ranges::to<std::vector>();
     std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
-    out                                     = drop_sref_for_new_root(out, options.new_root);
+    out                                     = drop_sref_for_new_root(out, options.new_roots);
     // Renumbered once, over the joined document, so the added-paragraph run
     // ascends across every wording div in it rather than restarting inside
     // each (issue #57). Rendering a fragment renders a document, so this is
@@ -594,7 +598,7 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {
-    std::string text = drop_sref_for_new_root(render_item(item), options.new_root);
+    std::string text = drop_sref_for_new_root(render_item(item), options.new_roots);
     if (!options.paper_mode)
         return wrap_wording(std::move(text));
     return wrap_added(wrap_wording(renumber_added(text)));

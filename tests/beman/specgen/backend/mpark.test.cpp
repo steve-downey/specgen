@@ -453,9 +453,11 @@ TEST_CASE("mpark - a titleless section emits no double space") {
     CHECK(mpark::render_to_string(doc) == "::: wording\n\n## [optional.ctor]{- .sref} {-}\n\n:::\n");
 }
 
-// --- --new-root (issue #89): a paper's own proposed clause is not yet in
-// the srefs database `.sref` looks up, so its class is dropped everywhere a
-// stable name is rendered; a citation of a name outside the root keeps it.
+// --- --new-root (issues #89, #94): a paper's own proposed clause is not yet
+// in the srefs database `.sref` looks up, so its class is dropped everywhere a
+// stable name is rendered; a citation of a name outside every root keeps it.
+// A root covers its whole subtree, and the option accumulates, because one
+// paper may propose several headers.
 
 TEST_CASE("new-root - a Section heading under the root drops .sref, one outside it does not") {
     Document doc;
@@ -472,7 +474,7 @@ TEST_CASE("new-root - a Section heading under the root drops .sref, one outside 
     outside.title       = "General utilities";
     doc.nodes.push_back(std::move(outside));
 
-    const std::string out = mpark::render_to_string(doc, {.new_root = "transcode"});
+    const std::string out = mpark::render_to_string(doc, {.new_roots = {"transcode"}});
     CHECK(out.find("## Header <transcode> synopsis [transcode] {-}") != std::string::npos);
     CHECK(out.find("### Errors [transcode.errors] {-}") != std::string::npos);
     CHECK(out.find("## General utilities [range.utility]{- .sref} {-}") != std::string::npos);
@@ -487,7 +489,7 @@ TEST_CASE("new-root - a Ref span under the root drops .sref, in the synopsis com
         .roster = {},
     });
 
-    const std::string out = mpark::render_to_string(doc, {.new_root = "transcode"});
+    const std::string out = mpark::render_to_string(doc, {.new_roots = {"transcode"}});
     CHECK(out.find("// @[transcode.ctor]@, constructors") != std::string::npos);
     CHECK(out.find(".sref") == std::string::npos);
 }
@@ -503,12 +505,12 @@ TEST_CASE("new-root - a RefInline citation outside the root keeps .sref, one und
                                   TextInline{"."}});
     item.descr.elements.push_back(std::move(remarks));
 
-    const std::string out = mpark::render_to_string(item, {.new_root = "transcode"});
+    const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode"}});
     CHECK(out.find("([transcode.errors])") != std::string::npos);
     CHECK(out.find("([range.utility]{- .sref})") != std::string::npos);
 }
 
-TEST_CASE("new-root - an exact match and a one-segment-deeper name are under the root; a longer prefix is not") {
+TEST_CASE("new-root - an exact match and a name at any depth are under the root; a longer prefix is not") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
@@ -516,13 +518,61 @@ TEST_CASE("new-root - an exact match and a one-segment-deeper name are under the
                                   TextInline{" "},
                                   RefInline{"transcode.errors"},
                                   TextInline{" "},
+                                  RefInline{"transcode.whatwg.decode.iterator"},
+                                  TextInline{" "},
                                   RefInline{"transcoded.other"}});
     item.descr.elements.push_back(std::move(remarks));
 
-    const std::string out = mpark::render_to_string(item, {.new_root = "transcode"});
+    const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode"}});
     CHECK(out.find("([transcode])") != std::string::npos);
     CHECK(out.find("([transcode.errors])") != std::string::npos);
+    // The whole subtree, not one segment: three levels down is still the
+    // paper's own clause, which is what the help text now says (issue #94).
+    CHECK(out.find("([transcode.whatwg.decode.iterator])") != std::string::npos);
     CHECK(out.find("([transcoded.other]{- .sref})") != std::string::npos);
+}
+
+// A paper proposing two headers gives a root for each, and both subtrees are
+// its own (issue #94): `beman.transcode`'s `<transcode>` and `<null_term>`
+// are the case that asked for it.
+TEST_CASE("new-root - two roots both apply, and a name under neither keeps .sref") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.paragraphs.push_back({RefInline{"transcode.reqs"},
+                                  TextInline{" "},
+                                  RefInline{"null.term.adaptor"},
+                                  TextInline{" "},
+                                  RefInline{"range.utility"}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode", "null.term"}});
+    CHECK(out.find("([transcode.reqs])") != std::string::npos);
+    CHECK(out.find("([null.term.adaptor])") != std::string::npos);
+    CHECK(out.find("([range.utility]{- .sref})") != std::string::npos);
+}
+
+// The first root survives the second: the defect issue #94 reports is that
+// passing the flag twice used to drop everything but the last name given.
+TEST_CASE("new-root - a Section heading under either of two roots drops .sref") {
+    Document doc;
+    Section  transcode;
+    transcode.stable_name = "transcode";
+    transcode.title       = "Header <transcode> synopsis";
+    doc.nodes.push_back(std::move(transcode));
+    Section null_term;
+    null_term.stable_name = "null.term.adaptor";
+    null_term.title       = "Adaptor";
+    doc.nodes.push_back(std::move(null_term));
+    Section outside;
+    outside.stable_name = "range.utility";
+    outside.title       = "General utilities";
+    doc.nodes.push_back(std::move(outside));
+
+    const std::string out = mpark::render_to_string(doc, {.new_roots = {"transcode", "null.term"}});
+    CHECK(out.find("## Header <transcode> synopsis [transcode] {-}") != std::string::npos);
+    CHECK(out.find("## Adaptor [null.term.adaptor] {-}") != std::string::npos);
+    CHECK(out.find("## General utilities [range.utility]{- .sref} {-}") != std::string::npos);
 }
 
 TEST_CASE("new-root - empty (the default) changes nothing") {
@@ -533,7 +583,7 @@ TEST_CASE("new-root - empty (the default) changes nothing") {
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(mpark::render_to_string(item).find("([transcode.errors]{- .sref})") != std::string::npos);
-    CHECK(mpark::render_to_string(item, {.new_root = ""}).find("([transcode.errors]{- .sref})") != std::string::npos);
+    CHECK(mpark::render_to_string(item, {.new_roots = {}}).find("([transcode.errors]{- .sref})") != std::string::npos);
 }
 
 // A synopsis holds no numbered paragraph, so wrapping one would leave an empty
