@@ -36,6 +36,13 @@ generate options:
                              the srefs database `.sref` looks up. May be
                              repeated; a name under any of the roots given
                              loses the class
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -55,25 +62,34 @@ generate options:
                              option parsing
 
 render options:
-  --from-ir <file>    IR JSON to read; "-" for standard input (required)
-  --backend <name>    latex (default), mpark, or org
-  --validate          run the wording validators before rendering; a finding
-                       at error severity aborts the render (exit 1) instead
-  --paper             wrap the fragment in an `::: add` editing-instruction div
-                       and number its paragraphs as added (mpark only)
-  --new-root <name>   drop the `.sref` class from <name> and every stable name
-                       beneath it, at any depth (mpark only): the paper's own
-                       proposed clause, not yet in the srefs database `.sref`
-                       looks up. May be repeated; a name under any of the roots
-                       given loses the class
-  --split <dir>       write one fragment per top-level section into <dir>,
-                       named from its stable name (optional.ctor.tex), and
-                       list the paths written on standard output
-  --root <name>       name the fragment holding the nodes outside every
-                       section (--split only); derived from the sections'
-                       common stable-name prefix when omitted
-  -o, --output <file> write here instead of standard output
+  --from-ir <file>          IR JSON to read; "-" for standard input (required)
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --paper                   wrap the fragment in an `::: add` editing-instruction
+                             div and number its paragraphs as added (mpark only)
+  --new-root <name>         drop the `.sref` class from <name> and every
+                             stable name beneath it, at any depth (mpark
+                             only): the paper's own proposed clause, not yet in
+                             the srefs database `.sref` looks up. May be
+                             repeated; a name under any of the roots given
+                             loses the class
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --split <dir>             write one fragment per top-level section into <dir>,
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted
+  -o, --output <file>       write here instead of standard output
 
 general:
-  -h, --help          show this message
-  --version           show the version
+  -h, --help                show this message
+  --version                 show the version

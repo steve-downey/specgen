@@ -42,6 +42,14 @@ endif()
 # PAPER (render mode, mpark only): add `--paper`, so the fragment comes
 # out wrapped in an `::: add` div with added-paragraph numbering.
 #
+# BASE_HEADING_LEVEL (render mode, mpark and org) and BASE_SECTION_DEPTH
+# (render mode, latex): pass the matching `--base-<...>` option, moving where a
+# top-level section starts. Two arguments rather than one because the two
+# options are two quantities and the driver refuses each on the other's
+# backends (issue #97); a case naming the wrong one for its BACKEND fails as
+# the usage error it is, which is itself worth having a harness that cannot
+# paper over.
+#
 # BACKEND (render mode only): render through a non-default backend. The
 # test registers as `golden.<case>.<backend>` and compares against that
 # backend's own extension in the same case directory (mpark -> expected.md,
@@ -98,6 +106,8 @@ function(specgen_add_golden case)
         BACKEND
         EXPECT_EXIT
         ROOT
+        BASE_HEADING_LEVEL
+        BASE_SECTION_DEPTH
         EXTRA_ARGS
         COMPILE_COMMANDS_DIR
         EXPECTED_DIR
@@ -166,6 +176,12 @@ function(specgen_add_golden case)
     endif()
     if(ARG_ROOT)
         list(APPEND case_args "-DROOT=${ARG_ROOT}")
+    endif()
+    if(ARG_BASE_HEADING_LEVEL)
+        list(APPEND case_args "-DBASE_HEADING_LEVEL=${ARG_BASE_HEADING_LEVEL}")
+    endif()
+    if(ARG_BASE_SECTION_DEPTH)
+        list(APPEND case_args "-DBASE_SECTION_DEPTH=${ARG_BASE_SECTION_DEPTH}")
     endif()
     if(DEFINED ARG_EXPECT_EXIT)
         list(APPEND case_args "-DEXPECT_EXIT=${ARG_EXPECT_EXIT}")
@@ -381,6 +397,36 @@ specgen_add_golden(
     BACKEND mpark
     PAPER
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
+)
+
+# Base level, all three backends over one nested fixture. The option existed in
+# every backend's Options and could not be set from the command line, so a
+# paper writing its own sections at `##` got its generated clauses at `##` too
+# -- siblings of "Abstract" rather than children of the "Wording" heading that
+# introduces them (issue #97). What the three cases have to show is that the
+# *origin* moves and the descent does not: the fixture nests three sections
+# deep, so each expected file steps 3/4/5 (or `###`/`####`/`#####`) from a base
+# one level off its backend's default. Rendering one IR to three targets makes
+# a difference between the expected files a backend difference by construction,
+# exactly as the value_or/converting_ctor triple does -- and here it also pins
+# the thing the two option names exist to keep apart, since a base of 3 means
+# `###` to mpark and `\rSec3` is the default the LaTeX case moves *off* of.
+specgen_add_golden(
+    base_level
+    BASE_SECTION_DEPTH 2
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
+)
+specgen_add_golden(
+    base_level
+    BACKEND mpark
+    BASE_HEADING_LEVEL 3
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
+)
+specgen_add_golden(
+    base_level
+    BACKEND org
+    BASE_HEADING_LEVEL 3
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
 )
 
 # Validate-mode case: a nested section (so the context prefix

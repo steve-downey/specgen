@@ -701,6 +701,19 @@ document owns framing. Fragment paths derive from stable names
 Rendering the same document is idempotent, but split output is not pruned: the
 ordered manifest is the caller's source of truth for reconciling stale files.
 
+**Where a top-level section starts is two options, not one**, because it is two
+quantities: `--base-section-depth` is the LaTeX backend's `\rSec` depth (3 by
+default, the split granularity above), and `--base-heading-level` is the
+markdown or org level a paper's wording sits at beneath the heading that
+introduces it (2 by default). Each is a usage error on the backends that do not
+measure in its unit, and one flag feeding both fields would collapse exactly
+the distinction `mpark.hpp` and `org.hpp` are written to preserve
+([wording-base-level](decisions/wording-base-level.md), issue #97).
+The base moves the origin and nothing else — a nested section is always one
+step below its parent, mpark saturates that *descent* at markdown's sixth
+heading and org has no such limit — and since a fragment *is* a document, a
+`--split` fragment starts at the same base a whole render does.
+
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /

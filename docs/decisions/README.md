@@ -34,3 +34,4 @@ and cite the design document as `docs/architecture.md` §N.
 | [cxx26-baseline](cxx26-baseline.md) | C++26 floor; GCC 16, Clang 22–23, libstdc++ |
 | [format-print-output](format-print-output.md) | `std::format`/`std::print`; streams move built bytes |
 | [construct-recognition](construct-recognition.md) | The AST says what a construct is; the lexer, how far it reaches |
+| [wording-base-level](wording-base-level.md) | Where a section starts is one option per unit |

@@ -19,7 +19,11 @@ namespace beman::specgen::backend::latex {
 
 struct Options {
     // Depth of a top-level Section; nested sections descend from here.
-    // The draft splits library wording at \rSec3 by default.
+    // The draft splits library wording at \rSec3 by default. The driver
+    // reaches this field as `--base-section-depth`, which is a usage error on
+    // the other two backends: their `--base-heading-level` counts headings in
+    // a paper and this counts depth in the draft, and the two are not the same
+    // number (decision wording-base-level).
     int base_section_depth = 3;
 };
 
