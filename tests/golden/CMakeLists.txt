@@ -861,6 +861,18 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_merge_deleted_template.hpp"
 )
 
+# How the `= delete`/`= default` tail is *spelled* must not decide whether
+# the declaration goes away whole (issue #99). A macro expanding to the
+# keyword raw-lexes to the macro's own identifier, and P2573's
+# `= delete("reason")` puts a parenthesized message past the keyword; the
+# front end asks the AST whether there is a tail and lexes only how far it
+# reaches.
+specgen_add_golden(
+    deleted_tail_spelling
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_spelling.hpp"
+)
+
 # Exposition-only members (design §3.5/§4.3) — `\expos` and
 # `\expos(name)` data members render with an `\exposid` span (via the §3.6
 # sentinel pipeline) and a `// exposition only` comment in the synopsis.
