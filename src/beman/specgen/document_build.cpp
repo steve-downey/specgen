@@ -149,8 +149,10 @@ BuildResult build_tree(std::span<DocEvent> events) {
 
     // In-class-defined members and hidden friends awaiting placement,
     // keyed by the stable name of the `\rSec` section their `\ref` group
-    // names. Populated when a SynopsisDecl event carries pending items,
-    // drained when the matching section closes.
+    // names -- and, when an `\at` on a class definition routed it, that
+    // class's own general paragraph and description too. Populated when a
+    // SynopsisDecl event carries pending items, drained when the matching
+    // section closes.
     std::map<std::string, std::vector<PendingItem>> pending;
 
     // Pop the innermost open frame, group its own children in the push order
@@ -230,7 +232,9 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // with the code already taken out of it, so that the
                     // class's own general paragraph and description --
                     // which have no route and belong beside it -- still
-                    // reach the frame (issue #41).
+                    // reach the frame (issue #41). A class whose `\at`
+                    // did route them leaves both fields empty here and
+                    // carries them in `pending` instead (issue #98).
                     if (!syn.synopsis.code.text.empty())
                         stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(syn.synopsis), false});
                     // Same placement key, pushed second: sort_frame is

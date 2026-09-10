@@ -132,24 +132,34 @@ struct SectionOpen {
     std::string title;
 };
 
-// An in-class-defined member's SpecItem awaiting placement (design
-// §3.3): harvested from a class body by classify() (which has the
-// clang::CXXRecordDecl in hand while building the class's own SynopsisDecl),
-// tagged with the stable name of the `\rSec` section its `\ref` group names
-// and its class-body offset (the placement key that interleaves it with
-// out-of-line siblings). build_tree injects it as a child of that section
+// A node awaiting placement in the section its markup named (design
+// §3.3): most often an in-class-defined member's SpecItem, harvested from a
+// class body by classify() (which has the clang::CXXRecordDecl in hand while
+// building the class's own SynopsisDecl), tagged with the stable name of the
+// `\rSec` section its `\ref` group names and its class-body offset (the
+// placement key that interleaves it with out-of-line siblings). build_tree
+// injects it as a child of that section
 // when the section closes, after the front end has already grouped adjacent
 // documented aliases and after that section's own out-of-line
 // `\also`/empty-descr grouping has run. build_tree itself never subjects an
 // injected in-class item to another join check;
 // a stable name that names no section is silently dropped (a design §9
 // coverage concern).
+//
+// `item` is an ir::Node and not an ir::SpecItem because a class's *own*
+// wording is two nodes, not one: the class-scope `static_assert` paragraph
+// (design §5.2) is an ir::FreeParagraph and the class's authored description
+// is a description-only SpecItem, and an `\at` on the class definition routes
+// both together (decision routed-wording-payload). Every other producer
+// still pushes a SpecItem, which converts; the one consumer that needs the
+// alternative back — alias grouping, which merges a follower's itemdecl into
+// its primary's — asks for it by the `is_alias` flag that put it there.
 struct PendingItem {
-    std::string                  stable;
-    unsigned                     offset = 0;
-    beman::specgen::ir::SpecItem item;
-    bool                         is_alias   = false; // transient alias-grouping metadata
-    bool                         wants_join = false; // adjacent alias carries \also
+    std::string              stable;
+    unsigned                 offset = 0;
+    beman::specgen::ir::Node item;
+    bool                     is_alias   = false; // transient alias-grouping metadata
+    bool                     wants_join = false; // adjacent alias carries \also
 };
 
 // A class/struct/union (or class template) *definition* at the top level
@@ -178,6 +188,10 @@ struct SynopsisDecl {
     // general-subclause paragraph adjacent to the class synopsis. This is a
     // sibling IR node rather than synopsis metadata, so every backend renders
     // it through the existing FreeParagraph case.
+    //
+    // Empty when the class's docblock carries an `\at`: the paragraph is then
+    // a PendingItem above, routed to the section it names, alongside the
+    // description below (decision routed-wording-payload).
     std::optional<beman::specgen::ir::FreeParagraph> general = {};
     // What the class's *own* docblock said about the type (design §6, issue
     // #18): `\remarks` on a defined class, an authored `\mandates` standing
@@ -189,6 +203,9 @@ struct SynopsisDecl {
     // machinery every other description already goes through; a Synopsis
     // deliberately is not a wording site (validate.cpp's wording_names_layer)
     // and giving it prose would falsify that.
+    //
+    // Empty when the class's docblock carries an `\at`, for the reason
+    // `general` above gives.
     beman::specgen::ir::ItemDescr descr = {};
 };
 

@@ -1,0 +1,1 @@
+specgen: box.syn/strap/synopsis: error: the description of `strap` is routed to [box.nosuch], which is not a section in this document
