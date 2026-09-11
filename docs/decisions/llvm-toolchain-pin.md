@@ -58,6 +58,18 @@ worth carrying compatibility code for: apt.llvm.org publishes a per-release
 channel for every supported LLVM, and the official release tarballs (what CI
 unpacks) cover the rest.
 
+**The pin covers clang-tidy and any plugin built against it**
+(`docs/plans/no-raw-loops-tidy-plugin.md`). A clang-tidy plugin resolves its
+symbols at load time against the `clang-tidy` binary that `dlopen`s it, so a
+plugin built against one LLVM's headers and loaded into another's binary
+fails to load at best and crashes at worst — the same seam this decision
+already guards for the front end, one more consumer. The binary and the
+headers are therefore found through the pinned package's own
+`${LLVM_TOOLS_BINARY_DIR}` and `${CLANG_INCLUDE_DIRS}`, never through `PATH`;
+the top-level probe records the result either way, since the clang-tidy
+headers come from clang-tools-extra and some distributions package them
+separately from Clang's.
+
 ## Consequences
 
 - Moving to a new LLVM is one deliberate flag
