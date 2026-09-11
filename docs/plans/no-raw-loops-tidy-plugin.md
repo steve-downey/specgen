@@ -1,8 +1,12 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
-**Status:** planned, not started. To be done together with pulling `clang-tidy` and its related gates into the
-build. Nothing below is wired in yet; `tools/check-raw-loops.cmake` remains the live gate until the
-[retire-text-gate](#retire-text-gate) step lands.
+**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe) and
+[tidy-plugin-target](#tidy-plugin-target) are done; `tools/check-raw-loops.cmake` remains the live gate until the
+[retire-text-gate](#retire-text-gate) step lands. Executing with the open questions resolved as recommended below
+unless overridden: `examples/` joins the scope, the text gate retires, and the header-TU switch turns on in
+`gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count), and
+the official 23.1.0 release tarball ships `clang-tidy`, `run-clang-tidy`, *and* the `clang-tidy/` headers, so the
+probe succeeds on CI's own toolchain.
 
 ## Goal
 
@@ -143,15 +147,19 @@ number.
 
 ### tidy-toolchain-probe
 
-Stage 1. Find the pinned LLVM's `clang-tidy` and `run-clang-tidy` via `${LLVM_TOOLS_BINARY_DIR}`, and probe for
-`clang-tidy/ClangTidyCheck.h` under `${CLANG_INCLUDE_DIRS}`. Record the results as cache variables and `STATUS` lines.
-Amend decision `llvm-toolchain-pin` to say the pin covers clang-tidy and any plugin built against it.
+Stage 1. **Done** (2026-09-11). Find the pinned LLVM's `clang-tidy` and `run-clang-tidy` via
+`${LLVM_TOOLS_BINARY_DIR}`, and probe for `clang-tidy/ClangTidyCheck.h` under `${CLANG_INCLUDE_DIRS}`. Record the
+results as cache variables and `STATUS` lines. Amend decision `llvm-toolchain-pin` to say the pin covers clang-tidy
+and any plugin built against it. Both probe branches exercised: found on the 23.1.0 release tarball, and the
+unavailable line names exactly what is missing.
 
 ### tidy-plugin-target
 
-Stage 2. Add the `MODULE` library target under `tools/` (suggested `tools/tidy/`), conditional on the probe, with the
-`SYSTEM` includes and RTTI handling copied from `src/beman/specgen/frontend/CMakeLists.txt`. Module registration only
-at this stage; `--list-checks` with `--load` proves the load.
+Stage 2. **Done** (2026-09-11). Add the `MODULE` library target under `tools/` (suggested `tools/tidy/`), conditional
+on the probe, with the `SYSTEM` includes and RTTI handling copied from
+`src/beman/specgen/frontend/CMakeLists.txt`. Module registration only at this stage; `--list-checks` with `--load`
+proves the load — pinned as the ctest case `style.tidy-plugin-loads`, GCC 16 against the no-RTTI 23.1.0 tarball, so
+the RTTI-mirroring branch is the one exercised.
 
 ### no-raw-loops-check
 
