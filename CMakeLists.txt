@@ -131,6 +131,74 @@ set(BEMAN_SPECGEN_LLVM_VERSION
 enable_language(C)
 find_package(Clang ${BEMAN_SPECGEN_LLVM_VERSION} REQUIRED CONFIG)
 message(STATUS "beman.specgen: Clang front end (LLVM ${LLVM_PACKAGE_VERSION})")
+
+# The clang-tidy plugin toolchain (docs/plans/no-raw-loops-tidy-plugin.md,
+# decision llvm-toolchain-pin: the pin covers clang-tidy and any plugin built
+# against it). Three probes against the *pinned* LLVM, never PATH: a plugin
+# built against one LLVM's headers and loaded into another's binary fails to
+# load at best and crashes at worst. The binaries ship with every install of
+# the pin; the clang-tidy headers come from clang-tools-extra, which some
+# distributions package separately, so the plugin target and the gate that
+# uses it hang off this probe rather than assuming. The text gate needs
+# nothing built, so its replacement must say when it is unavailable rather
+# than silently passing — hence a STATUS line either way.
+find_program(
+    BEMAN_SPECGEN_CLANG_TIDY
+    clang-tidy
+    PATHS ${LLVM_TOOLS_BINARY_DIR}
+    NO_DEFAULT_PATH
+)
+find_program(
+    BEMAN_SPECGEN_RUN_CLANG_TIDY
+    run-clang-tidy
+    PATHS ${LLVM_TOOLS_BINARY_DIR}
+    NO_DEFAULT_PATH
+)
+find_path(
+    BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR
+    clang-tidy/ClangTidyCheck.h
+    PATHS ${CLANG_INCLUDE_DIRS}
+    NO_DEFAULT_PATH
+)
+if(
+    BEMAN_SPECGEN_CLANG_TIDY
+    AND BEMAN_SPECGEN_RUN_CLANG_TIDY
+    AND BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR
+)
+    set(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN TRUE)
+    message(
+        STATUS
+        "beman.specgen: clang-tidy plugin toolchain (${BEMAN_SPECGEN_CLANG_TIDY}; headers under ${BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR})"
+    )
+else()
+    set(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN FALSE)
+    set(_specgen_tidy_missing "")
+    if(NOT BEMAN_SPECGEN_CLANG_TIDY)
+        list(
+            APPEND _specgen_tidy_missing
+            "clang-tidy in ${LLVM_TOOLS_BINARY_DIR}"
+        )
+    endif()
+    if(NOT BEMAN_SPECGEN_RUN_CLANG_TIDY)
+        list(
+            APPEND _specgen_tidy_missing
+            "run-clang-tidy in ${LLVM_TOOLS_BINARY_DIR}"
+        )
+    endif()
+    if(NOT BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR)
+        list(
+            APPEND _specgen_tidy_missing
+            "clang-tidy/ClangTidyCheck.h under the Clang include directories"
+        )
+    endif()
+    list(JOIN _specgen_tidy_missing "; " _specgen_tidy_missing)
+    message(
+        STATUS
+        "beman.specgen: clang-tidy plugin toolchain unavailable (missing: ${_specgen_tidy_missing})"
+    )
+    unset(_specgen_tidy_missing)
+endif()
+
 add_subdirectory(src/beman/specgen/frontend)
 
 if(BEMAN_SPECGEN_BUILD_TOOLS)
