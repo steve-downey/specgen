@@ -1,0 +1,3 @@
+marker_above_function.hpp:5:5: warning: raw loop outside a substrate generic algorithm; convert it to a named algorithm, or mark it '// substrate generic algorithm: <reason>' on the loop line or in the comment block directly above it [specgen-no-raw-loops]
+marker_above_function.hpp:6:5: warning: raw loop outside a substrate generic algorithm; convert it to a named algorithm, or mark it '// substrate generic algorithm: <reason>' on the loop line or in the comment block directly above it [specgen-no-raw-loops]
+marker_above_function.hpp:7:5: warning: raw loop outside a substrate generic algorithm; convert it to a named algorithm, or mark it '// substrate generic algorithm: <reason>' on the loop line or in the comment block directly above it [specgen-no-raw-loops]

@@ -1,0 +1,4 @@
+# The probes pin layout the check must see as written -- paren_next_line.hpp
+# exists precisely because clang-format would put the parenthesis back.
+DisableFormat: true
+SortIncludes: Never

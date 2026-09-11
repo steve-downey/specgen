@@ -1,7 +1,7 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
-**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe) and
-[tidy-plugin-target](#tidy-plugin-target) are done; `tools/check-raw-loops.cmake` remains the live gate until the
+**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe), [tidy-plugin-target](#tidy-plugin-target), and
+[no-raw-loops-check](#no-raw-loops-check) are done; `tools/check-raw-loops.cmake` remains the live gate until the
 [retire-text-gate](#retire-text-gate) step lands. Executing with the open questions resolved as recommended below
 unless overridden: `examples/` joins the scope, the text gate retires, and the header-TU switch turns on in
 `gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count), and
@@ -163,8 +163,15 @@ the RTTI-mirroring branch is the one exercised.
 
 ### no-raw-loops-check
 
-Stage 3. Implement `specgen-no-raw-loops` as specified above, with the probe-file tests. Green on the whole tree with
-zero findings, and the strip-the-markers negative test passing.
+Stage 3. **Done** (2026-09-11). Implement `specgen-no-raw-loops` as specified above, with the probe-file tests. Green
+on the whole tree with zero findings, and the strip-the-markers negative test passing. Landed as eight probe cases
+(`tidy.no-raw-loops.*`, each pinned against an expected-diagnostics file; the probes carry a `DisableFormat`
+`.clang-format` so `paren_next_line.cpp` keeps the layout it exists to test) plus `tidy.no-raw-loops.strip-markers`,
+which breaks every marker in a copy of `docblock.cpp` and requires exactly that many findings, parsing with the
+configured compiler's own implicit include directories so the answer does not depend on clang's GCC detection. A
+manual sweep over every production `.cpp` reported zero findings; the one finding in the tree remains
+`examples/emit_ir.cpp`, which [header-tu-inventory](#header-tu-inventory) resolves by marking it as `examples/`
+joins the scope.
 
 ### header-tu-inventory
 
