@@ -201,6 +201,11 @@ endif()
 
 add_subdirectory(src/beman/specgen/frontend)
 
+# The clang-tidy plugin rides the probe above, not BEMAN_SPECGEN_BUILD_TOOLS:
+# it is lint infrastructure, not the driver, and its CMakeLists returns
+# immediately when the probe came up empty.
+add_subdirectory(tools/tidy)
+
 if(BEMAN_SPECGEN_BUILD_TOOLS)
     add_subdirectory(tools/specgen)
 endif()
@@ -219,6 +224,24 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
             ${CMAKE_COMMAND} -P
             "${PROJECT_SOURCE_DIR}/tools/check-raw-loops.cmake"
     )
+
+    # The plugin-load smoke (docs/plans/no-raw-loops-tidy-plugin.md, stage
+    # tidy-plugin-target): the pinned clang-tidy dlopens the plugin and lists
+    # the specgen checks, which proves registration reached the registry the
+    # binary reads — the exact seam a mismatched toolchain breaks.
+    if(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN)
+        add_test(
+            NAME style.tidy-plugin-loads
+            COMMAND
+                ${BEMAN_SPECGEN_CLANG_TIDY} --load
+                $<TARGET_FILE:beman.specgen.tidy> --list-checks
+                --checks=-*,specgen-*
+        )
+        set_tests_properties(
+            style.tidy-plugin-loads
+            PROPERTIES PASS_REGULAR_EXPRESSION "specgen-no-raw-loops"
+        )
+    endif()
 
     add_subdirectory(tests/beman/specgen)
     # Golden and example-rerun cases run through the driver, so they are
