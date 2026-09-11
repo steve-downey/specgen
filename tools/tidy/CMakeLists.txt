@@ -27,6 +27,17 @@ if(NOT LLVM_ENABLE_RTTI)
     target_compile_options(beman.specgen.tidy PRIVATE -fno-rtti)
 endif()
 
+# A sanitizer configuration must not instrument the plugin: the host it is
+# dlopened into is the pinned clang-tidy binary, which carries no sanitizer
+# runtime, so instrumented objects leave __asan_*-style references undefined
+# and the load is rejected. The compiler honours the last -f[no-]sanitize
+# spelling, so appending -fno-sanitize=all cancels whatever the
+# configuration's global flags enabled.
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(beman.specgen.tidy PRIVATE -fno-sanitize=all)
+    target_link_options(beman.specgen.tidy PRIVATE -fno-sanitize=all)
+endif()
+
 # The clang-tidy headers live where the probe found them, beside Clang's
 # elsewhere; all three are noisy under this project's flags and taken as
 # SYSTEM so -Werror stays meaningful for our own code.
