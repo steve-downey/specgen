@@ -1,12 +1,13 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
-**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe), [tidy-plugin-target](#tidy-plugin-target), and
-[no-raw-loops-check](#no-raw-loops-check) are done; `tools/check-raw-loops.cmake` remains the live gate until the
-[retire-text-gate](#retire-text-gate) step lands. Executing with the open questions resolved as recommended below
-unless overridden: `examples/` joins the scope, the text gate retires, and the header-TU switch turns on in
-`gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count), and
-the official 23.1.0 release tarball ships `clang-tidy`, `run-clang-tidy`, *and* the `clang-tidy/` headers, so the
-probe succeeds on CI's own toolchain.
+**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe), [tidy-plugin-target](#tidy-plugin-target),
+[no-raw-loops-check](#no-raw-loops-check), and [header-tu-inventory](#header-tu-inventory) are done;
+`tools/check-raw-loops.cmake` remains the live gate until the [retire-text-gate](#retire-text-gate) step lands.
+Executing with the open questions resolved as recommended below unless overridden: `examples/` joined the scope at
+stage 4 (resolving [examples-scope](#examples-scope)), the text gate retires, and the header-TU switch turned on in
+`gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count; 135
+after stage 3's check source and stage 4's `examples/` join), and the official 23.1.0 release tarball ships
+`clang-tidy`, `run-clang-tidy`, *and* the `clang-tidy/` headers, so the probe succeeds on CI's own toolchain.
 
 ## Goal
 
@@ -175,9 +176,18 @@ joins the scope.
 
 ### header-tu-inventory
 
-Stage 4. Turn on `CMAKE_VERIFY_INTERFACE_HEADER_SETS` in the preset the lint runs from, and write the filtering script
-that turns the compile database into the pass's file list. Assert, once, that the resulting site inventory equals the
-text gate's (109 today).
+Stage 4. **Done** (2026-09-12). Turn on `CMAKE_VERIFY_INTERFACE_HEADER_SETS` in the preset the lint runs from, and
+write the filtering script that turns the compile database into the pass's file list. Assert, once, that the
+resulting site inventory equals the text gate's. Landed as the preset flag in `gcc-release` (the core already
+verified its header set via a target property; the flag adds the front end's, for the 26 header TUs the prototype
+counted) and `tools/tidy/no-raw-loops-scope.cmake`, which filters the compile database by exactly the text gate's
+exclusions plus `_deps/` — 40 TUs today. `examples/` joined the scope ([examples-scope](#examples-scope) resolved):
+its one loop at `examples/emit_ir.cpp` is marked, and the text gate's default roots gained `examples/` so the two
+gates enforce the same scope until retirement. The assertion ran as: capture every site the text scan counts
+(marked + unmarked, 135), strip every marker in the working tree, run the pass over the filtered list, and compare
+deduplicated `file:line` findings — **135 = 135, byte-identical sets**. One trap worth recording: `run-clang-tidy`
+falls back to the `clang-tidy` on `PATH` unless `-clang-tidy-binary` names the pinned one — the exact mismatch the
+pin exists to prevent, so the ctest-gate driver must always pass it.
 
 ### ctest-gate
 
@@ -204,9 +214,9 @@ candidates, from a trial run on the current tree:
 
 ### [examples-scope](#examples-scope)
 
-**Question:** does `examples/` fall under the no-raw-loops doctrine? **Status:** OPEN. The text gate excludes it; the
-AST inventory found one unmarked loop at `examples/emit_ir.cpp:19`. Either mark it and add `examples/` to the scope,
-or record the exclusion in `docs/CODING_RULES.md` so it reads as a decision rather than an accident.
+**Question:** does `examples/` fall under the no-raw-loops doctrine? **Status:** RESOLVED (2026-09-12, at
+[header-tu-inventory](#header-tu-inventory)): it does. Example code is production wording for readers, so it carries
+the same doctrine. The one loop at `examples/emit_ir.cpp` is marked, and `examples/` is in both gates' scope.
 
 ### [text-gate-fast-path](#text-gate-fast-path)
 

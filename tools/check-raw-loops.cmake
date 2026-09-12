@@ -15,8 +15,11 @@
 #   cmake -P tools/check-raw-loops.cmake
 #   cmake -DPATHS="src/beman/specgen/lower.cpp;src/beman/specgen/ir.cpp" -P tools/check-raw-loops.cmake
 #
-# With no PATHS, the default roots (src/, include/, tools/) are scanned for
-# *.cpp, *.hpp, *.cppm. With PATHS set, it is a `;`-separated list of files
+# With no PATHS, the default roots (src/, include/, tools/, examples/) are
+# scanned for *.cpp, *.hpp, *.cppm. examples/ is in scope by the
+# examples-scope decision recorded in docs/plans/no-raw-loops-tidy-plugin.md:
+# example code is production wording for readers, so it carries the same
+# doctrine. With PATHS set, it is a `;`-separated list of files
 # or directories -- relative to the repo root, or absolute -- and exactly
 # those are scanned instead. Per-step spot checks use the PATHS form to
 # narrow the gate to the files a step touched.
@@ -145,7 +148,7 @@ if(DEFINED PATHS)
         endif()
     endforeach()
 else()
-    foreach(root src include tools)
+    foreach(root src include tools examples)
         set(abs_root "${_repo_root}/${root}")
         if(IS_DIRECTORY "${abs_root}")
             _collect_dir("${abs_root}" dir_files)
