@@ -16,6 +16,8 @@ int main() {
     // 1. Parse a sparse markup block (as the front end will hand it to us).
     const auto parsed = grammar::parse_docblock("//! \\mandates `is_copy_constructible_v<T>` is `true`.\n"
                                                 "//! \\effects-equiv\n");
+    // substrate generic algorithm: print each diagnostic as it stands; a
+    // ranges pipeline over stderr would obscure the two-line teaching example.
     for (const auto& d : parsed.diags)
         std::println(stderr, "docblock:{}: {}", d.line, d.message);
     if (!parsed.ok())

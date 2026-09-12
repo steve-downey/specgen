@@ -48,7 +48,8 @@
         "_release-base"
       ],
       "cacheVariables": {
-        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/gnu-toolchain.cmake"
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/gnu-toolchain.cmake",
+        "CMAKE_VERIFY_INTERFACE_HEADER_SETS": true
       }
     },
     {
