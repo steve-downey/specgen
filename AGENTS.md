@@ -45,6 +45,11 @@ Gotchas that bite:
   generate-mode golden's `.singlepass` sibling says so.
 - `generate` reports docblock findings on stderr and still produces output on an
   Error; read stderr instead of trusting the exit code.
+- The "No raw loops" doctrine (docs/CODING_RULES.md) is gated by
+  `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy plugin check
+  over the compile database (~45 s), scope `src/`, `tools/`, `examples/`,
+  and every `FILE_SET` header as its own TU. A new loop needs its marker
+  before the suite is green.
 - The test count above goes stale the moment a ctest case is added; update it
   here **and** in `docs/building.md` together.
 

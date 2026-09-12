@@ -178,23 +178,39 @@ Before writing one, name which algorithm it actually is:
   enclosing function credits none of the loops inside it, because a reader
   standing at the loop should be able to see why it is allowed to be there.
 
-`tools/check-raw-loops.cmake` is the grep-able gate this doctrine runs as:
+**`specgen-no-raw-loops`** is the check this doctrine runs as: a clang-tidy
+plugin (`tools/tidy/`, loaded into the pinned LLVM's own `clang-tidy`) that
+matches every `for`, range-`for`, `while`, and `do` outside template
+instantiations — at the expansion location, so a loop a macro produces is a
+site at the macro's use — and reads the marker rule off the raw source
+buffer. It is wired into ctest as **`style.no-raw-loops`** (`ctest -R style`
+selects it) through `tools/tidy/run-no-raw-loops.cmake`, which runs the
+pinned `run-clang-tidy` over the compile database with specgen findings
+promoted to errors; when configure's toolchain probe found no clang-tidy
+plugin toolchain, the case fails loudly naming what is missing rather than
+going silently green.
+
+Its scope is the compile database itself: every production translation unit
+under `src/`, `tools/`, and `examples/`, plus every `FILE_SET` header as its
+own verification TU (`CMAKE_VERIFY_INTERFACE_HEADER_SETS` is on in the
+`gcc-release` preset, the one the lint runs from). Excluded: `vendor/` (a
+subtree; [subtree-consumption](decisions/subtree-consumption.md) forbids
+local edits), `tests/` and any `*.test.cpp` (out of this doctrine's
+inventory, which covers production code only), and `_deps/` (fetched
+third-party sources). Every loop inside that scope must carry the marker, or
+the ctest case fails, naming the file and line.
 
 ```sh
-cmake -P tools/check-raw-loops.cmake                                  # whole tree
-cmake -DPATHS="<file-or-dir>[;<file-or-dir>...]" -P tools/check-raw-loops.cmake  # one file or dir
+ctest --test-dir build/gcc-release -R style.no-raw-loops   # the gate (~45 s)
+clang-tidy --load build/gcc-release/tools/tidy/libbeman.specgen.tidy.so \
+    --checks=-*,specgen-no-raw-loops -p build/gcc-release/no-raw-loops <file>
 ```
 
-It is wired into ctest as **`style.no-raw-loops`** (`ctest -R style` selects
-it), registered unconditionally so it runs and reports the same result in both
-build configurations — it reads source text, not compiled output. Its scope is
-`src/`, `include/`, and `tools/`'s `*.cpp`/`*.hpp`/`*.cppm`, with two
-exclusions: `vendor/` (a subtree;
-[subtree-consumption](decisions/subtree-consumption.md) forbids local edits)
-and `tests/` plus any
-`*.test.cpp` (out of this doctrine's inventory, which covers production code
-only). Every loop inside that scope must carry the marker, or the ctest case
-fails, naming the file and line.
+The one-file form uses the pinned `clang-tidy` (configure's probe prints its
+path) and points `-p` at the gate's scrubbed database copy, which exists
+after the gate has run once. The check's own probe battery lives under
+`tests/tidy/` (`ctest -R tidy.`); the design history is
+`docs/plans/no-raw-loops-tidy-plugin.md`.
 
 The live check above is what enforces the doctrine.
 

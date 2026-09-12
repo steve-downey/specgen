@@ -79,7 +79,21 @@ reports the same test count the preset lane does.
 ## Lint
 
 `make lint` runs everything pre-commit is configured with (clang-format, gersemi,
-markdownlint, and the rest). Two gotchas:
+markdownlint, and the rest).
+
+The "No raw loops" doctrine (`docs/CODING_RULES.md`) is enforced separately, as
+the ctest case `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy
+plugin check run by the pinned `run-clang-tidy` over the compile database —
+every production TU plus every `FILE_SET` header as its own verification TU,
+which is why `CMAKE_VERIFY_INTERFACE_HEADER_SETS` is on in the `gcc-release`
+preset, the one the lint runs from. It needs the pinned LLVM's `clang-tidy`
+and the clang-tools-extra headers; configure's
+`beman.specgen: clang-tidy plugin toolchain` STATUS line says whether the
+probe found them, and without them the case fails naming the missing piece
+rather than going silently green. Budget ~45 s per run; `ctest -R style`
+selects it, and `ctest -R tidy.` runs the check's own probe battery.
+
+Two pre-commit gotchas:
 
 - It **reformats and then fails on its first run** — that is the auto-fix landing.
   `git add -A` and run it again; the second result is the one that counts.
