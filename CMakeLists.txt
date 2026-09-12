@@ -244,6 +244,9 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
     endif()
 
     add_subdirectory(tests/beman/specgen)
+    # The specgen-no-raw-loops check's own probe tests; the file returns
+    # immediately when the plugin toolchain probe came up empty.
+    add_subdirectory(tests/tidy)
     # Golden and example-rerun cases run through the driver, so they are
     # registered only where it is built. The example parity cases are not: they
     # compare two checked-in files, so they run even with BUILD_TOOLS off.
