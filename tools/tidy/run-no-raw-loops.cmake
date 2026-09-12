@@ -47,10 +47,18 @@ endif()
 get_filename_component(_repo_root "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
 get_filename_component(_repo_root "${_repo_root}" DIRECTORY)
 
-set(_scope_file "${BUILD_DIR}/no-raw-loops-scope.txt")
+# The pass re-parses with clang against its own scrubbed copy of the
+# database (see DB_OUT in no-raw-loops-scope.cmake): a configuration's
+# GCC-only instrumentation flags are clang parse errors or, under -Werror,
+# promoted "argument unused" warnings, and none of them change what the
+# check reads.
+set(_scope_dir "${BUILD_DIR}/no-raw-loops")
+file(MAKE_DIRECTORY "${_scope_dir}")
+set(_scope_file "${_scope_dir}/scope.txt")
 execute_process(
     COMMAND
-        ${CMAKE_COMMAND} "-DCOMPILE_DB=${_compile_db}" "-DOUT=${_scope_file}" -P
+        ${CMAKE_COMMAND} "-DCOMPILE_DB=${_compile_db}" "-DOUT=${_scope_file}"
+        "-DDB_OUT=${_scope_dir}/compile_commands.json" -P
         "${CMAKE_CURRENT_LIST_DIR}/no-raw-loops-scope.cmake"
     RESULT_VARIABLE _scope_status
     ERROR_VARIABLE _scope_err
@@ -66,7 +74,7 @@ set(_args
     -clang-tidy-binary
     "${CLANG_TIDY}"
     -p
-    "${BUILD_DIR}"
+    "${_scope_dir}"
     -load
     "${PLUGIN}"
     -checks=-*,specgen-*

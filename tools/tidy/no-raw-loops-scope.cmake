@@ -10,7 +10,7 @@
 # and nothing bespoke.
 #
 #   cmake -DCOMPILE_DB=<build>/compile_commands.json [-DOUT=<file>]
-#         -P tools/tidy/no-raw-loops-scope.cmake
+#         [-DDB_OUT=<file>] -P tools/tidy/no-raw-loops-scope.cmake
 #
 # Writes one entry per line, sorted: to OUT when given (the form the pass
 # driver consumes), otherwise to stdout. Exactly the text gate's exclusions
@@ -19,6 +19,16 @@
 # configured; examples/ is in scope (examples-scope decision, recorded in the
 # plan). Everything else stays, the build-tree header-verification TUs
 # included: their findings land in the real headers they include.
+#
+# DB_OUT, when given, receives the kept entries as a compile database of
+# their own with the instrumentation flags scrubbed from each command:
+# -fsanitize*/-fno-sanitize*, --coverage/-fprofile*, and -Werror. The pass
+# re-parses with clang, and a configuration's GCC-only instrumentation
+# spelling is a hard error there (-fprofile-abs-path is unknown to clang)
+# or an "argument unused" warning that a -Werror configuration promotes to
+# one — while none of it changes what the check reads, which is the point:
+# the gate gives one answer in every configuration. The pass driver points
+# clang-tidy's -p at DB_OUT's directory instead of the build's.
 
 if(NOT DEFINED COMPILE_DB)
     message(FATAL_ERROR "pass -DCOMPILE_DB=<build>/compile_commands.json")
@@ -37,6 +47,7 @@ file(READ "${COMPILE_DB}" _db)
 string(JSON _count LENGTH "${_db}")
 
 set(_files "")
+set(_db_entries "")
 math(EXPR _last "${_count} - 1")
 foreach(_idx RANGE 0 ${_last})
     string(JSON _file GET "${_db}" ${_idx} "file")
@@ -48,6 +59,26 @@ foreach(_idx RANGE 0 ${_last})
         continue()
     endif()
     list(APPEND _files "${_file}")
+    if(DEFINED DB_OUT)
+        # The flags live in the entry's "command" member; the tokens being
+        # deleted cannot occur in its "directory"/"file"/"output" paths, so
+        # scrubbing the serialized entry keeps the JSON escaping intact.
+        string(JSON _entry GET "${_db}" ${_idx})
+        string(REGEX REPLACE " -f(no-)?sanitize[^ \"]*" "" _entry "${_entry}")
+        string(
+            REGEX REPLACE " --coverage| -fprofile[^ \"]*| -Werror"
+            ""
+            _entry
+            "${_entry}"
+        )
+        # Accumulate as text, never through a CMake list: a command string
+        # is free to contain a semicolon.
+        if(_db_entries)
+            string(APPEND _db_entries ",\n${_entry}")
+        else()
+            set(_db_entries "${_entry}")
+        endif()
+    endif()
 endforeach()
 
 list(REMOVE_DUPLICATES _files)
@@ -65,4 +96,8 @@ else()
     foreach(_file IN LISTS _files)
         message(NOTICE "${_file}")
     endforeach()
+endif()
+
+if(DEFINED DB_OUT)
+    file(WRITE "${DB_OUT}" "[\n${_db_entries}\n]\n")
 endif()
