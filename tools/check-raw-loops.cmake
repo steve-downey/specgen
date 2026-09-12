@@ -67,10 +67,11 @@
 # then a summary with the marked and unmarked counts. Exits 0 if there are no
 # unmarked sites, exits 1 (via message(FATAL_ERROR ...)) otherwise.
 #
-# This runs as the ctest case `style.no-raw-loops` (registered in the top-level
-# CMakeLists.txt, `ctest -R style` selects it), unconditionally in both build
-# configurations -- it reads source text, so it needs nothing built and gives
-# the same answer in every configuration.
+# The ctest case `style.no-raw-loops` now runs the clang-tidy pass
+# (tools/tidy/run-no-raw-loops.cmake) instead of this scan; this script
+# remains the no-build spot check -- it answers in seconds with nothing
+# configured -- until the retire-text-gate stage of
+# docs/plans/no-raw-loops-tidy-plugin.md deletes it.
 #
 # Known limits (this is a line-oriented text scan, not a parser):
 #   - A loop whose `(` sits on the *following* line -- `for` alone, then

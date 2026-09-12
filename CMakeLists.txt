@@ -213,17 +213,41 @@ endif()
 if(BEMAN_SPECGEN_BUILD_TESTS)
     enable_testing()
 
-    # The "no raw loops" gate (docs/CODING_RULES.md):
-    # a style check over source text, needing no target built, so it is
-    # registered here rather than beside the golden cases below (which need the
-    # driver). `ctest -R style` selects
-    # it; tools/check-raw-loops.cmake's top-of-file comment is the interface.
-    add_test(
-        NAME style.no-raw-loops
-        COMMAND
-            ${CMAKE_COMMAND} -P
-            "${PROJECT_SOURCE_DIR}/tools/check-raw-loops.cmake"
-    )
+    # The "no raw loops" gate (docs/CODING_RULES.md), as the clang-tidy pass
+    # (docs/plans/no-raw-loops-tidy-plugin.md, ctest-gate):
+    # tools/tidy/run-no-raw-loops.cmake filters the compile database and runs
+    # the pinned run-clang-tidy with the specgen plugin, findings as errors.
+    # `ctest -R style` selects it. Without the plugin toolchain the case
+    # fails loudly naming what is missing, never a silent green. The
+    # ;-list must not split the test's command line; the driver splits it
+    # back on the |.
+    if(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN)
+        string(
+            REPLACE ";"
+            "|"
+            _specgen_gate_implicit_dirs
+            "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}"
+        )
+        add_test(
+            NAME style.no-raw-loops
+            COMMAND
+                ${CMAKE_COMMAND}
+                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
+                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
+                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
+                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
+        )
+        unset(_specgen_gate_implicit_dirs)
+    else()
+        add_test(
+            NAME style.no-raw-loops
+            COMMAND
+                ${CMAKE_COMMAND} -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
+        )
+    endif()
 
     # The plugin-load smoke (docs/plans/no-raw-loops-tidy-plugin.md, stage
     # tidy-plugin-target): the pinned clang-tidy dlopens the plugin and lists
