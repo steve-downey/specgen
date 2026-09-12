@@ -1,10 +1,9 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
-**Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe), [tidy-plugin-target](#tidy-plugin-target),
-[no-raw-loops-check](#no-raw-loops-check), [header-tu-inventory](#header-tu-inventory), and
-[ctest-gate](#ctest-gate) are done: `style.no-raw-loops` now runs the clang-tidy pass, and
-`tools/check-raw-loops.cmake` remains only as the no-build spot check until the
-[retire-text-gate](#retire-text-gate) step lands.
+**Status:** EXECUTED (2026-09-12, stages landing 2026-09-11 through 2026-09-12). All six stages are done:
+`style.no-raw-loops` runs the `specgen-no-raw-loops` clang-tidy plugin check over the compile database, the text
+scan `tools/check-raw-loops.cmake` is deleted, and `docs/CODING_RULES.md` ("No raw loops"), `docs/building.md`, and
+`AGENTS.md` name the check and the `gcc-release` lint preset. One rule, one gate.
 Executing with the open questions resolved as recommended below unless overridden: `examples/` joined the scope at
 stage 4 (resolving [examples-scope](#examples-scope)), the text gate retires, and the header-TU switch turned on in
 `gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count; 135
@@ -207,8 +206,11 @@ stays as the no-build spot check until [retire-text-gate](#retire-text-gate).
 
 ### retire-text-gate
 
-Stage 6. Delete `tools/check-raw-loops.cmake` and update `docs/CODING_RULES.md` ("No raw loops"), `docs/building.md`,
-and `AGENTS.md` to name the check and the lint preset. Two gates for one rule drift; the doctrine keeps one.
+Stage 6. **Done** (2026-09-12). Delete `tools/check-raw-loops.cmake` and update `docs/CODING_RULES.md` ("No raw
+loops"), `docs/building.md`, and `AGENTS.md` to name the check and the lint preset. Two gates for one rule drift;
+the doctrine keeps one. `docs/CODING_RULES.md` now documents the gate command and the one-file spot-check form
+(direct `clang-tidy --load` against the gate's scrubbed database copy), which replaces the old script's `PATHS`
+form.
 
 ## Related gates to ride the same pass
 
