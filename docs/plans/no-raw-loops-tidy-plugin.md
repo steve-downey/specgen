@@ -1,8 +1,10 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
 **Status:** in progress. [tidy-toolchain-probe](#tidy-toolchain-probe), [tidy-plugin-target](#tidy-plugin-target),
-[no-raw-loops-check](#no-raw-loops-check), and [header-tu-inventory](#header-tu-inventory) are done;
-`tools/check-raw-loops.cmake` remains the live gate until the [retire-text-gate](#retire-text-gate) step lands.
+[no-raw-loops-check](#no-raw-loops-check), [header-tu-inventory](#header-tu-inventory), and
+[ctest-gate](#ctest-gate) are done: `style.no-raw-loops` now runs the clang-tidy pass, and
+`tools/check-raw-loops.cmake` remains only as the no-build spot check until the
+[retire-text-gate](#retire-text-gate) step lands.
 Executing with the open questions resolved as recommended below unless overridden: `examples/` joined the scope at
 stage 4 (resolving [examples-scope](#examples-scope)), the text gate retires, and the header-TU switch turned on in
 `gcc-release` itself. Re-measured at execution start: 133 marked sites (the 109 below was the mid-2026 count; 135
@@ -191,9 +193,17 @@ pin exists to prevent, so the ctest-gate driver must always pass it.
 
 ### ctest-gate
 
-Stage 5. Register the pass as `style.no-raw-loops`, replacing the command of the existing case, conditional on the
-probe. When the probe fails, register a case that fails with a message naming what is missing, so the gate's absence is
-visible in `ctest` output rather than a silent green.
+Stage 5. **Done** (2026-09-12). Register the pass as `style.no-raw-loops`, replacing the command of the existing
+case, conditional on the probe. When the probe fails, register a case that fails with a message naming what is
+missing, so the gate's absence is visible in `ctest` output rather than a silent green. Landed as
+`tools/tidy/run-no-raw-loops.cmake` (the driver: scope filtering via `no-raw-loops-scope.cmake`, then the pinned
+`run-clang-tidy` — always through `-clang-tidy-binary`, per the trap stage 4 recorded — with `-load`,
+`-checks=-*,specgen-*`, `-warnings-as-errors=specgen-*`, a header filter over `include/`, `src/`, `tools/`,
+`examples/`, and the configured compiler's implicit include directories as explicit `-isystem`s so the parse uses
+the build's own standard library on every box) and `tools/tidy/no-raw-loops-unavailable.cmake` (the loud-fail
+half). Both branches exercised: the pass runs green over the tree's 40 TUs in ~47 s and fails when a marker is
+stripped; with the headers hidden the registered case fails naming the missing piece. `tools/check-raw-loops.cmake`
+stays as the no-build spot check until [retire-text-gate](#retire-text-gate).
 
 ### retire-text-gate
 
