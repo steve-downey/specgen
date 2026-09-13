@@ -19,6 +19,7 @@
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <set>
 #include <string>
 #include <vector>
 
@@ -63,6 +64,20 @@ Diagnostics validate(const ir::Node& node);
 /// each root in `Document::nodes` and combine under the monoid, the same
 /// walk `ir.cpp`'s `emit_json(Document&)` does directly over the roots.
 Diagnostics validate(const ir::Document& document);
+
+/// The names @p document documents: every roster entry with a visible
+/// declaration, plus each documented class's own name. This is the set the
+/// leakage rules consult first, exported so a caller holding the several
+/// documents of one paper can hand each one the others' (issue #109).
+std::set<std::string> documented_names(const ir::Document& document);
+
+/// `validate(document)` with @p also_documented joined into the documented
+/// set the leakage rules consult: a name specified by a sibling document of
+/// the same paper is not foreign (issue #109). Everything else — rosters,
+/// section routing, the foreign maps — stays this document's own, so the
+/// union widens only the question "can the reader see this name", which for
+/// a paper is answered by the paper.
+Diagnostics validate(const ir::Document& document, const std::set<std::string>& also_documented);
 
 /// True iff @p diagnostics contains at least one `Severity::Error` finding.
 bool has_errors(const Diagnostics& diagnostics);

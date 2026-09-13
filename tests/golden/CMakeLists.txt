@@ -99,24 +99,35 @@ endif()
 # <case>/expected.<backend>.manifest. BACKEND is required (it picks the
 # extension as well as the expected directory) and ROOT, if given, is passed
 # through as `--root`. Needs no Clang, like render.
+#
+# ALSO_FROM_IR (split mode only, multi-valued): further IR JSON inputs,
+# passed as additional `--from-ir` occurrences — the several documents of one
+# paper (issue #109) splitting into one directory under one manifest. ROOT
+# may then be multi-valued too, one per input in the same order, since
+# `--root` pairs with `--from-ir`. VALIDATE (an option) adds `--validate`,
+# so the case also pins that the paper validates across the union of its
+# documents' names: a finding at error severity would fail the run.
 function(specgen_add_golden case)
     set(one_value_args
         INPUT
         MODE
         BACKEND
         EXPECT_EXIT
-        ROOT
         BASE_HEADING_LEVEL
         BASE_SECTION_DEPTH
         EXTRA_ARGS
         COMPILE_COMMANDS_DIR
         EXPECTED_DIR
     )
+    # ROOT is multi-valued because --root pairs with --from-ir: a paper case
+    # names one root per input, in order. ALSO_FROM_IR carries the further
+    # inputs. Both are |-joined below — a ;-list would not survive the test
+    # command line, the same trap tests/tidy's harness records.
     cmake_parse_arguments(
         ARG
-        "NO_VALIDATE;PAPER"
+        "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        ""
+        "ROOT;ALSO_FROM_IR"
         ${ARGN}
     )
 
@@ -175,7 +186,17 @@ function(specgen_add_golden case)
         list(APPEND case_args "-DPAPER=ON")
     endif()
     if(ARG_ROOT)
-        list(APPEND case_args "-DROOT=${ARG_ROOT}")
+        string(REPLACE ";" "|" _root_joined "${ARG_ROOT}")
+        list(APPEND case_args "-DROOT=${_root_joined}")
+        unset(_root_joined)
+    endif()
+    if(ARG_ALSO_FROM_IR)
+        string(REPLACE ";" "|" _also_joined "${ARG_ALSO_FROM_IR}")
+        list(APPEND case_args "-DALSO_INPUTS=${_also_joined}")
+        unset(_also_joined)
+    endif()
+    if(ARG_VALIDATE)
+        list(APPEND case_args "-DVALIDATE=ON")
     endif()
     if(ARG_BASE_HEADING_LEVEL)
         list(APPEND case_args "-DBASE_HEADING_LEVEL=${ARG_BASE_HEADING_LEVEL}")
@@ -992,6 +1013,25 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_foreign_include.hpp"
 )
 
+# The two headers of one paper (issue #109). The sibling is an ordinary,
+# fully clean document; the main header's wording names `blend_policy`,
+# which the sibling declares *and documents*, so one run over the main
+# header alone reports it as foreign. NO_VALIDATE because that standing
+# finding is the fixture — `paper_main_validate` pins its exact text, and
+# `paper_union` pins that a run given both documents' IR validates clean:
+# the name is specified by the paper, across a header boundary.
+specgen_add_golden(
+    paper_sibling
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_sibling.hpp"
+)
+specgen_add_golden(
+    paper_main
+    MODE generate
+    NO_VALIDATE
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_main.hpp"
+)
+
 # The bare-name half asked about a spelling this run declares (issue #93,
 # decision shared-spelling-foreign-name): a documented enumerator and a
 # generated lookup table in support/spec_shared_spelling_tables.hpp share a
@@ -1514,6 +1554,36 @@ specgen_add_golden(
     foreign_include_validate
     MODE validate
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/foreign_include/expected.json"
+)
+
+# `spec_paper_main.hpp`'s standing finding, read off its own generate golden
+# the same way `foreign_include_validate` reads its header's. This is the
+# solo-run half of issue #109's pair: `blend_policy` is specified by the
+# paper but by a sibling header, so one header's run reports it foreign —
+# and the diagnostic's fixit list names the remedy that actually applies,
+# rendering the paper's documents together.
+specgen_add_golden(
+    paper_main_validate
+    MODE validate
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json"
+)
+
+# The union half of issue #109: both documents of the paper in one
+# invocation, validating across the union of their documented names — clean,
+# where the solo run above errors — and splitting into one directory under
+# one manifest. The paired --root entries are load-bearing twice over: they
+# pair with the --from-ir occurrences in order, and without them the two
+# documents would derive the same root fragment name from their shared
+# `paper.` prefix, which the driver reports as a collision rather than
+# letting the later document silently overwrite the earlier.
+specgen_add_golden(
+    paper_union
+    MODE split
+    VALIDATE
+    BACKEND latex
+    ROOT paper.mix.syn paper.blend.syn
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json"
+    ALSO_FROM_IR "${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
 )
 
 # `spec_gathered_class_at.hpp`'s standing finding, read off its own generate

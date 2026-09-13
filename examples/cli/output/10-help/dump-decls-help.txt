@@ -62,7 +62,14 @@ generate options:
                              option parsing
 
 render options:
-  --from-ir <file>          IR JSON to read; "-" for standard input (required)
+  --from-ir <file>          IR JSON to read; "-" for standard input (required).
+                             May be repeated, once per document of one paper:
+                             --validate then runs across the union of their
+                             documented names, so a name specified by a
+                             sibling document is not foreign. Several inputs
+                             require --split, and --root, when given at all,
+                             then repeats too, pairing with each --from-ir in
+                             order
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
@@ -87,7 +94,9 @@ render options:
                              list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
                              section (--split only); derived from the sections'
-                             common stable-name prefix when omitted
+                             common stable-name prefix when omitted. With
+                             several --from-ir inputs, repeats to name each
+                             document's root fragment, pairing in order
   -o, --output <file>       write here instead of standard output
 
 general:

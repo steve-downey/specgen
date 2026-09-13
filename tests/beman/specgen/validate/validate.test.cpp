@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -864,6 +865,42 @@ TEST_CASE("validate - validate(Node) reports no qualifier findings: the channel 
     // in a node records that the front end resolved one.
     const ir::Document doc = document_with_foreign({}, "return detail::make();", {{"detail", "demo::detail"}});
     CHECK(validate(doc.nodes.at(1)).empty());
+}
+
+// --- the paper's union of documented names (issue #109) ---------------------
+
+TEST_CASE("validate - a name documented by a sibling document of the paper is not foreign") {
+    // The reported failure: a paper is generated one document per header, so
+    // a name specified by a sibling header resolves to a declaration this
+    // run never documents. The caller who holds the paper passes the
+    // sibling's documented names, and the finding does not fire.
+    const ir::Document doc =
+        document_with_foreign_decl({}, "return grade_subsume(x);", {{"grade_subsume", "grade.hpp"}});
+
+    CHECK(!validate(doc).empty());
+    CHECK(validate(doc, {"grade_subsume"}).empty());
+}
+
+TEST_CASE("validate - the union does not blanket-suppress: a name no document specifies stays foreign") {
+    const ir::Document doc =
+        document_with_foreign_decl({}, "return probe_witness(x);", {{"probe_witness", "typeclass_base.hpp"}});
+
+    const Diagnostics diags = validate(doc, {"grade_subsume", "graded_context"});
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().message.find("`probe_witness` appears in rendered output") != std::string::npos);
+}
+
+TEST_CASE("validate - an empty union is validate(document), finding for finding") {
+    const ir::Document doc =
+        document_with_foreign_decl({}, "return probe_witness(x);", {{"probe_witness", "typeclass_base.hpp"}});
+    CHECK(validate(doc, {}) == validate(doc));
+}
+
+TEST_CASE("validate - documented_names reports the roster's visible names and the class's own") {
+    const std::set<std::string> names =
+        documented_names(document_with_equiv({{"observe", ir::Disposition::Described, ""}}, "return 0;"));
+    CHECK(names.contains("observe"));
+    CHECK(names.contains("widget"));
 }
 
 // --- a helper named only by a non-extracted body (design §9) ----------------
