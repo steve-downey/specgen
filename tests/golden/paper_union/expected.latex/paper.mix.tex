@@ -1,0 +1,16 @@
+\rSec3[paper.mix]{Mixing}
+
+\indexlibrarymember{mix}{mixer}%
+\begin{itemdecl}
+int mix(const T& part) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{requires(const blend_policy& policy) { policy.strength(); }} is \tcode{true}.
+
+\pnum
+\returns
+The blended value.
+\end{itemdescr}

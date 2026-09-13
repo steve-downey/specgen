@@ -143,9 +143,28 @@ elseif(MODE STREQUAL "split")
         set(BACKEND latex)
     endif()
 
+    # ROOT and ALSO_INPUTS arrive |-joined (a ;-list would not survive the
+    # test command line): the extra inputs become further --from-ir
+    # occurrences — the several documents of one paper (issue #109) — and
+    # each ROOT entry becomes its own --root, pairing with the inputs in
+    # order. VALIDATE adds --validate, so the run also asserts the paper
+    # validates across the union of its documents' names.
     set(root_args "")
     if(ROOT)
-        set(root_args --root "${ROOT}")
+        string(REPLACE "|" ";" _roots "${ROOT}")
+        foreach(_root IN LISTS _roots)
+            list(APPEND root_args --root "${_root}")
+        endforeach()
+    endif()
+    set(input_args --from-ir "${INPUT}")
+    if(ALSO_INPUTS)
+        string(REPLACE "|" ";" _also "${ALSO_INPUTS}")
+        foreach(_input IN LISTS _also)
+            list(APPEND input_args --from-ir "${_input}")
+        endforeach()
+    endif()
+    if(VALIDATE)
+        list(APPEND input_args --validate)
     endif()
 
     # A scratch directory of this run's own, emptied first: idempotence is
@@ -156,7 +175,7 @@ elseif(MODE STREQUAL "split")
 
     execute_process(
         COMMAND
-            "${SPECGEN}" render --from-ir "${INPUT}" --backend "${BACKEND}"
+            "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
             ${root_args} --split wording
         WORKING_DIRECTORY "${ACTUAL}"
         RESULT_VARIABLE render_result
@@ -166,7 +185,7 @@ elseif(MODE STREQUAL "split")
     if(render_result EQUAL 0)
         execute_process(
             COMMAND
-                "${SPECGEN}" render --from-ir "${INPUT}" --backend "${BACKEND}"
+                "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
                 ${root_args} --split wording
             WORKING_DIRECTORY "${ACTUAL}"
             RESULT_VARIABLE render_result

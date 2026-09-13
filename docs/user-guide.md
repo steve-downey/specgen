@@ -222,14 +222,20 @@ specgen render --from-ir wording.json --backend org -o wording.org
 `render` accepts these options:
 
 ```text
-specgen render --from-ir <file|->
+specgen render --from-ir <file|-> [--from-ir <file>...]
                [--backend latex|mpark|org]
                [--validate]
                [--paper] [--new-root <name>]
                [--base-heading-level <n>] [--base-section-depth <n>]
                [-o|--output <file>]
-               [--split <dir> [--root <name>]]
+               [--split <dir> [--root <name>...]]
 ```
+
+`--from-ir` may repeat, once per document of one paper (see
+[the multi-header section](#a-paper-proposing-several-headers) below):
+`--validate` then runs across the union of the documents' documented names,
+several inputs require `--split`, and `--root`, when given at all, repeats
+too, pairing with each `--from-ir` in order.
 
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
 the mpark/wg21 framework; `--paper` also wraps the fragment in an
@@ -326,6 +332,29 @@ Use `--paper` when the whole fragment is an addition and should receive
 editing-instruction framing and `x`, `x+1`, ... paragraph numbers. Omit it when
 the surrounding paper supplies that framing or when ordinary wording blocks
 are wanted.
+
+### A paper proposing several headers
+
+specgen reads one header per `generate` run, so a paper proposing several
+headers is several specgen documents — and a name specified by one of them is
+routinely used in another's wording. Rendered one run per header,
+`--validate` would report such a name as foreign: the run that uses it never
+documents it. The paper is the unit that has to be internally consistent, so
+render it as one: `--emit-ir` each header, then give one `render` every IR
+file, repeating `--from-ir` once per header. Validation then runs across the
+union of the documents' documented names, every fragment lands in one
+`--split` directory, and one manifest carries the whole paper in order.
+`--root`, when given at all, repeats too, pairing with each `--from-ir` in
+order — and a paper's headers usually need it, since documents sharing a
+stable-name prefix would otherwise derive the same root fragment name, which
+specgen reports as a collision rather than letting one overwrite the other.
+
+```sh
+specgen render --from-ir apply.json --root transpose.applicative.syn \
+  --from-ir grade.json --root transpose.grade.syn \
+  --backend mpark --validate --paper --split papers/wording \
+  > papers/wording/manifest
+```
 
 There are two common document layouts:
 

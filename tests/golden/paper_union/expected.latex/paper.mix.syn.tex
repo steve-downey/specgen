@@ -1,0 +1,9 @@
+\begin{codeblock}
+template<class T>
+class @\libglobal{mixer}@ {
+public:
+  // \ref{paper.mix}, mixing
+  int mix(const T& part) const
+    requires requires(const blend_policy& policy) { policy.strength(); };
+};
+\end{codeblock}

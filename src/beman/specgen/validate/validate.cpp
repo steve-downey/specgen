@@ -498,7 +498,8 @@ std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const 
     return "`" + run.name + "` appears in rendered output but is not a documented entity (declared in `" +
            entry->second +
            "`, which this run does not document): mark it `\\expos` where it is declared, document it in "
-           "this run, or rewrite the wording in documented terms";
+           "this run, render the paper's documents together (`render` takes `--from-ir` once per header, "
+           "and validates across their union), or rewrite the wording in documented terms";
 }
 
 // Design §9's leakage checker over one name: everything in rendered output
@@ -1506,7 +1507,15 @@ Diagnostics validate(const ir::Node& node) {
     return validate_with(node, section_names(node), name_visibility(node));
 }
 
-Diagnostics validate(const ir::Document& document) {
+Diagnostics validate(const ir::Document& document) { return validate(document, {}); }
+
+std::set<std::string> documented_names(const ir::Document& document) {
+    return foundation::mconcat_map(
+               document.nodes, [](const ir::Node& node) { return name_visibility(node); }, visibility_monoid)
+        .documented;
+}
+
+Diagnostics validate(const ir::Document& document, const std::set<std::string>& also_documented) {
     // Collected across the whole forest first: a synopsis routinely sits at
     // the top level, before the `\rSec` that opens the section its members'
     // wording was routed to (design §3.2), so a per-root name set would call
@@ -1539,6 +1548,12 @@ Diagnostics validate(const ir::Document& document) {
         document.foreign_declarations |
         std::views::transform([](const ir::ForeignDeclaration& d) { return std::pair{d.name, d.header}; }) |
         std::ranges::to<std::map<std::string, std::string>>();
+    // A paper is generated one document per header, and the caller who holds
+    // them all passes each one the others' documented names (issue #109): a
+    // name specified by a sibling document is not foreign, and the
+    // `documented` guard every leakage message already carries is the one
+    // place that fact needs to land.
+    visible.documented.insert(also_documented.begin(), also_documented.end());
 
     Diagnostics findings = foundation::mconcat_map(
         document.nodes,

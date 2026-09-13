@@ -21,7 +21,7 @@ targeting draft-LaTeX / mpark-wg21 / org backends. It is a tool, not a library
 
 ## Build & verify (details in docs/building.md)
 
-One preset, one configuration, 907 tests:
+One preset, one configuration, 924 tests:
 
 `uv run cmake --preset gcc-release && uv run cmake --build --preset gcc-release && uv run ctest --preset gcc-release`
 
@@ -60,8 +60,8 @@ The full statements live in `docs/architecture.md`; headlines only:
 - Every corpus header must satisfy design §9's coverage invariant, its leakage
   rule, and the drift/`noexcept` cross-checks (`golden.<case>.validate` gates
   them). `spec_namespace.hpp`, `spec_foreign_include.hpp`,
-  `spec_private_alias.hpp`, and `spec_optional.hpp` carry standing
-  findings — pin the diagnostic, never just skip a case.
+  `spec_private_alias.hpp`, `spec_optional.hpp`, and `spec_paper_main.hpp`
+  carry standing findings — pin the diagnostic, never just skip a case.
 - A comment line is one of three things: specgen markup (`//!`, `/*!`),
   Doxygen (`///`, `/** */`, dropped from synopses), or draft-form (`//`,
   `/* */`, survives verbatim). See design §1.
