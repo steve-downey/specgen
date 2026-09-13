@@ -71,11 +71,12 @@ Its commands are the scripts in [`examples/cli/`](examples/cli), and its output 
 - GCC 16 with libstdc++ and C++26 support
 - CMake 3.30 or later
 - `uv` for the repository's CMake wrappers
-- LLVM and Clang development packages 22 or later for header generation
+- LLVM and Clang 23.1 development packages for the required front end
 - Catch2 3 when building tests
 
-The supported Clang front-end configurations use Clang 22 or 23 with GCC 16's libstdc++.
-The LLVM version is pinned by `BEMAN_SPECGEN_LLVM_VERSION` (default `23.1`); see [docs/building.md](docs/building.md).
+The source compiler may be GCC 16 or Clang 22–23 with GCC 16's libstdc++; the Clang tooling
+libraries are independently pinned to the exact version named by `BEMAN_SPECGEN_LLVM_VERSION`
+(default `23.1`). See [docs/building.md](docs/building.md).
 Set `BEMAN_SPECGEN_BUILD_TESTS=OFF` to omit the test suite.
 
 ## Running
