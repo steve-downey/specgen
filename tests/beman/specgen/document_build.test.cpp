@@ -415,6 +415,8 @@ TEST_CASE("group_items - repeated overload indexes are deduplicated exactly") {
 TEST_CASE("group_items - distinct alias indexes survive grouping in order") {
     auto primary  = make_item("using value_type = T;", true);
     auto follower = make_item("using reference = T&;", false);
+    primary.decl.entities.push_back("value_type");
+    follower.decl.entities.push_back("reference");
     primary.decl.index.push_back({ir::IndexKind::Member, "value_type", "optional"});
     follower.decl.index.push_back({ir::IndexKind::Member, "reference", "optional"});
 
@@ -430,6 +432,9 @@ TEST_CASE("group_items - distinct alias indexes survive grouping in order") {
     REQUIRE(merged.decl.index.size() == 2);
     CHECK(merged.decl.index[0].name == "value_type");
     CHECK(merged.decl.index[1].name == "reference");
+    REQUIRE(merged.decl.entities.size() == 2);
+    CHECK(merged.decl.entities[0] == "value_type");
+    CHECK(merged.decl.entities[1] == "reference");
 }
 
 TEST_CASE("group_items - a wants_join candidate with nothing before it stays standalone") {

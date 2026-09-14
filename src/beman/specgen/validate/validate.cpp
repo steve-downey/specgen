@@ -351,6 +351,7 @@ std::string_view invisibility_reason(ir::Disposition disposition) {
         return "declared but never described";
     case ir::Disposition::Described:
     case ir::Disposition::Routed:
+    case ir::Disposition::Declared:
     case ir::Disposition::Defaulted:
     case ir::Disposition::Expos:
         return "visible"; // unreachable: names_a_visible_entity gates this
@@ -404,10 +405,16 @@ NameVisibility visibility_layer(const ir::NodeF<NameVisibility>& layer) {
         overloaded{
             [](const ir::SectionF<NameVisibility>& s) { return foundation::mconcat(s.children, visibility_monoid); },
             [](const ir::Synopsis& v) { return synopsis_visibility(v); },
-            // Only a roster records what became of a name; an
-            // item and a paragraph are where names are *used*,
-            // which is the other side of this check.
-            [](const ir::SpecItem&) { return NameVisibility{}; },
+            // ItemDecl::entities is the AST-derived identity of every
+            // signature this item specifies. It is deliberately not inferred
+            // from the formatted declaration or from optional editorial
+            // index metadata: a sibling document's normative namespace
+            // entity must enter the paper-wide documented set (issue #109).
+            [](const ir::SpecItem& v) {
+                NameVisibility out;
+                out.documented.insert(v.decl.entities.begin(), v.decl.entities.end());
+                return out;
+            },
             [](const ir::FreeParagraph&) { return NameVisibility{}; },
         },
         layer);

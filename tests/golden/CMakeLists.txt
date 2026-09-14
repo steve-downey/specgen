@@ -1558,10 +1558,11 @@ specgen_add_golden(
 
 # `spec_paper_main.hpp`'s standing finding, read off its own generate golden
 # the same way `foreign_include_validate` reads its header's. This is the
-# solo-run half of issue #109's pair: `blend_policy` is specified by the
-# paper but by a sibling header, so one header's run reports it foreign —
-# and the diagnostic's fixit list names the remedy that actually applies,
-# rendering the paper's documents together.
+# solo-run half of issue #109's pair: `blend_policy` and the normative
+# variable template `alpha_policy` are specified by the paper but by a
+# sibling header, so one header's run reports them foreign — and the
+# diagnostic's fixit list names the remedy that actually applies, rendering
+# the paper's documents together.
 specgen_add_golden(
     paper_main_validate
     MODE validate
@@ -1569,13 +1570,14 @@ specgen_add_golden(
 )
 
 # The union half of issue #109: both documents of the paper in one
-# invocation, validating across the union of their documented names — clean,
-# where the solo run above errors — and splitting into one directory under
-# one manifest. The paired --root entries are load-bearing twice over: they
-# pair with the --from-ir occurrences in order, and without them the two
+# invocation, validating across the union of their documented names — both
+# the synopsis-rostered class and ItemDecl-carried variable template are
+# clean, where the solo run above errors — and splitting into one directory
+# under one manifest. The paired --root entries are load-bearing twice over:
+# they pair with the --from-ir occurrences in order, and without them the two
 # documents would derive the same root fragment name from their shared
-# `paper.` prefix, which the driver reports as a collision rather than
-# letting the later document silently overwrite the earlier.
+# `paper.` prefix, which the driver reports as a collision rather than letting
+# the later document silently overwrite the earlier.
 specgen_add_golden(
     paper_union
     MODE split

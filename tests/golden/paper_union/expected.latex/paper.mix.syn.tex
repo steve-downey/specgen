@@ -4,6 +4,7 @@ class @\libglobal{mixer}@ {
 public:
   // \ref{paper.mix}, mixing
   int mix(const T& part) const
-    requires requires(const blend_policy& policy) { policy.strength(); };
+    requires(alpha_policy<T> == 0) &&
+            requires(const blend_policy& policy) { policy.strength(); };
 };
 \end{codeblock}

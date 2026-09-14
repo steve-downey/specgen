@@ -385,6 +385,21 @@ TEST_CASE("ir - round-trip preserves the document-level validator channels") {
     CHECK(parsed->unextracted_uses.at(1).member == "clone");
 }
 
+TEST_CASE("ir - round-trip preserves itemdecl entity identities") {
+    Document doc;
+    SpecItem item;
+    item.decl.signatures = {{"template<class T> inline constexpr int alpha_policy = 0;", {}}};
+    item.decl.entities   = {"alpha_policy"};
+    doc.nodes.push_back(std::move(item));
+    check_round_trip(doc);
+
+    const auto parsed = parse_document(to_json(doc));
+    REQUIRE(parsed.has_value());
+    const auto& entities = std::get<SpecItem>(parsed->nodes.at(0)).decl.entities;
+    REQUIRE(entities.size() == 1);
+    CHECK(entities.front() == "alpha_policy");
+}
+
 TEST_CASE("ir - round-trip preserves every element kind") {
     Document doc;
     SpecItem item;

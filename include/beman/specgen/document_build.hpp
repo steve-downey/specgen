@@ -118,7 +118,7 @@ struct Diagnostic {
     // document can span the headers it includes, and a finding in one of them
     // that reported the main file's name with the followed file's line number
     // would name a line in a file that has no such line.
-    std::string file;
+    std::string file = {};
 };
 
 // Opens a nested ir::Section frame (design §3.2): a `\rSec<depth>[stable]

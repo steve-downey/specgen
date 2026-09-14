@@ -4063,6 +4063,8 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                                                                  friend_begin,
                                                                  seebelow_target(attached.directives)));
     }
+    if (const std::string name = decl_form->getNameAsString(); !name.empty())
+        attached.item.decl.entities.push_back(name);
 
     // The declaration kind determines the draft index form without
     // inspecting its formatted spelling. Use decl_form -- the declaration the
@@ -4147,6 +4149,7 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
     else
         attached.item.decl.signatures.push_back(extract_alias_itemdecl(
             alias, sm, lang_opts, ns_drop_set, expos_set, alias_mask(attached.directives), head));
+    attached.item.decl.entities.push_back(alias->getNameAsString());
     if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext())) {
         attached.item.decl.index.push_back(
             {ir::IndexKind::Member, alias->getNameAsString(), record->getNameAsString()});
@@ -4193,6 +4196,7 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                              expos_set,
                                              /*exposition=*/false,
                                              std::string_view(tag.data(), tag.size())));
+    attached.item.decl.entities.push_back(decl->getNameAsString());
     return attached;
 }
 
@@ -4235,6 +4239,7 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                                                                  std::nullopt,
                                                                                  mask.unspecified,
                                                                                  see_below));
+    attached.item.decl.entities.push_back(decl->getNameAsString());
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
 }

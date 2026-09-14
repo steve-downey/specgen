@@ -271,8 +271,9 @@ struct json_descriptor<IndexEntry> {
 
 template <>
 struct json_descriptor<ItemDecl> {
-    static constexpr auto members =
-        std::tuple{field("signatures", &ItemDecl::signatures), field("index", &ItemDecl::index)};
+    static constexpr auto members = std::tuple{field("signatures", &ItemDecl::signatures),
+                                               field("index", &ItemDecl::index),
+                                               field("entities", &ItemDecl::entities)};
 };
 
 template <>

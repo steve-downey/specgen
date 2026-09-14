@@ -896,11 +896,17 @@ TEST_CASE("validate - an empty union is validate(document), finding for finding"
     CHECK(validate(doc, {}) == validate(doc));
 }
 
-TEST_CASE("validate - documented_names reports the roster's visible names and the class's own") {
-    const std::set<std::string> names =
-        documented_names(document_with_equiv({{"observe", ir::Disposition::Described, ""}}, "return 0;"));
+TEST_CASE("validate - documented_names reports visible roster and itemdecl entities") {
+    ir::Document document = document_with_equiv({{"observe", ir::Disposition::Described, ""}}, "return 0;");
+    ir::SpecItem item;
+    item.decl.entities = {"alpha_policy", "grade_of_t"};
+    document.nodes.push_back(std::move(item));
+
+    const std::set<std::string> names = documented_names(document);
     CHECK(names.contains("observe"));
     CHECK(names.contains("widget"));
+    CHECK(names.contains("alpha_policy"));
+    CHECK(names.contains("grade_of_t"));
 }
 
 // --- a helper named only by a non-extracted body (design §9) ----------------

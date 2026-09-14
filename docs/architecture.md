@@ -685,6 +685,14 @@ deliberate.
   that have no itemdecl. Do not infer memberx, memberexpos, zombie, or misc.
   Grouped declarations retain a stable exact-value union of their indexes, so overloads
   index once and differently named aliases all survive.
+- An ItemDecl also carries the **semantic entity names** its signatures declare. Unlike
+  the optional editorial index above, this validator-only metadata is complete for every
+  parsed declaration, including an undefined record primary that intentionally has no draft
+  index entry. Grouping preserves the names alongside the signatures. The paper-wide
+  validation path unions them with visible synopsis-roster names, so normative entities
+  specified by a sibling document are visible across the paper (issue #109); recovering a
+  declaration's identity from its formatted code text would violate §2's AST-for-structure
+  rule.
 - **Serializable** (`--emit-ir`): one JSON schema for emit and parse
   ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` returns a
   `std::string` and `parse_json_document`/`_item`/`_code` read it back, with the round-trip
@@ -853,6 +861,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      may share a word deliberately, and only one of them is foreign. The roster's own
      `documented` set does not settle it, an enumeration's enumerators being text inside an
      itemdecl rather than roster rows.
+     When `render` receives several `--from-ir` inputs, it validates each document against
+     the union of every input's visible roster names, synopsis names, and ItemDecl semantic
+     entity names. A normative entity specified by a sibling header is therefore not foreign;
+     a name no document specifies remains an Error (issue #109).
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any
@@ -977,7 +989,8 @@ The build assembles the tool from these components, each following the shared CM
 - **Semantic IR** — `include/beman/specgen/ir.hpp`, `src/beman/specgen/ir.cpp`.
   The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the thirteen
   `ElementKind`s in canonical order, `DescriptionElement` + `EquivalentTo`,
-  `ItemDecl`/`ItemDescr`/`SpecItem`, `IndexEntry`, `Section`/`Synopsis`/`FreeParagraph`/
+  `ItemDecl` (signatures plus semantic entity names)/`ItemDescr`/`SpecItem`, `IndexEntry`,
+  `Section`/`Synopsis`/`FreeParagraph`/
   `Document`, the coverage roster (`Disposition`, `MemberKind`, `SynopsisEntry`), the
   validator channels (`foreign_namespaces`, `foreign_declarations`, `unextracted_uses`), and
   `canonicalize()`.

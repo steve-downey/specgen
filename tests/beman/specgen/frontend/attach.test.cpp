@@ -63,6 +63,8 @@ TEST_CASE("build_document - documented namespace free-function definitions becom
     CHECK(identity->decl.index.front().kind == ir::IndexKind::Global);
     CHECK(identity->decl.index.front().name == "identity");
     CHECK(identity->decl.index.front().parent.empty());
+    REQUIRE(identity->decl.entities.size() == 1);
+    CHECK(identity->decl.entities.front() == "identity");
 
     REQUIRE(inspect->decl.signatures.size() == 1);
     CHECK(contains(inspect->decl.signatures.front().text, "int inspect(int declared_value);"));
@@ -75,6 +77,8 @@ TEST_CASE("build_document - documented namespace free-function definitions becom
     CHECK(inspect->decl.index.front().kind == ir::IndexKind::Global);
     CHECK(inspect->decl.index.front().name == "inspect");
     CHECK(inspect->decl.index.front().parent.empty());
+    REQUIRE(inspect->decl.entities.size() == 1);
+    CHECK(inspect->decl.entities.front() == "inspect");
 
     const auto contains_helper = [](const ir::Node& node) {
         const auto* item = std::get_if<ir::SpecItem>(&node);

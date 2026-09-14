@@ -4,15 +4,22 @@
 // Hand-curated corpus header (issue #109): one header of a two-header
 // paper, the one that *documents* `blend_policy`. On its own it is an
 // ordinary, fully §9-clean document; its role in the corpus is to be the
-// sibling whose documented names spec_paper_main.hpp is entitled to use.
-// The pair models a real paper generated one run per header: each header is
-// its own specgen document, and the paper is the unit that has to be
-// internally consistent.
+// sibling whose documented names spec_paper_main.hpp is entitled to use. It
+// deliberately supplies both a synopsis-rostered class and a normative
+// variable-template ItemDecl: issue #109's first fix admitted the former but
+// accidentally omitted the latter. The pair models a real paper generated
+// one run per header: each header is its own specgen document, and the paper
+// is the unit that has to be internally consistent.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_PAPER_SIBLING_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_PAPER_SIBLING_HPP
 
 namespace demo {
+
+//! \remarks This variable template is the lookup point for the alpha policy
+//! of a type. A program may specialize it.
+template <class T>
+inline constexpr int alpha_policy = 0;
 
 class blend_policy {
   public:

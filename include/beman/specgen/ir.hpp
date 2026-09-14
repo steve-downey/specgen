@@ -161,6 +161,13 @@ struct IndexEntry {
 struct ItemDecl {
     std::vector<CodeText>   signatures; // grouped overloads share one block
     std::vector<IndexEntry> index;      // backend-optional metadata
+    // The semantic names declared by `signatures`, independent of the
+    // editorial index above. A validator rendering several documents of one
+    // paper unions these names so a normative entity specified by one header
+    // is visible to wording generated from another (issue #109). Kept beside
+    // the declarations rather than recovered from their formatted text: the
+    // AST says what a declaration names (decision construct-recognition).
+    std::vector<std::string> entities = {};
 };
 
 struct ItemDescr {
