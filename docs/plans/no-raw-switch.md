@@ -26,13 +26,32 @@ precisely matchable in the AST, which is what makes the gate cheap (§5).
 
 ## 1. Why the compiler warning is not the gate
 
-Three independent reasons, each sufficient:
+Four independent reasons, each sufficient:
 
-- **No `-Werror`.** Grepping every toolchain file (`cmake/gcc-toolchain.cmake`,
-  `cmake/gcc-flags.cmake`, `cmake/clang-flags.cmake`, the four `llvm-*-toolchain.cmake`) finds
-  `-Wall -Wextra` and no `-Werror` anywhere. `-Wswitch` is advisory. That is how the `Declared`
-  omission reached `main` — and the comment above `names_a_visible_entity` asserting that a new
-  disposition "should stop compiling here" was, until this plan's stage 0, simply false.
+- **CI never sees `-Wswitch` at all.** This is the load-bearing one, and it is not what it
+  looks like from the workflow's job names. The chain, verified 2026-09-14:
+  - `-Wall -Wextra` live **only** in `cmake/gcc-flags.cmake`, `cmake/gcc-toolchain.cmake`,
+    `cmake/clang-flags.cmake`, and the four `llvm-*-toolchain.cmake`. Nothing in
+    `CMakeLists.txt` or `infra/` adds them.
+  - The CI lanes build from **presets**, and no preset names a toolchain file: `gcc-debug` and
+    `gcc-release` inherit `_root-config` + a build-type base, none of which sets
+    `CMAKE_CXX_FLAGS`. Those toolchain files are reached only by `make TOOLCHAIN=…`, which is
+    the *developer's* path, not CI's.
+  - So every CI lane compiles with neither `-Wall` nor `-Wextra`. `-Wswitch` is enabled *by*
+    `-Wall`; without it, it is off.
+  - The lane named **`GCC 16 Debug Werror`** passes `-DCMAKE_CXX_FLAGS=-Werror` and nothing
+    else, so it promotes to errors a warning set with `-Wswitch` *not in it*. It is not the
+    safety net its name implies.
+
+  The `Declared` omission was therefore visible only on a developer's machine, and CI was
+  green on it the whole time — including the lane with "Werror" in its name. **Consequence for
+  stage 0: setting `-Werror=switch` in the toolchain files would harden local builds and leave
+  CI exactly as blind as it is now.** The flags have to go where CI reads them —
+  `CMakePresets.json`'s cache variables, or the lane `args` — and `_root-config` acquiring
+  `-Wall -Wextra` is arguably the larger finding here, worth its own change either way.
+- **No `-Werror` on the developer path either.** None of the toolchain files above sets it, so
+  locally `-Wswitch` is advisory. The comment above `names_a_visible_entity` asserting that a
+  new disposition "should stop compiling here" is, on both paths, simply false.
 - **A `default:` disables it.** `-Wswitch` does not fire on a switch that has a `default:`
   label. Any future author who adds one silences the check permanently and silently. The tree
   is clean of this today (§2) but nothing holds it that way.
@@ -43,7 +62,10 @@ Three independent reasons, each sufficient:
 ## 2. The measurement
 
 Taken 2026-09-13 against `.build/build-gcc-16`'s compile database (GCC 16, 186 production TUs,
-`vendor/` `_deps/` `tests/` excluded), with the `Declared` fix applied:
+`vendor/` `_deps/` `tests/` excluded), with the `Declared` fix applied. Note this is the
+`make TOOLCHAIN=gcc-16` database, i.e. the one path that *does* carry `-Wall -Wextra`; the
+equivalent numbers from a CI preset build would be zero for the uninteresting reason given in
+§1.
 
 | flag | findings |
 |---|---|
@@ -204,7 +226,7 @@ The ctest case is `style.no-raw-switch`; `ctest -R style` then selects both. Pro
 
 | # | stage | touches | size |
 |---|---|---|---|
-| 0 | `-Werror=switch -Werror=switch-enum` in every toolchain/flags file; delete the false "should stop compiling here" claim above `names_a_visible_entity`, or make it true and keep it | 7 cmake files, 1 comment | **measured clean (§2)** — no code churn |
+| 0 | `-Wall -Wextra -Werror=switch -Werror=switch-enum` **where CI reads them** — `CMakePresets.json`'s `_root-config`, not only the 7 toolchain files (§1). Fix or retire the `GCC 16 Debug Werror` lane, whose `-DCMAKE_CXX_FLAGS=-Werror` currently promotes a warning set that excludes `-Wswitch`. Delete the false "should stop compiling here" claim above `names_a_visible_entity`, or make it true and keep it | `CMakePresets.json`, `.github/workflows/ci_tests.yml`, 7 cmake files, 1 comment | switch findings measured clean (§2); **`-Wall -Wextra` across CI for the first time is not measured and will surface unrelated warnings — budget for that, it is the whole risk in this stage** |
 | 1 | `foundation/enumeration.hpp`: `enumerators<E>`, the completeness `static_assert`, the total table, `match`/`when`. Unit tests including a negative probe that a missing enumerator fails to compile | 1 header, 1 test | the design commit; wants sign-off before it is written |
 | 2 | Migrate Shape A (8 sites). `diagnostic.hpp:24` **first** — it is the one whose fallback corrupts a diagnostic. Fold `kDispositionNames`/`kMemberKindNames` onto the same table | ir.cpp, diagnostic.hpp, common.hpp, mpark.cpp, latex.cpp, validate.cpp | mechanical once stage 1 lands; no golden movement expected (same strings) |
 | 3 | Factor the marker reader out of `NoRawLoopsCheck`; add `NoRawSwitchCheck`; probes under `tests/tidy/` | tools/tidy/, tests/tidy/ | the sibling-check commit |
