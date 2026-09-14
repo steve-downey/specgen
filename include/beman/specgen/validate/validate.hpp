@@ -66,9 +66,10 @@ Diagnostics validate(const ir::Node& node);
 Diagnostics validate(const ir::Document& document);
 
 /// The names @p document documents: every roster entry with a visible
-/// declaration, plus each documented class's own name. This is the set the
-/// leakage rules consult first, exported so a caller holding the several
-/// documents of one paper can hand each one the others' (issue #109).
+/// declaration, each documented class's own name, and every semantic entity
+/// named by an item declaration. This is the set the leakage rules consult
+/// first, exported so a caller holding the several documents of one paper can
+/// hand each one the others' (issue #109).
 std::set<std::string> documented_names(const ir::Document& document);
 
 /// `validate(document)` with @p also_documented joined into the documented

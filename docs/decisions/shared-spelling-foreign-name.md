@@ -53,11 +53,14 @@ and `ir::Document::foreign_declarations` may be read as "no entity of this run
 answers to this name".
 
 The front end is where this belongs because the question is *where a
-declaration lives*, which is the one thing the IR boundary does not carry.
-Answering it validator-side means a fourth document channel listing every
-declared name — a key in every `tests/golden/*/expected.json` for a fix that
-changes no wording, and a second consumer of the same fact. Filtering at the
-source moves only the goldens where a collision actually exists.
+declaration lives*. Item declarations now carry the semantic names they
+specify (issue #109), but that narrower IR fact cannot answer this question:
+an enumerator, private member, local, or `\omit`ted declaration is deliberately
+not an ItemDecl entity and still wins a shared-spelling collision. Answering
+that broader question validator-side would require a document channel listing
+every declared name — a key in every `tests/golden/*/expected.json` for a fix
+that changes no wording, and a second consumer of the same fact. Filtering at
+the source moves only the goldens where a collision actually exists.
 
 The rule is deliberately wider than the `documented` guard it repairs. It also
 covers a private or `\omit`ted member sharing a spelling with a foreign
@@ -113,7 +116,9 @@ spelling removes the demand at its source.
   count is zero: the golden's ordinary `.validate` sibling is the assertion.
   A regression re-opens it as three findings, one of them on the enumeration
   itself.
-- Nothing in the IR says which names the run declares, so this question can
-  only ever be settled in the front end. `validate.test.cpp` pins that
-  boundary from the other side: an enumerator is no roster row, and the
+- Nothing in the IR enumerates *every* name the run declares, so this question
+  can only ever be settled in the front end. ItemDecl's semantic entities are
+  the visible normative subset used for paper-wide validation (issue #109),
+  not the broader collision set. `validate.test.cpp` pins that boundary from
+  the other side: an enumerator is no roster row or ItemDecl entity, and the
   validator alone still reports the shared spelling.

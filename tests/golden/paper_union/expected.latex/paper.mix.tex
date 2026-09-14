@@ -8,7 +8,7 @@ int mix(const T& part) const;
 \begin{itemdescr}
 \pnum
 \constraints
-\tcode{requires(const blend_policy& policy) { policy.strength(); }} is \tcode{true}.
+\tcode{alpha_policy<T> == 0} is \tcode{true} and \tcode{requires(const blend_policy& policy) { policy.strength(); }} is \tcode{true}.
 
 \pnum
 \returns

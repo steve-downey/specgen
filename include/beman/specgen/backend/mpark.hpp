@@ -65,7 +65,7 @@ struct Options {
     // a citation of a clause the draft already has -- is unaffected either
     // way, which is the point: this says which names are new, not which
     // backend feature to turn off.
-    std::vector<std::string> new_roots;
+    std::vector<std::string> new_roots = {};
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once

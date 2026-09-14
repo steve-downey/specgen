@@ -18,6 +18,7 @@ namespace ir = beman::specgen::ir;
 
 void append_grouped_itemdecl(ir::ItemDecl& primary, ir::ItemDecl&& follower) {
     primary.signatures.append_range(std::move(follower.signatures));
+    primary.entities.append_range(std::move(follower.entities));
 
     std::vector<ir::IndexEntry> indexes;
     indexes.reserve(primary.index.size() + follower.index.size());
@@ -37,7 +38,8 @@ namespace {
 
 // The one destructive operation shared by adjacent and named grouping. The
 // primary remains in place with its description and placement key; the
-// follower contributes signatures and any exact-distinct index metadata.
+// follower contributes signatures, their semantic entity names, and any
+// exact-distinct index metadata.
 void append_signatures(GroupCandidate& primary, GroupCandidate& follower) {
     auto& primary_item  = std::get<beman::specgen::ir::SpecItem>(primary.node);
     auto& follower_item = std::get<beman::specgen::ir::SpecItem>(follower.node);
