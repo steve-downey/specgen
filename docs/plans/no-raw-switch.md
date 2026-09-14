@@ -1,10 +1,12 @@
 # Plan: eliminating enumerations by algebra, and the no-raw-switch gate
 
 **Status:** PROPOSED (2026-09-13). Occasioned by the `Declared` omission in
-`validate.cpp`'s `invisibility_reason` (fixed on `fix/disposition-switch-fallthrough`): the
-switch had missed an enumerator, `-Wswitch` said so, nothing failed, and the trailing
-`return "visible"` answered in the missing case's place. The fix closed that switch. This plan
-closes the *shape*.
+`validate.cpp`'s `invisibility_reason`: the switch had missed an enumerator, `-Wswitch` said
+so, nothing failed, and the trailing `return "visible"` answered in the missing case's place.
+PR #111 added the case; PR #112 replaced the fallback with `std::unreachable()`. That the
+omission and its silencer were closed by two unrelated PRs, neither of which set out to look
+for it, is itself the argument for this plan: those two closed one switch. This plan closes the
+*shape*.
 
 ## Goal
 
