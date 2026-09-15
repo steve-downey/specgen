@@ -464,6 +464,18 @@ TEST_CASE("docblock - impdef and seebelow conflict") {
     CHECK(has_diag(parsed, Severity::Error, "\\impdef and \\seebelow are mutually exclusive"));
 }
 
+TEST_CASE("docblock - elsewhere is exclusive with other disposition markers") {
+    CHECK(has_diag(parse_docblock("//! \\elsewhere\n//! \\omit\n"),
+                   Severity::Error,
+                   "\\elsewhere and \\omit are mutually exclusive"));
+    CHECK(has_diag(parse_docblock("//! \\elsewhere\n//! \\merge\n"),
+                   Severity::Error,
+                   "\\elsewhere and \\merge are mutually exclusive"));
+    CHECK(has_diag(parse_docblock("//! \\elsewhere\n//! \\expos\n"),
+                   Severity::Error,
+                   "\\elsewhere and \\expos are mutually exclusive"));
+}
+
 TEST_CASE("docblock - verbatim synopsis consumes the terminal payload without parsing it") {
     const auto parsed = parse_docblock("//! \\verbatim-synopsis\n"
                                        "//! namespace std {\n"

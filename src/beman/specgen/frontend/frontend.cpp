@@ -50,6 +50,7 @@
 #pragma GCC diagnostic pop
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <concepts>
 #include <format>
@@ -1190,6 +1191,10 @@ beman::specgen::lowering::ItemDirectives docblock_directives(const clang::Decl* 
     return {};
 }
 
+bool suppresses_generated_entity(const beman::specgen::lowering::ItemDirectives& directives) {
+    return directives.omit || directives.merge || directives.elsewhere;
+}
+
 // A top-level record marked \omit/\merge contributes no synopsis or derived
 // class wording. Return an engaged diagnostics vector only for that case, so
 // classify() can distinguish an unmarked record from a cleanly marked one
@@ -1206,7 +1211,7 @@ record_suppression_diagnostics(const clang::Decl* decl, const clang::SourceManag
 
     const grammar::ParseResult parsed  = grammar::parse_docblock(raw.substr(*start).str());
     const lowering::Lowered    lowered = lowering::lower(parsed.block);
-    if (!lowered.directives.omit && !lowered.directives.merge)
+    if (!suppresses_generated_entity(lowered.directives))
         return std::nullopt;
     return docblock_diagnostics(rc, *start, parsed.diags, sm);
 }
@@ -2244,6 +2249,15 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // adjacent general-subclause paragraph; remove it here regardless of
         // access, since StaticAssertDecl itself commonly reports AS_none.
         if (llvm::isa<clang::StaticAssertDecl>(member)) {
+            omit_line(member);
+            continue;
+        }
+
+        // Every suppressing marker applies to every authored member kind,
+        // not just functions in build_omit_set. In particular, `\elsewhere`
+        // may promise that a paper hand-authors a data member or alias while
+        // this generated synopsis leaves it out (issue #113).
+        if (suppresses_generated_entity(docblock_directives(member, sm))) {
             omit_line(member);
             continue;
         }
@@ -4455,7 +4469,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
 
             AttachedItem attached = attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set);
             diagnostics.append_range(std::move(attached.diagnostics));
-            if (attached.directives.omit || attached.directives.merge)
+            if (suppresses_generated_entity(attached.directives))
                 continue;
 
             const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
@@ -4509,7 +4523,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             continue;
         // `\omit`/`\merge`: no itemdescr (the synopsis line is dropped by the
         // omit-set pre-pass).
-        if (attached.directives.omit || attached.directives.merge)
+        if (suppresses_generated_entity(attached.directives))
             continue;
         // Placement: `\at <stable>` overrides the inferred `\ref` group.
         const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
@@ -4669,7 +4683,7 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         // deliberately does not special-case a documented private member).
         if (directives.merge) {
             entry.disposition = ir::Disposition::Merged;
-        } else if (directives.omit) {
+        } else if (directives.omit || directives.elsewhere) {
             entry.disposition = ir::Disposition::Omitted;
         } else if (routed_to != routed.end()) {
             // In-class: placed by name. An empty target is the "under no
@@ -4718,7 +4732,7 @@ build_roster(const clang::CXXRecordDecl*                                     rec
 std::set<const clang::Decl*> build_omit_set(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm) {
     const auto is_marked = [&sm](const clang::FunctionDecl* fn) {
         const beman::specgen::lowering::ItemDirectives dirs = docblock_directives(fn, sm);
-        return dirs.omit || dirs.merge;
+        return suppresses_generated_entity(dirs);
     };
 
     // Out-of-line function definitions, keyed to their in-class declaration.
@@ -4880,6 +4894,26 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
             return std::pair<const clang::Decl*, std::string>{named->getCanonicalDecl(), expos_name(named)};
         }));
 
+    // A namespace using-declaration introduces no declaration of its own for
+    // a synopsis to print, but `\expos` on it still marks the declarations it
+    // makes reachable under that name. Map every shadow's target so a use in
+    // this header -- or in a sibling header that includes it -- takes the
+    // ordinary exposition-use rewrite path (issue #113).
+    const auto expos_targets_of_using = [&](const clang::UsingDecl* using_decl) {
+        const std::string display = expos_name(using_decl);
+        return using_decl->shadows() | std::views::transform([display](const clang::UsingShadowDecl* shadow) {
+                   return std::array{
+                       ExposEntry{shadow->getCanonicalDecl(), display},
+                       ExposEntry{shadow->getTargetDecl()->getCanonicalDecl(), display},
+                   };
+               }) |
+               std::views::join | std::ranges::to<std::vector<ExposEntry>>();
+    };
+    expos.insert_range(
+        decls | std::views::transform([](const clang::Decl* decl) { return llvm::dyn_cast<clang::UsingDecl>(decl); }) |
+        std::views::filter([](const clang::UsingDecl* using_decl) { return using_decl != nullptr; }) |
+        std::views::filter(is_marked) | std::views::transform(expos_targets_of_using) | std::views::join);
+
     // A second pass, because a specialization takes its name from the primary
     // and the primary need not have been seen first. It is the same entity, so
     // it cannot be exposition-only under one name and not under another
@@ -4895,6 +4929,44 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
                                pair.first->getCanonicalDecl(), expos.at(pair.second->getCanonicalDecl())};
                        }));
     return expos;
+}
+
+// Names intentionally supplied by the paper but absent from this document's
+// rendered nodes (issue #113). `\elsewhere` is the explicit promise that the
+// paper hand-authors a declaration which specgen must suppress. A `\expos`
+// namespace using-declaration has no standalone declaration to render, but it
+// likewise makes its introduced name available to the paper and marks its
+// target for exposition-use rewriting in build_expos_set above.
+class PaperEntityCollector : public clang::RecursiveASTVisitor<PaperEntityCollector> {
+  public:
+    PaperEntityCollector(const clang::SourceManager& sm, std::set<std::string>& out) : sm_(sm), out_(out) {}
+
+    bool VisitNamedDecl(clang::NamedDecl* decl) {
+        if (decl == nullptr || decl->isImplicit())
+            return true;
+        const beman::specgen::lowering::ItemDirectives directives = docblock_directives(decl, sm_);
+        if (directives.elsewhere || (directives.expos && llvm::isa<clang::UsingDecl>(decl)))
+            if (const std::string name = decl->getNameAsString(); !name.empty())
+                out_.insert(name);
+        return true;
+    }
+
+  private:
+    const clang::SourceManager& sm_;
+    std::set<std::string>&      out_;
+};
+
+std::optional<std::vector<std::string>> collect_paper_entities(const std::vector<clang::Decl*>& decls,
+                                                               const clang::SourceManager&      sm) {
+    std::set<std::string> declared;
+    PaperEntityCollector  collector(sm, declared);
+    // substrate generic algorithm: a for_each-shaped RecursiveASTVisitor walk.
+    for (clang::Decl* decl : decls)
+        collector.TraverseDecl(decl);
+    std::vector<std::string> entities(declared.begin(), declared.end());
+    if (entities.empty())
+        return std::nullopt;
+    return entities;
 }
 
 // The namespace path enclosing `decl`, most-enclosing first, joined with
@@ -5324,7 +5396,7 @@ bool has_unextracted_body(const clang::FunctionDecl* fn, const clang::SourceMana
 
     const beman::specgen::lowering::Lowered lowered =
         beman::specgen::lowering::lower(beman::specgen::grammar::parse_docblock(raw.str()).block);
-    if (lowered.directives.omit || lowered.directives.merge)
+    if (suppresses_generated_entity(lowered.directives))
         return false;
     return std::ranges::none_of(lowered.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
         return element.equivalent.has_value();
@@ -5534,7 +5606,7 @@ std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string
 beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached, const DocumentFiles& doc) {
     namespace db = beman::specgen::document_build;
 
-    if (attached.directives.omit || attached.directives.merge)
+    if (suppresses_generated_entity(attached.directives))
         // \omit / \merge (design §4.3): no itemdescr. Removal from the
         // synopsis is handled by the omit-set pre-pass (build_omit_set +
         // extract_synopsis), which ran before this decl was reached. The
@@ -5639,8 +5711,8 @@ db::DocEvent classify(const RawItem&                                   ev,
                 // exactly as it does for a detached block whose entity is
                 // never declared (spec_verbatim_record_merge.hpp).
                 if ((parsed.block.verbatim_itemdecl || parsed.block.markers.verbatim_synopsis) &&
-                    is_attached_comment(ev.offset, attached_comments) && !parsed.block.markers.omit &&
-                    !parsed.block.markers.merge)
+                    is_attached_comment(ev.offset, attached_comments) &&
+                    !suppresses_generated_entity(parsed.block.markers))
                     return db::Ignored{};
                 const unsigned first_line = document_line(sm, doc, ev.offset) +
                                             static_cast<unsigned>(std::ranges::count(
@@ -5865,7 +5937,7 @@ db::DocEvent classify(const RawItem&                                   ev,
         // time someone documents one.
         if (has_docblock(ev.decl, sm)) {
             const beman::specgen::lowering::ItemDirectives dirs = docblock_directives(ev.decl, sm);
-            if (!dirs.omit && !dirs.merge && !dirs.expos) {
+            if (!suppresses_generated_entity(dirs) && !dirs.expos) {
                 const unsigned line = document_line(sm, doc, ev.offset);
                 // A documented function *declaration* is the one shape here
                 // with a better answer than "unsupported": the markup
@@ -6552,6 +6624,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
 
     const std::set<const clang::Decl*>              omit_set         = build_omit_set(decls, sm);
     const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(expos_decls, sm);
+    const std::optional<std::vector<std::string>>   paper_entities   = collect_paper_entities(decls, sm);
     const SeeBelowMap                               seebelow_map     = build_seebelow_map(decls, sm);
     const FreestandingMap                           freestanding_map = build_freestanding_map(decls, sm);
     const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
@@ -6845,7 +6918,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                             }
                         }
                     }
-                    if (!directives.omit && !directives.merge && is_first_declaration(item.decl)) {
+                    if (!suppresses_generated_entity(directives) && is_first_declaration(item.decl)) {
                         // The marker masks the declaration here exactly as it
                         // does outside the region (issue #55): a
                         // customization point object belongs in the header
@@ -6915,6 +6988,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     // both unit-tested with synthetic events in
     // tests/beman/specgen/document_build.test.cpp.
     db::BuildResult built               = db::build_tree(events);
+    built.document.paper_entities       = paper_entities;
     built.document.foreign_namespaces   = foreign;
     built.document.foreign_declarations = foreign_decls;
     built.document.unextracted_uses     = body_uses;

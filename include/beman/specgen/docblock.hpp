@@ -131,6 +131,7 @@ inline constexpr MarkerInfo kMarkers[] = {
      .arity    = MarkerArity::ParenOptional},
     {.spelling = "merge",               .flag = &Markers::merge},
     {.spelling = "omit",                .flag = &Markers::omit},
+    {.spelling = "elsewhere",           .flag = &Markers::elsewhere},
     {.spelling = "describe",            .flag = &Markers::describe},
     {.spelling = "also",
      .flag     = &Markers::also,

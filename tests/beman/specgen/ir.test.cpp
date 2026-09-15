@@ -400,6 +400,16 @@ TEST_CASE("ir - round-trip preserves itemdecl entity identities") {
     CHECK(entities.front() == "alpha_policy");
 }
 
+TEST_CASE("ir - round-trip preserves paper-only entity identities") {
+    Document doc;
+    doc.paper_entities = std::vector<std::string>{"tag", "tag_t"};
+
+    auto parsed = parse_document(emit_json(doc));
+    REQUIRE(parsed.has_value());
+    REQUIRE(parsed->paper_entities.has_value());
+    CHECK(*parsed->paper_entities == std::vector<std::string>{"tag", "tag_t"});
+}
+
 TEST_CASE("ir - round-trip preserves every element kind") {
     Document doc;
     SpecItem item;

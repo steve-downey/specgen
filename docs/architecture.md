@@ -284,6 +284,11 @@ back to name match within the class's fragments only):
   function templates**: the helper survives private-member filtering, its declared name is
   rewritten as an exposid in the class synopsis and its routed itemdecl, and extracted bodies
   rewrite calls to it through the same exposition-use path.
+- A namespace `using`-declaration carrying `\expos` marks both its Clang
+  shadow declaration and its underlying target. It produces no declaration of
+  its own, but uses of the introduced name take the ordinary exposid rewrite,
+  including from a sibling header that includes it (issue #113, decision
+  `paper-visible-names`).
 - Extracted-body (`*-equiv`) exposition rewriting is **reference-resolved first**: a resolved
   use of a namespace-scope expos entity loses only its own qualifier and becomes an exposid
   span; a same-named local is untouched; uses inside inactive conditional branches, consumed
@@ -422,6 +427,11 @@ The markers are enumerated in a single registry shared by the grammar and the fr
 - `\omit` — exclude a decl. A namespace-scope record or class-template
   definition is suppressed before synopsis extraction, roster construction, or
   class-head Mandates derivation.
+- `\elsewhere` — suppress a declaration which the paper supplies by hand
+  outside generated wording. It behaves like `\omit` for generation, but adds
+  the declaration's semantic name to the paper-wide validation set. It is
+  mutually exclusive with `\omit`, `\merge`, and `\expos` (issue #113,
+  decision `paper-visible-names`).
 - `\describe` — force an itemdecl for `= default` / `= delete` entities.
 - `\also` (or an empty markup block) — overload joins the preceding itemdescr;
   the generator accumulates itemdecls until it reaches a described one.
@@ -576,6 +586,8 @@ function un-`noexcept` even when it visibly never throws.
 | Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
 | Specialization of an `\expos` primary | the same, under the primary's name | its own markers do not apply |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
+| Any declaration, `\elsewhere` | suppressed; name is paper-visible | declaration is supplied by hand elsewhere |
+| Namespace `using`, `\expos` | none; introduced uses become exposids | name is paper-visible |
 | Documented record decl, never defined | — (no synopsis node) | yes, the declaration itself; `\also` groups |
 | Record forward decl (defined elsewhere), or undocumented never-defined | none, silent | — |
 | Documented namespace alias/alias template | — | yes, alias masking rules apply; `\also` groups |
@@ -693,6 +705,11 @@ deliberate.
   specified by a sibling document are visible across the paper (issue #109); recovering a
   declaration's identity from its formatted code text would violate §2's AST-for-structure
   rule.
+- `Document::paper_entities` carries semantic names intentionally available to
+  the paper despite having no rendered node. The front end records
+  `\elsewhere` declarations and exposition-only namespace `using`
+  declarations there; multi-document validation unions them with synopsis and
+  ItemDecl names (issue #113, decision `paper-visible-names`).
 - **Serializable** (`--emit-ir`): one JSON schema for emit and parse
   ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` returns a
   `std::string` and `parse_json_document`/`_item`/`_code` read it back, with the round-trip
@@ -863,8 +880,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      itemdecl rather than roster rows.
      When `render` receives several `--from-ir` inputs, it validates each document against
      the union of every input's visible roster names, synopsis names, and ItemDecl semantic
-     entity names. A normative entity specified by a sibling header is therefore not foreign;
-     a name no document specifies remains an Error (issue #109).
+     entity names, plus explicit `paper_entities`. A normative entity specified by a sibling
+     header — generated there, marked `\elsewhere`, or introduced by an exposition-only
+     namespace `using` declaration — is therefore not foreign; a name no document specifies
+     remains an Error (issues #109 and #113).
    - **Note** if an undocumented helper **function** appears only in bodies the tool never
      extracts: a documented function without `\effects-equiv` is never printed, so the front
      end records what such bodies name (`unextracted_uses`, §7) and the validator notes any
@@ -992,7 +1011,8 @@ The build assembles the tool from these components, each following the shared CM
   `ItemDecl` (signatures plus semantic entity names)/`ItemDescr`/`SpecItem`, `IndexEntry`,
   `Section`/`Synopsis`/`FreeParagraph`/
   `Document`, the coverage roster (`Disposition`, `MemberKind`, `SynopsisEntry`), the
-  validator channels (`foreign_namespaces`, `foreign_declarations`, `unextracted_uses`), and
+  validator channels (`paper_entities`, `foreign_namespaces`, `foreign_declarations`,
+  `unextracted_uses`), and
   `canonicalize()`.
 - **IR serialization** — same files. JSON round trip: `emit_json` (returns a `std::string`)
   and `parse_json_document`/`_item`/`_code`; one schema for both directions.

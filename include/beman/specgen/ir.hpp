@@ -313,9 +313,10 @@ struct ForeignNamespace {
 // reference resolved (decision shared-spelling-foreign-name): the check
 // resolves a reference but reports it by text, and a word naming both a
 // documented entity and a foreign one is evidence about neither. The front
-// end drops those, so the validator never sees them -- there is no
-// declared-name channel beside this one, and every consumer of this vector
-// can read it as "no entity of this run answers to this name".
+// end drops those, so the validator never sees them -- there is no exhaustive
+// declared-name channel beside this one (`paper_entities` is an explicit,
+// narrow promise), and every consumer of this vector can read it as "no entity
+// of this run answers to this name".
 struct ForeignDeclaration {
     std::string name;   // as used: `probe_witness`
     std::string header; // the header that actually declares it
@@ -343,6 +344,12 @@ struct BodyUse {
 
 struct Document {
     std::vector<Node> nodes;
+    // Semantic names which this generated document deliberately does not
+    // render, but which the paper makes available: declarations carrying
+    // `\elsewhere`, and namespace using-declarations carrying `\expos`.
+    // The paper-wide validation union includes them alongside names carried
+    // by rendered synopses and item declarations (issue #113).
+    std::optional<std::vector<std::string>> paper_entities = {};
     // A validator-only side channel, the same shape `Synopsis::roster`
     // and `DescriptionElement::conjuncts` are — every renderer
     // ignores it. Document-level rather than per-fragment because a surviving

@@ -2,13 +2,18 @@
 
 \indexlibrarymember{mix}{mixer}%
 \begin{itemdecl}
-int mix(const T& part) const;
+int mix(tag_t, const T& part) const;
 \end{itemdecl}
 
 \begin{itemdescr}
 \pnum
 \constraints
-\tcode{alpha_policy<T> == 0} is \tcode{true} and \tcode{requires(const blend_policy& policy) { policy.strength(); }} is \tcode{true}.
+\begin{itemize}
+\item \tcode{requires { tag; }} is \tcode{true},
+\item \tcode{\exposid{is-void-v}<T>} is \tcode{false},
+\item \tcode{alpha_policy<T> == 0} is \tcode{true},
+\item \tcode{requires(const blend_policy& policy) { policy.strength(); }} is \tcode{true}.
+\end{itemize}
 
 \pnum
 \returns

@@ -27,10 +27,11 @@ struct Markers {
     bool                       verbatim_synopsis    = false;
 
     // Entity-level structure.
-    bool                       merge    = false;
-    bool                       omit     = false;
-    bool                       describe = false;
-    bool                       also     = false;
+    bool                       merge     = false;
+    bool                       omit      = false;
+    bool                       elsewhere = false; // declaration is supplied by hand elsewhere in the paper
+    bool                       describe  = false;
+    bool                       also      = false;
     std::optional<std::string> group_id;    // \group <id>, frame-local primary
     std::optional<std::string> also_target; // optional id in \also <id>
 

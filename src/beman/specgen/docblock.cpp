@@ -877,6 +877,12 @@ ParseResult parse_docblock(std::string_view raw) {
         diags.push_back({Severity::Error, 0, "\\group and \\also are mutually exclusive"});
     if (block.markers.impdef && block.markers.seebelow)
         diags.push_back({Severity::Error, 0, "\\impdef and \\seebelow are mutually exclusive"});
+    if (block.markers.elsewhere && block.markers.omit)
+        diags.push_back({Severity::Error, 0, "\\elsewhere and \\omit are mutually exclusive"});
+    if (block.markers.elsewhere && block.markers.merge)
+        diags.push_back({Severity::Error, 0, "\\elsewhere and \\merge are mutually exclusive"});
+    if (block.markers.elsewhere && block.markers.expos)
+        diags.push_back({Severity::Error, 0, "\\elsewhere and \\expos are mutually exclusive"});
     if (block.markers.expos_name)
         block.markers.expos = true;
 
