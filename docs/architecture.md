@@ -153,6 +153,13 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   previous section. The recognizer is narrower than "any bracketed dotted name":
   it requires a numbered draft-form heading ending in the stable name, so prose citations and
   Doxygen `END [optional.syn]` fence lines stay silent.
+- An exact Doxygen fence `/// END [stable]` closes the currently open ordinary `\rSec`
+  section when its stable name matches. Following declarations return to its parent frame —
+  the document root for a top-level section — which is how helpers written between sibling
+  clauses stay out of the preceding clause's fragment. A mismatched fence or one with no
+  section open reports a Warning and leaves the tree unchanged. A `.syn` fence is instead
+  consumed by the bounded header-synopsis gatherer below; it does not produce a second close
+  event or diagnostic.
 
 ### 3.3 Redeclaration-chain attachment
 

@@ -221,6 +221,26 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     opening.open_offset = open.offset;
                     stack.push_back(std::move(opening));
                 },
+                [&](SectionClose& close) {
+                    if (stack.size() == 1) {
+                        diagnostics.push_back(
+                            Diagnostic{Severity::Warning,
+                                       close.line,
+                                       std::format("END [{}] has no open section to close", close.stable),
+                                       std::move(close.file)});
+                        return;
+                    }
+                    if (stack.back().stable != close.stable) {
+                        diagnostics.push_back(Diagnostic{Severity::Warning,
+                                                         close.line,
+                                                         std::format("END [{}] does not match open section [{}]",
+                                                                     close.stable,
+                                                                     stack.back().stable),
+                                                         std::move(close.file)});
+                        return;
+                    }
+                    close_top();
+                },
                 [&](SynopsisDecl& syn) {
                     // The class's own members' docblock findings,
                     // collected before the members themselves

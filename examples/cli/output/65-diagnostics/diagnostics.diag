@@ -1,7 +1,9 @@
-spec_diagnostics.hpp:60: error: unknown tag \remark
-spec_diagnostics.hpp:70: warning: duplicate \effects element; both kept
-spec_diagnostics.hpp:88: note: \effects appears after \remarks; output is canonicalized
-spec_diagnostics.hpp:92: error: unknown tag \effect
-spec_diagnostics.hpp:95: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
-spec_diagnostics.hpp:97: warning: malformed \rSec marker: expected '{' (comment offset 26)
-spec_diagnostics.hpp:101: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}
+spec_diagnostics.hpp:63: error: unknown tag \remark
+spec_diagnostics.hpp:73: warning: duplicate \effects element; both kept
+spec_diagnostics.hpp:91: note: \effects appears after \remarks; output is canonicalized
+spec_diagnostics.hpp:95: error: unknown tag \effect
+spec_diagnostics.hpp:98: warning: END [gadget.wrong] does not match open section [gadget.obs]
+spec_diagnostics.hpp:100: warning: END [gadget.extra] has no open section to close
+spec_diagnostics.hpp:102: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
+spec_diagnostics.hpp:104: warning: malformed \rSec marker: expected '{' (comment offset 26)
+spec_diagnostics.hpp:108: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}

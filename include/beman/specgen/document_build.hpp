@@ -132,6 +132,19 @@ struct SectionOpen {
     std::string title;
 };
 
+// Closes the currently open ordinary ir::Section frame (design §3.2): an
+// exact Doxygen `/// END [stable]` fence, already parsed by classify(). The
+// fence is structural source scaffolding, not authored wording. build_tree
+// closes the frame only when `stable` matches its stable name; a mismatch or
+// a fence at the root contributes a Warning and otherwise leaves the stack
+// unchanged. Header-synopsis `.syn` fences are consumed by the bounded
+// gatherer before classify() and never become this event.
+struct SectionClose {
+    std::string stable;
+    unsigned    line = 0;
+    std::string file = {};
+};
+
 // A node awaiting placement in the section its markup named (design
 // §3.3): most often an in-class-defined member's SpecItem, harvested from a
 // class body by classify() (which has the clang::CXXRecordDecl in hand while
@@ -269,7 +282,7 @@ struct Ignored {
 // classify()'s output (decision document-build-stages): a closed variant naming no
 // clang:: type, which is what lets build_tree and group_items below be
 // clang-free.
-using DocEvent = std::variant<SectionOpen, SynopsisDecl, ItemDecl, Ignored>;
+using DocEvent = std::variant<SectionOpen, SectionClose, SynopsisDecl, ItemDecl, Ignored>;
 
 // One node awaiting placement in the frame currently being built, carrying
 // exactly what group_items and the placement-key sort each need: `key` is
@@ -309,8 +322,9 @@ struct BuildResult {
 // Stage 2 (plus stage 3 folded in — see the top-of-file note): fold the
 // flat, offset-ordered `events` into the `\rSec` section tree (design §3.2).
 // For each open frame, in event order: push each child as a GroupCandidate
-// (an ItemDecl's own `wants_join`, false for everything else); at a
-// shallower-or-equal `\rSec` or at end of input, group_items() runs over
+// (an ItemDecl's own `wants_join`, false for everything else); at a matching
+// `/// END [stable]`, a shallower-or-equal `\rSec`, or end of input,
+// group_items() runs over
 // *that frame's own pushed candidates, in push order* (`\also`/empty-descr
 // grouping plus named grouping, design §4.3), *then* any pending
 // in-class members routed to this

@@ -1,0 +1,8 @@
+** Class template `crate` [demo.crate]
+
+#+begin_codeblock
+template<class T>
+class crate {};
+#+end_codeblock
+
+/Remarks/: A crate.

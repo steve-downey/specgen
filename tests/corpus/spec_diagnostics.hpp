@@ -8,7 +8,7 @@
 // should, because every other one backs a byte-exact golden.
 //
 // The point of the fixture is the *contrast*. Four comment shapes that all
-// fail parse_rsec() sit in one file:
+// fail parse_rsec() sit in one file, followed by ordinary END-fence errors:
 //
 //   - this license/SPDX block and the prose you are reading (no `\rSec`),
 //   - a `\ref{...}` group header inside the class body, which shares
@@ -20,9 +20,12 @@
 //   - `\rSec` with a well-formed depth and stable name but no `{title}`.
 //
 // Only the last two are malformed markers, so only they are diagnostics; the
-// first two are non-matches and must stay silent. The well-formed `\rSec3`
-// sections below keep the document non-trivial, so the test can also pin
-// that reporting a diagnostic does not disturb which nodes land in the tree.
+// first two are non-matches and must stay silent. A mismatched END fence and
+// one with no section open are diagnosed separately; the exact matching fence
+// between them closes the ordinary section silently. The well-formed
+// `\rSec3` sections below keep the document non-trivial, so the test can also
+// pin that reporting a diagnostic does not disturb which nodes land in the
+// tree.
 //
 // **This header's job also covers docblock findings.** The findings the
 // docblock grammar computes — the element-ordering Note, the
@@ -91,6 +94,10 @@ int gadget::value() const { return value_; }
 //! \omit
 //! \effect A tag that does not exist; the element is `\effects`.
 void gadget::scratch() {}
+
+/// END [gadget.wrong]
+/// END [gadget.obs]
+/// END [gadget.extra]
 
 // \rSec99999999999[gadget.overflow]{Depth that does not fit in an int}
 

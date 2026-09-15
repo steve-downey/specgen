@@ -404,6 +404,24 @@ A title too long for one line may continue on the immediately following plain
 and the wrapped lines join back into one title with single spaces. A `{title}`
 that never closes is still reported as a malformed marker.
 
+An exact Doxygen fence closes an ordinary section explicitly:
+
+```cpp
+// \rSec2[optional.bad]{Bad optional access}
+// ... declarations in the clause ...
+/// END [optional.bad]
+
+// declarations here return to the document root
+```
+
+This is useful for exposition-only helpers written between clauses: under
+`--split`, they enter the root fragment instead of the preceding clause's
+fragment. The stable name must match the currently open section. A mismatch,
+or an END fence when no section is open, is a warning and does not change
+placement. Closing a nested section resumes its parent; closing a top-level
+section resumes the document root. The same spelling bounds a gathered `.syn`
+region as described below; that fence is consumed by the gatherer.
+
 Inside a class, a draft-form group header routes following documented in-class
 members to the section with the matching stable name:
 

@@ -1,0 +1,8 @@
+** Class template `box` [demo.box]
+
+#+begin_codeblock
+template<class T>
+class box {};
+#+end_codeblock
+
+/Remarks/: A box.

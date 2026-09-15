@@ -5598,6 +5598,13 @@ struct UnrecognizedSectionHeader {
 
 std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string_view raw);
 
+struct SectionEndFence {
+    std::string stable;
+    std::size_t line_begin = 0;
+};
+
+std::optional<SectionEndFence> section_end_fence(std::string_view raw);
+
 // Fold one attached item into its DocEvent: classify()'s shared tail for
 // every top-level decl that becomes an ItemDecl — an out-of-line or free
 // function definition, or a documented record declaration the header never
@@ -5740,6 +5747,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     return out;
                 }
             }
+        }
+
+        if (const auto end = section_end_fence(ev.comment_text);
+            end && !std::string_view(end->stable).ends_with(".syn")) {
+            const unsigned fence_offset = ev.offset + static_cast<unsigned>(end->line_begin);
+            const auto [file, local]    = doc.locate(fence_offset);
+            return db::SectionClose{end->stable, sm.getLineNumber(file, local), diagnostic_file_name(sm, file)};
         }
 
         const parse::parse_result<SectionHeader> header = parse_rsec(ev.comment_text);
@@ -6175,11 +6189,11 @@ parse::parse_result<SectionHeader> parse_rsec(std::string_view raw) {
 namespace {
 
 // Clang coalesces adjacent line comments into one RawComment, but each
-// physical \rSec line is a distinct structure event. Split only around those
-// lines: the intervening chunks stay intact so multi-line docblocks and other
-// comment consumers retain their existing input shape. Offsets remain file
-// offsets rather than offsets into the merged RawComment.
-void append_rsec_comment_items(std::vector<RawItem>& out, unsigned raw_begin, std::string raw) {
+// physical \rSec or END line is a distinct structure event. Split only around
+// those lines: the intervening chunks stay intact so multi-line docblocks and
+// other comment consumers retain their existing input shape. Offsets remain
+// file offsets rather than offsets into the merged RawComment.
+void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begin, std::string raw) {
     const std::size_t first = raw.find_first_not_of(" \t");
     if (first == std::string::npos || !std::string_view(raw).substr(first).starts_with("//")) {
         out.push_back(RawItem{raw_begin, nullptr, std::move(raw)});
@@ -6195,7 +6209,7 @@ void append_rsec_comment_items(std::vector<RawItem>& out, unsigned raw_begin, st
         const std::size_t      newline  = raw.find('\n', line_begin);
         const std::size_t      line_end = newline == std::string::npos ? raw.size() : newline;
         const std::string_view line(raw.data() + line_begin, line_end - line_begin);
-        if (rsec_tag_recognized(line)) {
+        if (rsec_tag_recognized(line) || section_end_fence(line)) {
             if (chunk_begin < line_begin) {
                 out.push_back(RawItem{raw_begin + static_cast<unsigned>(chunk_begin),
                                       nullptr,
@@ -6247,16 +6261,11 @@ void append_rsec_comment_items(std::vector<RawItem>& out, unsigned raw_begin, st
         out.push_back(RawItem{raw_begin + static_cast<unsigned>(chunk_begin), nullptr, raw.substr(chunk_begin)});
 }
 
-struct HeaderSynopsisEnd {
-    std::string stable;
-    std::size_t line_begin = 0;
-};
-
-// The header-synopsis closing fence is deliberately Doxygen, not a specgen marker:
-// it bounds the source region without becoming authored wording. Clang can
-// merge it into the RawComment that carries a terminal \verbatim-synopsis, so
-// return byte offsets as well as the stable name.
-std::optional<HeaderSynopsisEnd> header_synopsis_end(std::string_view raw) {
+// An END fence is deliberately Doxygen, not a specgen marker: it bounds a
+// section without becoming authored wording. Clang can merge a `.syn` fence
+// into the RawComment that carries a terminal \verbatim-synopsis, so return
+// byte offsets as well as the stable name.
+std::optional<SectionEndFence> section_end_fence(std::string_view raw) {
     std::size_t begin = 0;
     // substrate generic algorithm: preserve byte offsets while scanning a
     // possibly merged RawComment for the exact physical fence line.
@@ -6278,7 +6287,7 @@ std::optional<HeaderSynopsisEnd> header_synopsis_end(std::string_view raw) {
                 if (text.starts_with(prefix) && text.ends_with(']')) {
                     const std::string_view stable = text.substr(prefix.size(), text.size() - prefix.size() - 1);
                     if (!stable.empty())
-                        return HeaderSynopsisEnd{std::string(stable), begin};
+                        return SectionEndFence{std::string(stable), begin};
                 }
             }
         }
@@ -6454,7 +6463,7 @@ DocumentFiles DocumentFiles::discover(clang::ASTUnit& ast, const clang::SourceMa
             }
             continue;
         }
-        if (const auto end = header_synopsis_end(text); end && end->stable == region_stable) {
+        if (const auto end = section_end_fence(text); end && end->stable == region_stable) {
             region_end = offset + static_cast<unsigned>(end->line_begin);
             break;
         }
@@ -6669,7 +6678,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             // more RawItems, so this is a flat-map into the existing event
             // buffer.
             for (const auto& [offset, comment] : *comments)
-                append_rsec_comment_items(raw_items, doc.offset_in(file, offset), comment->getRawText(sm).str());
+                append_structure_comment_items(raw_items, doc.offset_in(file, offset), comment->getRawText(sm).str());
         }
     };
     collect_comments(doc.main());
@@ -6738,9 +6747,9 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
             continue;
         }
 
-        std::optional<std::size_t>       close_index;
-        std::optional<HeaderSynopsisEnd> close;
-        std::optional<std::string>       boundary_error;
+        std::optional<std::size_t>     close_index;
+        std::optional<SectionEndFence> close;
+        std::optional<std::string>     boundary_error;
         // substrate generic algorithm: bounded lookahead for the first
         // structural conflict or exact matching END fence.
         for (std::size_t j = i + 1; j < raw_items.size(); ++j) {
@@ -6752,7 +6761,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
                     "header synopsis [{}] is not closed before section [{}]", header->stable, nested->value.stable);
                 break;
             }
-            const auto end = header_synopsis_end(candidate.comment_text);
+            const auto end = section_end_fence(candidate.comment_text);
             if (!end)
                 continue;
             if (end->stable != header->stable) {
