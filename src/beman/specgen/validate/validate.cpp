@@ -335,7 +335,7 @@ bool names_a_visible_entity(ir::Disposition disposition) {
     case ir::Disposition::Undocumented:
         return false;
     }
-    return false;
+    std::unreachable(); // Disposition is exhaustively handled above
 }
 
 // Why a name the reader cannot see is not visible, as the diagnostic says it.
@@ -356,7 +356,7 @@ std::string_view invisibility_reason(ir::Disposition disposition) {
     case ir::Disposition::Expos:
         return "visible"; // unreachable: names_a_visible_entity gates this
     }
-    return "visible";
+    std::unreachable(); // Disposition is exhaustively handled above
 }
 
 // What one synopsis's own roster says about the names in it. The document-wide
