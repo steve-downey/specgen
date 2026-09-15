@@ -1013,13 +1013,15 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_foreign_include.hpp"
 )
 
-# The two headers of one paper (issue #109). The sibling is an ordinary,
+# The two headers of one paper (issues #109 and #113). The sibling is an ordinary,
 # fully clean document; the main header's wording names `blend_policy`,
 # which the sibling declares *and documents*, so one run over the main
 # header alone reports it as foreign. NO_VALIDATE because that standing
 # finding is the fixture — `paper_main_validate` pins its exact text, and
 # `paper_union` pins that a run given both documents' IR validates clean:
-# the name is specified by the paper, across a header boundary.
+# the names are specified by the paper, generated or explicitly supplied
+# elsewhere, across a header boundary. The pair also pins exposition rewriting
+# through a namespace using-declaration in the sibling.
 specgen_add_golden(
     paper_sibling
     MODE generate
@@ -1559,8 +1561,9 @@ specgen_add_golden(
 # `spec_paper_main.hpp`'s standing finding, read off its own generate golden
 # the same way `foreign_include_validate` reads its header's. This is the
 # solo-run half of issue #109's pair: `blend_policy` and the normative
-# variable template `alpha_policy` are specified by the paper but by a
-# sibling header, so one header's run reports them foreign — and the
+# variable template `alpha_policy`, plus issue #113's `\elsewhere` names, are
+# specified by the paper but by a sibling header, so one header's run reports
+# them foreign — and the
 # diagnostic's fixit list names the remedy that actually applies, rendering
 # the paper's documents together.
 specgen_add_golden(
@@ -1569,7 +1572,7 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json"
 )
 
-# The union half of issue #109: both documents of the paper in one
+# The union half of issues #109 and #113: both documents of the paper in one
 # invocation, validating across the union of their documented names — both
 # the synopsis-rostered class and ItemDecl-carried variable template are
 # clean, where the solo run above errors — and splitting into one directory

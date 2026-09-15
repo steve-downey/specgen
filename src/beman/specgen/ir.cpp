@@ -441,6 +441,7 @@ template <>
 struct json_descriptor<Document> {
     static constexpr auto members = std::tuple{
         field("nodes", &Document::nodes),
+        optional_field("paper_entities", &Document::paper_entities),
         field("foreign", &Document::foreign_namespaces),
         field("foreign_decls", &Document::foreign_declarations),
         field("body_uses", &Document::unextracted_uses),

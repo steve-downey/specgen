@@ -1517,9 +1517,13 @@ Diagnostics validate(const ir::Node& node) {
 Diagnostics validate(const ir::Document& document) { return validate(document, {}); }
 
 std::set<std::string> documented_names(const ir::Document& document) {
-    return foundation::mconcat_map(
-               document.nodes, [](const ir::Node& node) { return name_visibility(node); }, visibility_monoid)
-        .documented;
+    std::set<std::string> names =
+        foundation::mconcat_map(
+            document.nodes, [](const ir::Node& node) { return name_visibility(node); }, visibility_monoid)
+            .documented;
+    if (document.paper_entities)
+        names.insert(document.paper_entities->begin(), document.paper_entities->end());
+    return names;
 }
 
 Diagnostics validate(const ir::Document& document, const std::set<std::string>& also_documented) {
@@ -1555,6 +1559,8 @@ Diagnostics validate(const ir::Document& document, const std::set<std::string>& 
         document.foreign_declarations |
         std::views::transform([](const ir::ForeignDeclaration& d) { return std::pair{d.name, d.header}; }) |
         std::ranges::to<std::map<std::string, std::string>>();
+    if (document.paper_entities)
+        visible.documented.insert(document.paper_entities->begin(), document.paper_entities->end());
     // A paper is generated one document per header, and the caller who holds
     // them all passes each one the others' documented names (issue #109): a
     // name specified by a sibling document is not foreign, and the

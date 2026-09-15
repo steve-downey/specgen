@@ -30,6 +30,8 @@ and cite the design document as `docs/architecture.md` §N.
 | [document-extent](document-extent.md) | A document is the main file and the includes inside its `.syn` region |
 | [routed-wording-payload](routed-wording-payload.md) | A routed item is an `ir::Node`; `\at` routes a class's wording |
 | [shared-spelling-foreign-name](shared-spelling-foreign-name.md) | A name this run declares is never a foreign one |
+| [paper-visible-names](paper-visible-names.md) | Explicit names supplied outside generated sibling wording |
+| [paper-visible-names](paper-visible-names.md) | Explicit names supplied outside generated sibling wording |
 | [no-typeclass-objects](no-typeclass-objects.md) | Explicit operation parameters; no lookup tier |
 | [cxx26-baseline](cxx26-baseline.md) | C++26 floor; GCC 16, Clang 22–23, libstdc++ |
 | [format-print-output](format-print-output.md) | `std::format`/`std::print`; streams move built bytes |
