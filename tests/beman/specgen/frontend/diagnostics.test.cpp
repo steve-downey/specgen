@@ -53,7 +53,8 @@ std::vector<db::Diagnostic> marker_diagnostics(const std::vector<db::Diagnostic>
 
 std::vector<db::Diagnostic> docblock_diagnostics(const std::vector<db::Diagnostic>& all) {
     return all | std::views::filter([](const db::Diagnostic& d) {
-               return !contains(d.message, "malformed \\rSec") && !contains(d.message, "unrecognized section header");
+               return !contains(d.message, "malformed \\rSec") &&
+                      !contains(d.message, "unrecognized section header") && !d.message.starts_with("END [");
            }) |
            std::ranges::to<std::vector<db::Diagnostic>>();
 }

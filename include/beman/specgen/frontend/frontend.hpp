@@ -229,8 +229,9 @@ beman::specgen::foundation::parse::parse_result<SectionHeader> parse_rsec(std::s
 // decl/comment into a beman::specgen::document_build::DocEvent (the only
 // stage that touches a clang::Decl*), document_build::build_tree() folds the
 // `\rSec<n>[stable]{Title}` markers into nested ir::Section frames (closing
-// any open frame at depth >= n first, every other decl becoming a child of
-// whichever frame is open), and document_build::group_items() joins
+// any open frame at depth >= n first, and closing the current frame at an
+// exact matching Doxygen `/// END [stable]` fence; every other decl becomes a
+// child of whichever frame is open), and document_build::group_items() joins
 // `\also`/empty-descr followers onto their primary as a post-pass. The latter
 // two are clang-free and unit-tested with synthetic events/trees in
 // tests/beman/specgen/document_build.test.cpp.

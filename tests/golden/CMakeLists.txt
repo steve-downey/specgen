@@ -646,6 +646,17 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_header_synopsis.hpp"
 )
 
+# An exact Doxygen END fence closes an ordinary section (issue #114), so the
+# exposition-only helper between two class clauses becomes a root node rather
+# than leaking into the preceding clause. The distinct case name leaves
+# `section_end_fragments` below to pin that placement in every split backend.
+specgen_add_golden(
+    section_end_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_section_end.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/section_end"
+)
+
 # Normalization (design §3.6) — a class template exercising the
 # draft FormatStyle's template/requires/concept options.
 specgen_add_golden(
@@ -1738,6 +1749,28 @@ specgen_add_golden(
     BACKEND org
     ROOT optional.syn
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/optional/expected.json"
+)
+
+# Ordinary END-fence placement through all three split backends: the helper is
+# in the derived `demo` root fragment, while each neighboring class remains in
+# its own stable-name fragment.
+specgen_add_golden(
+    section_end_fragments
+    MODE split
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_end/expected.json"
+)
+specgen_add_golden(
+    section_end_fragments
+    MODE split
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_end/expected.json"
+)
+specgen_add_golden(
+    section_end_fragments
+    MODE split
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_end/expected.json"
 )
 
 # Regeneration is wholesale and lands in the diff, never silent.

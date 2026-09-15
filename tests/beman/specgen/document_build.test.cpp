@@ -81,6 +81,53 @@ TEST_CASE("build_tree - a \\rSec nests a section and folds it in at EOF") {
     CHECK(std::holds_alternative<ir::SpecItem>(section->children[0]));
 }
 
+TEST_CASE("build_tree - a matching END fence closes an ordinary section") {
+    auto doc = build({
+        db::SectionOpen{100, 1, "widget.cons", "Constructors"},
+        db::ItemDecl{110, false, make_item("widget();", true)},
+        db::SectionClose{"widget.cons", 7},
+        db::ItemDecl{120, false, make_item("helper();", true)},
+    });
+
+    REQUIRE(doc.nodes.size() == 2);
+    const auto* section = std::get_if<ir::Section>(&doc.nodes[0]);
+    REQUIRE(section != nullptr);
+    REQUIRE(section->children.size() == 1);
+    CHECK(std::get<ir::SpecItem>(section->children[0]).decl.signatures[0].text == "widget();");
+    CHECK(std::get<ir::SpecItem>(doc.nodes[1]).decl.signatures[0].text == "helper();");
+}
+
+TEST_CASE("build_tree - a mismatched END fence warns and leaves the section open") {
+    std::vector<db::DocEvent> events{
+        db::SectionOpen{100, 1, "widget.cons", "Constructors"},
+        db::SectionClose{"widget.obs", 8, "support.hpp"},
+        db::ItemDecl{120, false, make_item("widget();", true)},
+    };
+    auto result = db::build_tree(std::span(events));
+
+    REQUIRE(result.document.nodes.size() == 1);
+    const auto& section = std::get<ir::Section>(result.document.nodes[0]);
+    REQUIRE(section.children.size() == 1);
+    REQUIRE(result.diagnostics.size() == 1);
+    CHECK(result.diagnostics[0].line == 8);
+    CHECK(result.diagnostics[0].file == "support.hpp");
+    CHECK(result.diagnostics[0].message == "END [widget.obs] does not match open section [widget.cons]");
+}
+
+TEST_CASE("build_tree - an END fence at the root warns and leaves the tree unchanged") {
+    std::vector<db::DocEvent> events{
+        db::SectionClose{"widget.cons", 4},
+        db::ItemDecl{10, false, make_item("helper();", true)},
+    };
+    auto result = db::build_tree(std::span(events));
+
+    REQUIRE(result.document.nodes.size() == 1);
+    CHECK(std::holds_alternative<ir::SpecItem>(result.document.nodes[0]));
+    REQUIRE(result.diagnostics.size() == 1);
+    CHECK(result.diagnostics[0].line == 4);
+    CHECK(result.diagnostics[0].message == "END [widget.cons] has no open section to close");
+}
+
 TEST_CASE("build_tree - un-nesting: a shallower \\rSec closes only the frames at or below its depth") {
     // \rSec1 A, \rSec2 B nested in A, \rSec2 D — a second depth-2 section —
     // closes only B (depth 2 >= 2), leaving A open, so B and D land as
