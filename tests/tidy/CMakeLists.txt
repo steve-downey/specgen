@@ -6,7 +6,18 @@
 # of the tree the check guards: one freestanding probe source per rule edge,
 # each pinned against an expected-diagnostics file, plus the strip-the-markers
 # negative over a production file. Conditional on the same probe as the
-# plugin target itself.
+# plugin target itself — except the scope script's own test, which is plain
+# CMake over a fixture database and runs wherever the tree configures.
+add_test(
+    NAME tidy.no-raw-loops.scope-multi-config
+    COMMAND
+        ${CMAKE_COMMAND}
+        "-DSCOPE_SCRIPT=${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-scope.cmake"
+        "-DREPO_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/scope-multi-config" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-scope.cmake"
+)
+
 if(NOT BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN)
     return()
 endif()
