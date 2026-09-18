@@ -89,6 +89,8 @@ serialized document back up. `--backend`, `--validate` (§9), `--paper` and
 share one back half, so single-pass wording equals two-pass wording byte for byte;
 `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
+`specgen --version` reports both the project version and the exact Git commit
+recorded from the source tree when CMake configured the binary.
 
 ### 2.1 A paper is the unit of an invocation
 
