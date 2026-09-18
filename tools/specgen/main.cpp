@@ -57,7 +57,8 @@ namespace mpark     = beman::specgen::backend::mpark;
 namespace org       = beman::specgen::backend::org;
 namespace validate  = beman::specgen::validate;
 
-constexpr std::string_view kVersion = "0.1.0";
+constexpr std::string_view kVersion   = BEMAN_SPECGEN_VERSION;
+constexpr std::string_view kGitCommit = BEMAN_SPECGEN_GIT_COMMIT;
 
 // The usage text is passed to std::print as an *argument*, never as the
 // format string: it is ordinary prose that happens to be a string literal,
@@ -1117,7 +1118,7 @@ int main(int argc, char** argv) {
     if (command == "-h" || command == "--help")
         return usage(stdout, 0);
     if (command == "--version") {
-        std::println(stdout, "specgen {}", kVersion);
+        std::println(stdout, "specgen {} (git {})", kVersion, kGitCommit);
         return 0;
     }
     if (command == "render")

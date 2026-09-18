@@ -9,7 +9,108 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.1.0
+    VERSION 0.2.0
+)
+
+# `specgen --version` identifies both the release and the exact source
+# revision. The cache entry is an escape hatch for source archives, which do
+# not carry Git metadata; ordinary repository builds derive it afresh whenever
+# HEAD or its branch ref moves.
+set(BEMAN_SPECGEN_GIT_COMMIT
+    ""
+    CACHE STRING
+    "Git commit to report in specgen --version (derived from the source tree when empty)"
+)
+if(NOT BEMAN_SPECGEN_GIT_COMMIT)
+    find_package(Git QUIET)
+    if(Git_FOUND)
+        execute_process(
+            COMMAND
+                "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" rev-parse
+                --show-toplevel
+            OUTPUT_VARIABLE _specgen_git_toplevel
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+            ERROR_QUIET
+            RESULT_VARIABLE _specgen_git_toplevel_result
+        )
+        cmake_path(
+            ABSOLUTE_PATH _specgen_git_toplevel
+            NORMALIZE
+            OUTPUT_VARIABLE _specgen_git_toplevel
+        )
+        cmake_path(
+            ABSOLUTE_PATH PROJECT_SOURCE_DIR
+            NORMALIZE
+            OUTPUT_VARIABLE _specgen_source_dir
+        )
+        if(
+            _specgen_git_toplevel_result EQUAL 0
+            AND _specgen_git_toplevel STREQUAL _specgen_source_dir
+        )
+            execute_process(
+                COMMAND
+                    "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" rev-parse
+                    --verify HEAD
+                OUTPUT_VARIABLE BEMAN_SPECGEN_GIT_COMMIT
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                COMMAND_ERROR_IS_FATAL ANY
+            )
+            execute_process(
+                COMMAND
+                    "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" rev-parse
+                    --git-path HEAD
+                OUTPUT_VARIABLE _specgen_git_head
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                COMMAND_ERROR_IS_FATAL ANY
+            )
+            execute_process(
+                COMMAND
+                    "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" symbolic-ref
+                    --quiet HEAD
+                OUTPUT_VARIABLE _specgen_git_ref
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+                RESULT_VARIABLE _specgen_git_ref_result
+            )
+            cmake_path(
+                ABSOLUTE_PATH _specgen_git_head
+                BASE_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                NORMALIZE
+            )
+            set_property(
+                DIRECTORY
+                APPEND
+                PROPERTY CMAKE_CONFIGURE_DEPENDS "${_specgen_git_head}"
+            )
+            if(_specgen_git_ref_result EQUAL 0)
+                execute_process(
+                    COMMAND
+                        "${GIT_EXECUTABLE}" -C "${PROJECT_SOURCE_DIR}" rev-parse
+                        --git-path "${_specgen_git_ref}"
+                    OUTPUT_VARIABLE _specgen_git_ref_path
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    COMMAND_ERROR_IS_FATAL ANY
+                )
+                cmake_path(
+                    ABSOLUTE_PATH _specgen_git_ref_path
+                    BASE_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                    NORMALIZE
+                )
+                set_property(
+                    DIRECTORY
+                    APPEND
+                    PROPERTY CMAKE_CONFIGURE_DEPENDS "${_specgen_git_ref_path}"
+                )
+            endif()
+        endif()
+    endif()
+    if(NOT BEMAN_SPECGEN_GIT_COMMIT)
+        set(BEMAN_SPECGEN_GIT_COMMIT "unknown")
+    endif()
+endif()
+message(
+    STATUS
+    "beman.specgen: version ${PROJECT_VERSION} (git ${BEMAN_SPECGEN_GIT_COMMIT})"
 )
 
 # [CMAKE.SKIP_TESTS]
@@ -275,6 +376,14 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
     # registered only where it is built. The example parity cases are not: they
     # compare two checked-in files, so they run even with BUILD_TOOLS off.
     if(TARGET specgen)
+        add_test(
+            NAME driver.version
+            COMMAND
+                ${CMAKE_COMMAND} "-DDRIVER=$<TARGET_FILE:specgen>"
+                "-DEXPECTED_VERSION=${PROJECT_VERSION}"
+                "-DEXPECTED_COMMIT=${BEMAN_SPECGEN_GIT_COMMIT}" -P
+                "${PROJECT_SOURCE_DIR}/tests/run-version.cmake"
+        )
         add_subdirectory(tests/golden)
     endif()
     add_subdirectory(tests/examples)

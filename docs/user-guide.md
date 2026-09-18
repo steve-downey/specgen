@@ -743,4 +743,7 @@ and the command exits 1.
   it warns, prints the partial interleave, and exits 0.
 
 Use `specgen --help` for the current command-line summary and
-`specgen --version` for the installed version.
+`specgen --version` for the installed version and source revision, printed as
+`specgen 0.2.0 (git <commit>)`. A source archive without Git metadata can set
+`BEMAN_SPECGEN_GIT_COMMIT` explicitly when configuring; otherwise the revision
+is reported as `unknown`.
