@@ -122,13 +122,13 @@ compile_commands.json: ## symlink the current compile commands db
 TARGET?=all
 
 .PHONY: compile
-compile: $(_build_path)/CMakeCache.txt
+compile: check-llvm
 compile: compile_commands.json
 compile:  ## Compile the project ($(TARGET) by default; TARGET= to pick one)
 	$(CMAKE) --build $(_build_path)  --config $(CONFIG) --target $(TARGET) -- -k 0
 
 .PHONY: compile-headers
-compile-headers: $(_build_path)/CMakeCache.txt ## Compile the headers
+compile-headers: check-llvm ## Compile the headers
 	 $(CMAKE) --build $(_build_path)  --config $(CONFIG) --target all_verify_interface_header_sets -- -k 0
 
 # No --component: the components this project actually creates are
@@ -147,7 +147,7 @@ compile-headers: $(_build_path)/CMakeCache.txt ## Compile the headers
 # build step.
 install: CONFIG=$(RELEASE_CONFIG)
 .PHONY: install
-install: $(_build_path)/CMakeCache.txt compile ## Install the project (RelWithDebInfo; CONFIG= to override)
+install: check-llvm compile ## Install the project (RelWithDebInfo; CONFIG= to override)
 	$(CMAKE) --install $(_build_path) --config $(CONFIG) --verbose
 
 # The configuration to ship, and the one `install` and `testinstall` run
@@ -170,8 +170,40 @@ clean-install:
 .PHONY: realclean
 realclean: clean-install
 
+# A build tree is configured against one LLVM and cannot change it in place:
+# find_package and find_program keep their cached answers, so reconfiguring
+# with a new Clang_DIR would move the front end while clang-tidy, LLVM_DIR and
+# the version pin itself stayed on the old one -- the mixed toolchain the pin
+# (decision llvm-toolchain-pin) exists to prevent. Without this check the
+# symptom is a compile error deep in frontend.cpp against the wrong headers.
+# So every target that builds or tests goes through here first, and a tree
+# whose cached Clang_DIR is not the one this Makefile would pass stops and
+# names the fix: a fresh tree.
+.PHONY: check-llvm
+check-llvm: $(_build_path)/CMakeCache.txt
+	@cached=$$(sed -n 's/^Clang_DIR:[A-Za-z]*=//p' $(_build_path)/CMakeCache.txt); \
+	if [ -n "$$cached" ] && [ "$$cached" != "$(CLANG_DIR)" ]; then \
+		echo "$(_build_path) was configured with Clang_DIR=$$cached,"; \
+		echo "but this Makefile passes CLANG_DIR=$(CLANG_DIR)."; \
+		echo "A build tree cannot change LLVM in place; run \`make realclean\`"; \
+		echo "(with the same TOOLCHAIN=, if any) and build again."; \
+		exit 1; \
+	fi
+
+# Regenerate the build tree if any CMake input is newer than it. CMake knows
+# its inputs (every CMakeLists.txt, every included .cmake, the toolchain) and
+# Ninja's build.ninja carries a rule that reruns cmake when one changes; asking
+# for that one target runs the rule and nothing else. `compile` gets this for
+# free because every `cmake --build` starts the same way, but `ctest` runs no
+# build, so without this it would run whatever tests the last generate
+# registered -- a test whose script moved keeps failing on the old path until
+# something else happens to reconfigure. A no-op when nothing is stale.
+.PHONY: regenerate
+regenerate: check-llvm ## Rerun cmake if the build tree is stale
+	$(CMAKE) --build $(_build_path) --target build.ninja
+
 .PHONY: ctest
-ctest: $(_build_path)/CMakeCache.txt ## Run CTest on current build
+ctest: regenerate ## Run CTest on current build
 	$(CTEST) --test-dir $(_build_path) --output-on-failure -C $(CONFIG)
 
 .PHONY: ctest_
@@ -197,7 +229,10 @@ realclean: ## Delete the build directory
 env:
 	$(foreach v, $(.VARIABLES), $(info $(v) = $($(v))))
 
-.DEFAULT: $(_build_path)/CMakeCache.txt ## Other targets passed through to cmake
+# Prerequisites listed on .DEFAULT are not applied to the targets it catches,
+# so the guard is invoked from the recipe instead.
+.DEFAULT: ## Other targets passed through to cmake
+	@$(MAKE) --no-print-directory check-llvm
 	$(CMAKE) --build $(_build_path)  --config $(CONFIG) --target $@ -- -k 0
 
 .PHONY: all
@@ -253,7 +288,7 @@ lint-manual: ## Run all manual tools in pre-commit
 
 .PHONY: coverage
 coverage: ## Build and run the tests with the GCOV profile and process the results
-coverage: venv $(_build_path)/CMakeCache.txt
+coverage: venv check-llvm
 	$(CMAKE) --build $(_build_path) --config Gcov
 	$(ACTIVATE) ctest --build-config Gcov --output-on-failure --test-dir $(_build_path)
 	$(CMAKE) --build $(_build_path) --config Gcov --target process_coverage

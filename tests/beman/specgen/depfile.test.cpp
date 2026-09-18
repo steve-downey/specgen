@@ -31,24 +31,22 @@ TEST_CASE("depfile::escape - a backslash is left alone") {
 
 TEST_CASE("depfile::format - one target, one prerequisite per line, then the -MP block") {
     const std::string fragment = format({"wording/expected.tex"}, {"include/a.hpp", "include/detail/b.hpp"});
-    CHECK(fragment ==
-          "wording/expected.tex: \\\n"
-          "  include/a.hpp \\\n"
-          "  include/detail/b.hpp\n"
-          "\n"
-          "include/a.hpp:\n"
-          "include/detail/b.hpp:\n");
+    CHECK(fragment == "wording/expected.tex: \\\n"
+                      "  include/a.hpp \\\n"
+                      "  include/detail/b.hpp\n"
+                      "\n"
+                      "include/a.hpp:\n"
+                      "include/detail/b.hpp:\n");
 }
 
 TEST_CASE("depfile::format - several targets share one rule") {
     // The whole and the pieces come out of one invocation, so they are one
     // rule's targets and not several rules that would each re-run it.
     const std::string fragment = format({"w/a.tex", "w/b.tex"}, {"include/a.hpp"});
-    CHECK(fragment ==
-          "w/a.tex w/b.tex: \\\n"
-          "  include/a.hpp\n"
-          "\n"
-          "include/a.hpp:\n");
+    CHECK(fragment == "w/a.tex w/b.tex: \\\n"
+                      "  include/a.hpp\n"
+                      "\n"
+                      "include/a.hpp:\n");
 }
 
 TEST_CASE("depfile::format - no prerequisites is a bare rule with no -MP block") {
@@ -64,9 +62,8 @@ TEST_CASE("depfile::format - no targets is no fragment at all") {
 
 TEST_CASE("depfile::format - targets and prerequisites are both escaped") {
     const std::string fragment = format({"out dir/a.tex"}, {"in dir/b.hpp"});
-    CHECK(fragment ==
-          "out\\ dir/a.tex: \\\n"
-          "  in\\ dir/b.hpp\n"
-          "\n"
-          "in\\ dir/b.hpp:\n");
+    CHECK(fragment == "out\\ dir/a.tex: \\\n"
+                      "  in\\ dir/b.hpp\n"
+                      "\n"
+                      "in\\ dir/b.hpp:\n");
 }

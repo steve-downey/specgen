@@ -59,7 +59,8 @@ std::string format(const std::vector<std::string>& targets, const std::vector<st
     if (prerequisites.empty())
         return std::format("{}:\n", target_list);
 
-    return std::format("{}:{}\n\n{}", target_list, prerequisite_list, concat(prerequisites | std::views::transform(phony_rule)));
+    return std::format(
+        "{}:{}\n\n{}", target_list, prerequisite_list, concat(prerequisites | std::views::transform(phony_rule)));
 }
 
 } // namespace beman::specgen::depfile

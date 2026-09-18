@@ -21,14 +21,22 @@
 # included: their findings land in the real headers they include.
 #
 # DB_OUT, when given, receives the kept entries as a compile database of
-# their own with the instrumentation flags scrubbed from each command:
-# -fsanitize*/-fno-sanitize*, --coverage/-fprofile*, and -Werror. The pass
+# their own, one entry per file, with the flags that do not survive a clang
+# re-parse scrubbed from each command:
+# -fsanitize*/-fno-sanitize*, --coverage/-fprofile*, -Werror, and the GCC
+# module-scanning set CMake adds under a scanning GCC (-fmodules-ts,
+# -fmodule-mapper=, -fdeps-format=, -fdeps-file=, -fdeps-target=). The pass
 # re-parses with clang, and a configuration's GCC-only instrumentation
 # spelling is a hard error there (-fprofile-abs-path is unknown to clang)
 # or an "argument unused" warning that a -Werror configuration promotes to
-# one — while none of it changes what the check reads, which is the point:
-# the gate gives one answer in every configuration. The pass driver points
-# clang-tidy's -p at DB_OUT's directory instead of the build's.
+# one; the scanning flags are unknown arguments outright — while none of it
+# changes what the check reads, which is the point: the gate gives one
+# answer in every configuration. One entry per file for the same reason: a
+# multi-config database (the Makefile lane) lists every file once per
+# configuration, and clang-tidy would parse it once per entry, reporting
+# each finding that many times over; the first entry in the database is the
+# one kept. The pass driver points clang-tidy's -p at DB_OUT's directory
+# instead of the build's.
 
 if(NOT DEFINED COMPILE_DB)
     message(FATAL_ERROR "pass -DCOMPILE_DB=<build>/compile_commands.json")
@@ -58,8 +66,7 @@ foreach(_idx RANGE 0 ${_last})
     if(_rel MATCHES "\\.test\\.cpp$" OR _file MATCHES "/_deps/")
         continue()
     endif()
-    list(APPEND _files "${_file}")
-    if(DEFINED DB_OUT)
+    if(DEFINED DB_OUT AND NOT "${_file}" IN_LIST _files)
         # The flags live in the entry's "command" member; the tokens being
         # deleted cannot occur in its "directory"/"file"/"output" paths, so
         # scrubbing the serialized entry keeps the JSON escaping intact.
@@ -67,6 +74,13 @@ foreach(_idx RANGE 0 ${_last})
         string(REGEX REPLACE " -f(no-)?sanitize[^ \"]*" "" _entry "${_entry}")
         string(
             REGEX REPLACE " --coverage| -fprofile[^ \"]*| -Werror"
+            ""
+            _entry
+            "${_entry}"
+        )
+        string(
+            REGEX REPLACE
+                " -fmodules-ts| -fmodule-mapper=[^ \"]*| -fdeps-[a-z]*=[^ \"]*"
             ""
             _entry
             "${_entry}"
@@ -79,6 +93,7 @@ foreach(_idx RANGE 0 ${_last})
             set(_db_entries "${_entry}")
         endif()
     endif()
+    list(APPEND _files "${_file}")
 endforeach()
 
 list(REMOVE_DUPLICATES _files)

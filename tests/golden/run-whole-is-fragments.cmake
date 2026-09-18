@@ -49,8 +49,7 @@ file(MAKE_DIRECTORY "${ACTUAL}")
 # whole and the pieces come out of one parse and one split, so a difference
 # between them cannot be blamed on two runs having seen different input.
 execute_process(
-    COMMAND
-        "${SPECGEN}" render ${input_args} -o whole.tex --split wording
+    COMMAND "${SPECGEN}" render ${input_args} -o whole.tex --split wording
     WORKING_DIRECTORY "${ACTUAL}"
     OUTPUT_VARIABLE manifest
     RESULT_VARIABLE render_result
@@ -84,7 +83,8 @@ if(NOT joined STREQUAL whole_text)
     find_program(DIFF_TOOL diff)
     if(DIFF_TOOL)
         execute_process(
-            COMMAND "${DIFF_TOOL}" -u "${ACTUAL}/joined.tex" "${ACTUAL}/whole.tex"
+            COMMAND
+                "${DIFF_TOOL}" -u "${ACTUAL}/joined.tex" "${ACTUAL}/whole.tex"
             OUTPUT_VARIABLE diff_text
             ERROR_QUIET
         )
