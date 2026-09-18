@@ -17,6 +17,7 @@ import beman.specgen;
     #include <beman/specgen/backend/mpark.hpp>
     #include <beman/specgen/backend/org.hpp>
     #include <beman/specgen/conjuncts.hpp>
+    #include <beman/specgen/depfile.hpp>
     #include <beman/specgen/diagnostic.hpp>
     #include <beman/specgen/docblock.hpp>
     #include <beman/specgen/document_build.hpp>

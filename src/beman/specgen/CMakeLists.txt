@@ -11,6 +11,7 @@ target_sources(
         docblock.cpp
         lower.cpp
         conjuncts.cpp
+        depfile.cpp
         document_build.cpp
         fragments.cpp
 )

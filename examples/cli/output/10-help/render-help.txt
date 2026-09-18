@@ -19,11 +19,14 @@ dump-decls options:
                              option parsing
 
 generate options:
-  <header>                  the header to parse; with none, parse a stock
-                             snippet as a link-proving smoke check
+  <header>...                the headers to parse, one document each and all
+                             of them one paper, in the order named; with none,
+                             parse a stock snippet as a link-proving smoke
+                             check
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
-                             rendering wording here
+                             rendering wording here. One document per file is
+                             what the format is, so this takes one header
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
@@ -48,8 +51,20 @@ generate options:
                              list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
                              section (--split only); derived from the sections'
-                             common stable-name prefix when omitted
-  -o, --output <file>       write here instead of standard output
+                             common stable-name prefix when omitted. With
+                             several headers, repeats to name each document's
+                             root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output;
+                             alongside --split, write both the whole and the
+                             fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and every file its parse read,
+                             with an empty rule per prerequisite so a deleted
+                             header rebuilds rather than erroring. System
+                             headers are left out
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
                              compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -67,9 +82,10 @@ render options:
                              --validate then runs across the union of their
                              documented names, so a name specified by a
                              sibling document is not foreign. Several inputs
-                             require --split, and --root, when given at all,
-                             then repeats too, pairing with each --from-ir in
-                             order
+                             render as one paper -- joined in order for a
+                             single output, split into per-clause fragments,
+                             or both -- and --root, when given at all, repeats
+                             too, pairing with each --from-ir in order
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
@@ -97,7 +113,15 @@ render options:
                              common stable-name prefix when omitted. With
                              several --from-ir inputs, repeats to name each
                              document's root fragment, pairing in order
-  -o, --output <file>       write here instead of standard output
+  -o, --output <file>       write the whole here instead of standard output;
+                             alongside --split, write both the whole and the
+                             fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and the IR files it read, with
+                             an empty rule per prerequisite
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
 
 general:
   -h, --help                show this message

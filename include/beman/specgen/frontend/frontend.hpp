@@ -282,6 +282,34 @@ struct BuildFailure {
 std::expected<beman::specgen::document_build::BuildResult, BuildFailure>
 build_document(std::string_view header_path, const ParseOptions& options = {});
 
+// What build_document builds, plus the files it had to read to build it: the
+// header itself first, then every non-system file the preprocessor opened for
+// it, sorted. This is what a Makefile dependency fragment's prerequisite list
+// is made of (depfile.hpp), and the front end is the only tier that can answer
+// it -- a document is not a record of where its declarations came from, and by
+// the time the driver holds one the parse is over.
+//
+// It over-approximates the set a change to the *wording* could come from, and
+// deliberately, exactly as a compiler's `-MD` does: extraction is lexical, but
+// a typedef or a default argument in an implementation header the document
+// never renders can still change what the derived wording says, and a
+// dependency edge too many costs a spurious rebuild while one too few costs a
+// stale paper.
+//
+// Why this and not `build_document` with a wider return: `build_document` has
+// sixty-odd call sites, almost all of them tests that want the document and
+// nothing else, and document_build::BuildResult is build_tree()'s return --
+// Tier A, clang-free, and in no position to know what a file is. So the richer
+// entry point is the one with the longer name, and the older one is a
+// projection of it rather than a second implementation.
+struct DocumentBuild {
+    beman::specgen::document_build::BuildResult result;
+    std::vector<std::string>                    sources;
+};
+
+std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view    header_path,
+                                                                       const ParseOptions& options = {});
+
 } // namespace beman::specgen::frontend
 
 #endif // BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP

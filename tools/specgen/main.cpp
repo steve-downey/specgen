@@ -8,17 +8,26 @@
 //   render      IR JSON in, wording fragments out. Needs no compiler, so it is
 //               available in every build and is what the backend goldens run
 //               through on every CI lane.
-//   generate    header in, wording out, in one pass: the IR stays in memory
+//   generate    headers in, wording out, in one pass: the IR stays in memory
 //               and is never written anywhere unless `--emit-ir` asks for it,
 //               in which case emitting it is all the command does. Needs the
 //               Clang front end, and reports so plainly when the build did
 //               not include it.
+//
 //   dump-decls  debug mode: prints the decl/comment interleave design
 //               §3.2 builds for a header. Needs the Clang front end too.
+//
+// Either rendering command takes a whole paper, not just a document: several
+// headers or several `--from-ir` inputs render as one, validated against the
+// union of their documented names, and written as the joined whole, as
+// per-clause fragments, or as both (decision paper-is-the-invocation).
+// `--depfile` then says what the run read to produce them, so a build can
+// rebuild the wording when a header moves (decision depfile-emission).
 
 #include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/backend/mpark.hpp>
 #include <beman/specgen/backend/org.hpp>
+#include <beman/specgen/depfile.hpp>
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/foundation/fold_left_short.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
@@ -57,7 +66,8 @@ namespace mpark     = beman::specgen::backend::mpark;
 namespace org       = beman::specgen::backend::org;
 namespace validate  = beman::specgen::validate;
 
-constexpr std::string_view kVersion = "0.1.0";
+constexpr std::string_view kVersion   = BEMAN_SPECGEN_VERSION;
+constexpr std::string_view kGitCommit = BEMAN_SPECGEN_GIT_COMMIT;
 
 // The usage text is passed to std::print as an *argument*, never as the
 // format string: it is ordinary prose that happens to be a string literal,
@@ -84,11 +94,14 @@ dump-decls options:
                              option parsing
 
 generate options:
-  <header>                  the header to parse; with none, parse a stock
-                             snippet as a link-proving smoke check
+  <header>...                the headers to parse, one document each and all
+                             of them one paper, in the order named; with none,
+                             parse a stock snippet as a link-proving smoke
+                             check
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
-                             rendering wording here
+                             rendering wording here. One document per file is
+                             what the format is, so this takes one header
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
@@ -113,8 +126,20 @@ generate options:
                              list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
                              section (--split only); derived from the sections'
-                             common stable-name prefix when omitted
-  -o, --output <file>       write here instead of standard output
+                             common stable-name prefix when omitted. With
+                             several headers, repeats to name each document's
+                             root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output;
+                             alongside --split, write both the whole and the
+                             fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and every file its parse read,
+                             with an empty rule per prerequisite so a deleted
+                             header rebuilds rather than erroring. System
+                             headers are left out
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
                              compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -132,9 +157,10 @@ render options:
                              --validate then runs across the union of their
                              documented names, so a name specified by a
                              sibling document is not foreign. Several inputs
-                             require --split, and --root, when given at all,
-                             then repeats too, pairing with each --from-ir in
-                             order
+                             render as one paper -- joined in order for a
+                             single output, split into per-clause fragments,
+                             or both -- and --root, when given at all, repeats
+                             too, pairing with each --from-ir in order
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
@@ -162,7 +188,15 @@ render options:
                              common stable-name prefix when omitted. With
                              several --from-ir inputs, repeats to name each
                              document's root fragment, pairing in order
-  -o, --output <file>       write here instead of standard output
+  -o, --output <file>       write the whole here instead of standard output;
+                             alongside --split, write both the whole and the
+                             fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and the IR files it read, with
+                             an empty rule per prerequisite
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
 
 general:
   -h, --help                show this message
@@ -232,6 +266,15 @@ struct WordingOptions {
     // render_document below, which reads it off a default-constructed Options.
     std::optional<int> base_heading_level;
     std::optional<int> base_section_depth;
+    // --depfile <path>: where to write the Makefile dependency fragment
+    // (depfile.hpp), and --dep-target <name>, accumulated, for the targets to
+    // name in it instead of the files actually written. The override exists
+    // because a build system's notion of what this invocation produces is not
+    // always a path specgen passed: a recipe whose real target is a stamp file,
+    // or one that renders into a scratch directory and installs afterwards,
+    // knows its own target names and specgen cannot.
+    std::string              depfile;
+    std::vector<std::string> dep_targets;
 };
 
 // The driver's only integer-valued options, parsed once for both commands so a
@@ -304,6 +347,14 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
             opts.awaiting.clear();
             return opts;
         }
+        // --dep-target accumulates for the same reason --new-root does: one
+        // invocation can produce several files, and a rule naming only the last
+        // of them would leave the others looking up to date when they are not.
+        if (opts.awaiting == "--dep-target") {
+            opts.wording.dep_targets.push_back(arg);
+            opts.awaiting.clear();
+            return opts;
+        }
         // The two base-level options are settled here for the same kind of
         // reason: the reference chain below can only name a `std::string&`,
         // and these carry a number, whose failure to be one has to leave the
@@ -318,9 +369,10 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
             opts.awaiting.clear();
             return opts;
         }
-        std::string& dest = opts.awaiting == "--backend" ? opts.wording.backend
-                            : opts.awaiting == "--split" ? opts.wording.split_dir
-                                                         : opts.wording.output;
+        std::string& dest = opts.awaiting == "--backend"   ? opts.wording.backend
+                            : opts.awaiting == "--split"   ? opts.wording.split_dir
+                            : opts.awaiting == "--depfile" ? opts.wording.depfile
+                                                           : opts.wording.output;
         dest              = arg;
         opts.awaiting.clear();
         return opts;
@@ -334,7 +386,8 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
         return opts;
     }
     if (arg == "--from-ir" || arg == "--backend" || arg == "--split" || arg == "--root" || arg == "--new-root" ||
-        arg == "--base-heading-level" || arg == "--base-section-depth" || arg == "-o" || arg == "--output") {
+        arg == "--base-heading-level" || arg == "--base-section-depth" || arg == "-o" || arg == "--output" ||
+        arg == "--depfile" || arg == "--dep-target") {
         opts.awaiting = arg;
         return opts;
     }
@@ -382,13 +435,26 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
         return std::format("specgen: --base-heading-level {} is past markdown's deepest heading; "
                            "the mpark backend takes 1 to 6",
                            *options.base_heading_level);
-    // --split writes a *set* of files whose names it derives, so there is
-    // nothing for a single output path to mean beside it; and --root names one
-    // of those files, so it means nothing without them.
-    if (!options.split_dir.empty() && !options.output.empty())
-        return std::string("specgen: --split writes a directory of fragments, so --output does not apply");
+    // --root names one of --split's derived files, so it means nothing without
+    // them.
+    //
+    // --output alongside --split, by contrast, is no longer a contradiction and
+    // is deliberately allowed: the whole and the pieces are two views of one
+    // render, a paper wants both -- the assembled clause to diff against the
+    // draft, and the per-clause fragments to `\input` -- and producing them
+    // from one invocation is one parse and one dependency fragment rather than
+    // two of each.
     if (!options.root.empty() && options.split_dir.empty())
         return std::string("specgen: --root names a fragment, so it applies only with --split");
+    // A dependency fragment whose rule has no target is not a rule. specgen
+    // knows the targets when it wrote the files itself; writing to standard
+    // output it does not, and guessing is worse than asking.
+    if (!options.depfile.empty() && options.output.empty() && options.split_dir.empty() && options.dep_targets.empty())
+        return std::string("specgen: --depfile names what this run produced, so it needs -o, --split, "
+                           "or --dep-target");
+    if (!options.dep_targets.empty() && options.depfile.empty())
+        return std::string("specgen: --dep-target names a target in a dependency fragment, so it applies "
+                           "only with --depfile");
     return std::nullopt;
 }
 
@@ -456,81 +522,309 @@ std::string_view fragment_extension(const WordingOptions& options) {
     return options.backend == "mpark" ? ".md" : options.backend == "org" ? ".org" : ".tex";
 }
 
+// The files an emit step wrote, in the order it wrote them. Two readers: the
+// `--split` manifest on standard output, and `--depfile`'s target list. Empty
+// means the wording went to standard output, which is not a file anything can
+// depend on.
+using Written = std::vector<std::string>;
+
+// The manifest: one path per line. Built whole and printed once (decision
+// format-print-output), so a failed write leaves no half-list claiming files
+// that are not there.
+std::string manifest_text(const Written& paths) {
+    return paths | std::views::transform([](const std::string& path) { return std::format("{}\n", path); }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+// The Makefile dependency fragment (depfile.hpp), written last of all -- after
+// every output it names is on disk. A `.d` promising files that were never
+// written is worse than none: make believes the next build has nothing to do.
+//
+// A caller that gave no `--depfile` gets no fragment and no error; the option's
+// absence is not a failure, and every emit path calls this unconditionally
+// rather than each remembering to ask first.
+std::expected<void, std::string>
+write_depfile(const WordingOptions& options, const Written& written, const std::vector<std::string>& prerequisites) {
+    if (options.depfile.empty())
+        return {};
+    // wording_option_error has already refused the case where neither says
+    // anything, so one of the two is non-empty here.
+    const Written& targets = options.dep_targets.empty() ? written : options.dep_targets;
+
+    std::ofstream out(options.depfile, std::ios::binary);
+    if (!out)
+        return std::unexpected(std::format("specgen: cannot write '{}'", options.depfile));
+    out << beman::specgen::depfile::format(targets, prerequisites);
+    if (!out)
+        return std::unexpected(std::format("specgen: cannot write '{}'", options.depfile));
+    return {};
+}
+
+// One rendered string to wherever the caller asked for it: `-o` if it named a
+// file, standard output otherwise. Bulk I/O, not formatting -- `{}` on stdout
+// and `<<` on the file stream, rather than running a whole rendered document
+// back through the format machinery (decision format-print-output's boundary
+// rule).
+std::expected<Written, std::string> write_whole(const std::string& rendered, const WordingOptions& options) {
+    if (options.output.empty()) {
+        std::print(stdout, "{}", rendered);
+        return Written{};
+    }
+    std::ofstream out(options.output, std::ios::binary);
+    if (!out)
+        return std::unexpected(std::format("specgen: cannot write '{}'", options.output));
+    out << rendered;
+    if (!out)
+        return std::unexpected(std::format("specgen: cannot write '{}'", options.output));
+    return Written{options.output};
+}
+
+// One file per fragment into `--split`'s directory, then the manifest.
+//
+// Takes the already-split pieces rather than a document, because the two
+// callers arrive with different things to say about a failure: one document's
+// split can ask for `--root`, while a paper's has to name which of its inputs
+// the unnamed fragment came from. Splitting is theirs; writing is the same
+// either way.
+std::expected<Written, std::string> write_fragments(const std::vector<fragments::Fragment>& pieces,
+                                                    const WordingOptions&                   options) {
+    std::error_code failed;
+    std::filesystem::create_directories(options.split_dir, failed);
+    if (failed)
+        return std::unexpected(std::format("specgen: cannot create '{}': {}", options.split_dir, failed.message()));
+
+    // The early-stop verb again (decision expected-error-taxonomy): writing a
+    // set of files is a sequence that must stop at the first failure, and what
+    // it accumulates is the paths in document order, which is the one thing the
+    // directory listing loses. The manifest is printed once at the end rather
+    // than a line at a time (decision format-print-output), so a failed write
+    // leaves no half-list claiming files that are not there.
+    return beman::specgen::foundation::fold_left_short(
+               pieces,
+               Written{},
+               [&](Written listing, const fragments::Fragment& fragment) -> std::expected<Written, std::string> {
+                   const std::filesystem::path path = std::filesystem::path(options.split_dir) /
+                                                      std::format("{}{}", fragment.name, fragment_extension(options));
+                   std::ofstream               out(path, std::ios::binary);
+                   if (!out)
+                       return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
+                   out << render_wording(fragment.document, options);
+                   if (!out)
+                       return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
+                   listing.push_back(path.generic_string());
+                   return listing;
+               })
+        .transform([](Written paths) {
+            std::print(stdout, "{}", manifest_text(paths));
+            return paths;
+        });
+}
+
+// Whether this run writes the whole document at all. `--split` on its own means
+// the pieces *are* the output, and printing the whole to standard output beside
+// them would bury the manifest that says where they went. Naming `-o` as well
+// asks for both, and gets both.
+bool wants_whole(const WordingOptions& options) { return options.split_dir.empty() || !options.output.empty(); }
+
 // The back half of the driver: one document in, one file -- or a directory of
-// them -- out. `render` arrives here from IR JSON and `generate` from a header
-// it has just parsed, and nothing below can tell which, so the single-pass
-// wording is byte-identical to the two-pass route by construction rather than
-// by comparison.
-std::expected<int, std::string> emit_wording(const ir::Document& document, const WordingOptions& options) {
-    // Both branches write an already-built document, so this is bulk I/O, not
-    // formatting: `{}` on stdout and `<<` on the file stream, rather than
-    // running a whole rendered fragment back through the format machinery
-    // (decision format-print-output's boundary rule).
-    auto write_output = [&](std::string rendered) -> std::expected<int, std::string> {
-        if (options.output.empty()) {
-            std::print(stdout, "{}", rendered);
-            return 0;
-        }
-        std::ofstream out(options.output, std::ios::binary);
-        if (!out)
-            return std::unexpected(std::format("specgen: cannot write '{}'", options.output));
-        out << rendered;
-        return out ? 0 : 1;
-    };
-
-    auto write_fragments = [&](const ir::Document& whole) -> std::expected<int, std::string> {
-        // Validation, if it ran at all, ran over the whole document above:
-        // the roster and the two document-level channels it reads describe the
-        // header, not any one section of it, so splitting first would ask
-        // every rule a narrower question than the one design §9 poses.
-        const std::expected<std::vector<fragments::Fragment>, fragments::Error> pieces =
-            fragments::split(whole, {.root = options.root});
-        if (!pieces)
-            return std::unexpected(std::format(
-                "specgen: {}{}", pieces.error().message, pieces.error().root_unnamed ? "; name it with --root" : ""));
-
-        std::error_code failed;
-        std::filesystem::create_directories(options.split_dir, failed);
-        if (failed)
-            return std::unexpected(
-                std::format("specgen: cannot create '{}': {}", options.split_dir, failed.message()));
-
-        // The early-stop verb again (decision expected-error-taxonomy):
-        // writing a set of files is a sequence that must stop at the first
-        // failure, and what it accumulates is the manifest — the paths in
-        // document order, which is the one thing the directory listing
-        // loses. It is printed once at the end rather than a line at a time
-        // (decision format-print-output), so a failed write leaves no
-        // half-list claiming files that are not there.
-        const std::expected<std::string, std::string> manifest = beman::specgen::foundation::fold_left_short(
-            *pieces,
-            std::string{},
-            [&](std::string listing, const fragments::Fragment& fragment) -> std::expected<std::string, std::string> {
-                const std::filesystem::path path = std::filesystem::path(options.split_dir) /
-                                                   std::format("{}{}", fragment.name, fragment_extension(options));
-                std::ofstream               out(path, std::ios::binary);
-                if (!out)
-                    return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
-                out << render_wording(fragment.document, options);
-                if (!out)
-                    return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
-                return std::format("{}{}\n", listing, path.generic_string());
+// them, or both -- out. `render` arrives here from IR JSON and `generate` from
+// a header it has just parsed, and nothing below can tell which, so the
+// single-pass wording is byte-identical to the two-pass route by construction
+// rather than by comparison.
+std::expected<Written, std::string> emit_wording(const ir::Document& document, const WordingOptions& options) {
+    // Validate, then render (decision expected-error-taxonomy): an
+    // error-severity finding short-circuits the rest, which is what "aborts the
+    // render" means.
+    return validate_document(document, options.validate)
+        .and_then([&]() -> std::expected<Written, std::string> {
+            return wants_whole(options) ? write_whole(render_wording(document, options), options)
+                                        : std::expected<Written, std::string>{Written{}};
+        })
+        .and_then([&](Written written) -> std::expected<Written, std::string> {
+            if (options.split_dir.empty())
+                return written;
+            // Validation, if it ran at all, ran over the whole document above:
+            // the roster and the two document-level channels it reads describe
+            // the header, not any one section of it, so splitting first would
+            // ask every rule a narrower question than the one design §9 poses.
+            const std::expected<std::vector<fragments::Fragment>, fragments::Error> pieces =
+                fragments::split(document, {.root = options.root});
+            if (!pieces)
+                return std::unexpected(std::format("specgen: {}{}",
+                                                   pieces.error().message,
+                                                   pieces.error().root_unnamed ? "; name it with --root" : ""));
+            return write_fragments(*pieces, options).transform([&](Written written_pieces) {
+                written.append_range(std::move(written_pieces));
+                return std::move(written);
             });
-        if (!manifest)
-            return std::unexpected(manifest.error());
+        });
+}
 
-        std::print(stdout, "{}", *manifest);
-        return 0;
+// Several documents are one paper (issue #109). Validation runs across all of
+// them, against the union of their documented names — a name specified by a
+// sibling document is not foreign — and an error in any aborts the render of
+// every one: the unit that has to be internally consistent is the paper, so
+// nothing is written from an inconsistent one. Each finding is prefixed with
+// the input it came from, since a context path alone no longer says which
+// document it is about.
+//
+// The same report-or-abort shape validate_document gives one document:
+// warnings are printed here and rendering continues, any error returns every
+// finding for the caller to print and renders nothing.
+std::expected<void, std::string>
+validate_paper(const std::vector<std::string>& labels, const std::vector<ir::Document>& documents, bool run) {
+    if (!run)
+        return {};
+
+    const auto set_union = beman::specgen::foundation::monoid{
+        [](std::set<std::string> a, const std::set<std::string>& b) {
+            a.insert(b.begin(), b.end());
+            return a;
+        },
+        std::set<std::string>{},
+    };
+    const std::set<std::string> paper = beman::specgen::foundation::mconcat_map(
+        documents, [](const ir::Document& document) { return validate::documented_names(document); }, set_union);
+
+    struct PaperFindings {
+        std::vector<std::string> lines;
+        bool                     errors = false;
+    };
+    const auto findings_monoid = beman::specgen::foundation::monoid{
+        [](PaperFindings a, const PaperFindings& b) {
+            a.lines.insert(a.lines.end(), b.lines.begin(), b.lines.end());
+            a.errors = a.errors || b.errors;
+            return a;
+        },
+        PaperFindings{},
+    };
+    const PaperFindings findings = beman::specgen::foundation::mconcat_map(
+        std::views::zip(labels, documents),
+        [&](const auto& pair) {
+            const auto& [label, document]           = pair;
+            const validate::Diagnostics diagnostics = validate::validate(document, paper);
+            return PaperFindings{
+                diagnostics | std::views::transform([&](const validate::Diagnostic& finding) {
+                    return std::format("specgen: {}: {}", label, validate::format_diagnostic(finding));
+                }) | std::ranges::to<std::vector<std::string>>(),
+                validate::has_errors(diagnostics),
+            };
+        },
+        findings_monoid);
+
+    if (findings.errors)
+        return std::unexpected(findings.lines | std::views::join_with('\n') | std::ranges::to<std::string>());
+    // substrate generic algorithm: formatted output, not a fold — nothing is
+    // accumulated and nothing is returned.
+    for (const std::string& line : findings.lines)
+        std::println(stderr, "{}", line);
+    return {};
+}
+
+// The back half again, for a paper of several documents. `render` arrives here
+// with one `--from-ir` per document and `generate` with one header per
+// document, and as with emit_wording nothing below can tell which.
+//
+// `labels` names each document for a diagnostic — an IR path or a header path —
+// and pairs with `documents` and, when it is given at all, with `roots`.
+std::expected<Written, std::string> emit_paper(const std::vector<std::string>&  labels,
+                                               const std::vector<ir::Document>& documents,
+                                               const std::vector<std::string>&  roots,
+                                               const WordingOptions&            options) {
+    // The whole paper is its documents rendered in order and joined by a blank
+    // line. That is the same text `--split` would write, in the same order,
+    // with the fragment boundaries left out — which is what makes the assembled
+    // clause a thing a paper can diff against the draft rather than a thing
+    // some script reassembled and might have reassembled differently.
+    const auto write_paper = [&]() -> std::expected<Written, std::string> {
+        if (!wants_whole(options))
+            return Written{};
+        return write_whole(documents | std::views::transform([&](const ir::Document& document) {
+                               return render_wording(document, options);
+                           }) | std::views::join_with(std::string_view("\n")) |
+                               std::ranges::to<std::string>(),
+                           options);
     };
 
-    // Validate, then render (decision expected-error-taxonomy): an error-severity
-    // finding short-circuits the rest, which is what "aborts the render" means.
-    return validate_document(document, options.validate).and_then([&]() -> std::expected<int, std::string> {
-        // One document in, one file or a directory of them out. Which it is,
-        // is the last thing the pipeline decides, because everything above it —
-        // reading, parsing, validating — is the same work either way.
-        return options.split_dir.empty() ? write_output(render_wording(document, options)) : write_fragments(document);
-    });
+    // Split every document before writing anything: the fragments land in one
+    // --split directory, so two documents deriving the same name would
+    // otherwise have the later one silently overwrite the earlier — and a
+    // paper's headers routinely share a stable-name prefix, which is exactly
+    // the derived root name. Splitting first turns that into a reported
+    // collision, and pairs each document with its own --root.
+    struct PaperFragment {
+        std::string         label;
+        fragments::Fragment fragment;
+    };
+    const auto split_paper = [&]() -> std::expected<std::vector<PaperFragment>, std::string> {
+        return beman::specgen::foundation::fold_left_short(
+            std::views::zip(labels, documents, std::views::iota(std::size_t{0})),
+            std::vector<PaperFragment>{},
+            [&](std::vector<PaperFragment> flat,
+                const auto&                triple) -> std::expected<std::vector<PaperFragment>, std::string> {
+                const auto& [label, document, index] = triple;
+                const std::string root               = roots.empty() ? std::string{} : roots[index];
+                return fragments::split(document, {.root = root})
+                    .transform_error([&](const fragments::Error& error) {
+                        return std::format("specgen: {}: {}{}",
+                                           label,
+                                           error.message,
+                                           error.root_unnamed ? "; name it with --root (one per document, in order)"
+                                                              : "");
+                    })
+                    .transform([&](std::vector<fragments::Fragment> split_pieces) {
+                        // substrate generic algorithm: append with provenance;
+                        // there is no single-range verb that tags each element
+                        // with the input it came from while moving it.
+                        for (fragments::Fragment& piece : split_pieces)
+                            flat.push_back(PaperFragment{label, std::move(piece)});
+                        return std::move(flat);
+                    });
+            });
+    };
+
+    const auto check_collisions = [&](const std::vector<PaperFragment>& pieces) -> std::expected<void, std::string> {
+        return beman::specgen::foundation::fold_left_short(
+                   pieces,
+                   std::map<std::string, std::string>{},
+                   [&](std::map<std::string, std::string> seen,
+                       const PaperFragment& piece) -> std::expected<std::map<std::string, std::string>, std::string> {
+                       const auto [entry, inserted] = seen.emplace(piece.fragment.name, piece.label);
+                       if (!inserted)
+                           return std::unexpected(
+                               std::format("specgen: fragment `{}{}` is written by both `{}` and `{}`; "
+                                           "give each document its own --root",
+                                           piece.fragment.name,
+                                           fragment_extension(options),
+                                           entry->second,
+                                           piece.label));
+                       return seen;
+                   })
+            .transform([](const std::map<std::string, std::string>&) {});
+    };
+
+    return validate_paper(labels, documents, options.validate)
+        .and_then(write_paper)
+        .and_then([&](Written written) -> std::expected<Written, std::string> {
+            if (options.split_dir.empty())
+                return written;
+            return split_paper()
+                .and_then([&](std::vector<PaperFragment> pieces) -> std::expected<Written, std::string> {
+                    return check_collisions(pieces).and_then([&] {
+                        // Moved out rather than copied: a paper's documents are
+                        // whole headers' worth of IR, and write_fragments needs
+                        // only the pieces, not which input each came from.
+                        return write_fragments(pieces | std::views::transform([](PaperFragment& piece) {
+                                                   return std::move(piece.fragment);
+                                               }) | std::ranges::to<std::vector<fragments::Fragment>>(),
+                                               options);
+                    });
+                })
+                .transform([&](Written written_pieces) {
+                    written.append_range(std::move(written_pieces));
+                    return std::move(written);
+                });
+        });
 }
 
 int render_command(const std::vector<std::string>& args) {
@@ -580,16 +874,20 @@ int render_command(const std::vector<std::string>& args) {
         std::println(stderr, "specgen: one --from-ir takes one --root, not {}", roots.size());
         return 2;
     }
-    if (inputs.size() > 1 && wording.split_dir.empty()) {
-        std::println(stderr, "specgen: several --from-ir inputs write several documents, so they require --split");
-        return 2;
-    }
     if (inputs.size() > 1 && !roots.empty() && roots.size() != inputs.size()) {
         std::println(stderr,
                      "specgen: --root pairs with --from-ir in order, so pass one per input or none: "
                      "{} input(s), {} --root(s)",
                      inputs.size(),
                      roots.size());
+        return 2;
+    }
+    // The paper path's own copy of wording_option_error's --root rule, which
+    // cannot see these: the single-document path assigns its one root into
+    // WordingOptions just below and is checked there, while a paper's roots
+    // stay in the list that pairs with the inputs.
+    if (inputs.size() > 1 && !roots.empty() && wording.split_dir.empty()) {
+        std::println(stderr, "specgen: --root names a fragment, so it applies only with --split");
         return 2;
     }
     // The single-document path reads its root off WordingOptions, exactly as
@@ -640,150 +938,26 @@ int render_command(const std::vector<std::string>& args) {
             std::println(stderr, "{}", result.error());
             return 1;
         }
-        return *result;
-    }
-
-    // Several documents are one paper. Validation runs first, across all of
-    // them, against the union of their documented names — a name specified by
-    // a sibling document is not foreign (issue #109) — and an error in any
-    // aborts the render of every one: the unit that has to be internally
-    // consistent is the paper, so no fragment is written from an inconsistent
-    // one. Each finding is prefixed with the input it came from, since a
-    // context path alone no longer says which document it is about.
-    if (wording.validate) {
-        const auto set_union = beman::specgen::foundation::monoid{
-            [](std::set<std::string> a, const std::set<std::string>& b) {
-                a.insert(b.begin(), b.end());
-                return a;
-            },
-            std::set<std::string>{},
-        };
-        const std::set<std::string> paper = beman::specgen::foundation::mconcat_map(
-            *documents, [](const ir::Document& document) { return validate::documented_names(document); }, set_union);
-
-        struct PaperFindings {
-            std::vector<std::string> lines;
-            bool                     errors = false;
-        };
-        const auto findings_monoid = beman::specgen::foundation::monoid{
-            [](PaperFindings a, const PaperFindings& b) {
-                a.lines.insert(a.lines.end(), b.lines.begin(), b.lines.end());
-                a.errors = a.errors || b.errors;
-                return a;
-            },
-            PaperFindings{},
-        };
-        const PaperFindings findings = beman::specgen::foundation::mconcat_map(
-            std::views::zip(inputs, *documents),
-            [&](const auto& pair) {
-                const auto& [input, document]           = pair;
-                const validate::Diagnostics diagnostics = validate::validate(document, paper);
-                return PaperFindings{
-                    diagnostics | std::views::transform([&](const validate::Diagnostic& finding) {
-                        return std::format("specgen: {}: {}", input, validate::format_diagnostic(finding));
-                    }) | std::ranges::to<std::vector<std::string>>(),
-                    validate::has_errors(diagnostics),
-                };
-            },
-            findings_monoid);
-        // The same report-or-abort shape validate_document gives one
-        // document: warnings are printed and rendering continues, any error
-        // prints every finding and renders nothing.
-        // substrate generic algorithm: formatted output, not a fold —
-        // nothing is accumulated and nothing is returned.
-        for (const std::string& line : findings.lines)
-            std::println(stderr, "{}", line);
-        if (findings.errors)
+        if (const auto failed = write_depfile(wording, *result, inputs); !failed) {
+            std::println(stderr, "{}", failed.error());
             return 1;
+        }
+        return 0;
     }
 
-    // Split every document before writing anything: the fragments land in
-    // one --split directory, so two documents deriving the same name would
-    // otherwise have the later one silently overwrite the earlier — and a
-    // paper's headers routinely share a stable-name prefix, which is exactly
-    // the derived root name. Splitting first turns that into a reported
-    // collision, and pairs each document with its own --root.
-    struct PaperFragment {
-        std::string         input;
-        fragments::Fragment fragment;
-    };
-    const auto pieces = beman::specgen::foundation::fold_left_short(
-        std::views::zip(inputs, *documents, std::views::iota(std::size_t{0})),
-        std::vector<PaperFragment>{},
-        [&](std::vector<PaperFragment> flat,
-            const auto&                triple) -> std::expected<std::vector<PaperFragment>, std::string> {
-            const auto& [input, document, index] = triple;
-            const std::string root               = roots.empty() ? std::string{} : roots[index];
-            return fragments::split(document, {.root = root})
-                .transform_error([&](const fragments::Error& error) {
-                    return std::format("specgen: {}: {}{}",
-                                       input,
-                                       error.message,
-                                       error.root_unnamed ? "; name it with --root (one per --from-ir, in order)"
-                                                          : "");
-                })
-                .transform([&](std::vector<fragments::Fragment> split_pieces) {
-                    // substrate generic algorithm: append with provenance;
-                    // there is no single-range verb that tags each element
-                    // with the input it came from while moving it.
-                    for (fragments::Fragment& piece : split_pieces)
-                        flat.push_back(PaperFragment{input, std::move(piece)});
-                    return std::move(flat);
-                });
-        });
-    if (!pieces) {
-        std::println(stderr, "{}", pieces.error());
+    const auto written = emit_paper(inputs, *documents, roots, wording);
+    if (!written) {
+        std::println(stderr, "{}", written.error());
         return 1;
     }
-    const auto collision = beman::specgen::foundation::fold_left_short(
-        *pieces,
-        std::map<std::string, std::string>{},
-        [&](std::map<std::string, std::string> seen,
-            const PaperFragment& piece) -> std::expected<std::map<std::string, std::string>, std::string> {
-            const auto [entry, inserted] = seen.emplace(piece.fragment.name, piece.input);
-            if (!inserted)
-                return std::unexpected(std::format(
-                    "specgen: fragment `{}{}` is written by both `{}` and `{}`; give each document its own --root",
-                    piece.fragment.name,
-                    fragment_extension(wording),
-                    entry->second,
-                    piece.input));
-            return seen;
-        });
-    if (!collision) {
-        std::println(stderr, "{}", collision.error());
+    // The prerequisites of a render are the IR files it read. Modest on its
+    // own, and the point: a two-stage build whose `generate --emit-ir` step
+    // already wrote a fragment naming the headers now has both edges, and make
+    // chains them without either stage knowing about the other.
+    if (const auto failed = write_depfile(wording, *written, inputs); !failed) {
+        std::println(stderr, "{}", failed.error());
         return 1;
     }
-
-    std::error_code failed;
-    std::filesystem::create_directories(wording.split_dir, failed);
-    if (failed) {
-        std::println(stderr, "specgen: cannot create '{}': {}", wording.split_dir, failed.message());
-        return 1;
-    }
-    // One manifest for the whole paper, printed once at the end (decision
-    // format-print-output), so a failed write leaves no half-list claiming
-    // files that are not there — the same shape emit_wording gives one
-    // document.
-    const auto manifest = beman::specgen::foundation::fold_left_short(
-        *pieces,
-        std::string{},
-        [&](std::string listing, const PaperFragment& piece) -> std::expected<std::string, std::string> {
-            const std::filesystem::path path = std::filesystem::path(wording.split_dir) /
-                                               std::format("{}{}", piece.fragment.name, fragment_extension(wording));
-            std::ofstream               out(path, std::ios::binary);
-            if (!out)
-                return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
-            out << render_wording(piece.fragment.document, wording);
-            if (!out)
-                return std::unexpected(std::format("specgen: cannot write '{}'", path.string()));
-            return std::format("{}{}\n", listing, path.generic_string());
-        });
-    if (!manifest) {
-        std::println(stderr, "{}", manifest.error());
-        return 1;
-    }
-    std::print(stdout, "{}", *manifest);
     return 0;
 }
 
@@ -804,11 +978,18 @@ int generate_command(const std::vector<std::string>& args) {
     const std::vector<std::string> head(args.begin(), dash_dash);
     const std::vector<std::string> tail(dash_dash == args.end() ? args.end() : dash_dash + 1, args.end());
 
-    std::string    header;
-    std::string    compile_commands_dir;
-    WordingOptions wording;
-    bool           emit_ir             = false;
-    bool           no_compile_commands = false;
+    // The headers, in the order they were named: one document each, and all of
+    // them one paper. The order is the paper's clause order, which is why they
+    // accumulate rather than the last one winning.
+    std::vector<std::string> headers;
+    // --root, accumulated and pairing with `headers` in order, exactly as
+    // `render`'s pairs with --from-ir: with several documents each needs its
+    // own root fragment name.
+    std::vector<std::string> roots;
+    std::string              compile_commands_dir;
+    WordingOptions           wording;
+    bool                     emit_ir             = false;
+    bool                     no_compile_commands = false;
     // The first wording-only option seen, for the `--emit-ir` conflict below:
     // naming the one the user actually typed beats listing all five. -o is not
     // one of them -- it names where either mode's single output goes.
@@ -854,8 +1035,13 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
         } else if (arg == "--root") {
             wording_only();
-            if (!next(wording.root))
+            // One root per occurrence, pairing with the headers in order
+            // (issue #94's rule again): silently keeping the last of several
+            // would leave every earlier document's root fragment unnamed.
+            std::string root;
+            if (!next(root))
                 return 2;
+            roots.push_back(std::move(root));
         } else if (arg == "--validate") {
             wording_only();
             wording.validate = true;
@@ -886,13 +1072,24 @@ int generate_command(const std::vector<std::string>& args) {
             std::optional<int>& target =
                 arg == "--base-heading-level" ? wording.base_heading_level : wording.base_section_depth;
             target = *level;
+        } else if (arg == "--depfile") {
+            // Not a wording-only option: it describes what this run produced,
+            // which --emit-ir produces too (the IR file is as much a build
+            // artifact of the header as the wording is).
+            if (!next(wording.depfile))
+                return 2;
+        } else if (arg == "--dep-target") {
+            std::string dep_target;
+            if (!next(dep_target))
+                return 2;
+            wording.dep_targets.push_back(std::move(dep_target));
         } else if (arg == "--compile-commands") {
             if (!next(compile_commands_dir))
                 return 2;
         } else if (arg == "--no-compile-commands") {
             no_compile_commands = true;
         } else if (!arg.empty() && arg.front() != '-') {
-            header = arg;
+            headers.push_back(arg);
         } else {
             std::println(stderr, "specgen: unknown option '{}'", arg);
             return usage(stderr, 2);
@@ -906,7 +1103,41 @@ int generate_command(const std::vector<std::string>& args) {
         std::println(stderr, "specgen: --emit-ir writes IR, so {} does not apply", wording_flag);
         return 2;
     }
-    if (header.empty()) {
+    // One IR document per file is what the format is; there is no envelope for
+    // several, and `render --from-ir` takes them one path at a time. A paper's
+    // worth of IR is therefore a `generate --emit-ir` per header, which is what
+    // the two-stage route has always been -- and is now only needed when the IR
+    // itself is wanted, since one `generate` renders the paper directly.
+    if (emit_ir && headers.size() > 1) {
+        std::println(stderr,
+                     "specgen: --emit-ir writes one document, so it takes one header, not {}; "
+                     "run it once per header",
+                     headers.size());
+        return 2;
+    }
+    // The same pairing `render` requires of --root and --from-ir, for the same
+    // reason (issue #94): one per document, in order, or none at all.
+    if (headers.size() == 1 && roots.size() > 1) {
+        std::println(stderr, "specgen: one header takes one --root, not {}", roots.size());
+        return 2;
+    }
+    if (headers.size() > 1 && !roots.empty() && roots.size() != headers.size()) {
+        std::println(stderr,
+                     "specgen: --root pairs with the headers in order, so pass one per header or none: "
+                     "{} header(s), {} --root(s)",
+                     headers.size(),
+                     roots.size());
+        return 2;
+    }
+    if (headers.size() > 1 && !roots.empty() && wording.split_dir.empty()) {
+        std::println(stderr, "specgen: --root names a fragment, so it applies only with --split");
+        return 2;
+    }
+    // The single-document path reads its root off WordingOptions, exactly as it
+    // always has; the paper path pairs below instead.
+    if (headers.size() == 1 && roots.size() == 1)
+        wording.root = roots.front();
+    if (headers.empty()) {
         if (emit_ir) {
             std::println(stderr, "specgen: generate --emit-ir requires a header");
             return usage(stderr, 2);
@@ -946,12 +1177,21 @@ int generate_command(const std::vector<std::string>& args) {
     const frontend::ParseOptions raw_options{.extra_args             = tail,
                                              .compile_commands_dir   = compile_commands_dir,
                                              .probe_compile_commands = !no_compile_commands};
-    const frontend::ResolvedArgs resolved = frontend::resolve_extra_args(header, raw_options);
-    if (!resolved.source.empty())
-        std::println(
-            stderr, "specgen: using compile flags for '{}' from the database entry in '{}'", header, resolved.source);
-    const frontend::ParseOptions options{
-        .extra_args = resolved.args, .compile_commands_dir = {}, .probe_compile_commands = false};
+    // Resolved per header, not once for the paper: a compilation database
+    // answers about a file, and two headers of one paper can perfectly well
+    // have been compiled with different flags. Papers whose headers share a
+    // `--` tail -- every one so far -- get the identical answer each time, so
+    // the single-header route through here is unchanged.
+    const auto resolve_for = [&](const std::string& header) {
+        const frontend::ResolvedArgs resolved = frontend::resolve_extra_args(header, raw_options);
+        if (!resolved.source.empty())
+            std::println(stderr,
+                         "specgen: using compile flags for '{}' from the database entry in '{}'",
+                         header,
+                         resolved.source);
+        return frontend::ParseOptions{
+            .extra_args = resolved.args, .compile_commands_dir = {}, .probe_compile_commands = false};
+    };
 
     // Build, then emit, as one and_then pipeline (decision
     // expected-error-taxonomy). The stages start out with different error
@@ -960,46 +1200,101 @@ int generate_command(const std::vector<std::string>& args) {
     // pipeline's before the chain, and a write failure then reports the way a
     // build failure does. Diagnostics collected along the way are printed but
     // never turn a successful build into a failed one.
+    //
+    // Every header is parsed before anything is written, for the reason
+    // `render` reads every `--from-ir` first: a paper is the unit (issue #109),
+    // and half its wording on disk beside a header that would not parse is the
+    // state this ordering exists to prevent. fold_left_short, so the scan stops
+    // at the first header that fails and parses no later one.
     auto result =
-        frontend::build_document(header, options)
-            .transform_error(
-                [](const frontend::BuildFailure& failure) { return std::format("specgen: {}", failure.message); })
-            .and_then([&](beman::specgen::document_build::BuildResult built) -> std::expected<int, std::string> {
-                // substrate generic algorithm
-                // Formatted output, not a fold: nothing is accumulated and
-                // nothing is returned, so there is no verb to name here.
-                //
-                // `line: severity:`: the location is a line number the
-                // reader can actually find, not a byte offset, and the
-                // severity is each finding's own — notes and errors are
-                // not all printed as the literal word "warning". An Error
-                // here still does not fail the build: failing it would
-                // withhold the wording, not just the finding's own text.
-                // `diagnostic.file` is set only for a finding in a header the
-                // document follows (a `.syn` region's includes), where the
-                // main file's name would be the wrong one.
-                for (const auto& diagnostic : built.diagnostics)
-                    std::println(stderr,
-                                 "{}:{}: {}: {}",
-                                 diagnostic.file.empty() ? std::string(header) : diagnostic.file,
-                                 diagnostic.line,
-                                 beman::specgen::severity_label(diagnostic.severity),
-                                 diagnostic.message);
+        beman::specgen::foundation::fold_left_short(
+            headers,
+            std::vector<frontend::DocumentBuild>{},
+            [&](std::vector<frontend::DocumentBuild> built,
+                const std::string& header) -> std::expected<std::vector<frontend::DocumentBuild>, std::string> {
+                return frontend::build_document_with_sources(header, resolve_for(header))
+                    .transform_error([](const frontend::BuildFailure& failure) {
+                        return std::format("specgen: {}", failure.message);
+                    })
+                    .transform([&](frontend::DocumentBuild one) {
+                        // substrate generic algorithm
+                        // Formatted output, not a fold: nothing is accumulated
+                        // and nothing is returned, so there is no verb to name
+                        // here.
+                        //
+                        // `line: severity:`: the location is a line number the
+                        // reader can actually find, not a byte offset, and the
+                        // severity is each finding's own — notes and errors are
+                        // not all printed as the literal word "warning". An
+                        // Error here still does not fail the build: failing it
+                        // would withhold the wording, not just the finding's
+                        // own text. `diagnostic.file` is set only for a finding
+                        // in a header the document follows (a `.syn` region's
+                        // includes), where the main file's name would be the
+                        // wrong one — which is also what already tells a
+                        // paper's findings apart, with no per-document prefix
+                        // needed.
+                        for (const auto& diagnostic : one.result.diagnostics)
+                            std::println(stderr,
+                                         "{}:{}: {}: {}",
+                                         diagnostic.file.empty() ? header : diagnostic.file,
+                                         diagnostic.line,
+                                         beman::specgen::severity_label(diagnostic.severity),
+                                         diagnostic.message);
+                        built.push_back(std::move(one));
+                        return std::move(built);
+                    });
+            })
+            .and_then([&](std::vector<frontend::DocumentBuild> built) -> std::expected<int, std::string> {
+                // `--emit-ir` stops at the seam (decision ir-boundary): the IR
+                // file is the output, and is as much a build artifact of the
+                // header as the wording is -- so it gets a dependency fragment
+                // on the same terms, which is the first edge of a two-stage
+                // build whose `render --from-ir` step supplies the second.
+                const auto write_ir = [&]() -> std::expected<Written, std::string> {
+                    const ir::Document& document = built.front().result.document; // exactly one, enforced above
+                    if (wording.output.empty()) {
+                        std::println(stdout, "{}", ir::emit_json(document));
+                        return Written{};
+                    }
+                    std::ofstream out(wording.output, std::ios::binary);
+                    if (!out)
+                        return std::unexpected(std::format("specgen: cannot write '{}'", wording.output));
+                    out << ir::emit_json(document) << '\n';
+                    if (!out)
+                        return std::unexpected(std::format("specgen: cannot write '{}'", wording.output));
+                    return Written{wording.output};
+                };
 
-                // The single pass: the document goes straight to the backends,
-                // through the same function `render` uses.
-                if (!emit_ir)
-                    return emit_wording(built.document, wording);
+                // The single pass: the documents go straight to the backends,
+                // through the same two functions `render` uses -- which is what
+                // makes the one-pass wording byte-identical to the two-pass
+                // route by construction rather than by comparison.
+                const auto write_wording = [&]() -> std::expected<Written, std::string> {
+                    std::vector<ir::Document> documents = built |
+                                                          std::views::transform([](frontend::DocumentBuild& one) {
+                                                              return std::move(one.result.document);
+                                                          }) |
+                                                          std::ranges::to<std::vector<ir::Document>>();
+                    return documents.size() == 1 ? emit_wording(documents.front(), wording)
+                                                 : emit_paper(headers, documents, roots, wording);
+                };
 
-                if (wording.output.empty()) {
-                    std::println(stdout, "{}", ir::emit_json(built.document));
-                    return 0;
-                }
-                std::ofstream out(wording.output, std::ios::binary);
-                if (!out)
-                    return std::unexpected(std::format("specgen: cannot write '{}'", wording.output));
-                out << ir::emit_json(built.document) << '\n';
-                return out ? 0 : 1;
+                return (emit_ir ? write_ir() : write_wording())
+                    .and_then([&](const Written& written) -> std::expected<int, std::string> {
+                        // Every file every parse read, which is what the output
+                        // is a build artifact of. Sorted and deduplicated
+                        // across the paper: two headers of one paper routinely
+                        // include the same third one, and make has no use for
+                        // hearing so twice.
+                        std::vector<std::string> prerequisites =
+                            built | std::views::transform(&frontend::DocumentBuild::sources) | std::views::join |
+                            std::ranges::to<std::vector<std::string>>();
+                        std::ranges::sort(prerequisites);
+                        const auto duplicates = std::ranges::unique(prerequisites);
+                        prerequisites.erase(duplicates.begin(), duplicates.end());
+                        return write_depfile(wording, written, prerequisites).transform([] { return 0; });
+                    });
             });
 
     if (!result) {
@@ -1117,7 +1412,7 @@ int main(int argc, char** argv) {
     if (command == "-h" || command == "--help")
         return usage(stdout, 0);
     if (command == "--version") {
-        std::println(stdout, "specgen {}", kVersion);
+        std::println(stdout, "specgen {} (git {})", kVersion, kGitCommit);
         return 0;
     }
     if (command == "render")

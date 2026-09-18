@@ -1,0 +1,18 @@
+\indexlibraryglobal{alpha_policy}%
+\begin{itemdecl}
+template<class T> inline constexpr int alpha_policy = 0;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+This variable template is the lookup point for the alpha policy of a type. A program may specialize it.
+\end{itemdescr}
+
+\begin{codeblock}
+class @\libglobal{blend_policy}@ {
+public:
+  // \ref{paper.blend}, observers
+  int strength() const;
+};
+\end{codeblock}

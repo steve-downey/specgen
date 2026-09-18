@@ -47,6 +47,9 @@ So the output here is not an illustration of what specgen does. It is what specg
 | =--validate= | Validation |
 | =--paper= | Mpark paper mode |
 | =--split=, =--root= | Fragment output |
+| =generate <header>...= (a paper) | A paper of several headers |
+| =-o= with =--split= | A paper of several headers |
+| =--depfile=, =--dep-target= | A paper of several headers |
 
 * General Command Information
 :PROPERTIES:
@@ -142,6 +145,29 @@ One fragment from each backend, the same section three ways:
 #+transclude: [[file:../examples/cli/output/50-fragments/mpark/wording/optional.ctor.md]] :src markdown
 
 #+transclude: [[file:../examples/cli/output/50-fragments/org/wording/optional.syn.org]] :src org
+
+* A Paper Of Several Headers
+:PROPERTIES:
+:CUSTOM_ID: a-paper-of-several-headers
+:END:
+
+A paper proposing several headers is several specgen documents and one invocation.
+=generate= takes one header per document, validates across the union of their documented names — so a name specified by a sibling document is not foreign — and writes the assembled clause, the per-clause fragments, or both.
+
+#+transclude: [[file:../examples/cli/55-paper.sh]] :src sh
+
+=--split= names the pieces, in document then section order:
+
+#+transclude: [[file:../examples/cli/output/55-paper/manifest]] :src text
+
+=-o= names the whole, which is those same pieces in that same order with the fragment boundaries left out.
+That is not a coincidence to be relied on quietly: =golden.paper_whole.is_fragments= pins it, because a paper that assembles its clause from fragments and one that renders it whole have to agree.
+
+=--depfile= writes what make needs to know to rebuild any of it.
+The prerequisites are every file the parses read — including =include/support/spec_paper_traits.hpp=, which neither header names on the command line and which no rendered wording mentions, and which is exactly the edge that matters: a docblock in it changes the generated clause, so a paper that did not depend on it would go stale in silence.
+The empty rule per prerequisite is =-MP=: delete or rename a header and the next build regenerates rather than failing on a prerequisite the stale fragment still remembers.
+
+#+transclude: [[file:../examples/cli/output/55-paper/wording.d]] :src makefile
 
 * Validation
 :PROPERTIES:

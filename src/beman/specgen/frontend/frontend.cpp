@@ -53,6 +53,7 @@
 #include <array>
 #include <cctype>
 #include <concepts>
+#include <filesystem>
 #include <format>
 #include <fstream>
 #include <functional>
@@ -225,6 +226,58 @@ ParsedHeader parse_header(std::string_view header_path, const ParseOptions& opti
         clang::tooling::buildASTFromCodeWithArgs(buffer.str(), args, std::string(header_path));
     const bool had_error = ast && ast->getDiagnostics().hasErrorOccurred();
     return ParsedHeader{std::move(ast), had_error};
+}
+
+// Every file the parse read, for build_document_with_sources (frontend.hpp):
+// `header_path` first, then the non-system files the preprocessor opened,
+// sorted.
+//
+// The main file is taken from `header_path` rather than found in the walk,
+// because it is not there to find: parse_header hands Clang the source as an
+// in-memory buffer with a display path, so no FileEntry is ever created for it
+// and nothing in the SourceManager's FileInfos names it. A dependency list
+// missing the one file the caller named would be worse than no list at all.
+//
+// System headers are dropped -- `-MMD` semantics rather than `-MD`. Wording
+// really can move when the standard library under it moves, but a `.d` naming
+// every libstdc++ header buries the three that a reader is scanning for, and
+// the paths it would name are a property of the box that ran the tool rather
+// than of the paper.
+std::vector<std::string> parse_sources(std::string_view header_path, const clang::ASTUnit& ast) {
+    const clang::SourceManager& sm = ast.getSourceManager();
+
+    // Lexically, not `weakly_canonical`: `./a.hpp` and `a.hpp` are one file and
+    // have to dedup as one -- a header named on the command line is routinely
+    // `#include`d by a sibling too, and the two spellings reached the
+    // SourceManager by different routes. Resolving any further would make the
+    // paths absolute and follow symlinks, and a dependency fragment is read
+    // from the directory the build runs in, where the relative spelling is the
+    // one that works.
+    const auto normalized = [](std::string_view path) {
+        return std::filesystem::path(path).lexically_normal().generic_string();
+    };
+
+    std::vector<std::string> sources;
+    // substrate generic algorithm: a filter-map over a DenseMap's own iterator
+    // pair, which is not a range and so cannot be piped through views.
+    for (clang::SourceManager::fileinfo_iterator it = sm.fileinfo_begin(); it != sm.fileinfo_end(); ++it) {
+        const clang::FileID file = sm.translateFile(it->first);
+        if (file.isValid() && sm.isInSystemHeader(sm.getLocForStartOfFile(file)))
+            continue;
+        sources.push_back(normalized(it->first.getName()));
+    }
+
+    // A DenseMap iterates in hash order, so sorting is not presentation here:
+    // an unsorted list would make two runs over one unchanged header produce
+    // two different dependency fragments.
+    std::ranges::sort(sources);
+    const auto duplicates = std::ranges::unique(sources);
+    sources.erase(duplicates.begin(), duplicates.end());
+    // The main file leads, and appears once however it was reached.
+    const std::string main_file = normalized(header_path);
+    std::erase(sources, main_file);
+    sources.insert(sources.begin(), main_file);
+    return sources;
 }
 
 // The files whose declarations form one document (issue #77): the main file,
@@ -6579,6 +6632,16 @@ InterleaveResult collect_interleaved(std::string_view header_path, const ParseOp
 
 std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    header_path,
                                                             const ParseOptions& options) {
+    // A projection of the richer entry point, not a second parse and not a
+    // second implementation (see DocumentBuild in frontend.hpp): the callers
+    // that want only the document say so by calling this.
+    return build_document_with_sources(header_path, options).transform([](DocumentBuild built) {
+        return std::move(built.result);
+    });
+}
+
+std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view    header_path,
+                                                                       const ParseOptions& options) {
     namespace ir = beman::specgen::ir;
 
     ParsedHeader parsed = parse_header(header_path, options);
@@ -7001,7 +7064,7 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     built.document.foreign_namespaces   = foreign;
     built.document.foreign_declarations = foreign_decls;
     built.document.unextracted_uses     = body_uses;
-    return built;
+    return DocumentBuild{std::move(built), parse_sources(header_path, *parsed.ast)};
 }
 
 } // namespace beman::specgen::frontend

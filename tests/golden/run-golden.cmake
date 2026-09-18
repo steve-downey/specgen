@@ -1,8 +1,11 @@
 # tests/golden/run-golden.cmake                                    -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# Run one golden case, in one of three MODEs:
+# Run one golden case, in one of these MODEs:
 #   render    (default) INPUT is IR JSON; run it through `specgen render`.
+#             ALSO_INPUTS adds further `--from-ir` occurrences, and several
+#             documents with no `--split` render as one joined output — the
+#             assembled clause, in document then section order.
 #   generate  INPUT is a header; run it through `specgen generate --emit-ir`
 #             (Clang-tier only — the case registering this mode must itself be
 #             registered only where the driver is built). Always passes
@@ -28,6 +31,14 @@
 #             this mode's whole point is a byte-exact stderr comparison, which
 #             a stray "using compile flags..." diagnostic would break on any
 #             machine that happens to have a build configured.
+#   depfile   INPUT is a header; run `specgen generate --depfile` and compare
+#             the *dependency fragment* — the wording goes to a scratch file.
+#             Clang-tier only, like generate. Run from the header's own
+#             directory and with a fixed `--dep-target wording.tex`, because a
+#             fragment is nothing but paths: an absolute build path on either
+#             side of the rule would make the golden machine-specific.
+#             ALSO_INPUTS adds further headers, pinning the fragment for a whole
+#             paper — the union of what all its parses read, deduplicated.
 #   split     INPUT is IR JSON; run it through `specgen render --split`
 #             and compare the *directory* of fragments it writes, plus the
 #             manifest it prints, against a checked-in directory. ACTUAL is a
@@ -106,6 +117,30 @@ elseif(MODE STREQUAL "diagnose")
         RESULT_VARIABLE render_result
         ERROR_FILE "${ACTUAL}"
     )
+elseif(MODE STREQUAL "depfile")
+    # The dependency fragment is the artifact; the wording goes to a scratch
+    # file. Run from the header's own directory, like diagnose, and with a fixed
+    # --dep-target: a fragment is nothing but paths, so both halves of every
+    # rule have to be relative or the golden is machine-specific. The target
+    # name is what a build system would have supplied anyway.
+    cmake_path(GET INPUT PARENT_PATH input_dir)
+    cmake_path(GET INPUT FILENAME input_name)
+    set(header_args "${input_name}")
+    if(ALSO_INPUTS)
+        string(REPLACE "|" ";" _also "${ALSO_INPUTS}")
+        foreach(_input IN LISTS _also)
+            cmake_path(GET _input FILENAME _also_name)
+            list(APPEND header_args "${_also_name}")
+        endforeach()
+    endif()
+    execute_process(
+        COMMAND
+            "${SPECGEN}" generate ${header_args} -o "${ACTUAL}.tex" --dep-target
+            wording.tex --depfile "${ACTUAL}" --no-compile-commands
+        WORKING_DIRECTORY "${input_dir}"
+        RESULT_VARIABLE render_result
+        ERROR_VARIABLE render_error
+    )
 elseif(MODE STREQUAL "render")
     if(NOT BACKEND)
         set(BACKEND latex)
@@ -131,9 +166,25 @@ elseif(MODE STREQUAL "render")
         list(APPEND level_args --base-section-depth "${BASE_SECTION_DEPTH}")
     endif()
 
+    # ALSO_INPUTS arrives |-joined (a ;-list would not survive the test command
+    # line): the extra inputs become further --from-ir occurrences, and several
+    # documents with no --split render as one joined output -- the assembled
+    # clause a paper diffs against the draft. VALIDATE then also pins that the
+    # paper validates across the union of its documents' names.
+    set(input_args --from-ir "${INPUT}")
+    if(ALSO_INPUTS)
+        string(REPLACE "|" ";" _also "${ALSO_INPUTS}")
+        foreach(_input IN LISTS _also)
+            list(APPEND input_args --from-ir "${_input}")
+        endforeach()
+    endif()
+    if(VALIDATE)
+        list(APPEND input_args --validate)
+    endif()
+
     execute_process(
         COMMAND
-            "${SPECGEN}" render --from-ir "${INPUT}" --backend "${BACKEND}"
+            "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
             ${paper_args} ${level_args} -o "${ACTUAL}"
         RESULT_VARIABLE render_result
         ERROR_VARIABLE render_error

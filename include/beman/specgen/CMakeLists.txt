@@ -10,6 +10,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
                 FILES
                     config.hpp
                     conjuncts.hpp
+                    depfile.hpp
                     diagnostic.hpp
                     docblock.hpp
                     document_build.hpp
@@ -35,6 +36,7 @@ else()
                 FILES
                     config.hpp
                     conjuncts.hpp
+                    depfile.hpp
                     diagnostic.hpp
                     docblock.hpp
                     document_build.hpp

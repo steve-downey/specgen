@@ -7,6 +7,12 @@ add_executable(specgen)
 target_sources(specgen PRIVATE main.cpp)
 target_link_libraries(specgen PRIVATE beman::specgen)
 target_compile_features(specgen PRIVATE cxx_std_26)
+target_compile_definitions(
+    specgen
+    PRIVATE
+        BEMAN_SPECGEN_VERSION="${PROJECT_VERSION}"
+        BEMAN_SPECGEN_GIT_COMMIT="${BEMAN_SPECGEN_GIT_COMMIT}"
+)
 
 # The front end is unconditional: find_package(Clang) is REQUIRED at the top
 # level, so there is no build without it — `generate` is the driver's reason

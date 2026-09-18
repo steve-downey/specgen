@@ -163,12 +163,13 @@ All three produce the same wording, byte for byte; the golden suite's
 Its supported generation path is:
 
 ```text
-specgen generate <header> [--emit-ir]
+specgen generate <header>... [--emit-ir]
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
-                 [--split <dir> [--root <name>]]
+                 [--split <dir>] [--root <name>]
                  [-o <file>]
+                 [--depfile <file>] [--dep-target <name>]
                  [--compile-commands <dir> | --no-compile-commands]
                  [-- <clang arguments>...]
 ```
@@ -180,6 +181,20 @@ those options rather than ignoring them. `-o` and
 `--output` name the destination either way; otherwise output goes to standard
 output. With no header at all, `generate` parses a stock snippet as a
 front-end link probe and produces no wording.
+
+Several headers are one paper, one document each — see
+[A paper proposing several headers](#a-paper-proposing-several-headers) below.
+`--root` then repeats, pairing with them in order, and `-o` alongside `--split`
+writes both the assembled whole and the per-clause fragments. `--emit-ir` is
+the exception: the IR format holds one document per file, so it takes one
+header.
+
+`--depfile <file>` writes a Makefile dependency fragment naming what the run
+produced and every non-system file its parses read, with an empty rule per
+prerequisite so a deleted header rebuilds rather than erroring.
+`--dep-target <name>` repeats and replaces the target list, for a build whose
+real target is a stamp file or an installed copy rather than a path specgen was
+handed.
 
 Compilation arguments have this precedence:
 
@@ -228,14 +243,19 @@ specgen render --from-ir <file|-> [--from-ir <file>...]
                [--paper] [--new-root <name>]
                [--base-heading-level <n>] [--base-section-depth <n>]
                [-o|--output <file>]
-               [--split <dir> [--root <name>...]]
+               [--split <dir>] [--root <name>...]
+               [--depfile <file>] [--dep-target <name>]
 ```
 
 `--from-ir` may repeat, once per document of one paper (see
 [the multi-header section](#a-paper-proposing-several-headers) below):
 `--validate` then runs across the union of the documents' documented names,
-several inputs require `--split`, and `--root`, when given at all, repeats
-too, pairing with each `--from-ir` in order.
+and `--root`, when given at all, repeats too, pairing with each `--from-ir` in
+order. Several inputs render as one paper — joined in order into a single
+output, split into per-clause fragments, or both.
+
+`--depfile` here names the IR files the render read, which is the second edge
+of a two-stage build whose `generate --emit-ir` step wrote the first.
 
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
 the mpark/wg21 framework; `--paper` also wraps the fragment in an
@@ -247,8 +267,12 @@ manifest of written paths to standard output. File stems are stable names and
 extensions follow the backend: `.tex`, `.md`, or `.org`. Nodes outside every
 section go into a root fragment. Its name is normally the longest common dotted
 prefix of the section names; use `--root <name>` when it cannot be derived or
-must be overridden. `--root` is valid only with `--split`, and `--split` cannot
-be combined with `--output`.
+must be overridden. `--root` is valid only with `--split`.
+
+`--split` may be combined with `--output`, and then writes both views of the
+render: the fragments into the directory, and the whole — for a paper, every
+document joined in order — to the file. `--split` on its own writes only the
+fragments; the manifest, not the wording, is what goes to standard output.
 
 Splitting does not delete files left by an earlier run. Consumers should use
 the manifest, in document order, to reconcile the output directory.
@@ -335,19 +359,37 @@ are wanted.
 
 ### A paper proposing several headers
 
-specgen reads one header per `generate` run, so a paper proposing several
-headers is several specgen documents — and a name specified by one of them is
-routinely used in another's wording. Rendered one run per header,
-`--validate` would report such a name as foreign: the run that uses it never
-documents it. The paper is the unit that has to be internally consistent, so
-render it as one: `--emit-ir` each header, then give one `render` every IR
-file, repeating `--from-ir` once per header. Validation then runs across the
-union of the documents' documented names, every fragment lands in one
-`--split` directory, and one manifest carries the whole paper in order.
-`--root`, when given at all, repeats too, pairing with each `--from-ir` in
-order — and a paper's headers usually need it, since documents sharing a
-stable-name prefix would otherwise derive the same root fragment name, which
-specgen reports as a collision rather than letting one overwrite the other.
+One header is one specgen document, so a paper proposing several headers is
+several documents — and a name specified by one of them is routinely used in
+another's wording. Rendered one run per header, `--validate` would report such
+a name as foreign: the run that uses it never documents it. The paper is the
+unit that has to be internally consistent, so render it as one. Name every
+header on one `generate`:
+
+```sh
+specgen generate include/transpose/apply.hpp include/transpose/grade.hpp \
+  --root transpose.applicative.syn --root transpose.grade.syn \
+  --backend mpark --validate --paper --split papers/wording \
+  -o papers/wording/transpose.md \
+  --depfile papers/.deps/wording.d \
+  -- -std=c++2c -Iinclude
+```
+
+Validation runs across the union of the documents' documented names, every
+fragment lands in one `--split` directory, and one manifest carries the whole
+paper in order. `--root`, when given at all, repeats too, pairing with the
+headers in order — and a paper's headers usually need it, since documents
+sharing a stable-name prefix would otherwise derive the same root fragment
+name, which specgen reports as a collision rather than letting one overwrite
+the other.
+
+`-o` beside `--split` asks for both views of the render: the pieces to
+`\input`, and the whole — every document joined in order — to diff against the
+working draft. They come from one parse, and the whole is the pieces in
+manifest order, so the two cannot disagree.
+
+`render` takes a paper the same way, one `--from-ir` per document, for a build
+that keeps the IR:
 
 ```sh
 specgen render --from-ir apply.json --root transpose.applicative.syn \
@@ -356,23 +398,37 @@ specgen render --from-ir apply.json --root transpose.applicative.syn \
   > papers/wording/manifest
 ```
 
+`--emit-ir` is the one thing that stays one header at a time: the IR format
+holds one document per file.
+
 There are two common document layouts:
 
 - A library with one specification-facing header per proposed header can put
-  each header's `.syn` fence and clauses in that file, then run specgen once per
-  header into a shared staging directory. Give every run an explicit `--root`
-  so its loose synopsis nodes cannot collide.
+  each header's `.syn` fence and clauses in that file, then name every header on
+  one specgen run. Give each an explicit `--root` so their loose synopsis nodes
+  cannot collide.
 - An umbrella header can put its public component includes inside one gathered
   `.syn` region and its clause outline after the fence. specgen follows those
   includes as part of one document. This lets implementation stay split across
   normal component headers without merging source files for the generator.
 
 Committing fragments lets a paper build without the pinned LLVM toolchain and
-makes wording changes visible in review. A cheap CI staleness gate may hash the
-document roots and the headers included inside each gathered `.syn` region;
-that proves the committed output came from the current inputs. It does not
-replace regeneration plus `--validate`, which answer whether the output and
-the specification are correct.
+makes wording changes visible in review. `--depfile` is what keeps them honest:
+it writes a Makefile fragment naming what the run produced and every non-system
+file its parses read — including headers reached only through an `#include`,
+which are exactly the ones a hand-maintained prerequisite list forgets. Make a
+paper's wording a real file target with that fragment `-include`d, and editing
+a docblock rebuilds the paper while editing nothing rebuilds nothing.
+
+```make
+papers/wording/transpose.md: $(WORDING_HEADERS)
+	specgen generate $(WORDING_HEADERS) ... --depfile papers/.deps/wording.d
+
+-include papers/.deps/*.d
+```
+
+A dependency edge cannot say whether the output is *right*, only whether it is
+current; regeneration plus `--validate` is what answers that.
 
 ## Comment forms and document structure
 
@@ -732,15 +788,24 @@ and the command exits 1.
 
 - Successful `generate`, `render`, and `dump-decls` invocations exit 0.
 - Command-line usage errors and unavailable Clang-only commands exit 2.
-- `generate` exits 1 when the header cannot be read, Clang cannot build an AST,
+- `generate` exits 1 when a header cannot be read, Clang cannot build an AST,
   Clang reports a parse error, or output cannot be written. It never emits
   plausible partial wording after a C++ parse failure. Rendering without
   `--emit-ir` adds `render`'s own failures: fragment errors and, under
-  `--validate`, error-severity findings.
+  `--validate`, error-severity findings. With several headers it parses them
+  all before writing anything and stops at the first that fails, so a paper is
+  never half on disk.
 - `render` exits 1 on unreadable or invalid JSON, output failures, fragment
   errors, or error-severity validation findings.
+- A `--depfile` that cannot be written exits 1. It is written after every
+  output it names, so a run that got that far has already produced the wording.
+  `--depfile` with nothing to name as a target, and `--dep-target` without
+  `--depfile`, are usage errors and exit 2.
 - `dump-decls` is diagnostic by design: after a recoverable Clang parse error
   it warns, prints the partial interleave, and exits 0.
 
 Use `specgen --help` for the current command-line summary and
-`specgen --version` for the installed version.
+`specgen --version` for the installed version and source revision, printed as
+`specgen 0.2.0 (git <commit>)`. A source archive without Git metadata can set
+`BEMAN_SPECGEN_GIT_COMMIT` explicitly when configuring; otherwise the revision
+is reported as `unknown`.
