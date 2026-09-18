@@ -1,0 +1,10 @@
+\begin{codeblock}
+template<class T>
+class @\libglobal{mixer}@ {
+public:
+  // \ref{paper.mix}, mixing
+  int mix(tag_t, const T& part) const
+    requires requires { tag; } && (!@\exposidnc{is-void-v}@<T>) && (alpha_policy<T> == 0) &&
+             requires(const blend_policy& policy) { policy.strength(); };
+};
+\end{codeblock}

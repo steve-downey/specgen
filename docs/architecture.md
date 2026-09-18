@@ -90,6 +90,28 @@ share one back half, so single-pass wording equals two-pass wording byte for byt
 `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
 
+### 2.1 A paper is the unit of an invocation
+
+The unit either rendering command takes is a *paper*, not a document: `generate` accepts
+several headers and `render` several `--from-ir` inputs, one document each, in clause order
+([paper-is-the-invocation](decisions/paper-is-the-invocation.md)). Validation then runs across
+the union of their documented names, so a name specified by a sibling document is not foreign,
+and an error in any one aborts the render of all of them — the thing that has to be internally
+consistent is the paper.
+
+A paper's wording comes out in either or both of two views. `-o` writes the whole: the
+documents rendered in order and joined by a blank line, which is the assembled clause a paper
+diffs against the working draft. `--split` writes the pieces, one file per top-level section
+across every document, under one manifest. Asking for both is one parse, and the whole is by
+construction the pieces in manifest order with the fragment boundaries left out
+(`golden.paper_whole.is_fragments` pins it) — so a paper that `\input`s fragments and one that
+includes the assembled clause cannot disagree.
+
+`--depfile <path>` then writes a Makefile dependency fragment
+([depfile-emission](decisions/depfile-emission.md)) naming what the run produced and every
+non-system file its parses read, so a build can rebuild wording when a header moves rather
+than leaving a paper silently stale.
+
 ## 3. Front end (Clang)
 
 ### 3.1 Tool setup
@@ -1056,8 +1078,13 @@ The build assembles the tool from these components, each following the shared CM
   `format_and_recover` (the §3.6 sentinel pipeline), `draft_format_style()`.
 - **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
   single-pass render), `render` (`--from-ir`), the wording options both share
-  (`--backend`, `--validate`, `--split`/`--root`, `--paper`) in `emit_wording`, and
+  (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`)
+  in `emit_wording` for one document and `emit_paper` for several (§2.1), and
   `dump-decls`.
+- **Dependency fragment** — `depfile.hpp`/`.cpp`. Make escaping, the one-rule target list
+  and the `-MP` block. Tier A and clang-free: *which* files a parse read is the front end's
+  answer (`frontend::DocumentBuild::sources`) and which were written is the driver's, but
+  the formatting is neither.
 - **Golden harness** — `tests/golden/`, `tests/golden/run-golden.cmake`,
   `tests/golden/run-single-pass.cmake`. The §10 modes: render (per backend), validate,
   generate (with `.roundtrip`/`.validate`/`.singlepass` siblings), diagnose, split.

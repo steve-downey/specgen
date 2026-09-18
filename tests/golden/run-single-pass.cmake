@@ -15,6 +15,12 @@
 # maintain: the two-pass side is regenerated from the golden IR on every run,
 # which is itself pinned by golden.<case>.
 #
+# HEADER and IR are |-joined lists (a ;-list would not survive the test command
+# line), so the same gate covers a whole paper: several headers to one
+# `generate` against several `--from-ir` to one `render`, each list in the same
+# order. A one-header case passes one value and splits to a one-element list,
+# which is the invocation it always was.
+#
 # HEADER, IR and ACTUAL are required; EXTRA_ARGS (space-separated, appended
 # after a `--`) and COMPILE_COMMANDS_DIR are the same two opt-ins
 # specgen_add_golden documents for the generate mode, passed through so a case
@@ -32,8 +38,16 @@ if(NOT SPECGEN OR NOT HEADER OR NOT IR OR NOT ACTUAL)
     )
 endif()
 
+string(REPLACE "|" ";" _headers "${HEADER}")
+string(REPLACE "|" ";" _irs "${IR}")
+
+set(render_args render)
+foreach(_ir IN LISTS _irs)
+    list(APPEND render_args --from-ir "${_ir}")
+endforeach()
+
 execute_process(
-    COMMAND "${SPECGEN}" render --from-ir "${IR}" -o "${ACTUAL}.two-pass"
+    COMMAND "${SPECGEN}" ${render_args} -o "${ACTUAL}.two-pass"
     RESULT_VARIABLE two_pass_result
     ERROR_VARIABLE two_pass_error
 )
@@ -46,7 +60,7 @@ endif()
 
 set(generate_args
     generate
-    "${HEADER}"
+    ${_headers}
     -o
     "${ACTUAL}.one-pass"
     --no-compile-commands

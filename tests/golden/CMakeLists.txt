@@ -100,13 +100,22 @@ endif()
 # extension as well as the expected directory) and ROOT, if given, is passed
 # through as `--root`. Needs no Clang, like render.
 #
-# ALSO_FROM_IR (split mode only, multi-valued): further IR JSON inputs,
-# passed as additional `--from-ir` occurrences — the several documents of one
-# paper (issue #109) splitting into one directory under one manifest. ROOT
-# may then be multi-valued too, one per input in the same order, since
-# `--root` pairs with `--from-ir`. VALIDATE (an option) adds `--validate`,
-# so the case also pins that the paper validates across the union of its
-# documents' names: a finding at error severity would fail the run.
+# MODE depfile: INPUT is a header, run through `specgen generate` with
+# `--depfile`, and the *dependency fragment* is what gets compared. Clang-tier
+# only, like generate. Run from the header's own directory and with a fixed
+# `--dep-target`, so every path in the compared bytes is relative: a fragment
+# is nothing but paths, and an absolute build path in one would make the golden
+# machine-specific. ALSO_INPUT adds further headers, so a paper's fragment —
+# the union of what all its parses read — is pinned too.
+#
+# ALSO_INPUT (multi-valued; split, render and depfile modes): further inputs of
+# whatever kind the mode reads — IR JSON for split and render, headers for
+# depfile. The several documents of one paper (issue #109), rendered into one
+# directory under one manifest, joined into one output, or read for one
+# dependency fragment. ROOT may then be multi-valued too, one per input in the
+# same order, since `--root` pairs with the inputs. VALIDATE (an option) adds
+# `--validate`, so the case also pins that the paper validates across the union
+# of its documents' names: a finding at error severity would fail the run.
 function(specgen_add_golden case)
     set(one_value_args
         INPUT
@@ -119,15 +128,15 @@ function(specgen_add_golden case)
         COMPILE_COMMANDS_DIR
         EXPECTED_DIR
     )
-    # ROOT is multi-valued because --root pairs with --from-ir: a paper case
-    # names one root per input, in order. ALSO_FROM_IR carries the further
+    # ROOT is multi-valued because --root pairs with the inputs: a paper case
+    # names one root per input, in order. ALSO_INPUT carries the further
     # inputs. Both are |-joined below — a ;-list would not survive the test
     # command line, the same trap tests/tidy's harness records.
     cmake_parse_arguments(
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_FROM_IR"
+        "ROOT;ALSO_INPUT"
         ${ARGN}
     )
 
@@ -159,6 +168,9 @@ function(specgen_add_golden case)
     elseif(ARG_MODE STREQUAL "diagnose" OR ARG_MODE STREQUAL "validate")
         set(expected "${case_dir}/expected.diag")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.diag")
+    elseif(ARG_MODE STREQUAL "depfile")
+        set(expected "${case_dir}/expected.d")
+        set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.d")
     elseif(ARG_BACKEND STREQUAL "mpark")
         set(expected "${case_dir}/expected.md")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.md")
@@ -190,8 +202,8 @@ function(specgen_add_golden case)
         list(APPEND case_args "-DROOT=${_root_joined}")
         unset(_root_joined)
     endif()
-    if(ARG_ALSO_FROM_IR)
-        string(REPLACE ";" "|" _also_joined "${ARG_ALSO_FROM_IR}")
+    if(ARG_ALSO_INPUT)
+        string(REPLACE ";" "|" _also_joined "${ARG_ALSO_INPUT}")
         list(APPEND case_args "-DALSO_INPUTS=${_also_joined}")
         unset(_also_joined)
     endif()
@@ -1045,6 +1057,40 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_main.hpp"
 )
 
+# What one `generate` over the whole paper reads. Both headers plus the
+# support/ header spec_paper_sibling.hpp includes -- which neither names on the
+# command line and which no rendered wording mentions, and which is exactly
+# the edge a build needs: a docblock in it changes the generated clause, so a
+# paper that did not depend on it would go stale silently.
+#
+# It also pins the deduplication, which is not cosmetic here:
+# spec_paper_main.hpp `#include`s spec_paper_sibling.hpp, so the sibling is both
+# a header named on the command line and one reached through an include, and
+# the two routes spell it differently before normalization.
+specgen_add_golden(
+    paper_depfile
+    MODE depfile
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_main.hpp"
+    ALSO_INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_sibling.hpp"
+)
+
+# The `.singlepass` invariant for a whole paper: one `generate` over both
+# headers must produce the bytes one `render` over both documents' IR does.
+# Registered by hand rather than as a sibling because a paper is not one case's
+# header -- it is these two together, in this order -- but it is the same gate
+# and the same script, so the two routes cannot drift apart for a paper any
+# more than they can for a document. The IR on the two-pass side is what
+# golden.paper_main and golden.paper_sibling already pin.
+add_test(
+    NAME golden.paper.singlepass
+    COMMAND
+        ${CMAKE_COMMAND} "-DSPECGEN=$<TARGET_FILE:specgen>"
+        "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_main.hpp|${PROJECT_SOURCE_DIR}/tests/corpus/spec_paper_sibling.hpp"
+        "-DIR=${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json|${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
+        "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/paper.singlepass" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-single-pass.cmake"
+)
+
 # The bare-name half asked about a spelling this run declares (issue #93,
 # decision shared-spelling-foreign-name): a documented enumerator and a
 # generated lookup table in support/spec_shared_spelling_tables.hpp share a
@@ -1599,7 +1645,34 @@ specgen_add_golden(
     BACKEND latex
     ROOT paper.mix.syn paper.blend.syn
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json"
-    ALSO_FROM_IR "${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
+    ALSO_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
+)
+
+# The same paper, unsplit: the documents joined in order into one output. This
+# is the assembled clause a paper diffs against the draft, and pinning it beside
+# `paper_union` is what says the two views are the same wording -- the join is
+# the split's own order with the fragment boundaries left out, not a second
+# arrangement that could drift from it. No --root: nothing is being named,
+# because nothing is being split.
+specgen_add_golden(
+    paper_whole
+    VALIDATE
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json"
+    ALSO_INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
+)
+
+# And the relationship between the two cases above, which neither of their
+# expected files can state: the whole is the fragments joined, in manifest
+# order. Needs no Clang, like the two it stands between.
+add_test(
+    NAME golden.paper_whole.is_fragments
+    COMMAND
+        ${CMAKE_COMMAND} "-DSPECGEN=$<TARGET_FILE:specgen>"
+        "-DINPUTS=${CMAKE_CURRENT_SOURCE_DIR}/paper_main/expected.json|${CMAKE_CURRENT_SOURCE_DIR}/paper_sibling/expected.json"
+        "-DROOTS=paper.mix.syn|paper.blend.syn"
+        "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/paper_whole.is_fragments" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-whole-is-fragments.cmake"
 )
 
 # `spec_gathered_class_at.hpp`'s standing finding, read off its own generate

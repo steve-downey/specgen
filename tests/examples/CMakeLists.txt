@@ -119,6 +119,25 @@ foreach(backend latex mpark org)
     )
 endforeach()
 
+# The paper captures. The fragments are the same four the paper_union golden
+# pins -- one invocation over two headers reaches the bytes two `--emit-ir`
+# runs and one `render` do, which golden.paper.singlepass is what says -- and
+# the assembled clause is paper_whole's. The dependency fragment has no golden
+# twin: the depfile golden runs from the corpus directory and names its target
+# `wording.tex`, while this one runs from a project-shaped scratch tree, so the
+# two are the same tool answering about two different layouts. The rerun case
+# below is what checks it.
+specgen_add_example_tree(
+    paper_fragments
+    CAPTURED 55-paper/wording
+    GOLDEN paper_union/expected.latex
+)
+specgen_add_example_parity(
+    paper_whole
+    CAPTURED 55-paper/expected.tex
+    GOLDEN paper_whole/expected.tex
+)
+
 specgen_add_example_parity(
     validate_coverage
     CAPTURED 60-validate/coverage.diag
@@ -164,6 +183,7 @@ specgen_add_example_rerun(20-widget-ir)
 specgen_add_example_rerun(30-render-backends)
 specgen_add_example_rerun(40-paper-mode)
 specgen_add_example_rerun(50-fragments)
+specgen_add_example_rerun(55-paper)
 specgen_add_example_rerun(60-validate)
 specgen_add_example_rerun(65-diagnostics)
 specgen_add_example_rerun(70-include-path)

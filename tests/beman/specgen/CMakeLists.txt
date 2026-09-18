@@ -12,6 +12,7 @@ foreach(
     docblock
     lower
     conjuncts
+    depfile
     document_build
     fragments
 )
