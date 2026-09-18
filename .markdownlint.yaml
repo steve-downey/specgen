@@ -9,3 +9,9 @@ MD033: false
 MD013:
   line_length: 119
   code_blocks: false
+
+# MD010/no-hard-tabs : Hard tabs : https://github.com/DavidAnson/markdownlint/blob/v0.35.0/doc/md010.md
+# Make recipes require a leading hard tab.
+MD010:
+  ignore_code_languages:
+    - make
