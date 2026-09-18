@@ -27,7 +27,11 @@ an API the front end calls, breaking the build the day it lands. Pass
 `Clang_DIR` whose version does not match the request is **rejected** rather than
 used, so moving to a new LLVM is one deliberate flag
 (`-DBEMAN_SPECGEN_LLVM_VERSION=<version>`) and never an accident of what happens to
-be installed. See [decisions/llvm-toolchain-pin.md](decisions/llvm-toolchain-pin.md).
+be installed. The pin is per build tree: it is a cache variable, so a tree
+configured before the default moved keeps the old value and the old `find_*`
+answers with it. After the pin moves, start a fresh build directory rather than
+reconfiguring the old one (the Makefile refuses to, see below).
+See [decisions/llvm-toolchain-pin.md](decisions/llvm-toolchain-pin.md).
 
 ## The preset lane
 
@@ -39,7 +43,7 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-That run reports **939 tests**. The count goes stale the moment a ctest case is
+That run reports **940 tests**. The count goes stale the moment a ctest case is
 added; whoever adds one updates this number here in the same change.
 
 The full preset list is `{gcc, llvm, appleclang, msvc}` × `{debug, release}`;
@@ -62,6 +66,16 @@ reports the same test count the preset lane does.
 
 - `CONFIG` defaults to **`Asan`**, so a bare `make` or `make test` builds and tests
   under AddressSanitizer.
+- `make ctest` runs the tests without building, but it regenerates first
+  (`make regenerate`, a no-op when nothing is stale), so a test whose command line
+  moved in a `CMakeLists.txt` runs as now registered rather than as last generated.
+  It still runs against whatever was last built; `make test` builds first.
+- A build tree is configured against one LLVM and **cannot change it in place**:
+  `find_package` and `find_program` keep their cached answers, so reconfiguring
+  with a new `Clang_DIR` would mix two toolchains. Every building or testing
+  target first checks the tree's cached `Clang_DIR` against the `CLANG_DIR` the
+  Makefile would pass, and stops naming the fix when they differ: `make realclean`
+  (with the same `TOOLCHAIN=`, if any), then build again.
 - `make release` builds `RelWithDebInfo` and `make install-release` installs it;
   `RELEASE_CONFIG` overrides the configuration. A sanitizer build is the wrong thing
   to install: the sanitizer writes to stderr, which corrupts byte-compared captured
@@ -90,7 +104,11 @@ preset, the one the lint runs from. It needs the pinned LLVM's `clang-tidy`
 and the clang-tools-extra headers; configure's
 `beman.specgen: clang-tidy plugin toolchain` STATUS line says whether the
 probe found them, and without them the case fails naming the missing piece
-rather than going silently green. Budget ~45 s per run; `ctest -R style`
+rather than going silently green. The pass re-parses with clang against a
+scrubbed copy of the compile database: instrumentation flags, `-Werror`, and
+the GCC module-scanning flags are removed, and a multi-config database (the
+Makefile lane) is reduced to one entry per file, so the gate gives one answer
+per lane and parses each TU once. Budget ~45 s per run; `ctest -R style`
 selects it, and `ctest -R tidy.` runs the check's own probe battery.
 
 Two pre-commit gotchas:
