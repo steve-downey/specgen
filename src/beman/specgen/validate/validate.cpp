@@ -1076,6 +1076,42 @@ Diagnostics check_drift_pair(const ir::DescriptionElement& derived, const ir::De
         diagnostics_monoid);
 }
 
+// One derived element (design §5.2): for every derived conjunct that its own
+// paired authored element neither duplicates nor contradicts, look for a
+// comparable reading anywhere else in the item's wording before flagging it
+// -- the paper sometimes documents an overload-discriminating conjunct in a
+// sibling \remarks instead of repeating it in \constraints, and that pattern
+// must stay silent. Only a conjunct with no comparable reading anywhere in
+// the item is a real coverage gap.
+Diagnostics check_missing_pair(const ir::DescriptionElement&              derived,
+                               const std::vector<ir::DescriptionElement>& all_elements) {
+    const std::string kind_name = std::string(ir::element_name(derived.kind));
+
+    const std::vector<const ir::Paragraph*> item_paragraphs =
+        all_elements | std::views::transform(element_paragraphs) | std::views::join | std::ranges::to<std::vector>();
+
+    return foundation::mconcat_map(
+        derived.conjuncts,
+        [&](const ir::Paragraph& conjunct_paragraph) -> Diagnostics {
+            const std::optional<Conjunct> conjunct = read_conjunct(conjunct_paragraph);
+            if (!conjunct || conjunct->polarity == ConjunctPolarity::Unknown)
+                return {};
+
+            const bool covered = std::ranges::any_of(item_paragraphs, [&](const ir::Paragraph* p) {
+                const auto reading = find_subject(*p, conjunct->subject);
+                return reading.has_value() && *reading != ConjunctPolarity::Unknown;
+            });
+            if (covered)
+                return {};
+
+            return {{Severity::Warning,
+                     kind_name,
+                     "the derived `" + conjunct->subject + "` conjunct has no authored " + kind_name +
+                         " counterpart anywhere in the description"}};
+        },
+        diagnostics_monoid);
+}
+
 // The front end keeps suppressed derived conjuncts on the authored element
 // itself, so compare that element's rendered prose with its own validator-only
 // evidence. The grouped authored/derived form remains readable for hand-built
@@ -1092,14 +1128,16 @@ Diagnostics check_mandates_constraints_drift(const std::vector<ir::DescriptionEl
 
     return foundation::mconcat_map(
         groups,
-        [](const std::vector<ir::DescriptionElement>& group) -> Diagnostics {
+        [&elements](const std::vector<ir::DescriptionElement>& group) -> Diagnostics {
             const auto derived_it  = std::ranges::find_if(group, [](const auto& e) { return e.derived; });
             const auto authored_it = std::ranges::find_if(group, [](const auto& e) { return !e.derived; });
             if (authored_it != group.end() && !authored_it->conjuncts.empty())
-                return check_drift_pair(*authored_it, *authored_it);
+                return diagnostics_monoid.combine(check_drift_pair(*authored_it, *authored_it),
+                                                  check_missing_pair(*authored_it, elements));
             if (derived_it == group.end() || authored_it == group.end())
                 return {};
-            return check_drift_pair(*derived_it, *authored_it);
+            return diagnostics_monoid.combine(check_drift_pair(*derived_it, *authored_it),
+                                              check_missing_pair(*derived_it, elements));
         },
         diagnostics_monoid);
 }

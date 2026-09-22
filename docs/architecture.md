@@ -939,6 +939,12 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    §5.4.
 4. **Mandates/Constraints drift** (Warning): authored prose vs. the suppressed derivation's
    conjuncts (§5.2), located at the specific assert, firing on duplication or contradiction.
+   The reverse direction is checked too: a derived conjunct with no comparable reading
+   anywhere in the item's wording — not just its paired element, so a conjunct legitimately
+   documented in a sibling element (e.g. `\remarks` instead of `\constraints`) stays silent —
+   warns that it has no authored counterpart. A miss on either direction costs nothing; an
+   authored `\constraints` that is a strict textual subset of the real `requires`-clause used
+   to validate clean, which this closes.
 5. **Ordering lint** (Note): authored element order vs. canonical. This rule lives in the
    docblock grammar itself (§4); the pipeline's job is to carry the grammar's diagnostics out
    to the driver rather than compute anything new.

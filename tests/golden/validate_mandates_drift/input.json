@@ -10,14 +10,24 @@
     "conjunct (`copyable<T>` is `true`) contradicted by authored prose",
     "reading `false` -- the contradict case.",
     "",
-    "Three negative controls, which must stay silent alongside those two:",
-    "`gadget`'s destructor is a derived Mandates element with no authored",
-    "twin at all; `widget`'s second constructor is an authored Constraints",
-    "element that names a different subject than its derived twin; and",
-    "`gadget`'s own roster carries one genuinely undocumented member",
-    "(`scratch`), included so this fixture has an Error-severity finding --",
-    "run-golden.cmake's MODE validate requires exit code 1, and the drift",
-    "check alone never produces one (design §5.2: \"validator warns\").",
+    "`widget`'s second constructor is an authored Constraints element that",
+    "names a different subject than its derived twin -- since that authored",
+    "text never mentions the derived conjunct's subject anywhere in the",
+    "item, this is now the missing-counterpart case (design §5.2's reverse",
+    "direction), not a silent negative control.",
+    "",
+    "`widget`'s third constructor is the legitimate reason that case can be",
+    "silent instead: its derived Constraints conjunct is omitted from the",
+    "authored `\\constraints` but stated in a sibling `\\remarks`, and the",
+    "missing-counterpart check searches the whole item, not just the paired",
+    "element, so it stays silent.",
+    "",
+    "Two negative controls remain silent: `gadget`'s destructor is a",
+    "derived Mandates element with no authored twin at all, and `gadget`'s",
+    "own roster carries one genuinely undocumented member (`scratch`),",
+    "included so this fixture has an Error-severity finding -- run-golden",
+    ".cmake's MODE validate requires exit code 1, and the drift check alone",
+    "never produces one (design §5.2: \"validator warns\").",
     "",
     "The `conjuncts` field on each authored replacement is the suppressed",
     "derivation's pre-join list (frontend.cpp); it is",
@@ -154,6 +164,46 @@
                     { "t": "code", "code": { "text": "copyable<T>", "spans": [] } },
                     { "t": "text", "text": " is " },
                     { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "type": "item",
+          "decl": {
+            "signatures": [{ "text": "template<class E> widget(E&&);", "spans": [] }],
+            "index": []
+          },
+          "descr": {
+            "elements": [
+              {
+                "kind": "constraints",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "is_constructible_v<T, E>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": "." }
+                  ]
+                ],
+                "conjuncts": [
+                  [
+                    { "t": "code", "code": { "text": "is_reference_v<E>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } }
+                  ]
+                ]
+              },
+              {
+                "kind": "remarks",
+                "paragraphs": [
+                  [
+                    { "t": "code", "code": { "text": "is_reference_v<E>", "spans": [] } },
+                    { "t": "text", "text": " is " },
+                    { "t": "code", "code": { "text": "true", "spans": [] } },
+                    { "t": "text", "text": " for this overload to be viable." }
                   ]
                 ]
               }

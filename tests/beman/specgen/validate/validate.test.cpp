@@ -1124,7 +1124,9 @@ TEST_CASE("validate - drift comparison reads authored flat table cells") {
     CHECK(diags.front().message.find("duplicates") != std::string::npos);
 }
 
-TEST_CASE("validate - authored prose not mentioning the derived subject is silent") {
+TEST_CASE("validate - a derived conjunct absent from unrelated authored prose warns it has no authored counterpart") {
+    // This is the reference-E converting-constructor bug: authored prose that
+    // never mentions the derived subject at all used to validate clean.
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
@@ -1134,7 +1136,56 @@ TEST_CASE("validate - authored prose not mentioning the derived subject is silen
     item.decl.signatures.push_back({"gadget(const gadget&);", {}});
     item.descr.elements = {authored};
 
+    const Diagnostics diags = validate(ir::Node{item});
+    REQUIRE(diags.size() == 1);
+    CHECK(diags.front().severity == Severity::Warning);
+    CHECK(diags.front().context == "mandates");
+    CHECK(diags.front().message.find("has no authored") != std::string::npos);
+    CHECK(diags.front().message.find("`is_copy_constructible_v<int>`") != std::string::npos);
+}
+
+TEST_CASE("validate - a derived conjunct documented only in a sibling Remarks element is not flagged missing") {
+    // The paper sometimes documents an overload-discriminating conjunct in a
+    // sibling \remarks instead of repeating it in \constraints/\mandates --
+    // the missing-counterpart search must look at the whole item, not just
+    // the paired element, or this legitimate pattern becomes a false positive.
+    ir::DescriptionElement authored;
+    authored.kind      = ir::ElementKind::Mandates;
+    authored.conjuncts = {conjunct_paragraph("is_reference_v<E>", "true")};
+    authored.paragraphs.push_back({ir::TextInline{"Some unrelated authored condition."}});
+
+    ir::DescriptionElement remarks;
+    remarks.kind = ir::ElementKind::Remarks;
+    remarks.paragraphs.push_back(authored_paragraph("is_reference_v<E>", "true"));
+
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"gadget(const gadget&);", {}});
+    item.descr.elements = {authored, remarks};
+
     CHECK(validate(ir::Node{item}).empty());
+}
+
+TEST_CASE("validate - one documented and one undocumented conjunct in the same requires-clause both get flagged") {
+    // Two-conjunct requires-clause where only the first is echoed in prose:
+    // the duplicate check fires for the first, the missing-counterpart check
+    // fires for the second -- exactly the shape of the bug this guards.
+    ir::DescriptionElement authored;
+    authored.kind      = ir::ElementKind::Constraints;
+    authored.conjuncts = {conjunct_paragraph("is_constructible_v<T, U>", "true"),
+                          conjunct_paragraph("is_same_v<U, int>", "false")};
+    authored.paragraphs.push_back(authored_paragraph("is_constructible_v<T, U>", "true"));
+
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class U> void put(U&&);", {}});
+    item.descr.elements = {authored};
+
+    const Diagnostics diags = validate(ir::Node{item});
+    REQUIRE(diags.size() == 2);
+    CHECK(std::ranges::any_of(diags, [](const auto& d) { return d.message.find("duplicates") != std::string::npos; }));
+    CHECK(std::ranges::any_of(diags, [](const auto& d) {
+        return d.message.find("has no authored") != std::string::npos &&
+               d.message.find("`is_same_v<U, int>`") != std::string::npos;
+    }));
 }
 
 TEST_CASE("validate - a derived element with no authored twin is silent") {
