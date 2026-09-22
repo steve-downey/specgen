@@ -4644,8 +4644,14 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // (design §6, cf. tuple's defaulted copy constructor, whose itemdecl
         // exists because a Mandates and an Effects apply to it) — or an explicit
         // `\describe`. Otherwise it stays a synopsis-only declaration. The
-        // `= default`/`= delete` tail is kept verbatim in the itemdecl.
-        if (is_defaulted_or_deleted && attached.item.descr.elements.empty() && !attached.directives.describe)
+        // `= default`/`= delete` tail is kept verbatim in the itemdecl. A
+        // derive_constraints/derive_mandates element doesn't count: it restates
+        // the declaration's own constraint rather than adding something to
+        // specify, and on a deleted overload a standalone item for it is
+        // actively misleading (issue #121).
+        const bool has_authored_element =
+            std::ranges::any_of(attached.item.descr.elements, [](const auto& element) { return !element.derived; });
+        if (is_defaulted_or_deleted && !has_authored_element && !attached.directives.describe)
             continue;
         // `\omit`/`\merge`: no itemdescr (the synopsis line is dropped by the
         // omit-set pre-pass).

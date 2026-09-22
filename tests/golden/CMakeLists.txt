@@ -985,6 +985,18 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_spelling.hpp"
 )
 
+# A derived Constraints element is not "something to specify" for the
+# in-class collection gate (issue #121): a `= delete`d member with no
+# authored description element must stay synopsis-only even though
+# `derive_constraints` (issue #120's head-clause support) fills its
+# `elements` with a derived paragraph. `\describe` and an authored element
+# still earn an itemdecl, unaffected.
+specgen_add_golden(
+    deleted_derived_constraints
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_derived_constraints.hpp"
+)
+
 # Exposition-only members (design §3.5/§4.3) — `\expos` and
 # `\expos(name)` data members render with an `\exposid` span (via the §3.6
 # sentinel pipeline) and a `// exposition only` comment in the synopsis.
