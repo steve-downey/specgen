@@ -540,8 +540,15 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 
 ### 5.1 Constraints
 
-- Source: the decl's **Sema-normalized associated constraints** (captures trailing
-  requires, constrained template params, abbreviated forms uniformly).
+- Source: the decl's own **requires-clauses**, both positions — the one on its
+  template parameter list and the trailing one — conjoined in
+  [temp.constr.decl]/3 order. The two spellings are equivalent C++, so which one
+  the author picks must not decide whether the spec is derived or retyped.
+  A *constrained template parameter* (`template <integral T>`) and its
+  abbreviated `auto` form are deliberately **not** a source: the draft shows
+  those in the declaration rather than restating them as prose. Sema
+  normalization is not used — it discards the written spellings the conjunct
+  rewriter reads back.
 - Phrasing rewriter over top-level `&&` conjuncts:
   - bool trait/variable → "`X` is `true`"
   - negation → "`X` is `false`"
@@ -549,8 +556,9 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   - unrecognized → verbatim "`expr` is `true`"
   - **no flattening through disjunctions**: `A && (B || C)` yields two conjuncts,
     the second verbatim.
-- Default: requires-clause is removed from the itemdecl and rendered as a
-  *Constraints:* paragraph. `\constraints-in-decl` overrides per decl.
+- Default: the requires-clause is removed from the itemdecl and rendered as a
+  *Constraints:* paragraph — a trailing clause by truncation, a template-head
+  clause by excision. `\constraints-in-decl` overrides per decl, for either.
 - `detail::` concepts in constraints trip the leakage checker; fixits: replace
   the derived paragraph with authored `\constraints` prose, or mark that
   namespace-scope concept `\expos` so resolved uses become `\exposid` spans.
