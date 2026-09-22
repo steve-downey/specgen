@@ -2055,6 +2055,26 @@ const clang::TemplateParameterList* head_parameters(const clang::Decl* head_decl
     return tmpl != nullptr ? tmpl->getTemplateParameters() : nullptr;
 }
 
+// A function template's *own* head parameter list -- the one whose
+// requires-clause constrains this function. Null for a non-template function,
+// and for a non-template member of a class template: the enclosing class's
+// clause constrains the class, not the member ([temp.constr.decl]/3 lists only
+// the declaration's own template-parameter-list and trailing clause). For a
+// member template it is the innermost list, the `template <class U>` the
+// out-of-line definition writes under the class's own head.
+const clang::TemplateParameterList* function_head_parameters(const clang::FunctionDecl* fn) {
+    const clang::FunctionTemplateDecl* described = fn->getDescribedFunctionTemplate();
+    return described != nullptr ? described->getTemplateParameters() : nullptr;
+}
+
+// The requires-clause written after that list, as opposed to the trailing one
+// written after the declarator. The two positions are equivalent C++ and both
+// feed design §5.1 (issue #119).
+const clang::Expr* head_requires_clause(const clang::FunctionDecl* fn) {
+    const clang::TemplateParameterList* params = function_head_parameters(fn);
+    return params != nullptr ? params->getRequiresClause() : nullptr;
+}
+
 beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*                      record,
                                               const clang::SourceManager&                      sm,
                                               const clang::LangOptions&                        lang_opts,
@@ -2913,13 +2933,16 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
 // does if it ever shows up, rather than emitting a definition as an itemdecl.
 //
 // `strip_requires_clause` is the default (design §5.1: "requires-clause
-// is removed from the itemdecl"): when `in_class` carries a trailing
-// requires-clause, truncate the text at its own `getBeginLoc()` (the in-class
+// is removed from the itemdecl"), and covers both positions a clause can be
+// written in, since they are equivalent C++ (issue #119). A *trailing* clause
+// is a truncation: cut the text at its own `getBeginLoc()` (the in-class
 // decl's clause, since the itemdecl text is the in-class decl's own text —
 // though per C++ it must match the out-of-line definition's), right-trim, and
-// drop a trailing bare `requires` token left behind by the cut. Callers pass
-// false for a `\constraints-in-decl` declaration, which keeps the clause
-// verbatim instead of deriving a Constraints element from it.
+// drop a trailing bare `requires` token left behind by the cut. A clause on
+// the template parameter list is an excision instead, since it sits between
+// the head and the declarator; that one is a dominant SynopsisEdit below.
+// Callers pass false for a `\constraints-in-decl` declaration, which keeps
+// either clause verbatim instead of deriving a Constraints element from it.
 //
 // `friend_begin` is the enclosing FriendDecl's begin location for a
 // hidden friend: the `friend` keyword belongs to the FriendDecl, not the inner
@@ -3031,6 +3054,25 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
         if (use.qualifier_end > use.qualifier_begin)
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
     }
+    // The head requires-clause (design §5.1, issue #119): an interior excision,
+    // not the tail truncation above. Delete from just past the parameter list's
+    // `>` through the end of the clause, so the `requires` keyword and the
+    // whitespace before it go with it and no token scan is needed. Dominant,
+    // because a qualifier or exposition-only edit that landed inside the clause
+    // sorts ahead of this one and would otherwise trip the descending
+    // applier's overlap watermark, suppressing the deletion entirely.
+    if (strip_requires_clause) {
+        if (const clang::Expr* head_clause = head_requires_clause(in_class)) {
+            const clang::SourceLocation rangle = function_head_parameters(in_class)->getRAngleLoc();
+            const unsigned              clause_begin =
+                sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(rangle, 0, sm, lang_opts)).second;
+            const unsigned clause_end =
+                sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(head_clause->getEndLoc(), 0, sm, lang_opts))
+                    .second;
+            if (clause_begin >= decl_begin && clause_end > clause_begin)
+                add_dominant_edit(edits, SynopsisEdit{clause_begin, clause_end, " "});
+        }
+    }
     if (seebelow_edit)
         add_dominant_edit(edits, std::move(*seebelow_edit));
 
@@ -3135,10 +3177,18 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
 
 // --- Constraints derivation (design §5.1) -----------------------------------
 // [structure.specifications] read backwards: Constraints = removed from
-// overload resolution = the trailing requires-clause. Source is the trailing
-// requires-clause only (the Beman convention); Sema-normalized associated
-// constraints (constrained template params, abbreviated `auto`) are a
-// refinement this tier does not attempt.
+// overload resolution = the declaration's requires-clauses. Source is both
+// positions a clause can be written in -- on the template parameter list and
+// trailing the declarator -- conjoined in [temp.constr.decl]/3 order. They are
+// equivalent C++, so which one the author picks must not decide whether the
+// spec is derived or retyped by hand (issue #119).
+//
+// A *constrained template parameter* (`template <integral T>`) and its
+// abbreviated `auto` spelling are deliberately not a source: the draft shows
+// those in the declaration rather than restating them as prose, so turning
+// them into a Constraints element would diverge from the wording being
+// generated. Sema normalization is also the wrong instrument for any of this,
+// since it discards the written spellings expr_code_rewritten reads back.
 
 // Flatten `e`'s top-level `&&` conjuncts into `out`, in source order. Only
 // `&&` is flattened — a `||` at the top level is left as a single leaf
@@ -3210,6 +3260,28 @@ llvm::StringRef expr_text(const clang::Expr* e, const clang::SourceManager& sm, 
     return clang::Lexer::getSourceText(clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts);
 }
 
+// Fold a formatted fragment onto one line. A conjunct is inline code inside a
+// sentence, so it has to be one: org's `~…~` does not span two newlines, and a
+// markdown span that does is one blank line from breaking. clang-format keeps
+// the author's line breaks here (ColumnLimit 0, above) and a multi-line
+// requires-expression is an ordinary way to write one, so fold them out.
+// Only a whitespace run containing a newline folds, which leaves the spacing
+// inside a string literal as written. This runs before recover_sentinels,
+// whose span offsets must be the folded text's; a sentinel is an identifier
+// with no whitespace in it, so folding cannot reach inside one.
+std::string fold_lines(std::string_view text) {
+    // The whitespace set the trims elsewhere in this file use.
+    static constexpr std::string_view whitespace = " \t\n\v\f\r";
+    return text |
+           std::views::chunk_by([](char a, char b) { return whitespace.contains(a) && whitespace.contains(b); }) |
+           std::views::transform([](auto run) {
+               return std::ranges::any_of(run, [](char c) { return c == '\n' || c == '\r'; })
+                          ? std::string(" ")
+                          : run | std::ranges::to<std::string>();
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
 beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*                               e,
                                                  const clang::SourceManager&                      sm,
                                                  const clang::LangOptions&                        lang_opts,
@@ -3243,7 +3315,7 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
         text.replace(edit.begin - text_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return recover_sentinels(format_expr_fragment(text), sentinels);
+    return recover_sentinels(fold_lines(format_expr_fragment(text)), sentinels);
 }
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:
@@ -3304,10 +3376,12 @@ beman::specgen::ir::Paragraph phrase_conjunct(const clang::Expr*                
     return out;
 }
 
-// Derive a Constraints element from `fn`'s own trailing requires-clause, or
-// nullopt if it has none (or the clause somehow splits into no conjuncts at
-// all). Rendering (sentence vs. itemize) is conjuncts::render_into, shared
-// with Mandates (design §5.3) — not reimplemented here.
+// Derive a Constraints element from `fn`'s own requires-clauses -- the one on
+// its template parameter list first, then the trailing one, the order
+// [temp.constr.decl]/3 conjoins them in -- or nullopt if it has neither (or
+// they somehow split into no conjuncts at all). Rendering (sentence vs.
+// itemize) is conjuncts::render_into, shared with Mandates (design §5.3) — not
+// reimplemented here.
 std::optional<beman::specgen::ir::DescriptionElement>
 derive_constraints(const clang::FunctionDecl*                       fn,
                    const clang::SourceManager&                      sm,
@@ -3316,12 +3390,11 @@ derive_constraints(const clang::FunctionDecl*                       fn,
                    const std::map<const clang::Decl*, std::string>& expos_set) {
     namespace ir = beman::specgen::ir;
 
-    const clang::AssociatedConstraint& requires_clause = fn->getTrailingRequiresClause();
-    if (requires_clause.ConstraintExpr == nullptr)
-        return std::nullopt;
-
     std::vector<const clang::Expr*> leaves;
-    split_conjuncts(requires_clause.ConstraintExpr, leaves);
+    if (const clang::Expr* head_clause = head_requires_clause(fn))
+        split_conjuncts(head_clause, leaves);
+    if (const clang::Expr* trailing = fn->getTrailingRequiresClause().ConstraintExpr)
+        split_conjuncts(trailing, leaves);
     if (leaves.empty())
         return std::nullopt;
 

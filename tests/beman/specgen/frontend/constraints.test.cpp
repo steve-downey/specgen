@@ -11,6 +11,12 @@
 // negation ("is false"), plain trait again — in source order, and the
 // itemdecl must have the requires-clause stripped (design §5.1: "requires-
 // clause is removed from the itemdecl").
+//
+// A clause on the template parameter list is the same clause in the other
+// equivalent position, and must derive and strip identically (issue #119);
+// `put_head`/`put_trailing` in that header write the same two conjuncts each
+// way so the two can be compared directly rather than against a transcription.
+// `\constraints-in-decl` keeps either one in the itemdecl.
 
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/ir.hpp>
@@ -121,7 +127,7 @@ TEST_CASE("build_document - a foreign name spelled the same as one this run decl
                               [](const ir::ForeignNamespace& ns) { return ns.name == "tables"; }));
 }
 
-TEST_CASE("build_document - spec_constraints.hpp derives Constraints from the trailing requires-clause") {
+TEST_CASE("build_document - spec_constraints.hpp derives Constraints from a trailing requires-clause") {
     const auto built = frontend::build_document(kCorpusHeader);
     REQUIRE(built.has_value());
     const ir::Document& document = built->document;
@@ -135,7 +141,7 @@ TEST_CASE("build_document - spec_constraints.hpp derives Constraints from the tr
         }
     }
     REQUIRE(cons != nullptr);
-    REQUIRE(cons->children.size() == 2);
+    REQUIRE(cons->children.size() == 5);
 
     const auto* item = std::get_if<ir::SpecItem>(&cons->children[0]);
     REQUIRE(item != nullptr);
@@ -208,4 +214,68 @@ TEST_CASE("build_document - spec_constraints.hpp derives Constraints from the tr
     CHECK_FALSE(contains(synopsis->code.text, "detail::is_compatible"));
     CHECK(std::ranges::any_of(synopsis->code.spans,
                               [](const ir::Span& span) { return span.kind == ir::SpanKind::ExposId; }));
+}
+
+TEST_CASE("build_document - a requires-clause derives the same wording from either position") {
+    const auto built = frontend::build_document(kCorpusHeader);
+    REQUIRE(built.has_value());
+
+    const auto section = std::ranges::find_if(built->document.nodes, [](const ir::Node& node) {
+        const auto* found = std::get_if<ir::Section>(&node);
+        return found != nullptr && found->stable_name == "box.cons";
+    });
+    REQUIRE(section != built->document.nodes.end());
+    const ir::Section& cons = std::get<ir::Section>(*section);
+    REQUIRE(cons.children.size() == 5);
+
+    // `put_head` writes its clause on the template parameter list, where
+    // derive_constraints used to look right past it; `put_trailing` writes the
+    // same two conjuncts after the declarator (issue #119).
+    const auto* head     = std::get_if<ir::SpecItem>(&cons.children[2]);
+    const auto* trailing = std::get_if<ir::SpecItem>(&cons.children[3]);
+    REQUIRE(head != nullptr);
+    REQUIRE(trailing != nullptr);
+
+    REQUIRE(head->decl.signatures.size() == 1);
+    REQUIRE(trailing->decl.signatures.size() == 1);
+    CHECK(contains(head->decl.signatures[0].text, "put_head"));
+    CHECK(contains(trailing->decl.signatures[0].text, "put_trailing"));
+    // Both itemdecls lose the clause; the head form keeps its template head,
+    // which the excision has to cut out from under without taking with it.
+    CHECK_FALSE(contains(head->decl.signatures[0].text, "requires"));
+    CHECK_FALSE(contains(head->decl.signatures[0].text, "is_constructible_v"));
+    CHECK(contains(head->decl.signatures[0].text, "template<class U>"));
+    CHECK_FALSE(contains(trailing->decl.signatures[0].text, "requires"));
+
+    REQUIRE(head->descr.elements.size() == 2);
+    CHECK(head->descr.elements[0].kind == ir::ElementKind::Constraints);
+    CHECK(head->descr.elements[0].derived);
+    CHECK(head->descr.elements[1].kind == ir::ElementKind::Effects);
+
+    // Two conjuncts is under conjuncts::Options's sentence_threshold, so this
+    // pair renders as a joined sentence rather than the itemize above.
+    const ir::DescriptionElement& head_constraints     = head->descr.elements[0];
+    const ir::DescriptionElement& trailing_constraints = trailing->descr.elements[0];
+    CHECK_FALSE(head_constraints.itemize.has_value());
+    REQUIRE(head_constraints.paragraphs.size() == 1);
+    CHECK(paragraph_text(head_constraints.paragraphs[0]) ==
+          "is_constructible_v<T, U> is true and is_same_v<U, int> is false.");
+
+    // The invariant the issue asks for, stated against the other position
+    // rather than against a transcription of it.
+    REQUIRE(trailing_constraints.paragraphs.size() == 1);
+    CHECK(paragraph_text(head_constraints.paragraphs[0]) == paragraph_text(trailing_constraints.paragraphs[0]));
+    REQUIRE(head_constraints.conjuncts.size() == trailing_constraints.conjuncts.size());
+    CHECK(std::ranges::equal(head_constraints.conjuncts,
+                             trailing_constraints.conjuncts,
+                             [](const auto& a, const auto& b) { return paragraph_text(a) == paragraph_text(b); }));
+
+    // `\constraints-in-decl` keeps a head clause in the itemdecl and derives
+    // nothing from it, the same escape a trailing clause gets.
+    const auto* in_decl = std::get_if<ir::SpecItem>(&cons.children[4]);
+    REQUIRE(in_decl != nullptr);
+    REQUIRE(in_decl->decl.signatures.size() == 1);
+    CHECK(contains(in_decl->decl.signatures[0].text, "requires is_convertible_v<U, T>"));
+    REQUIRE(in_decl->descr.elements.size() == 1);
+    CHECK(in_decl->descr.elements[0].kind == ir::ElementKind::Effects);
 }

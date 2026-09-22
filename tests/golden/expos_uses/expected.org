@@ -84,9 +84,9 @@ int level() const;
 /Returns/: ~0~.
 
 #+begin_itemdecl
-template<class T>
-  requires @\exposidnc{enabled}@<T>
-bool fully_qualified_use();
+template<class T> bool fully_qualified_use();
 #+end_itemdecl
+
+/Constraints/: ~T~ models @@latex:\exposid{enabled}@@.
 
 /Returns/: ~true~.

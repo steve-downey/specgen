@@ -15,6 +15,14 @@
 // The requires-clause must be removed from the itemdecl (design §5.1
 // "Default: requires-clause is removed from the itemdecl") — extract_itemdecl
 // truncates at the in-class decl's own trailing requires-clause.
+//
+// `put_head`/`put_trailing` write the *same* two conjuncts in the two
+// equivalent clause positions, so the goldens state the invariant directly:
+// which position the author picked decides nothing about the wording (issue
+// #119). Two conjuncts is under the sentence_threshold, so these render as a
+// joined sentence rather than the itemize above. `put_in_decl` pins that
+// `\constraints-in-decl` keeps a head clause in the itemdecl and suppresses
+// the derivation, the same as it does for a trailing one.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_CONSTRAINTS_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_CONSTRAINTS_HPP
@@ -52,6 +60,18 @@ class box {
     void assign(U&& value)
         requires detail::is_compatible<T, U> && detail::is_allowed<U>;
 
+    template <class U>
+        requires is_constructible_v<T, U> && (!is_same_v<U, int>)
+    void put_head(U&& value);
+
+    template <class U>
+    void put_trailing(U&& value)
+        requires is_constructible_v<T, U> && (!is_same_v<U, int>);
+
+    template <class U>
+        requires is_convertible_v<U, T>
+    void put_in_decl(U&& value);
+
   private:
     T value_;
 };
@@ -74,6 +94,32 @@ template <class U>
 void box<T>::assign(U&& value)
     requires detail::is_compatible<T, U> && detail::is_allowed<U>
 {
+    value_ = T();
+}
+
+//! \effects Stores `value`.
+template <class T>
+template <class U>
+    requires is_constructible_v<T, U> && (!is_same_v<U, int>)
+void box<T>::put_head(U&& value) {
+    value_ = T();
+}
+
+//! \effects Stores `value`.
+template <class T>
+template <class U>
+void box<T>::put_trailing(U&& value)
+    requires is_constructible_v<T, U> && (!is_same_v<U, int>)
+{
+    value_ = T();
+}
+
+//! \constraints-in-decl
+//! \effects Stores `value`.
+template <class T>
+template <class U>
+    requires is_convertible_v<U, T>
+void box<T>::put_in_decl(U&& value) {
     value_ = T();
 }
 
