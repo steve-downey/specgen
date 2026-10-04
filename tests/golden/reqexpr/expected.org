@@ -1,6 +1,7 @@
 ** Class ~box~ [demo.box]
 :PROPERTIES:
 :CUSTOM_ID: demo.box
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.box}
@@ -66,6 +67,7 @@ template<class I> friend constexpr bool operator==(const I& it, box);
 ** Free functions [demo.free]
 :PROPERTIES:
 :CUSTOM_ID: demo.free
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.free}

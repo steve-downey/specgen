@@ -12,6 +12,7 @@ private:
 ** Assignment [optional.assign]
 :PROPERTIES:
 :CUSTOM_ID: optional.assign
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.assign}

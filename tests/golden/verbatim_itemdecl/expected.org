@@ -1,6 +1,7 @@
 ** Verbatim item declarations [verbatim.itemdecl]
 :PROPERTIES:
 :CUSTOM_ID: verbatim.itemdecl
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{verbatim.itemdecl}

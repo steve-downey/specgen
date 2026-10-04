@@ -30,6 +30,7 @@ private:
 ** Observers [counter.obs]
 :PROPERTIES:
 :CUSTOM_ID: counter.obs
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{counter.obs}
@@ -79,6 +80,7 @@ template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<i
 ** Class template ~gauge~ [counter.gauge]
 :PROPERTIES:
 :CUSTOM_ID: counter.gauge
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{counter.gauge}

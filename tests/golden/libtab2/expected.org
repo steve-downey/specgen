@@ -1,6 +1,7 @@
 ** Errors [demo.errors]
 :PROPERTIES:
 :CUSTOM_ID: demo.errors
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.errors}

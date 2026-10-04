@@ -1,6 +1,7 @@
 ** Modifiers [optional.mod]
 :PROPERTIES:
 :CUSTOM_ID: optional.mod
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.mod}

@@ -9,6 +9,7 @@ public:
 ** Modifiers [widget.mod]
 :PROPERTIES:
 :CUSTOM_ID: widget.mod
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{widget.mod}
@@ -22,7 +23,7 @@ void configure(int mode);
 
 - ~mode >= 0~,
 - ~mode <= 2~, and
-- ~mode~ denotes a supported mode as specified in ([[https://eel.is/c++draft/external.mode.requirements][[external.mode.requirements]]]).
+- ~mode~ denotes a supported mode as specified in ([[https://eel.is/c++draft/external.mode.requirements][@@html:[external.mode.requirements]@@@@latex:{[}external.mode.requirements{]}@@]]).
 #+end_pnum
 
 #+begin_pnum

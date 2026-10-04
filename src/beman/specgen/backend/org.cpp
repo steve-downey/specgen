@@ -37,9 +37,10 @@
 //
 //   4. Normative paragraphs go in `#+begin_pnum` special blocks, whose wg21org
 //      exporters supply the target-specific counter. The top-level generated
-//      sections carry `:WG21_WORDING: t`; wg21org uses that property to apply
-//      wording section numbering to exactly the generated subtree, while the
-//      including paper still owns its front matter and outer framing.
+//      sections are `:UNNUMBERED:` like mpark's `{-}` headings. Top-level
+//      sections also carry `:WG21_WORDING: t`; wg21org uses that property to
+//      apply wording paragraph numbering and presentation to exactly the
+//      generated subtree, while the including paper still owns its framing.
 
 #include <beman/specgen/backend/org.hpp>
 
@@ -230,8 +231,9 @@ std::string link_stable_refs_from(std::string_view text,
         return std::string(text.substr(pos));
     const std::string_view name = text.substr(open + 2, close - open - 2);
     return std::string(text.substr(pos, open - pos)) + "([[" +
-           (under_new_root(name, new_roots) ? "#" : "https://eel.is/c++draft/") + std::string(name) + "][[" +
-           std::string(name) + "]]])" + link_stable_refs_from(text, new_roots, close + 2);
+           (under_new_root(name, new_roots) ? "#" : "https://eel.is/c++draft/") + std::string(name) + "][@@html:[" +
+           std::string(name) + "]@@@@latex:{[}" + std::string(name) + "{]}@@]])" +
+           link_stable_refs_from(text, new_roots, close + 2);
 }
 
 std::string link_stable_refs(const std::string& text, std::span<const std::string> new_roots) {
@@ -457,7 +459,7 @@ struct SeededProjector {
         std::string header =
             s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
                             : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
-        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n{}:END:\n#+latex: \\label{{{}}}\n",
+        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}:END:\n#+latex: \\label{{{}}}\n",
                               s.stable_name,
                               ctx.wording_root ? ":WG21_WORDING: t\n" : "",
                               s.stable_name);

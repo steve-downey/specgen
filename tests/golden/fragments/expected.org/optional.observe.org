@@ -1,6 +1,7 @@
 ** Observers [optional.observe]
 :PROPERTIES:
 :CUSTOM_ID: optional.observe
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.observe}

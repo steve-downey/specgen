@@ -1,6 +1,7 @@
 ** Header synopsis [demo.syn]
 :PROPERTIES:
 :CUSTOM_ID: demo.syn
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.syn}
@@ -23,6 +24,7 @@ template<typename I> void swap(holder<I>&, holder<I>&);
 *** Class template ~holder~ [demo.holder]
 :PROPERTIES:
 :CUSTOM_ID: demo.holder
+:UNNUMBERED: t
 :END:
 #+latex: \label{demo.holder}
 
@@ -37,6 +39,7 @@ constexpr explicit holder(I ptr);
 *** Operations [demo.ops]
 :PROPERTIES:
 :CUSTOM_ID: demo.ops
+:UNNUMBERED: t
 :END:
 #+latex: \label{demo.ops}
 

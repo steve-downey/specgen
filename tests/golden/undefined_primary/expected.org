@@ -1,6 +1,7 @@
 ** Undefined primaries [undef.primary]
 :PROPERTIES:
 :CUSTOM_ID: undef.primary
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{undef.primary}

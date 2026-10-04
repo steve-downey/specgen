@@ -219,9 +219,13 @@ TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(org::render_to_string(item).find(
-              "See ([[https://eel.is/c++draft/optional.general][[optional.general]]]).") != std::string::npos);
+              "See "
+              "([[https://eel.is/c++draft/"
+              "optional.general][@@html:[optional.general]@@@@latex:{[}optional.general{]}@@]]).") !=
+          std::string::npos);
     CHECK(org::render_to_string(item, {.new_roots = {"optional"}})
-              .find("See ([[#optional.general][[optional.general]]]).") != std::string::npos);
+              .find("See ([[#optional.general][@@html:[optional.general]@@@@latex:{[}optional.general{]}@@]]).") !=
+          std::string::npos);
 }
 
 TEST_CASE("org - a concept reference is code font") {
@@ -486,6 +490,7 @@ TEST_CASE("org - document with sections, synopsis, and free prose") {
         R"(** Observers [optional.observe]
 :PROPERTIES:
 :CUSTOM_ID: optional.observe
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.observe}
@@ -501,6 +506,7 @@ A program that instantiates it is ill-formed.
 *** Deeper [optional.observe.deep]
 :PROPERTIES:
 :CUSTOM_ID: optional.observe.deep
+:UNNUMBERED: t
 :END:
 #+latex: \label{optional.observe.deep}
 )");
@@ -515,7 +521,7 @@ TEST_CASE("org - base heading level is an option") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc, {.base_heading_level = 4}) == framed(
-          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: "
+          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: "
           "\\label{optional.ctor}\n"));
 }
 
@@ -528,7 +534,7 @@ TEST_CASE("org - code names in section titles use org markup") {
 
     CHECK(org::render_to_string(doc) == framed(
           "** Class ~optional~ constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: "
-          "optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: \\label{optional.ctor}\n"));
+          "optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: \\label{optional.ctor}\n"));
 }
 
 // Unlike the mpark backend there is no cap: markdown stops at six heading
@@ -540,7 +546,7 @@ TEST_CASE("org - outline level is not capped at six") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == framed(
-          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:WG21_WORDING: t\n:END:\n#+latex: \\label{deep}\n"));
+          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: \\label{deep}\n"));
 }
 
 // The base moves the *origin*, not the descent: at any base a nested section
@@ -567,6 +573,7 @@ TEST_CASE("org - a nested section descends from a non-default base") {
         R"(*** Transcoding [transcode]
 :PROPERTIES:
 :CUSTOM_ID: transcode
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{transcode}
@@ -574,12 +581,14 @@ TEST_CASE("org - a nested section descends from a non-default base") {
 **** Error types [transcode.errors]
 :PROPERTIES:
 :CUSTOM_ID: transcode.errors
+:UNNUMBERED: t
 :END:
 #+latex: \label{transcode.errors}
 
 ***** Enumerators [transcode.errors.enum]
 :PROPERTIES:
 :CUSTOM_ID: transcode.errors.enum
+:UNNUMBERED: t
 :END:
 #+latex: \label{transcode.errors.enum}
 )");
@@ -593,7 +602,7 @@ TEST_CASE("org - a titleless section emits no double space") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc) == framed(
-          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: "
+          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: "
           "\\label{optional.ctor}\n"));
 }
 

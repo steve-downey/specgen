@@ -47,6 +47,7 @@ struct box {
 ** Member types [box.mem]
 :PROPERTIES:
 :CUSTOM_ID: box.mem
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{box.mem}

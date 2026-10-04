@@ -16,5 +16,5 @@ template<class U> constexpr explicit(@\seebelow@) optional(const optional<U>& rh
 #+end_pnum
 
 #+begin_pnum
-/Remarks/: The expression inside ~explicit~ is equivalent to ~!is_convertible_v<const U&, T>~, see ([[https://eel.is/c++draft/optional.general][[optional.general]]]).
+/Remarks/: The expression inside ~explicit~ is equivalent to ~!is_convertible_v<const U&, T>~, see ([[https://eel.is/c++draft/optional.general][@@html:[optional.general]@@@@latex:{[}optional.general{]}@@]]).
 #+end_pnum

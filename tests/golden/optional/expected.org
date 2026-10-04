@@ -56,6 +56,7 @@ private:
 ** Constructors [optional.ctor]
 :PROPERTIES:
 :CUSTOM_ID: optional.ctor
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.ctor}
@@ -126,6 +127,7 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ** Assignment [optional.assign]
 :PROPERTIES:
 :CUSTOM_ID: optional.assign
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.assign}
@@ -153,6 +155,7 @@ template<class... Args> constexpr T& emplace(Args&&... args);
 ** Observers [optional.observe]
 :PROPERTIES:
 :CUSTOM_ID: optional.observe
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.observe}
@@ -196,6 +199,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 ** Monadic operations [optional.monadic]
 :PROPERTIES:
 :CUSTOM_ID: optional.monadic
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.monadic}
@@ -215,6 +219,7 @@ template<class F> constexpr @\seebelow@ transform(F&& f) const&;
 ** Modifiers [optional.mod]
 :PROPERTIES:
 :CUSTOM_ID: optional.mod
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.mod}

@@ -1,6 +1,7 @@
 ** Class template ~crate~ [demo.crate]
 :PROPERTIES:
 :CUSTOM_ID: demo.crate
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.crate}

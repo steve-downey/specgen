@@ -1,6 +1,7 @@
 ** Header <box> synopsis [box.syn]
 :PROPERTIES:
 :CUSTOM_ID: box.syn
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{box.syn}
@@ -39,6 +40,7 @@ A program that instantiates ~crumb~ is ill-formed unless ~sizeof(short) >= 2~ is
 *** Class ~crate~ [box.crate]
 :PROPERTIES:
 :CUSTOM_ID: box.crate
+:UNNUMBERED: t
 :END:
 #+latex: \label{box.crate}
 
@@ -53,6 +55,7 @@ A program that instantiates ~crate~ is ill-formed unless ~sizeof(int) >= 2~ is ~
 *** Class template ~pallet~ [box.pallet]
 :PROPERTIES:
 :CUSTOM_ID: box.pallet
+:UNNUMBERED: t
 :END:
 #+latex: \label{box.pallet}
 
@@ -63,6 +66,7 @@ A program that instantiates ~pallet<T>~ is ill-formed unless ~sizeof(char) == 1~
 *** Class ~label~ [box.label]
 :PROPERTIES:
 :CUSTOM_ID: box.label
+:UNNUMBERED: t
 :END:
 #+latex: \label{box.label}
 
@@ -73,6 +77,7 @@ A program that instantiates ~pallet<T>~ is ill-formed unless ~sizeof(char) == 1~
 *** Class ~hinge~ [box.hinge]
 :PROPERTIES:
 :CUSTOM_ID: box.hinge
+:UNNUMBERED: t
 :END:
 #+latex: \label{box.hinge}
 
@@ -85,6 +90,7 @@ struct hinge {
 **** General [box.hinge.general]
 :PROPERTIES:
 :CUSTOM_ID: box.hinge.general
+:UNNUMBERED: t
 :END:
 #+latex: \label{box.hinge.general}
 

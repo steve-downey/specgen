@@ -9,8 +9,9 @@
 // `lstnewenvironment`s, so the draft's `@...@` escape convention applies
 // inside them verbatim. Like the other two backends these are standalone
 // fragments for transclusion. Normative paragraphs use `#+begin_pnum`, and
-// top-level generated sections carry `:WG21_WORDING: t`; the including paper
-// still owns its front matter and outer framing. See docs/architecture.md §8.
+// generated sections are `:UNNUMBERED:` like mpark's `{-}` headings, and
+// top-level sections carry `:WG21_WORDING: t`; the including paper still owns
+// its front matter and outer framing. See docs/architecture.md §8.
 //
 // Design §8 says of this backend that "correctness is defined by the
 // exporter", so its conventions are settled against wg21org rather than

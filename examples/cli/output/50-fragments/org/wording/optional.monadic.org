@@ -1,6 +1,7 @@
 ** Monadic operations [optional.monadic]
 :PROPERTIES:
 :CUSTOM_ID: optional.monadic
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{optional.monadic}

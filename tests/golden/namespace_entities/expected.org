@@ -1,6 +1,7 @@
 ** Vocabulary [demo.vocab]
 :PROPERTIES:
 :CUSTOM_ID: demo.vocab
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.vocab}

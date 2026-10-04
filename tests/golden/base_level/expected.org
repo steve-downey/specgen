@@ -1,6 +1,7 @@
 *** Header synopsis [gadget.syn]
 :PROPERTIES:
 :CUSTOM_ID: gadget.syn
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{gadget.syn}
@@ -15,6 +16,7 @@ public:
 *** Observers [gadget.observe]
 :PROPERTIES:
 :CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{gadget.observe}
@@ -22,6 +24,7 @@ public:
 **** Readiness [gadget.observe.ready]
 :PROPERTIES:
 :CUSTOM_ID: gadget.observe.ready
+:UNNUMBERED: t
 :END:
 #+latex: \label{gadget.observe.ready}
 
@@ -36,6 +39,7 @@ constexpr bool ready() const noexcept;
 ***** Notes [gadget.observe.ready.notes]
 :PROPERTIES:
 :CUSTOM_ID: gadget.observe.ready.notes
+:UNNUMBERED: t
 :END:
 #+latex: \label{gadget.observe.ready.notes}
 

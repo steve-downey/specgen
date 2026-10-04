@@ -1,6 +1,7 @@
 ** Class template ~holder~ [demo.holder]
 :PROPERTIES:
 :CUSTOM_ID: demo.holder
+:UNNUMBERED: t
 :WG21_WORDING: t
 :END:
 #+latex: \label{demo.holder}

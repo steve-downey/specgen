@@ -798,10 +798,13 @@ There are exactly three backends, and **adding wording to one means adding it to
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
   the draft's own listings environments. Normative paragraphs use `#+begin_pnum` special
-  blocks, and top-level generated sections carry `:WG21_WORDING: t` so wg21org can apply
-  draft section and paragraph numbering to each complete generated subtree. Tables are
-  named, captioned native org tables; target-neutral `#+ATTR_WG21: :columns ...` proportions
-  become `longtable` widths in LaTeX and `<col>` widths in HTML.
+  blocks. Every generated section carries `:UNNUMBERED: t`, the counterpart of mpark's
+  `{-}` heading attribute; top-level sections also carry `:WG21_WORDING: t` so wg21org can
+  apply draft paragraph numbering and presentation to each complete generated subtree.
+  Stable-name references use real Org links with target-specific snippets for their literal
+  bracketed descriptions. Tables are named, captioned native org tables; target-neutral
+  `#+ATTR_WG21: :columns ...` proportions become `longtable` widths in LaTeX and `<col>`
+  widths in HTML.
 
 Shared substrate (`backend/common.hpp`): `render_code_spans` walks a span table, handing each
 backend's single `escape_span` both the semantic span and the covered source spelling; the
