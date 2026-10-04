@@ -258,9 +258,11 @@ output, split into per-clause fragments, or both.
 of a two-stage build whose `generate --emit-ir` step wrote the first.
 
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
-the mpark/wg21 framework; `--paper` also wraps the fragment in an
-editing-instruction `::: add` div and is valid only with that backend. The `org`
-backend emits org for the wg21org exporter.
+the mpark/wg21 framework, and the `org` backend emits org for the wg21org
+exporter. With either paper backend, `--paper` marks the complete fragment as
+added and numbers its paragraphs `x`, `x+1`, and so on. Mpark uses an
+editing-instruction `::: add` div; org uses `addedblock` around rootless
+material and `WG21_CHANGE=add` on generated clause roots.
 
 `--split <dir>` writes one file per top-level section and prints an ordered
 manifest of written paths to standard output. File stems are stable names and

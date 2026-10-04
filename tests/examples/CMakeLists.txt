@@ -103,6 +103,11 @@ specgen_add_example_parity(
     CAPTURED 40-paper-mode/paper-mode.md
     GOLDEN paper_mode/expected.md
 )
+specgen_add_example_parity(
+    paper_mode_org
+    CAPTURED 40-paper-mode/paper-mode.org
+    GOLDEN paper_mode_org/expected.org
+)
 
 # The fragment captures: a manifest file and a directory of fragments per
 # backend, from the same split the fragments goldens pin.

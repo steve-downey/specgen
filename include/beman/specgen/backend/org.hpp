@@ -41,6 +41,11 @@ struct Options {
     // (decision wording-base-level).
     int base_heading_level = 2;
 
+    // Mark the rendered fragment as newly added wording. Top-level section
+    // subtrees carry WG21_CHANGE=add; rootless nodes use addedblock. Paragraph
+    // labels form one x, x+1, ... run over the complete fragment.
+    bool paper_mode = false;
+
     // Stable-name roots introduced by this paper.  References beneath one of
     // these roots link to the generated CUSTOM_ID; other stable names link to
     // the current working draft.

@@ -92,6 +92,23 @@ std::string wrap_pnum(std::string text) {
     return "#+begin_pnum\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_pnum\n";
 }
 
+std::string wrap_added(std::string text) {
+    return "#+begin_addedblock\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_addedblock\n";
+}
+
+std::string number_added_pnums_from(std::string text, std::size_t pos, std::size_t count) {
+    constexpr std::string_view marker = "#+begin_pnum\n";
+    pos                               = text.find(marker, pos);
+    if (pos == std::string::npos)
+        return text;
+    const std::string label       = count == 0 ? "x" : std::format("x+{}", count);
+    const std::string replacement = std::format("#+begin_pnum {}\n", label);
+    text.replace(pos, marker.size(), replacement);
+    return number_added_pnums_from(std::move(text), pos + replacement.size(), count + 1);
+}
+
+std::string number_added_pnums(std::string text) { return number_added_pnums_from(std::move(text), 0, 0); }
+
 // --- prose ------------------------------------------------------------------
 
 // Org's code markup is `~x~`, and org has no escape for a literal `~` inside
@@ -429,6 +446,7 @@ std::string render_item(const ir::SpecItem& item) {
 struct RenderCtx {
     int  level;
     bool wording_root;
+    bool paper_mode;
 };
 
 // The fold's seed/handle type: a node paired with the RenderCtx its parent
@@ -459,12 +477,13 @@ struct SeededProjector {
         std::string header =
             s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
                             : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
-        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}:END:\n#+latex: \\label{{{}}}\n",
+        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n#+latex: \\label{{{}}}\n",
                               s.stable_name,
                               ctx.wording_root ? ":WG21_WORDING: t\n" : "",
+                              ctx.wording_root && ctx.paper_mode ? ":WG21_CHANGE: add\n" : "",
                               s.stable_name);
 
-        const RenderCtx     child_ctx{ctx.level + 1, false};
+        const RenderCtx     child_ctx{ctx.level + 1, false, ctx.paper_mode};
         std::vector<Seeded> children =
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
@@ -515,16 +534,26 @@ std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
 } // namespace
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_heading_level, true};
+    const RenderCtx                ctx{options.base_heading_level, true, options.paper_mode};
     const std::vector<std::string> rendered =
-        doc.nodes | std::views::transform([&ctx](const ir::Node& node) { return render_node_to_string(node, ctx); }) |
+        doc.nodes | std::views::transform([&](const ir::Node& node) {
+            std::string text = render_node_to_string(node, ctx);
+            if (options.paper_mode && !std::holds_alternative<ir::Section>(node))
+                return wrap_added(std::move(text));
+            return text;
+        }) |
         std::ranges::to<std::vector>();
-    const std::string out = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    std::string out = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    if (options.paper_mode)
+        out = number_added_pnums(std::move(out));
     return link_stable_refs(out, options.new_roots);
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {
-    return link_stable_refs(render_item(item), options.new_roots);
+    std::string out = render_item(item);
+    if (options.paper_mode)
+        out = wrap_added(number_added_pnums(std::move(out)));
+    return link_stable_refs(out, options.new_roots);
 }
 
 } // namespace beman::specgen::backend::org

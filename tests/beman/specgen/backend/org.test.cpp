@@ -628,3 +628,43 @@ TEST_CASE("org - a synopsis is a codeblock, an itemdecl is an itemdecl") {
     CHECK(org::render_to_string(doc) == framed(
           "#+begin_codeblock\ntemplate<class T> class optional;\n#+end_codeblock\n"));
 }
+
+TEST_CASE("org - paper mode marks additions and numbers one item") {
+    SpecItem item;
+    item.decl.signatures.push_back({"int f();", {}});
+    item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"Does a thing."}}}, {}});
+
+    const std::string out = org::render_to_string(item, {.paper_mode = true});
+    CHECK(out.starts_with("#+begin_addedblock\n"));
+    CHECK(out.find("#+begin_pnum x\n/Effects/: Does a thing.") != std::string::npos);
+    CHECK(out.ends_with("#+end_addedblock\n"));
+}
+
+TEST_CASE("org - paper mode numbers across added section roots") {
+    Document doc;
+    for (const char* name : {"first", "second"}) {
+        Section sec;
+        sec.stable_name = name;
+        sec.title       = name;
+        SpecItem item;
+        item.descr.elements.push_back(
+            {ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}});
+        sec.children.push_back(std::move(item));
+        doc.nodes.push_back(std::move(sec));
+    }
+
+    const std::string out = org::render_to_string(doc, {.paper_mode = true});
+    CHECK(out.find(":WG21_CHANGE: add") != std::string::npos);
+    for (const char* label : {"x", "x+1", "x+2", "x+3"}) {
+        const std::string marker = std::string("#+begin_pnum ") + label + "\n";
+        CHECK(out.find(marker) != std::string::npos);
+        CHECK(out.find(marker) == out.rfind(marker));
+    }
+}
+
+TEST_CASE("org - paper mode wraps a bare synopsis") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "gadget", .code = {"class gadget;", {}}, .roster = {}});
+    CHECK(org::render_to_string(doc, {.paper_mode = true}) ==
+          "#+begin_addedblock\n#+begin_codeblock\nclass gadget;\n#+end_codeblock\n#+end_addedblock\n");
+}

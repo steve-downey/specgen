@@ -2,7 +2,9 @@
 - [General Command Information](#general-command-information)
 - [Minimal Header To IR](#minimal-header-to-ir)
 - [Render-Only IR Examples](#render-only-ir-examples)
-- [Mpark Paper Mode](#mpark-paper-mode)
+- [Paper Mode](#paper-mode)
+  - [Observers [gadget.observe]](#gadget.observe)
+  - [Modifiers [gadget.mod]](#gadget.mod)
 - [Fragment Output](#fragment-output)
 - [A Paper Of Several Headers](#a-paper-of-several-headers)
 - [Validation](#validation)
@@ -106,8 +108,8 @@ generate options:
   --validate                run the wording validators before rendering; a
 			     finding at error severity aborts the render
 			     (exit 1) instead
-  --paper                   wrap the fragment in an `::: add` editing-instruction
-			     div and number its paragraphs as added (mpark only)
+  --paper                   mark the fragment as an addition and number its
+			     paragraphs as added (mpark and org)
   --new-root <name>         treat <name> and every stable name beneath it as
 			     a clause proposed by this paper (mpark and org),
 			     rather than one already in the working draft. May be
@@ -164,8 +166,8 @@ render options:
   --validate                run the wording validators before rendering; a
 			     finding at error severity aborts the render
 			     (exit 1) instead
-  --paper                   wrap the fragment in an `::: add` editing-instruction
-			     div and number its paragraphs as added (mpark only)
+  --paper                   mark the fragment as an addition and number its
+			     paragraphs as added (mpark and org)
   --new-root <name>         treat <name> and every stable name beneath it as
 			     a clause proposed by this paper (mpark and org),
 			     rather than one already in the working draft. May be
@@ -562,19 +564,19 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 ```
 
 
-<a id="mpark-paper-mode"></a>
+<a id="paper-mode"></a>
 
-# Mpark Paper Mode
+# Paper Mode
 
-Paper mode is mpark-only. It wraps the fragment in an editing-instruction div and numbers added paragraphs as `x`, `x+1`, and so on.
+Paper mode marks a complete mpark or org fragment as added wording and numbers added paragraphs as `x`, `x+1`, and so on. Mpark uses its editing-instruction div; org uses `addedblock` for rootless material and a `WG21_CHANGE` property for complete clause subtrees.
 
 ```sh
 #!/bin/sh
 # examples/cli/40-paper-mode.sh                                       -*-sh-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# Paper mode is mpark-only: it wraps the fragment in an editing-instruction div
-# and numbers added paragraphs x, x+1, and so on. No other backend has it.
+# Paper mode marks a complete mpark or org fragment as added wording and
+# numbers its paragraphs x, x+1, and so on.
 . "$(dirname -- "$0")/env.sh"
 
 OUT=$(out_dir 40-paper-mode)
@@ -584,6 +586,11 @@ cd "$REPO_ROOT"
     --backend mpark \
     --paper \
     -o "$OUT/paper-mode.md"
+
+"$SPECGEN" render --from-ir tests/golden/paper_mode/input.json \
+    --backend org \
+    --paper \
+    -o "$OUT/paper-mode.org"
 ```
 
 ````markdown
@@ -631,6 +638,89 @@ constexpr void reset() noexcept;
 
 :::
 ````
+
+The same IR in org:
+
+\#+begin\_src org
+
+<div class="addedblock" id="org2806f94">
+<div class="codeblock" id="orgab7aeb4">
+<p>
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+};
+</p>
+
+</div>
+
+</div>
+
+
+<a id="gadget.observe"></a>
+
+## Observers [gadget.observe]
+
+<div class="itemdecl" id="org0ae3fb5">
+<p>
+constexpr bool ready() const noexcept;
+</p>
+
+</div>
+
+<div class="pnum" id="org2977a75">
+<p>
+<i>Constraints</i>:
+</p>
+
+<ul class="org-ul">
+<li><code>is_copy_constructible_v&lt;T&gt;</code> is <code>true</code>,</li>
+<li><code>is_move_constructible_v&lt;T&gt;</code> is <code>true</code>.</li>
+</ul>
+
+</div>
+
+<div class="pnum" id="org8ed3f66">
+<p>
+<i>Returns</i>: <code>true</code> if and only if the gadget is ready.
+</p>
+
+</div>
+
+<div class="pnum" id="org4c772c8">
+<p>
+A second paragraph, so the added numbering has to advance.
+</p>
+
+</div>
+
+<div class="pnum" id="org875ba82">
+<p>
+A free paragraph closing the subclause.
+</p>
+
+</div>
+
+
+<a id="gadget.mod"></a>
+
+## Modifiers [gadget.mod]
+
+<div class="itemdecl" id="org7cced6d">
+<p>
+constexpr void reset() noexcept;
+</p>
+
+</div>
+
+<div class="pnum" id="org6aa89d4">
+<p>
+<i>Effects</i>: Resets the gadget.
+</p>
+
+</div>
+
+\#+end\_src
 
 
 <a id="fragment-output"></a>

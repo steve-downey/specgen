@@ -31,8 +31,8 @@ generate options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
-  --paper                   wrap the fragment in an `::: add` editing-instruction
-                             div and number its paragraphs as added (mpark only)
+  --paper                   mark the fragment as an addition and number its
+                             paragraphs as added (mpark and org)
   --new-root <name>         treat <name> and every stable name beneath it as
                              a clause proposed by this paper (mpark and org),
                              rather than one already in the working draft. May be
@@ -89,8 +89,8 @@ render options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
-  --paper                   wrap the fragment in an `::: add` editing-instruction
-                             div and number its paragraphs as added (mpark only)
+  --paper                   mark the fragment as an addition and number its
+                             paragraphs as added (mpark and org)
   --new-root <name>         treat <name> and every stable name beneath it as
                              a clause proposed by this paper (mpark and org),
                              rather than one already in the working draft. May be

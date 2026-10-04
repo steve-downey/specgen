@@ -1,0 +1,57 @@
+#+begin_addedblock
+#+begin_codeblock
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+};
+#+end_codeblock
+#+end_addedblock
+
+** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
+#+latex: \label{gadget.observe}
+
+#+begin_itemdecl
+constexpr bool ready() const noexcept;
+#+end_itemdecl
+
+#+begin_pnum x
+/Constraints/:
+
+- ~is_copy_constructible_v<T>~ is ~true~,
+- ~is_move_constructible_v<T>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum x+1
+/Returns/: ~true~ if and only if the gadget is ready.
+#+end_pnum
+
+#+begin_pnum x+2
+A second paragraph, so the added numbering has to advance.
+#+end_pnum
+
+#+begin_pnum x+3
+A free paragraph closing the subclause.
+#+end_pnum
+
+** Modifiers [gadget.mod]
+:PROPERTIES:
+:CUSTOM_ID: gadget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
+#+latex: \label{gadget.mod}
+
+#+begin_itemdecl
+constexpr void reset() noexcept;
+#+end_itemdecl
+
+#+begin_pnum x+4
+/Effects/: Resets the gadget.
+#+end_pnum

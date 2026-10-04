@@ -805,6 +805,9 @@ There are exactly three backends, and **adding wording to one means adding it to
   bracketed descriptions. Tables are named, captioned native org tables; target-neutral
   `#+ATTR_WG21: :columns ...` proportions become `longtable` widths in LaTeX and `<col>`
   widths in HTML.
+  Paper mode marks each top-level generated clause with `:WG21_CHANGE: add`,
+  wraps rootless material in `addedblock`, and changes the fragment's one
+  paragraph run to `x`, `x+1`, ... labels.
 
 Shared substrate (`backend/common.hpp`): `render_code_spans` walks a span table, handing each
 backend's single `escape_span` both the semantic span and the covered source spelling; the
@@ -1086,7 +1089,8 @@ The build assembles the tool from these components, each following the shared CM
   `src/beman/specgen/backend/mpark.cpp`. The wg21 framework's pandoc markdown per §8,
   including paper mode.
 - **org backend** — `include/beman/specgen/backend/org.hpp`,
-  `src/beman/specgen/backend/org.cpp`. Org for the `wg21org` exporter per §8.
+  `src/beman/specgen/backend/org.cpp`. Org for the `wg21org` exporter per §8,
+  including paper mode.
 - **Backend substrate** — `include/beman/specgen/backend/common.hpp`. `render_code_spans`,
   the `RenderF`/`render_fmap` algebra, `element_label`, and the shared draft span/inline
   spellings (`draft_span_prose`, `draft_span_codeblock`, `draft_code_inline`).
