@@ -8,8 +8,9 @@
 // `#+begin_itemdecl` **special blocks** — which org exports to the draft's own
 // `lstnewenvironment`s, so the draft's `@...@` escape convention applies
 // inside them verbatim. Like the other two backends these are standalone
-// fragments for transclusion; the including paper owns its front matter and
-// framing. See docs/architecture.md §8.
+// fragments for transclusion. Normative paragraphs use `#+begin_pnum`, and
+// top-level generated sections carry `:WG21_WORDING: t`; the including paper
+// still owns its front matter and outer framing. See docs/architecture.md §8.
 //
 // Design §8 says of this backend that "correctness is defined by the
 // exporter", so its conventions are settled against wg21org rather than
@@ -21,6 +22,7 @@
 #include <beman/specgen/ir.hpp>
 
 #include <string>
+#include <vector>
 
 namespace beman::specgen::backend::org {
 
@@ -37,6 +39,11 @@ struct Options {
     // follows, refusing a base above six for mpark and accepting one here
     // (decision wording-base-level).
     int base_heading_level = 2;
+
+    // Stable-name roots introduced by this paper.  References beneath one of
+    // these roots link to the generated CUSTOM_ID; other stable names link to
+    // the current working draft.
+    std::vector<std::string> new_roots = {};
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once

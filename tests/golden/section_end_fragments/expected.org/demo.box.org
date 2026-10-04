@@ -1,8 +1,15 @@
-** Class template `box` [demo.box]
+** Class template ~box~ [demo.box]
+:PROPERTIES:
+:CUSTOM_ID: demo.box
+:WG21_WORDING: t
+:END:
+#+latex: \label{demo.box}
 
 #+begin_codeblock
 template<class T>
 class box {};
 #+end_codeblock
 
+#+begin_pnum
 /Remarks/: A box.
+#+end_pnum

@@ -2,25 +2,35 @@
 struct tag {};
 #+end_codeblock
 
+#+begin_pnum
 /Remarks/: A defined record's own description.
+#+end_pnum
 
 #+begin_codeblock
 template<class T>
 struct checked {};
 #+end_codeblock
 
+#+begin_pnum
 /Mandates/: ~T~ is a type this facility accepts.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: Instantiating ~checked~ registers nothing; it only constrains.
+#+end_pnum
 
 #+begin_codeblock
 template<class T>
 struct probe {};
 #+end_codeblock
 
+#+begin_pnum
 A program that instantiates ~probe<T>~ is ill-formed unless ~acceptable_v<T>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: The derived paragraph above states the requirement; this says what the type is for.
+#+end_pnum
 
 #+begin_codeblock
 template<class T>
@@ -30,12 +40,21 @@ struct box {
 };
 #+end_codeblock
 
+#+begin_pnum
 /Remarks/: A ~box~ is a distinct type for each ~T~; two ~box~ types with different ~T~ never compare equal.
+#+end_pnum
 
 ** Member types [box.mem]
+:PROPERTIES:
+:CUSTOM_ID: box.mem
+:WG21_WORDING: t
+:END:
+#+latex: \label{box.mem}
 
 #+begin_itemdecl
 using type = T;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The contained type.
+#+end_pnum

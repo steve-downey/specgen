@@ -797,8 +797,11 @@ There are exactly three backends, and **adding wording to one means adding it to
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
-  the draft's own listings environments. Tables are named, captioned native org tables. The
-  backend numbers no paragraphs and wraps the fragment in nothing.
+  the draft's own listings environments. Normative paragraphs use `#+begin_pnum` special
+  blocks, and top-level generated sections carry `:WG21_WORDING: t` so wg21org can apply
+  draft section and paragraph numbering to each complete generated subtree. Tables are
+  named, captioned native org tables; target-neutral `#+ATTR_WG21: :columns ...` proportions
+  become `longtable` widths in LaTeX and `<col>` widths in HTML.
 
 Shared substrate (`backend/common.hpp`): `render_code_spans` walks a span table, handing each
 backend's single `escape_span` both the semantic span and the covered source spelling; the
@@ -822,6 +825,8 @@ against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   respectively, and the parentheses belong to the prose form only. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
+  The wg21org HTML exporter resolves that same `\ref{x}` to a local `CUSTOM_ID` when the
+  paper defines `x`, and to `eel.is/c++draft/x` otherwise.
 - The org backend has **no escape convention of its own**, because its code blocks are not
   code blocks: `#+begin_codeblock`/`#+begin_itemdecl` are org *special* blocks, which org's
   stock `org-latex-special-block` exports to `\begin{codeblock}` / `\begin{itemdecl}` (the
@@ -839,14 +844,14 @@ against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   drops the index effect.
 - Out in org prose `@…@` is inert (it is a listings option), so a code inline carrying a
   span (or a literal `~`, which org's `~code~` cannot escape) leaves org for an
-  `@@latex:…@@` export snippet; every other inline is org-native.
+  paired `@@latex:…@@@@html:…@@` export snippets; every other inline is org-native.
 
 **Fragment splitting belongs to no backend.** `render --split <dir>` writes one file per
 top-level section, named from its stable name; `fragments::split`
 (`include/beman/specgen/fragments.hpp`) does the cutting, and a `Fragment` carries a whole
 `ir::Document`, so rendering one is the ordinary `render_to_string(document)` call. Do not add
 a fragment-shaped entry point to a backend: per-backend framing already lands per fragment
-(mpark's `::: wording` div, nothing at all in org) because a fragment *is* a
+(mpark's `::: wording` div, org's top-level `:WG21_WORDING:` property) because a fragment *is* a
 document; the file extension is the only backend fact in the scheme, and it lives in the
 driver. Consequences:
 

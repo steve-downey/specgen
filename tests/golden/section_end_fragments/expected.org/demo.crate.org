@@ -1,8 +1,15 @@
-** Class template `crate` [demo.crate]
+** Class template ~crate~ [demo.crate]
+:PROPERTIES:
+:CUSTOM_ID: demo.crate
+:WG21_WORDING: t
+:END:
+#+latex: \label{demo.crate}
 
 #+begin_codeblock
 template<class T>
 class crate {};
 #+end_codeblock
 
+#+begin_pnum
 /Remarks/: A crate.
+#+end_pnum

@@ -300,7 +300,7 @@ not exceed 6, markdown's deepest heading. The base moves only where the
 outermost section sits: nested sections still descend one step at a time from
 it, and `--split` starts every fragment at the same base a whole render would.
 
-### Proposed stable names in mpark papers
+### Proposed stable names in mpark and wg21org papers
 
 The mpark/wg21 framework's `.sref` class looks stable names up in the current
 working draft. A paper's newly proposed clauses are not there yet, so leaving
@@ -312,11 +312,13 @@ specgen render --from-ir wording.json --backend mpark \
   --new-root transcode --new-root null.term
 ```
 
-The option is mpark-only and repeatable. It removes `.sref` from an exact root
-and every stable name below it, whether the name occurs on a heading or in a
-cross-reference. References to existing standard clauses retain `.sref` and
-continue to resolve normally. This is deliberately narrower than stripping
-the class from every stable name in a paper.
+The option applies to the `mpark` and `org` backends and is repeatable. For
+mpark it removes `.sref` from an exact root and every stable name below it,
+whether the name occurs on a heading or in a cross-reference. For org it makes
+references beneath those roots internal `CUSTOM_ID` links; references to all
+other stable names link to the current working draft at `eel.is/c++draft`.
+This is deliberately narrower than treating every stable name in a paper as
+new wording.
 
 ### Integrating generated fragments into a paper
 

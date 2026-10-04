@@ -1,9 +1,18 @@
 ** Monadic operations [optional.monadic]
+:PROPERTIES:
+:CUSTOM_ID: optional.monadic
+:WG21_WORDING: t
+:END:
+#+latex: \label{optional.monadic}
 
 #+begin_itemdecl
 template<class F> constexpr @\seebelow@ transform(F&& f) const&;
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: If ~*this~ contains a value, returns an optional holding the result of invoking ~f~ with the contained value; otherwise returns an empty optional.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: The return type is ~remove_cvref_t<invoke_result_t<F, const T&>>~.
+#+end_pnum

@@ -108,12 +108,11 @@ generate options:
                              (exit 1) instead
   --paper                   wrap the fragment in an `::: add` editing-instruction
                              div and number its paragraphs as added (mpark only)
-  --new-root <name>         drop the `.sref` class from <name> and every
-                             stable name beneath it, at any depth (mpark
-                             only): the paper's own proposed clause, not yet in
-                             the srefs database `.sref` looks up. May be
-                             repeated; a name under any of the roots given
-                             loses the class
+  --new-root <name>         treat <name> and every stable name beneath it as
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -167,12 +166,11 @@ render options:
                              (exit 1) instead
   --paper                   wrap the fragment in an `::: add` editing-instruction
                              div and number its paragraphs as added (mpark only)
-  --new-root <name>         drop the `.sref` class from <name> and every
-                             stable name beneath it, at any depth (mpark
-                             only): the paper's own proposed clause, not yet in
-                             the srefs database `.sref` looks up. May be
-                             repeated; a name under any of the roots given
-                             loses the class
+  --new-root <name>         treat <name> and every stable name beneath it as
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -247,7 +245,7 @@ struct WordingOptions {
     std::string root;             // --root <name>, with --split
     bool        validate = false; // --validate
     bool        paper    = false; // --paper (mpark only)
-    // --new-root <name> (mpark only), accumulated: the flag repeats, once per
+    // --new-root <name> (mpark and org), accumulated: the flag repeats, once per
     // header the paper proposes, and every occurrence adds a root (issue #94).
     std::vector<std::string> new_roots;
     // Where a top-level section starts, in the two units the backends measure
@@ -408,10 +406,8 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // when it was not.
     if (options.paper && options.backend != "mpark")
         return std::format("specgen: --paper applies only to the mpark backend, not '{}'", options.backend);
-    // `.sref` is an mpark/wg21 construct; the other two backends have no
-    // stable-name class to drop.
-    if (!options.new_roots.empty() && options.backend != "mpark")
-        return std::format("specgen: --new-root applies only to the mpark backend, not '{}'", options.backend);
+    if (!options.new_roots.empty() && options.backend == "latex")
+        return std::format("specgen: --new-root applies to the mpark and org backends, not '{}'", options.backend);
     // The two base-level options measure two different things, so each is a
     // usage error where the other one belongs -- and each message names the
     // one that does. Accepting either spelling everywhere would be the flag
@@ -509,7 +505,9 @@ std::string render_wording(const ir::Document& fragment, const WordingOptions& o
              .new_roots          = options.new_roots});
     if (options.backend == "org")
         return org::render_to_string(
-            fragment, {.base_heading_level = options.base_heading_level.value_or(org::Options{}.base_heading_level)});
+            fragment,
+            {.base_heading_level = options.base_heading_level.value_or(org::Options{}.base_heading_level),
+             .new_roots          = options.new_roots});
     return latex::render_to_string(
         fragment, {.base_section_depth = options.base_section_depth.value_or(latex::Options{}.base_section_depth)});
 }

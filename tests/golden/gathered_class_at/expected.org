@@ -1,4 +1,9 @@
 ** Header <box> synopsis [box.syn]
+:PROPERTIES:
+:CUSTOM_ID: box.syn
+:WG21_WORDING: t
+:END:
+#+latex: \label{box.syn}
 
 #+begin_codeblock
 struct crate {
@@ -23,25 +28,53 @@ struct strap {
 };
 #+end_codeblock
 
+#+begin_pnum
 A program that instantiates ~crumb~ is ill-formed unless ~sizeof(short) >= 2~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: A ~crumb~ is described where it is written.
+#+end_pnum
 
-*** Class `crate` [box.crate]
+*** Class ~crate~ [box.crate]
+:PROPERTIES:
+:CUSTOM_ID: box.crate
+:END:
+#+latex: \label{box.crate}
 
+#+begin_pnum
 A program that instantiates ~crate~ is ill-formed unless ~sizeof(int) >= 2~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: A ~crate~ owns no storage.
+#+end_pnum
 
-*** Class template `pallet` [box.pallet]
+*** Class template ~pallet~ [box.pallet]
+:PROPERTIES:
+:CUSTOM_ID: box.pallet
+:END:
+#+latex: \label{box.pallet}
 
+#+begin_pnum
 A program that instantiates ~pallet<T>~ is ill-formed unless ~sizeof(char) == 1~ is ~true~.
+#+end_pnum
 
-*** Class `label` [box.label]
+*** Class ~label~ [box.label]
+:PROPERTIES:
+:CUSTOM_ID: box.label
+:END:
+#+latex: \label{box.label}
 
+#+begin_pnum
 /Remarks/: A ~label~ names a ~crate~ and nothing else.
+#+end_pnum
 
-*** Class `hinge` [box.hinge]
+*** Class ~hinge~ [box.hinge]
+:PROPERTIES:
+:CUSTOM_ID: box.hinge
+:END:
+#+latex: \label{box.hinge}
 
 #+begin_codeblock
 struct hinge {
@@ -50,7 +83,15 @@ struct hinge {
 #+end_codeblock
 
 **** General [box.hinge.general]
+:PROPERTIES:
+:CUSTOM_ID: box.hinge.general
+:END:
+#+latex: \label{box.hinge.general}
 
+#+begin_pnum
 A program that instantiates ~hinge~ is ill-formed unless ~sizeof(int) >= 2~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: A ~hinge~ joins two crates.
+#+end_pnum

@@ -35,12 +35,11 @@
 //      a code inline that carries a *span* -- and only such an inline --
 //      leaves org for an `@@latex:...@@` export snippet.
 //
-//   4. No paragraph numbers, and no `#+begin_wording` wrapper. `\pnum` and
-//      `[#]{.pnum}` are self-numbering and org has no equivalent, so numbering
-//      here would be the first that specgen itself counted; and design §8's
-//      "the including document owns framing" applies with nothing to override
-//      it, since org's `wording` environment restyles section numbering rather
-//      than enabling anything the fragment needs.
+//   4. Normative paragraphs go in `#+begin_pnum` special blocks, whose wg21org
+//      exporters supply the target-specific counter. The top-level generated
+//      sections carry `:WG21_WORDING: t`; wg21org uses that property to apply
+//      wording section numbering to exactly the generated subtree, while the
+//      including paper still owns its front matter and outer framing.
 
 #include <beman/specgen/backend/org.hpp>
 
@@ -53,6 +52,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,6 +87,10 @@ std::string render_block(std::string_view env, const ir::CodeText& code) {
     return std::format("#+begin_{}\n{}\n#+end_{}\n", env, render_code(code), env);
 }
 
+std::string wrap_pnum(std::string text) {
+    return "#+begin_pnum\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_pnum\n";
+}
+
 // --- prose ------------------------------------------------------------------
 
 // Org's code markup is `~x~`, and org has no escape for a literal `~` inside
@@ -98,6 +102,49 @@ std::string render_block(std::string_view env, const ir::CodeText& code) {
 // branch already exists.
 bool needs_latex_snippet(const ir::CodeInline& v) {
     return !v.code.spans.empty() || v.code.text.contains('~') || v.code.text.empty();
+}
+
+std::string html_escape(std::string_view text) {
+    return text | std::views::transform([](const char ch) {
+               switch (ch) {
+               case '&': return std::string{"&amp;"};
+               case '<': return std::string{"&lt;"};
+               case '>': return std::string{"&gt;"};
+               default: return std::string(1, ch);
+               }
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string html_span(const ir::Span& span, std::string_view spelling) {
+    switch (span.kind) {
+    case ir::SpanKind::ExposId: return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::SeeBelow: return "<var>see below</var>";
+    case ir::SpanKind::ImplDefined: return "<var>implementation-defined</var>";
+    case ir::SpanKind::Placeholder: return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::Ref: return "[" + html_escape(span.payload) + "]";
+    case ir::SpanKind::LibraryIndex: return html_escape(spelling);
+    }
+    std::unreachable();
+}
+
+std::string html_code_inline(const ir::CodeInline& v) {
+    struct State {
+        std::string out;
+        std::size_t pos = 0;
+    };
+    const std::string_view text = v.code.text;
+    State state = std::ranges::fold_left(v.code.spans, State{}, [text](State state, const ir::Span& span) {
+        if (span.begin <= text.size() && span.end <= text.size() && span.begin >= state.pos &&
+            span.end >= span.begin) {
+            state.out += html_escape(text.substr(state.pos, span.begin - state.pos));
+            state.out += html_span(span, text.substr(span.begin, span.end - span.begin));
+            state.pos = span.end;
+        }
+        return state;
+    });
+    state.out += html_escape(text.substr(state.pos));
+    return "<code>" + state.out + "</code>";
 }
 
 // Dispatches one Inline (a Paragraph's Piece) to its org rendering. Four
@@ -122,7 +169,7 @@ struct PieceRenderer {
     // a doubled-up `\tcode{\exposid{value}}`.
     std::string operator()(const ir::CodeInline& v) const {
         if (needs_latex_snippet(v))
-            return "@@latex:" + common::draft_code_inline(v) + "@@";
+            return "@@latex:" + common::draft_code_inline(v) + "@@@@html:" + html_code_inline(v) + "@@";
         return '~' + v.code.text + '~';
     }
 
@@ -155,8 +202,46 @@ std::string render_table_cell(const ir::Paragraph& paragraph) {
            std::views::join | std::ranges::to<std::string>();
 }
 
+// Section titles use the source markup's backticks for code names.  They are
+// not Paragraphs, so PieceRenderer never sees them; translate that one piece
+// of inline markup explicitly for an org heading.
+std::string render_section_title(std::string title) {
+    std::ranges::replace(title, '`', '~');
+    return title;
+}
+
+bool under_new_root(std::string_view name, std::span<const std::string> new_roots) {
+    return std::ranges::any_of(new_roots, [name](std::string_view root) {
+        return name == root || (name.starts_with(root) && name.size() > root.size() && name[root.size()] == '.');
+    });
+}
+
+// RefInline deliberately renders a distinctive parenthesized stable name.
+// Turn that neutral spelling into a real Org link after rendering, when the
+// paper-level list of newly proposed roots is available.
+std::string link_stable_refs_from(std::string_view text,
+                                  std::span<const std::string> new_roots,
+                                  std::size_t pos) {
+    const std::size_t open = text.find("([", pos);
+    if (open == std::string::npos)
+        return std::string(text.substr(pos));
+    const std::size_t close = text.find("])", open + 2);
+    if (close == std::string::npos)
+        return std::string(text.substr(pos));
+    const std::string_view name = text.substr(open + 2, close - open - 2);
+    return std::string(text.substr(pos, open - pos)) + "([[" +
+           (under_new_root(name, new_roots) ? "#" : "https://eel.is/c++draft/") + std::string(name) + "][[" +
+           std::string(name) + "]]])" + link_stable_refs_from(text, new_roots, close + 2);
+}
+
+std::string link_stable_refs(const std::string& text, std::span<const std::string> new_roots) {
+    return link_stable_refs_from(text, new_roots, 0);
+}
+
 std::string render_table(const ir::Table2D& table) {
-    std::string out = std::format("#+name: {}\n#+caption: {}\n| | {} | {} |\n|-\n",
+    std::string out = std::format("#+name: {}\n#+caption: {}\n"
+                                  "#+ATTR_WG21: :columns 18 36 36\n"
+                                  "| | {} | {} |\n|-\n",
                                   table.stable_name,
                                   render_paragraph(table.caption),
                                   render_table_cell(table.column1),
@@ -174,7 +259,9 @@ std::string render_table(const ir::Table2D& table) {
 // \libtab2's flat two-column table (issue #74): a named, captioned org table
 // with no row-heading column to spare.
 std::string render_flat_table(const ir::Table1D& table) {
-    std::string out = std::format("#+name: {}\n#+caption: {}\n| {} | {} |\n|-\n",
+    std::string out = std::format("#+name: {}\n#+caption: {}\n"
+                                  "#+ATTR_WG21: :columns 25 67\n"
+                                  "| {} | {} |\n|-\n",
                                   table.stable_name,
                                   render_paragraph(table.caption),
                                   render_table_cell(table.column1),
@@ -252,6 +339,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                          render_block("codeblock", element.equivalent->code));
     }
 
+    std::ranges::transform(blocks, blocks.begin(), [](std::string block) { return wrap_pnum(std::move(block)); });
     return blocks;
 }
 
@@ -334,10 +422,11 @@ std::string render_item(const ir::SpecItem& item) {
 // --- the direct algebra over backend::common::RenderF ---------------------
 
 // Inherited attribute carrier, handed down through `project` below. Only the
-// outline level travels: like the mpark backend and unlike the LaTeX one there
-// is no `pnum_base` companion, because this backend numbers nothing.
+// outline level travels. Paragraph numbering is delegated to wg21org's pnum
+// special block and therefore needs no counter in this rendering context.
 struct RenderCtx {
-    int level;
+    int  level;
+    bool wording_root;
 };
 
 // The fold's seed/handle type: a node paired with the RenderCtx its parent
@@ -357,20 +446,23 @@ struct SeededProjector {
     // only here during descent, so it is rendered now into
     // `RenderedSectionF::header` -- the field named for exactly this.
     //
-    // The stable name rides the heading as plain bracketed text, a
-    // deliberate checkpoint call. No `:CUSTOM_ID:` drawer: an org
-    // link target is what a *numbered* cross-reference would need, and nothing
-    // in a fragment resolves one yet (the mpark backend's `{- .sref}` is the
-    // analogous decision, made the other way only because that framework has a
-    // srefs database to miss in).
+    // The stable name rides the heading as bracketed text and as its HTML
+    // target.  Org's LaTeX exporter prefixes a CUSTOM_ID label with `sec:`,
+    // while draft `\ref` spans use the stable name itself, so the raw LaTeX
+    // label supplies that second spelling.
     common::RenderF<Seeded> operator()(const ir::Section& s) const {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header = s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
-                                             : std::format("{} {} [{}]\n", stars, s.title, s.stable_name);
+        std::string header =
+            s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
+                            : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
+        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n{}:END:\n#+latex: \\label{{{}}}\n",
+                              s.stable_name,
+                              ctx.wording_root ? ":WG21_WORDING: t\n" : "",
+                              s.stable_name);
 
-        const RenderCtx     child_ctx{ctx.level + 1};
+        const RenderCtx     child_ctx{ctx.level + 1, false};
         std::vector<Seeded> children =
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
@@ -406,7 +498,7 @@ struct OrgAlgebra {
     // the same two environments.
     std::string operator()(const ir::Synopsis& v) const { return render_block("codeblock", v.code); }
     std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
-    std::string operator()(const ir::FreeParagraph& v) const { return render_paragraph(v.text) + '\n'; }
+    std::string operator()(const ir::FreeParagraph& v) const { return wrap_pnum(render_paragraph(v.text) + '\n'); }
 };
 
 std::string render_layer(const common::RenderF<std::string>& layer) {
@@ -421,13 +513,16 @@ std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
 } // namespace
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_heading_level};
+    const RenderCtx                ctx{options.base_heading_level, true};
     const std::vector<std::string> rendered =
         doc.nodes | std::views::transform([&ctx](const ir::Node& node) { return render_node_to_string(node, ctx); }) |
         std::ranges::to<std::vector>();
-    return rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::string out = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    return link_stable_refs(out, options.new_roots);
 }
 
-std::string render_to_string(const ir::SpecItem& item, const Options&) { return render_item(item); }
+std::string render_to_string(const ir::SpecItem& item, const Options& options) {
+    return link_stable_refs(render_item(item), options.new_roots);
+}
 
 } // namespace beman::specgen::backend::org

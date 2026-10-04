@@ -18,6 +18,14 @@
 #include <string>
 
 namespace org    = beman::specgen::backend::org;
+
+std::string framed(std::string body) {
+    return body;
+}
+
+std::string pnum(std::string body) {
+    return "#+begin_pnum\n" + body + "#+end_pnum\n";
+}
 namespace common = beman::specgen::backend::common;
 using namespace beman::specgen::ir;
 
@@ -54,19 +62,23 @@ TEST_CASE("org - value_or golden") {
         EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}};
     item.descr.elements.push_back(std::move(effects));
 
-    const std::string expected =
+    const std::string expected = framed(
         R"(#+begin_itemdecl
 template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;
 #+end_itemdecl
 
+#+begin_pnum
 /Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
 return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 #+end_codeblock
-)";
+#+end_pnum
+)");
 
     CHECK(org::render_to_string(item) == expected);
 }
@@ -165,7 +177,7 @@ TEST_CASE("org - a whole-span code inline becomes a latex export snippet") {
     // code font. This is the whole-span rule the LaTeX backend applies, and it
     // applies here because the snippet's contents *are* draft LaTeX -- the
     // opposite of the mpark backend, whose twin case asserts no such shortcut.
-    CHECK(out.find("@@latex:\\exposid{val}@@") != std::string::npos);
+    CHECK(out.find("@@latex:\\exposid{val}@@@@html:<code><var>val</var></code>@@") != std::string::npos);
     CHECK(out.find("\\tcode{") == std::string::npos);
 }
 
@@ -177,7 +189,9 @@ TEST_CASE("org - a partially-spanned code inline keeps its tcode wrapper") {
         {TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
-    CHECK(org::render_to_string(item).find("Equivalent to @@latex:\\tcode{x.\\exposid{val}}@@") != std::string::npos);
+    CHECK(org::render_to_string(item).find(
+              "Equivalent to @@latex:\\tcode{x.\\exposid{val}}@@@@html:<code>x.<var>val</var></code>@@") !=
+          std::string::npos);
 }
 
 // Org has no escape for a literal `~` inside `~...~`, and C++ spells two real
@@ -191,25 +205,23 @@ TEST_CASE("org - a code inline containing a tilde falls back to a snippet") {
     item.descr.elements.push_back(std::move(effects));
 
     const std::string out = org::render_to_string(item);
-    CHECK(out.find("Calls @@latex:\\tcode{~optional()}@@.") != std::string::npos);
+    CHECK(out.find("Calls @@latex:\\tcode{~optional()}@@@@html:<code>~optional()</code>@@.") != std::string::npos);
     // The naive rendering would have closed org's code run at the second
     // character and spilled the rest into prose.
     CHECK(out.find("~~optional()~") == std::string::npos);
 }
 
-// The prose cross-reference. `\iref` is the parenthesized form, so the parens
-// belong to this rendering; plain text rather than an org link, per the
-// checkpoint.
-TEST_CASE("org - a RefInline in prose is parenthesized plain text") {
+TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
     remarks.paragraphs.push_back({TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}});
     item.descr.elements.push_back(std::move(remarks));
 
-    const std::string out = org::render_to_string(item);
-    CHECK(out.find("See ([optional.general]).") != std::string::npos);
-    CHECK(out.find("[[") == std::string::npos); // no org link syntax
+    CHECK(org::render_to_string(item).find(
+              "See ([[https://eel.is/c++draft/optional.general][[optional.general]]]).") != std::string::npos);
+    CHECK(org::render_to_string(item, {.new_roots = {"optional"}})
+              .find("See ([[#optional.general][[optional.general]]]).") != std::string::npos);
 }
 
 TEST_CASE("org - a concept reference is code font") {
@@ -253,9 +265,7 @@ TEST_CASE("org - the labels that differ from the macro name") {
     CHECK(out.find("/expects/") == std::string::npos);
 }
 
-// No paragraph numbers anywhere (checkpoint note 4), so a second paragraph is
-// plain prose -- where both sibling backends emit a fresh `\pnum`/`[#]{.pnum}`.
-TEST_CASE("org - a multi-paragraph element repeats neither label nor number") {
+TEST_CASE("org - a multi-paragraph element repeats the number but not the label") {
     SpecItem           item;
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
@@ -264,14 +274,18 @@ TEST_CASE("org - a multi-paragraph element repeats neither label nor number") {
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(effects));
 
-    const std::string expected = R"(#+begin_itemdecl
+    const std::string expected = framed(R"(#+begin_itemdecl
 int f();
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: First.
+#+end_pnum
 
+#+begin_pnum
 Second.
-)";
+#+end_pnum
+)");
     CHECK(org::render_to_string(item) == expected);
 }
 
@@ -283,15 +297,17 @@ TEST_CASE("org - an itemize with no lead-in prose carries the label") {
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(constraints));
 
-    const std::string expected = R"(#+begin_itemdecl
+    const std::string expected = framed(R"(#+begin_itemdecl
 int f();
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/:
 
 - one,
 - two.
-)";
+#+end_pnum
+)");
     CHECK(org::render_to_string(item) == expected);
 }
 
@@ -346,6 +362,7 @@ TEST_CASE("org - an authored two-dimensional table is a named native table") {
     CHECK(out.find("/Effects/:\n\n"
                    "#+name: optional.assign.copy\n"
                    "#+caption: ~operator=~ effects\n"
+                   "#+ATTR_WG21: :columns 18 36 36\n"
                    "| | has \\vert{} value | has no value |\n"
                    "|-\n"
                    "| ~rhs~ | assigns | initializes |\n"
@@ -355,6 +372,7 @@ TEST_CASE("org - an authored two-dimensional table is a named native table") {
     REQUIRE(first_table != std::string::npos);
     REQUIRE(second_table != std::string::npos);
     CHECK(first_table < second_table);
+    CHECK(out.find("#+ATTR_WG21: :columns 18 36 36", first_table) != std::string::npos);
 }
 
 TEST_CASE("org - an authored flat two-column table is a named native table") {
@@ -376,6 +394,7 @@ TEST_CASE("org - an authored flat two-column table is a named native table") {
     CHECK(out.find("/Remarks/:\n\n"
                    "#+name: demo.errors.tab\n"
                    "#+caption: ~whatwg_error~ meanings\n"
+                   "#+ATTR_WG21: :columns 25 67\n"
                    "| Constant \\vert{} ish | Meaning |\n"
                    "|-\n"
                    "| ~invalid_byte~ | bad byte |\n"
@@ -397,7 +416,7 @@ TEST_CASE("org - adjacent same-kind elements share one label") {
     item.descr.elements.push_back(std::move(authored));
 
     const std::string out = org::render_to_string(item);
-    CHECK(out.find("/Mandates/: Derived.\n\nAuthored.\n") != std::string::npos);
+    CHECK(out.find(pnum("/Mandates/: Derived.\n") + "\n" + pnum("Authored.\n")) != std::string::npos);
     // Once, not twice.
     CHECK(out.find("/Mandates/", out.find("/Mandates/") + 1) == std::string::npos);
 }
@@ -407,14 +426,14 @@ TEST_CASE("org - grouped overloads share one itemdecl block") {
     item.decl.signatures.push_back({"int f();", {}});
     item.decl.signatures.push_back({"int f(int);", {}});
 
-    CHECK(org::render_to_string(item) == "#+begin_itemdecl\nint f();\nint f(int);\n#+end_itemdecl\n");
+    CHECK(org::render_to_string(item) == framed("#+begin_itemdecl\nint f();\nint f(int);\n#+end_itemdecl\n"));
 }
 
 TEST_CASE("org - a decl with no description emits only its itemdecl") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
 
-    CHECK(org::render_to_string(item) == "#+begin_itemdecl\nint f();\n#+end_itemdecl\n");
+    CHECK(org::render_to_string(item) == framed("#+begin_itemdecl\nint f();\n#+end_itemdecl\n"));
 }
 
 TEST_CASE("org - a description with no declaration emits no itemdecl block") {
@@ -426,7 +445,7 @@ TEST_CASE("org - a description with no declaration emits no itemdecl block") {
 
     const std::string out = org::render_to_string(item);
     CHECK(out.find("itemdecl") == std::string::npos);
-    CHECK(out == "/Remarks/: A defined class's own description.\n");
+    CHECK(out == framed(pnum("/Remarks/: A defined class's own description.\n")));
 }
 
 TEST_CASE("org - index entries are dropped") {
@@ -461,19 +480,30 @@ TEST_CASE("org - document with sections, synopsis, and free prose") {
     sec.children.push_back(std::move(nested));
     doc.nodes.push_back(std::move(sec));
 
-    // A nested section descends one outline level. No wrapper around the root
-    // (checkpoint note 4) and no numbering on the free paragraph.
-    const std::string expected =
+    // A nested section descends one outline level.  The fragment carries its
+    // wording range and the free paragraph carries its paragraph marker.
+    const std::string expected = framed(
         R"(** Observers [optional.observe]
+:PROPERTIES:
+:CUSTOM_ID: optional.observe
+:WG21_WORDING: t
+:END:
+#+latex: \label{optional.observe}
 
 #+begin_codeblock
 constexpr bool has_value() const noexcept;
 #+end_codeblock
 
+#+begin_pnum
 A program that instantiates it is ill-formed.
+#+end_pnum
 
 *** Deeper [optional.observe.deep]
-)";
+:PROPERTIES:
+:CUSTOM_ID: optional.observe.deep
+:END:
+#+latex: \label{optional.observe.deep}
+)");
     CHECK(org::render_to_string(doc) == expected);
 }
 
@@ -484,7 +514,21 @@ TEST_CASE("org - base heading level is an option") {
     sec.title       = "Constructors";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc, {.base_heading_level = 4}) == "**** Constructors [optional.ctor]\n");
+    CHECK(org::render_to_string(doc, {.base_heading_level = 4}) == framed(
+          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: "
+          "\\label{optional.ctor}\n"));
+}
+
+TEST_CASE("org - code names in section titles use org markup") {
+    Document doc;
+    Section  sec;
+    sec.stable_name = "optional.ctor";
+    sec.title       = "Class `optional` constructors";
+    doc.nodes.push_back(std::move(sec));
+
+    CHECK(org::render_to_string(doc) == framed(
+          "** Class ~optional~ constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: "
+          "optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: \\label{optional.ctor}\n"));
 }
 
 // Unlike the mpark backend there is no cap: markdown stops at six heading
@@ -495,7 +539,8 @@ TEST_CASE("org - outline level is not capped at six") {
     sec.stable_name = "deep";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == "******** [deep]\n");
+    CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == framed(
+          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:WG21_WORDING: t\n:END:\n#+latex: \\label{deep}\n"));
 }
 
 // The base moves the *origin*, not the descent: at any base a nested section
@@ -518,13 +563,26 @@ TEST_CASE("org - a nested section descends from a non-default base") {
     outer.children.push_back(std::move(inner));
     doc.nodes.push_back(std::move(outer));
 
-    const std::string expected =
+    const std::string expected = framed(
         R"(*** Transcoding [transcode]
+:PROPERTIES:
+:CUSTOM_ID: transcode
+:WG21_WORDING: t
+:END:
+#+latex: \label{transcode}
 
 **** Error types [transcode.errors]
+:PROPERTIES:
+:CUSTOM_ID: transcode.errors
+:END:
+#+latex: \label{transcode.errors}
 
 ***** Enumerators [transcode.errors.enum]
-)";
+:PROPERTIES:
+:CUSTOM_ID: transcode.errors.enum
+:END:
+#+latex: \label{transcode.errors.enum}
+)");
     CHECK(org::render_to_string(doc, {.base_heading_level = 3}) == expected);
 }
 
@@ -534,14 +592,14 @@ TEST_CASE("org - a titleless section emits no double space") {
     sec.stable_name = "optional.ctor";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc) == "** [optional.ctor]\n");
+    CHECK(org::render_to_string(doc) == framed(
+          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:WG21_WORDING: t\n:END:\n#+latex: "
+          "\\label{optional.ctor}\n"));
 }
 
-// Design §8's "the including document owns framing", with nothing overriding
-// it here: org's `wording` environment restyles section numbering rather than
-// enabling anything a fragment needs, so -- unlike mpark's `::: wording`, which
-// `[#]{.pnum}` forces -- nothing wraps the fragment.
-TEST_CASE("org - a fragment carries no wording wrapper") {
+// Keywords, rather than a greater block, can span Org headlines.  The
+// exporters translate this range to the target's wording container.
+TEST_CASE("org - rootless nodes need no wording wrapper") {
     Document doc;
     SpecItem first;
     first.decl.signatures.push_back({"int f();", {}});
@@ -551,13 +609,13 @@ TEST_CASE("org - a fragment carries no wording wrapper") {
     doc.nodes.push_back(std::move(second));
 
     const std::string out = org::render_to_string(doc);
-    CHECK(out.find("#+begin_wording") == std::string::npos);
-    CHECK(out == "#+begin_itemdecl\nint f();\n#+end_itemdecl\n\n#+begin_itemdecl\nint g();\n#+end_itemdecl\n");
+    CHECK(out == framed("#+begin_itemdecl\nint f();\n#+end_itemdecl\n\n#+begin_itemdecl\nint g();\n#+end_itemdecl\n"));
 }
 
 TEST_CASE("org - a synopsis is a codeblock, an itemdecl is an itemdecl") {
     Document doc;
     doc.nodes.push_back(Synopsis{.name = "optional", .code = {"template<class T> class optional;", {}}, .roster = {}});
 
-    CHECK(org::render_to_string(doc) == "#+begin_codeblock\ntemplate<class T> class optional;\n#+end_codeblock\n");
+    CHECK(org::render_to_string(doc) == framed(
+          "#+begin_codeblock\ntemplate<class T> class optional;\n#+end_codeblock\n"));
 }

@@ -1,4 +1,9 @@
 ** Header synopsis [demo.syn]
+:PROPERTIES:
+:CUSTOM_ID: demo.syn
+:WG21_WORDING: t
+:END:
+#+latex: \label{demo.syn}
 
 #+begin_codeblock
 template<typename I>
@@ -14,16 +19,24 @@ public:
 template<typename I> holder(I) -> holder<I>;
 #+end_codeblock
 
-*** Class template `holder` [demo.holder]
+*** Class template ~holder~ [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:END:
+#+latex: \label{demo.holder}
 
 #+begin_itemdecl
 constexpr explicit holder(I ptr);
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Initializes the holder with ~ptr~.
+#+end_pnum
 
 #+begin_itemdecl
 constexpr I get() const;
 #+end_itemdecl
 
-/Returns/: @@latex:\exposid{ptr}@@.
+#+begin_pnum
+/Returns/: @@latex:\exposid{ptr}@@@@html:<code><var>ptr</var></code>@@.
+#+end_pnum

@@ -11,25 +11,33 @@ struct tagger {};
 inline constexpr @\placeholder{unspecified}@ thing;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The name ~thing~ denotes a customization point object.
+#+end_pnum
 
 #+begin_itemdecl
 inline constexpr @\placeholder{unspecified}@ copied;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The copy-initialized spelling masks the same way.
+#+end_pnum
 
 #+begin_itemdecl
 template<typename T> inline constexpr @\placeholder{unspecified}@ tag;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The name ~tag~ denotes a family of tag objects.
+#+end_pnum
 
 #+begin_itemdecl
 inline constexpr @\placeholder{unspecified}@ forwarded;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The name ~forwarded~ denotes an object forwarding to the implementation's own.
+#+end_pnum
 
 #+begin_codeblock
 inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
