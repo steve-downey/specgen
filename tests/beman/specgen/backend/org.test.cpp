@@ -228,6 +228,28 @@ TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
           std::string::npos);
 }
 
+TEST_CASE("org - stable references do not rewrite code or authored text") {
+    SpecItem          item;
+    DescriptionElement effects;
+    effects.kind       = ElementKind::Effects;
+    effects.equivalent =
+        EquivalentTo{{"std::apply([](auto... xs) { return (... + xs); }, t[0]);", {}}};
+    item.descr.elements.push_back(std::move(effects));
+
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.paragraphs.push_back(
+        {TextInline{"Authored ([[https://example.com][link]]) stays; unmatched ([ stays too."}});
+    remarks.paragraphs.push_back({TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.find("std::apply([](auto... xs) { return (... + xs); }, t[0]);") != std::string::npos);
+    CHECK(out.find("Authored ([[https://example.com][link]]) stays; unmatched ([ stays too.") != std::string::npos);
+    CHECK(out.find("#+end_codeblock") != std::string::npos);
+    CHECK(out.find("([[https://eel.is/c++draft/optional.general]") != std::string::npos);
+}
+
 TEST_CASE("org - a concept reference is code font") {
     SpecItem           item;
     DescriptionElement constraints;
