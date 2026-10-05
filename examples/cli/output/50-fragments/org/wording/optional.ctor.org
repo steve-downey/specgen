@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.ctor}
 
 #+begin_itemdecl
 constexpr optional() noexcept;

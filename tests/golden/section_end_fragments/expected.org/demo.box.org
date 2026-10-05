@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.box}
 
 #+begin_codeblock
 template<class T>

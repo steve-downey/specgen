@@ -493,7 +493,6 @@ TEST_CASE("org - document with sections, synopsis, and free prose") {
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.observe}
 
 #+begin_codeblock
 constexpr bool has_value() const noexcept;
@@ -508,7 +507,6 @@ A program that instantiates it is ill-formed.
 :CUSTOM_ID: optional.observe.deep
 :UNNUMBERED: t
 :END:
-#+latex: \label{optional.observe.deep}
 )");
     CHECK(org::render_to_string(doc) == expected);
 }
@@ -521,8 +519,7 @@ TEST_CASE("org - base heading level is an option") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc, {.base_heading_level = 4}) == framed(
-          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: "
-          "\\label{optional.ctor}\n"));
+          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 TEST_CASE("org - code names in section titles use org markup") {
@@ -534,7 +531,7 @@ TEST_CASE("org - code names in section titles use org markup") {
 
     CHECK(org::render_to_string(doc) == framed(
           "** Class ~optional~ constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: "
-          "optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: \\label{optional.ctor}\n"));
+          "optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // Unlike the mpark backend there is no cap: markdown stops at six heading
@@ -546,7 +543,7 @@ TEST_CASE("org - outline level is not capped at six") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == framed(
-          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: \\label{deep}\n"));
+          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // The base moves the *origin*, not the descent: at any base a nested section
@@ -576,21 +573,18 @@ TEST_CASE("org - a nested section descends from a non-default base") {
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{transcode}
 
 **** Error types [transcode.errors]
 :PROPERTIES:
 :CUSTOM_ID: transcode.errors
 :UNNUMBERED: t
 :END:
-#+latex: \label{transcode.errors}
 
 ***** Enumerators [transcode.errors.enum]
 :PROPERTIES:
 :CUSTOM_ID: transcode.errors.enum
 :UNNUMBERED: t
 :END:
-#+latex: \label{transcode.errors.enum}
 )");
     CHECK(org::render_to_string(doc, {.base_heading_level = 3}) == expected);
 }
@@ -602,8 +596,7 @@ TEST_CASE("org - a titleless section emits no double space") {
     doc.nodes.push_back(std::move(sec));
 
     CHECK(org::render_to_string(doc) == framed(
-          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n#+latex: "
-          "\\label{optional.ctor}\n"));
+          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // Keywords, rather than a greater block, can span Org headlines.  The

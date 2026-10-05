@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{gadget.syn}
 
 #+begin_codeblock
 class gadget {
@@ -19,14 +18,12 @@ public:
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{gadget.observe}
 
 **** Readiness [gadget.observe.ready]
 :PROPERTIES:
 :CUSTOM_ID: gadget.observe.ready
 :UNNUMBERED: t
 :END:
-#+latex: \label{gadget.observe.ready}
 
 #+begin_itemdecl
 constexpr bool ready() const noexcept;
@@ -41,7 +38,6 @@ constexpr bool ready() const noexcept;
 :CUSTOM_ID: gadget.observe.ready.notes
 :UNNUMBERED: t
 :END:
-#+latex: \label{gadget.observe.ready.notes}
 
 #+begin_pnum
 A third level of section, so the descent below the base is visible.

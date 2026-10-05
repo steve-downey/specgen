@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{verbatim.itemdecl}
 
 #+begin_itemdecl
 struct nullopt_t {@\seebelow@};

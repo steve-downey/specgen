@@ -466,10 +466,9 @@ struct SeededProjector {
     // only here during descent, so it is rendered now into
     // `RenderedSectionF::header` -- the field named for exactly this.
     //
-    // The stable name rides the heading as bracketed text and as its HTML
-    // target.  Org's LaTeX exporter prefixes a CUSTOM_ID label with `sec:`,
-    // while draft `\ref` spans use the stable name itself, so the raw LaTeX
-    // label supplies that second spelling.
+    // The stable name rides the heading as bracketed text and as its export
+    // target.  The wg21org exporters preserve CUSTOM_ID verbatim for both
+    // HTML anchors and LaTeX labels, so no target-specific markup is needed.
     common::RenderF<Seeded> operator()(const ir::Section& s) const {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
@@ -477,11 +476,10 @@ struct SeededProjector {
         std::string header =
             s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
                             : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
-        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n#+latex: \\label{{{}}}\n",
+        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
                               s.stable_name,
                               ctx.wording_root ? ":WG21_WORDING: t\n" : "",
-                              ctx.wording_root && ctx.paper_mode ? ":WG21_CHANGE: add\n" : "",
-                              s.stable_name);
+                              ctx.wording_root && ctx.paper_mode ? ":WG21_CHANGE: add\n" : "");
 
         const RenderCtx     child_ctx{ctx.level + 1, false, ctx.paper_mode};
         std::vector<Seeded> children =

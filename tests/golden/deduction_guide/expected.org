@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.syn}
 
 #+begin_codeblock
 template<typename I>
@@ -25,7 +24,6 @@ template<typename I> holder(I) -> holder<I>;
 :CUSTOM_ID: demo.holder
 :UNNUMBERED: t
 :END:
-#+latex: \label{demo.holder}
 
 #+begin_itemdecl
 constexpr explicit holder(I ptr);

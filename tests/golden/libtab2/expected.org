@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.errors}
 
 #+begin_itemdecl
 enum class whatwg_error { invalid_byte, truncated_sequence };

@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.monadic}
 
 #+begin_itemdecl
 template<class F> constexpr @\seebelow@ transform(F&& f) const&;

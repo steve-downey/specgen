@@ -50,7 +50,6 @@ struct box {
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{box.mem}
 
 #+begin_itemdecl
 using type = T;

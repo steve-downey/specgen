@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{undef.primary}
 
 #+begin_itemdecl
 template<class L, class R>

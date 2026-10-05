@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.vocab}
 
 #+begin_itemdecl
 template<class T> using id_t = T;

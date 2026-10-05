@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.observe}
 
 #+begin_itemdecl
 constexpr bool has_value() const noexcept;

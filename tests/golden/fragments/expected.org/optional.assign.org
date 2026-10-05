@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.assign}
 
 #+begin_itemdecl
 template<class... Args> constexpr T& emplace(Args&&... args);

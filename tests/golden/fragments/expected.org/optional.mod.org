@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{optional.mod}
 
 #+begin_itemdecl
 constexpr void reset() noexcept;

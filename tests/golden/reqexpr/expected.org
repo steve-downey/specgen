@@ -4,7 +4,6 @@
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.box}
 
 #+begin_codeblock
 struct box {
@@ -70,7 +69,6 @@ template<class I> friend constexpr bool operator==(const I& it, box);
 :UNNUMBERED: t
 :WG21_WORDING: t
 :END:
-#+latex: \label{demo.free}
 
 #+begin_itemdecl
 template<class T> constexpr int free_with_req_expr(T);

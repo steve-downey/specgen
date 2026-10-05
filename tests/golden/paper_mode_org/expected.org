@@ -14,7 +14,6 @@ public:
 :WG21_WORDING: t
 :WG21_CHANGE: add
 :END:
-#+latex: \label{gadget.observe}
 
 #+begin_itemdecl
 constexpr bool ready() const noexcept;
@@ -46,7 +45,6 @@ A free paragraph closing the subclause.
 :WG21_WORDING: t
 :WG21_CHANGE: add
 :END:
-#+latex: \label{gadget.mod}
 
 #+begin_itemdecl
 constexpr void reset() noexcept;
