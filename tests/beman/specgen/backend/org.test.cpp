@@ -17,15 +17,11 @@
 
 #include <string>
 
-namespace org    = beman::specgen::backend::org;
+namespace org = beman::specgen::backend::org;
 
-std::string framed(std::string body) {
-    return body;
-}
+std::string framed(std::string body) { return body; }
 
-std::string pnum(std::string body) {
-    return "#+begin_pnum\n" + body + "#+end_pnum\n";
-}
+std::string pnum(std::string body) { return "#+begin_pnum\n" + body + "#+end_pnum\n"; }
 namespace common = beman::specgen::backend::common;
 using namespace beman::specgen::ir;
 
@@ -229,11 +225,10 @@ TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
 }
 
 TEST_CASE("org - stable references do not rewrite code or authored text") {
-    SpecItem          item;
+    SpecItem           item;
     DescriptionElement effects;
     effects.kind       = ElementKind::Effects;
-    effects.equivalent =
-        EquivalentTo{{"std::apply([](auto... xs) { return (... + xs); }, t[0]);", {}}};
+    effects.equivalent = EquivalentTo{{"std::apply([](auto... xs) { return (... + xs); }, t[0]);", {}}};
     item.descr.elements.push_back(std::move(effects));
 
     DescriptionElement remarks;
@@ -540,8 +535,9 @@ TEST_CASE("org - base heading level is an option") {
     sec.title       = "Constructors";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc, {.base_heading_level = 4}) == framed(
-          "**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
+    CHECK(org::render_to_string(doc, {.base_heading_level = 4}) ==
+          framed("**** Constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: "
+                 "t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 TEST_CASE("org - code names in section titles use org markup") {
@@ -551,9 +547,9 @@ TEST_CASE("org - code names in section titles use org markup") {
     sec.title       = "Class `optional` constructors";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc) == framed(
-          "** Class ~optional~ constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: "
-          "optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
+    CHECK(org::render_to_string(doc) ==
+          framed("** Class ~optional~ constructors [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: "
+                 "optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // Unlike the mpark backend there is no cap: markdown stops at six heading
@@ -564,8 +560,8 @@ TEST_CASE("org - outline level is not capped at six") {
     sec.stable_name = "deep";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc, {.base_heading_level = 8}) == framed(
-          "******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
+    CHECK(org::render_to_string(doc, {.base_heading_level = 8}) ==
+          framed("******** [deep]\n:PROPERTIES:\n:CUSTOM_ID: deep\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // The base moves the *origin*, not the descent: at any base a nested section
@@ -617,8 +613,10 @@ TEST_CASE("org - a titleless section emits no double space") {
     sec.stable_name = "optional.ctor";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(org::render_to_string(doc) == framed(
-          "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
+    CHECK(
+        org::render_to_string(doc) ==
+        framed(
+            "** [optional.ctor]\n:PROPERTIES:\n:CUSTOM_ID: optional.ctor\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n"));
 }
 
 // Keywords, rather than a greater block, can span Org headlines.  The
@@ -640,8 +638,8 @@ TEST_CASE("org - a synopsis is a codeblock, an itemdecl is an itemdecl") {
     Document doc;
     doc.nodes.push_back(Synopsis{.name = "optional", .code = {"template<class T> class optional;", {}}, .roster = {}});
 
-    CHECK(org::render_to_string(doc) == framed(
-          "#+begin_codeblock\ntemplate<class T> class optional;\n#+end_codeblock\n"));
+    CHECK(org::render_to_string(doc) ==
+          framed("#+begin_codeblock\ntemplate<class T> class optional;\n#+end_codeblock\n"));
 }
 
 TEST_CASE("org - paper mode marks additions and numbers one item") {
@@ -662,8 +660,7 @@ TEST_CASE("org - paper mode numbers across added section roots") {
         sec.stable_name = name;
         sec.title       = name;
         SpecItem item;
-        item.descr.elements.push_back(
-            {ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}});
+        item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}});
         sec.children.push_back(std::move(item));
         doc.nodes.push_back(std::move(sec));
     }

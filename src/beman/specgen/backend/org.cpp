@@ -125,10 +125,14 @@ bool needs_latex_snippet(const ir::CodeInline& v) {
 std::string html_escape(std::string_view text) {
     return text | std::views::transform([](const char ch) {
                switch (ch) {
-               case '&': return std::string{"&amp;"};
-               case '<': return std::string{"&lt;"};
-               case '>': return std::string{"&gt;"};
-               default: return std::string(1, ch);
+               case '&':
+                   return std::string{"&amp;"};
+               case '<':
+                   return std::string{"&lt;"};
+               case '>':
+                   return std::string{"&gt;"};
+               default:
+                   return std::string(1, ch);
                }
            }) |
            std::views::join | std::ranges::to<std::string>();
@@ -136,12 +140,18 @@ std::string html_escape(std::string_view text) {
 
 std::string html_span(const ir::Span& span, std::string_view spelling) {
     switch (span.kind) {
-    case ir::SpanKind::ExposId: return "<var>" + html_escape(span.payload) + "</var>";
-    case ir::SpanKind::SeeBelow: return "<var>see below</var>";
-    case ir::SpanKind::ImplDefined: return "<var>implementation-defined</var>";
-    case ir::SpanKind::Placeholder: return "<var>" + html_escape(span.payload) + "</var>";
-    case ir::SpanKind::Ref: return "[" + html_escape(span.payload) + "]";
-    case ir::SpanKind::LibraryIndex: return html_escape(spelling);
+    case ir::SpanKind::ExposId:
+        return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::SeeBelow:
+        return "<var>see below</var>";
+    case ir::SpanKind::ImplDefined:
+        return "<var>implementation-defined</var>";
+    case ir::SpanKind::Placeholder:
+        return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::Ref:
+        return "[" + html_escape(span.payload) + "]";
+    case ir::SpanKind::LibraryIndex:
+        return html_escape(spelling);
     }
     std::unreachable();
 }
@@ -213,7 +223,7 @@ struct PieceRenderer {
     std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
 };
 
-std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots = {}) {
+std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
     return para | std::views::transform([new_roots](const ir::Inline& piece) {
                return std::visit(overloaded{PieceRenderer{new_roots}}, piece);
            }) |
@@ -264,9 +274,8 @@ std::string render_flat_table(const ir::Table1D& table, std::span<const std::str
                                   render_table_cell(table.column1, new_roots),
                                   render_table_cell(table.column2, new_roots));
     out += table.rows | std::views::transform([new_roots](const ir::Table1DRow& row) {
-               return std::format("| {} | {} |\n",
-                                  render_table_cell(row.cell1, new_roots),
-                                  render_table_cell(row.cell2, new_roots));
+               return std::format(
+                   "| {} | {} |\n", render_table_cell(row.cell1, new_roots), render_table_cell(row.cell2, new_roots));
            }) |
            std::views::join | std::ranges::to<std::string>();
     return out;
@@ -292,19 +301,18 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
 
     if (!element.paragraphs.empty()) {
         blocks.push_back(label + render_paragraph(element.paragraphs.front(), new_roots) + '\n');
-        blocks.append_range(
-            element.paragraphs | std::views::drop(1) |
-            std::views::transform(
-                [new_roots](const ir::Paragraph& para) { return render_paragraph(para, new_roots) + '\n'; }));
+        blocks.append_range(element.paragraphs | std::views::drop(1) |
+                            std::views::transform([new_roots](const ir::Paragraph& para) {
+                                return render_paragraph(para, new_roots) + '\n';
+                            }));
     }
 
     if (element.itemize) {
-        const std::string items =
-            element.itemize->items |
-            std::views::transform([new_roots](const ir::Paragraph& item) {
-                return "- " + render_paragraph(item, new_roots) + '\n';
-            }) |
-            std::views::join | std::ranges::to<std::string>();
+        const std::string items = element.itemize->items |
+                                  std::views::transform([new_roots](const ir::Paragraph& item) {
+                                      return "- " + render_paragraph(item, new_roots) + '\n';
+                                  }) |
+                                  std::views::join | std::ranges::to<std::string>();
 
         // Same placement rule as the other two backends: the list belongs to
         // the paragraph it enumerates, so it follows the lead-in prose when
@@ -318,12 +326,10 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
             blocks.back() += '\n' + items;
     }
 
-    const std::string rendered_tables = tables |
-                                        std::views::transform(
-                                            [new_roots](const ir::Table2D& table) {
-                                                return render_table(table, new_roots);
-                                            }) |
-                                        std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::string rendered_tables =
+        tables |
+        std::views::transform([new_roots](const ir::Table2D& table) { return render_table(table, new_roots); }) |
+        std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_tables.empty()) {
         if (blocks.empty())
             blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_tables);
@@ -331,12 +337,10 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
             blocks.back() += '\n' + rendered_tables;
     }
 
-    const std::string rendered_flat_tables = flat_tables |
-                                             std::views::transform(
-                                                 [new_roots](const ir::Table1D& table) {
-                                                     return render_flat_table(table, new_roots);
-                                                 }) |
-                                             std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::string rendered_flat_tables =
+        flat_tables |
+        std::views::transform([new_roots](const ir::Table1D& table) { return render_flat_table(table, new_roots); }) |
+        std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_flat_tables.empty()) {
         if (blocks.empty())
             blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_flat_tables);
@@ -383,7 +387,7 @@ ir::DescriptionElement merge_element_group(std::ranges::range auto&& group) {
     return out;
 }
 
-std::vector<std::string> element_group_blocks(std::ranges::range auto&& group,
+std::vector<std::string> element_group_blocks(std::ranges::range auto&&    group,
                                               std::span<const std::string> new_roots) {
     const std::vector<ir::Table2D> tables =
         group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
@@ -396,7 +400,7 @@ std::vector<std::string> element_group_blocks(std::ranges::range auto&& group,
     return element_blocks(merge_element_group(group), tables, flat_tables, new_roots);
 }
 
-std::string render_item(const ir::SpecItem& item, std::span<const std::string> new_roots = {}) {
+std::string render_item(const ir::SpecItem& item, std::span<const std::string> new_roots) {
     // Index entries are dropped (design §8: "draft backend expands, others
     // drop"). `\indexlibrarymember` builds the draft's own index; a paper
     // fragment has none to build. Note this is a *policy* about papers rather
@@ -423,8 +427,7 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
         std::views::chunk_by(
             [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
         std::views::transform([new_roots](auto&& group) { return element_group_blocks(group, new_roots); }) |
-        std::views::join |
-        std::ranges::to<std::vector>();
+        std::views::join | std::ranges::to<std::vector>();
 
     if (!out.empty())
         out += '\n';
@@ -467,9 +470,9 @@ struct SeededProjector {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header =
-            s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
-                            : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
+        std::string header = s.title.empty()
+                                 ? std::format("{} [{}]\n", stars, s.stable_name)
+                                 : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
         header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
                               s.stable_name,
                               ctx.wording_root ? ":WG21_WORDING: t\n" : "",
@@ -518,14 +521,11 @@ struct OrgAlgebra {
     }
 };
 
-std::string render_layer(const common::RenderF<std::string>& layer,
-                         std::span<const std::string>        new_roots) {
+std::string render_layer(const common::RenderF<std::string>& layer, std::span<const std::string> new_roots) {
     return std::visit(overloaded{OrgAlgebra{new_roots}}, layer);
 }
 
-std::string render_node_to_string(const ir::Node&             node,
-                                  const RenderCtx&            ctx,
-                                  std::span<const std::string> new_roots) {
+std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx, std::span<const std::string> new_roots) {
     return beman::tree_algorithms::fold_with<std::string>(
         [new_roots](const common::RenderF<std::string>& layer) { return render_layer(layer, new_roots); },
         common::render_fmap,
@@ -537,15 +537,15 @@ std::string render_node_to_string(const ir::Node&             node,
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
     const RenderCtx                ctx{options.base_heading_level, true, options.paper_mode};
-    const std::vector<std::string> rendered =
-        doc.nodes | std::views::transform([&](const ir::Node& node) {
-            std::string text = render_node_to_string(node, ctx, options.new_roots);
-            if (options.paper_mode && !std::holds_alternative<ir::Section>(node))
-                return wrap_added(std::move(text));
-            return text;
-        }) |
-        std::ranges::to<std::vector>();
-    std::string out = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::vector<std::string> rendered = doc.nodes | std::views::transform([&](const ir::Node& node) {
+                                                  std::string text =
+                                                      render_node_to_string(node, ctx, options.new_roots);
+                                                  if (options.paper_mode && !std::holds_alternative<ir::Section>(node))
+                                                      return wrap_added(std::move(text));
+                                                  return text;
+                                              }) |
+                                              std::ranges::to<std::vector>();
+    std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
     if (options.paper_mode)
         out = number_added_pnums(std::move(out));
     return out;
