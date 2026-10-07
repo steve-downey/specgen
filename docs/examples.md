@@ -2,8 +2,11 @@
 - [General Command Information](#general-command-information)
 - [Minimal Header To IR](#minimal-header-to-ir)
 - [Render-Only IR Examples](#render-only-ir-examples)
-- [Mpark Paper Mode](#mpark-paper-mode)
+- [Paper Mode](#paper-mode)
+  - [Observers [gadget.observe]](#gadget.observe)
+  - [Modifiers [gadget.mod]](#gadget.mod)
 - [Fragment Output](#fragment-output)
+- [A Paper Of Several Headers](#a-paper-of-several-headers)
 - [Validation](#validation)
 - [Explicit Include Path](#explicit-include-path)
 - [Declaration Interleave](#declaration-interleave)
@@ -43,6 +46,9 @@ examples/cli/run-all.sh       # re-capture everything shown below
 | `--validate`                      | Validation                                  |
 | `--paper`                         | Mpark paper mode                            |
 | `--split`, `--root`               | Fragment output                             |
+| `generate <header>...` (a paper)  | A paper of several headers                  |
+| `-o` with `--split`               | A paper of several headers                  |
+| `--depfile`, `--dep-target`       | A paper of several headers                  |
 
 
 <a id="general-command-information"></a>
@@ -90,24 +96,51 @@ dump-decls options:
 			     option parsing
 
 generate options:
-  <header>                  the header to parse; with none, parse a stock
-			     snippet as a link-proving smoke check
+  <header>...                the headers to parse, one document each and all
+			     of them one paper, in the order named; with none,
+			     parse a stock snippet as a link-proving smoke
+			     check
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
 			     for a later `render --from-ir`, instead of
-			     rendering wording here
+			     rendering wording here. One document per file is
+			     what the format is, so this takes one header
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
 			     finding at error severity aborts the render
 			     (exit 1) instead
-  --paper                   wrap the fragment in an `::: add` editing-instruction
-			     div and number its paragraphs as added (mpark only)
+  --paper                   mark the fragment as an addition and number its
+			     paragraphs as added (mpark and org)
+  --new-root <name>         treat <name> and every stable name beneath it as
+			     a clause proposed by this paper (mpark and org),
+			     rather than one already in the working draft. May be
+			     repeated; references beneath any root use a local
+			     target
+  --base-heading-level <n>  heading level of a top-level section; nested
+			     sections descend from it (mpark and org only;
+			     2 by default). One to six under mpark, markdown's
+			     deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+			     descend from it (latex only; 3 by default, the
+			     draft's library split granularity)
   --split <dir>             write one fragment per top-level section into <dir>,
 			     named from its stable name (optional.ctor.tex), and
 			     list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
 			     section (--split only); derived from the sections'
-			     common stable-name prefix when omitted
-  -o, --output <file>       write here instead of standard output
+			     common stable-name prefix when omitted. With
+			     several headers, repeats to name each document's
+			     root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output;
+			     alongside --split, write both the whole and the
+			     fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+			     this run produced and every file its parse read,
+			     with an empty rule per prerequisite so a deleted
+			     header rebuilds rather than erroring. System
+			     headers are left out
+  --dep-target <name>       name this target in the dependency fragment
+			     instead of the files actually written; repeats
+			     (--depfile only)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
 			     compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -120,23 +153,54 @@ generate options:
 			     option parsing
 
 render options:
-  --from-ir <file>    IR JSON to read; "-" for standard input (required)
-  --backend <name>    latex (default), mpark, or org
-  --validate          run the wording validators before rendering; a finding
-		       at error severity aborts the render (exit 1) instead
-  --paper             wrap the fragment in an `::: add` editing-instruction div
-		       and number its paragraphs as added (mpark only)
-  --split <dir>       write one fragment per top-level section into <dir>,
-		       named from its stable name (optional.ctor.tex), and
-		       list the paths written on standard output
-  --root <name>       name the fragment holding the nodes outside every
-		       section (--split only); derived from the sections'
-		       common stable-name prefix when omitted
-  -o, --output <file> write here instead of standard output
+  --from-ir <file>          IR JSON to read; "-" for standard input (required).
+			     May be repeated, once per document of one paper:
+			     --validate then runs across the union of their
+			     documented names, so a name specified by a
+			     sibling document is not foreign. Several inputs
+			     render as one paper -- joined in order for a
+			     single output, split into per-clause fragments,
+			     or both -- and --root, when given at all, repeats
+			     too, pairing with each --from-ir in order
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+			     finding at error severity aborts the render
+			     (exit 1) instead
+  --paper                   mark the fragment as an addition and number its
+			     paragraphs as added (mpark and org)
+  --new-root <name>         treat <name> and every stable name beneath it as
+			     a clause proposed by this paper (mpark and org),
+			     rather than one already in the working draft. May be
+			     repeated; references beneath any root use a local
+			     target
+  --base-heading-level <n>  heading level of a top-level section; nested
+			     sections descend from it (mpark and org only;
+			     2 by default). One to six under mpark, markdown's
+			     deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+			     descend from it (latex only; 3 by default, the
+			     draft's library split granularity)
+  --split <dir>             write one fragment per top-level section into <dir>,
+			     named from its stable name (optional.ctor.tex), and
+			     list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+			     section (--split only); derived from the sections'
+			     common stable-name prefix when omitted. With
+			     several --from-ir inputs, repeats to name each
+			     document's root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output;
+			     alongside --split, write both the whole and the
+			     fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+			     this run produced and the IR files it read, with
+			     an empty rule per prerequisite
+  --dep-target <name>       name this target in the dependency fragment
+			     instead of the files actually written; repeats
+			     (--depfile only)
 
 general:
-  -h, --help          show this message
-  --version           show the version
+  -h, --help                show this message
+  --version                 show the version
 ```
 
 
@@ -486,29 +550,33 @@ org, for the `wg21org` exporter:
 template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;
 #+end_itemdecl
 
+#+begin_pnum
 /Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
 return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 #+end_codeblock
+#+end_pnum
 ```
 
 
-<a id="mpark-paper-mode"></a>
+<a id="paper-mode"></a>
 
-# Mpark Paper Mode
+# Paper Mode
 
-Paper mode is mpark-only. It wraps the fragment in an editing-instruction div and numbers added paragraphs as `x`, `x+1`, and so on.
+Paper mode marks a complete mpark or org fragment as added wording and numbers added paragraphs as `x`, `x+1`, and so on. Mpark uses its editing-instruction div; org uses `addedblock` for rootless material and a `WG21_CHANGE` property for complete clause subtrees.
 
 ```sh
 #!/bin/sh
 # examples/cli/40-paper-mode.sh                                       -*-sh-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# Paper mode is mpark-only: it wraps the fragment in an editing-instruction div
-# and numbers added paragraphs x, x+1, and so on. No other backend has it.
+# Paper mode marks a complete mpark or org fragment as added wording and
+# numbers its paragraphs x, x+1, and so on.
 . "$(dirname -- "$0")/env.sh"
 
 OUT=$(out_dir 40-paper-mode)
@@ -518,6 +586,11 @@ cd "$REPO_ROOT"
     --backend mpark \
     --paper \
     -o "$OUT/paper-mode.md"
+
+"$SPECGEN" render --from-ir tests/golden/paper_mode/input.json \
+    --backend org \
+    --paper \
+    -o "$OUT/paper-mode.org"
 ```
 
 ````markdown
@@ -559,12 +632,95 @@ constexpr bool ready() const noexcept;
 constexpr void reset() noexcept;
 ```
 
-[x]{.pnum} *Effects*: Resets the gadget.
+[x+4]{.pnum} *Effects*: Resets the gadget.
 
 :::
 
 :::
 ````
+
+The same IR in org:
+
+\#+begin\_src org
+
+<div class="addedblock" id="org2806f94">
+<div class="codeblock" id="orgab7aeb4">
+<p>
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+};
+</p>
+
+</div>
+
+</div>
+
+
+<a id="gadget.observe"></a>
+
+## Observers [gadget.observe]
+
+<div class="itemdecl" id="org0ae3fb5">
+<p>
+constexpr bool ready() const noexcept;
+</p>
+
+</div>
+
+<div class="pnum" id="org2977a75">
+<p>
+<i>Constraints</i>:
+</p>
+
+<ul class="org-ul">
+<li><code>is_copy_constructible_v&lt;T&gt;</code> is <code>true</code>,</li>
+<li><code>is_move_constructible_v&lt;T&gt;</code> is <code>true</code>.</li>
+</ul>
+
+</div>
+
+<div class="pnum" id="org8ed3f66">
+<p>
+<i>Returns</i>: <code>true</code> if and only if the gadget is ready.
+</p>
+
+</div>
+
+<div class="pnum" id="org4c772c8">
+<p>
+A second paragraph, so the added numbering has to advance.
+</p>
+
+</div>
+
+<div class="pnum" id="org875ba82">
+<p>
+A free paragraph closing the subclause.
+</p>
+
+</div>
+
+
+<a id="gadget.mod"></a>
+
+## Modifiers [gadget.mod]
+
+<div class="itemdecl" id="org7cced6d">
+<p>
+constexpr void reset() noexcept;
+</p>
+
+</div>
+
+<div class="pnum" id="org6aa89d4">
+<p>
+<i>Effects</i>: Resets the gadget.
+</p>
+
+</div>
+
+\#+end\_src
 
 
 <a id="fragment-output"></a>
@@ -805,10 +961,81 @@ public:
   friend constexpr bool operator==(const optional& x, const optional& y);
 
 private:
-  T @\exposidnc{value}@;            // exposition only
+  T @\exposidnc{value}@;              // exposition only
   bool @\exposidnc{engaged}@ = false; // exposition only
 };
 #+end_codeblock
+```
+
+
+<a id="a-paper-of-several-headers"></a>
+
+# A Paper Of Several Headers
+
+A paper proposing several headers is several specgen documents and one invocation. `generate` takes one header per document, validates across the union of their documented names — so a name specified by a sibling document is not foreign — and writes the assembled clause, the per-clause fragments, or both.
+
+```sh
+#!/bin/sh
+# examples/cli/55-paper.sh                                            -*-sh-*-
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# A paper of several headers in one invocation. `generate` takes one header per
+# document and renders them as one paper -- validated across the union of their
+# documented names, so a name specified by a sibling document is not foreign --
+# writing the assembled clause with `-o`, the per-clause fragments with
+# `--split`, and a Makefile dependency fragment with `--depfile`.
+#
+# The headers are copied into the output directory and everything runs from
+# there with relative paths, for the reason 50-fragments.sh runs from inside its
+# own: a manifest or a dependency fragment holding an absolute path would differ
+# on every machine. It also makes the capture read like the project it is an
+# example for -- headers under include/, wording written beside them.
+. "$(dirname -- "$0")/env.sh"
+
+require_tier_b
+
+OUT=$(out_dir 55-paper)
+CORPUS=$REPO_ROOT/tests/corpus
+
+mkdir -p "$OUT/include/support"
+cp "$CORPUS/spec_paper_main.hpp" "$CORPUS/spec_paper_sibling.hpp" "$OUT/include/"
+cp "$CORPUS/support/spec_paper_traits.hpp" "$OUT/include/support/"
+
+cd "$OUT"
+
+# One parse of both headers, three outputs: the whole, the pieces, and the
+# dependency fragment that says what the first two were built from.
+"$SPECGEN" generate include/spec_paper_main.hpp include/spec_paper_sibling.hpp \
+    --validate \
+    --no-compile-commands \
+    -o expected.tex \
+    --split wording \
+    --root paper.mix.syn --root paper.blend.syn \
+    --depfile wording.d > manifest
+```
+
+`--split` names the pieces, in document then section order:
+
+```text
+wording/paper.mix.syn.tex
+wording/paper.mix.tex
+wording/paper.blend.syn.tex
+wording/paper.blend.tex
+```
+
+`-o` names the whole, which is those same pieces in that same order with the fragment boundaries left out. That is not a coincidence to be relied on quietly: `golden.paper_whole.is_fragments` pins it, because a paper that assembles its clause from fragments and one that renders it whole have to agree.
+
+`--depfile` writes what make needs to know to rebuild any of it. The prerequisites are every file the parses read — including `include/support/spec_paper_traits.hpp`, which neither header names on the command line and which no rendered wording mentions, and which is exactly the edge that matters: a docblock in it changes the generated clause, so a paper that did not depend on it would go stale in silence. The empty rule per prerequisite is `-MP`: delete or rename a header and the next build regenerates rather than failing on a prerequisite the stale fragment still remembers.
+
+```makefile
+expected.tex wording/paper.mix.syn.tex wording/paper.mix.tex wording/paper.blend.syn.tex wording/paper.blend.tex: \
+  include/spec_paper_main.hpp \
+  include/spec_paper_sibling.hpp \
+  include/support/spec_paper_traits.hpp
+
+include/spec_paper_main.hpp:
+include/spec_paper_sibling.hpp:
+include/support/spec_paper_traits.hpp:
 ```
 
 
@@ -883,12 +1110,15 @@ OUT=$(out_dir 65-diagnostics)
 ```
 
 ```text
-spec_diagnostics.hpp:63: warning: duplicate \effects element; both kept
-spec_diagnostics.hpp:81: note: \effects appears after \remarks; output is canonicalized
-spec_diagnostics.hpp:85: error: unknown tag \effect
-spec_diagnostics.hpp:88: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
-spec_diagnostics.hpp:90: warning: malformed \rSec marker: expected '{' (comment offset 26)
-spec_diagnostics.hpp:94: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}
+spec_diagnostics.hpp:63: error: unknown tag \remark
+spec_diagnostics.hpp:73: warning: duplicate \effects element; both kept
+spec_diagnostics.hpp:91: note: \effects appears after \remarks; output is canonicalized
+spec_diagnostics.hpp:95: error: unknown tag \effect
+spec_diagnostics.hpp:98: warning: END [gadget.wrong] does not match open section [gadget.obs]
+spec_diagnostics.hpp:100: warning: END [gadget.extra] has no open section to close
+spec_diagnostics.hpp:102: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
+spec_diagnostics.hpp:104: warning: malformed \rSec marker: expected '{' (comment offset 26)
+spec_diagnostics.hpp:108: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}
 ```
 
 
@@ -1308,7 +1538,7 @@ public:
   friend constexpr bool operator==(const optional& x, const optional& y);
 
 private:
-  T $value$;            // exposition only
+  T $value$;              // exposition only
   bool $engaged$ = false; // exposition only
 };
 ```

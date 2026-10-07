@@ -1,19 +1,30 @@
 ** Modifiers [optional.mod]
+:PROPERTIES:
+:CUSTOM_ID: optional.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 constexpr void reset() noexcept;
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
 @\exposidnc{engaged}@ = false;
 #+end_codeblock
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is ~false~.
+#+end_pnum
 
 #+begin_itemdecl
 friend constexpr bool operator==(const optional& x, const optional& y);
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: ~true~ if both operands are disengaged, or both are engaged with equal contained values.
+#+end_pnum

@@ -1,14 +1,22 @@
 ** Errors [demo.errors]
+:PROPERTIES:
+:CUSTOM_ID: demo.errors
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 enum class whatwg_error { invalid_byte, truncated_sequence };
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The enumerators have the meanings in the following table.
 
 #+name: demo.errors.tab
 #+caption: Enum class ~whatwg_error~
+#+ATTR_WG21: :columns 25 67
 | Constant | Meaning |
 |-
 | ~invalid_byte~ | the input holds a byte the encoding does not allow in that position. |
 | ~truncated_sequence~ | the input ends in the middle of a sequence. |
+#+end_pnum

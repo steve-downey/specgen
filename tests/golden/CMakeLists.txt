@@ -39,7 +39,7 @@ endif()
 # through `specgen render --backend latex`, compared against
 # <case>/expected.tex. Runs on every lane.
 #
-# PAPER (render mode, mpark only): add `--paper`, so the fragment comes
+# PAPER (render mode, mpark and org): add `--paper`, so the fragment comes
 # out wrapped in an `::: add` div with added-paragraph numbering.
 #
 # BASE_HEADING_LEVEL (render mode, mpark and org) and BASE_SECTION_DEPTH
@@ -428,6 +428,12 @@ specgen_add_golden(
 specgen_add_golden(
     paper_mode
     BACKEND mpark
+    PAPER
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
+)
+specgen_add_golden(
+    paper_mode_org
+    BACKEND org
     PAPER
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
 )

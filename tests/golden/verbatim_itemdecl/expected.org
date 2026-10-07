@@ -1,4 +1,9 @@
 ** Verbatim item declarations [verbatim.itemdecl]
+:PROPERTIES:
+:CUSTOM_ID: verbatim.itemdecl
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 struct nullopt_t {@\seebelow@};
@@ -6,4 +11,6 @@ struct nullopt_t {@\seebelow@};
 inline constexpr nullopt_t nullopt(@\unspec@);
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The type represents the no-value state.
+#+end_pnum

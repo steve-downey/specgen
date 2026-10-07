@@ -1,4 +1,9 @@
-** Class template `holder` [demo.holder]
+** Class template ~holder~ [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_codeblock
 template<typename R>
@@ -18,10 +23,14 @@ public:
 constexpr explicit holder(R base);
 #+end_itemdecl
 
-/Effects/: Initializes @@latex:\exposid{base}@@ with ~std::move(base)~ and @@latex:\exposid{count}@@ with ~1~.
+#+begin_pnum
+/Effects/: Initializes @@latex:\exposid{base}@@@@html:<code><var>base</var></code>@@ with ~std::move(base)~ and @@latex:\exposid{count}@@@@html:<code><var>count</var></code>@@ with ~1~.
+#+end_pnum
 
 #+begin_itemdecl
 constexpr holder();
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Equivalent to ~holder(R())~.
+#+end_pnum

@@ -7,15 +7,24 @@ public:
 #+end_codeblock
 
 ** Modifiers [widget.mod]
+:PROPERTIES:
+:CUSTOM_ID: widget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 void configure(int mode);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: All of the following are true:
 
 - ~mode >= 0~,
 - ~mode <= 2~, and
-- ~mode~ denotes a supported mode as specified in ([external.mode.requirements]).
+- ~mode~ denotes a supported mode as specified in ([[https://eel.is/c++draft/external.mode.requirements][@@html:[external.mode.requirements]@@@@latex:{[}external.mode.requirements{]}@@]]).
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Configures the widget.
+#+end_pnum

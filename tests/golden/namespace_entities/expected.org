@@ -1,49 +1,68 @@
 ** Vocabulary [demo.vocab]
+:PROPERTIES:
+:CUSTOM_ID: demo.vocab
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class T> using id_t = T;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The identity alias.
+#+end_pnum
 
 #+begin_itemdecl
 using value_t = int;
 using size_type = unsigned long;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The value aliases.
+#+end_pnum
 
 #+begin_itemdecl
 using token_t = @\impdef@;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The token type is implementation-defined.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T> inline constexpr bool flag_v = false;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: ~flag_v<T>~ is ~false~ unless a program specializes it.
+#+end_pnum
 
 #+begin_itemdecl
 inline constexpr int max_links = 8;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The registration limit.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T>
 concept usable = requires { typename T::type; };
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: A type is usable if it names a member type.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T>
 concept masked = @\seebelow@;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The concept is specified below.
+#+end_pnum
 
 #+begin_codeblock
 template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
@@ -58,16 +77,20 @@ concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
 enum class color { red, green };
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The enumerators have the following meanings:
 
 - ~red~ -- the default channel.
 - ~green~ -- the channel a program selects.
+#+end_pnum
 
 #+begin_itemdecl
 enum link_width : unsigned char { narrow = 1, wide = 2 };
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The width of a link, in bytes.
+#+end_pnum
 
 #+begin_codeblock
 enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
@@ -77,4 +100,6 @@ enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
 inline constexpr @\exposidnc{channel-state}@ initial_state = @\exposidnc{channel-state}@::open;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: The state a new channel starts in.
+#+end_pnum

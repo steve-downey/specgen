@@ -10,16 +10,24 @@ private:
 #+end_codeblock
 
 ** Assignment [optional.assign]
+:PROPERTIES:
+:CUSTOM_ID: optional.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 optional& operator=(const optional& rhs);
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: See the following table.
 
 #+name: optional.assign.copy
 #+caption: ~optional::operator=(const optional&)~ effects
+#+ATTR_WG21: :columns 18 36 36
 | | ~*this~ contains a value | ~*this~ does not contain a value |
 |-
-| ~rhs~ contains a value | assigns the value of ~rhs~ to @@latex:\exposid{val}@@. | direct-non-list-initializes @@latex:\exposid{val}@@ from ~rhs~. |
-| ~rhs~ does not contain a value | destroys @@latex:\exposid{val}@@. | no effect. |
+| ~rhs~ contains a value | assigns the value of ~rhs~ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@. | direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ from ~rhs~. |
+| ~rhs~ does not contain a value | destroys @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@. | no effect. |
+#+end_pnum

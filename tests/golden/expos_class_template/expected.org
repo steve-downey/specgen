@@ -46,10 +46,14 @@ concept @\exposidnc{mixes-with-model}@ =
 template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: A boxed copy of ~t~.
+#+end_pnum
 
 #+begin_itemdecl
 template<typename T> constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: The raw form of ~b~.
+#+end_pnum

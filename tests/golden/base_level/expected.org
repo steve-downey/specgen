@@ -1,4 +1,9 @@
 *** Header synopsis [gadget.syn]
+:PROPERTIES:
+:CUSTOM_ID: gadget.syn
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_codeblock
 class gadget {
@@ -8,15 +13,32 @@ public:
 #+end_codeblock
 
 *** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 **** Readiness [gadget.observe.ready]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe.ready
+:UNNUMBERED: t
+:END:
 
 #+begin_itemdecl
 constexpr bool ready() const noexcept;
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: ~true~ if and only if the gadget is ready.
+#+end_pnum
 
 ***** Notes [gadget.observe.ready.notes]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe.ready.notes
+:UNNUMBERED: t
+:END:
 
+#+begin_pnum
 A third level of section, so the descent below the base is visible.
+#+end_pnum

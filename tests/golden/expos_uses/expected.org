@@ -28,23 +28,33 @@ private:
 #+end_codeblock
 
 ** Observers [counter.obs]
+:PROPERTIES:
+:CUSTOM_ID: counter.obs
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 int get() const;
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: Equivalent to:
 
 #+begin_codeblock
 return @\exposidnc{value}@;
 #+end_codeblock
+#+end_pnum
 
 #+begin_itemdecl
 void bump();
 #+end_itemdecl
 
-/Mandates/: ~int~ models @@latex:\exposid{enabled}@@.
+#+begin_pnum
+/Mandates/: ~int~ models @@latex:\exposid{enabled}@@@@html:<code><var>enabled</var></code>@@.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
@@ -52,16 +62,26 @@ int exposed_limit = 2;
 if constexpr (@\exposidnc{enabled}@<int>)
   @\exposidnc{value}@ = @\exposidnc{value}@ + @\exposidnc{limit}@ + exposed_limit;
 #+end_codeblock
+#+end_pnum
 
-/Remarks/: Increments @@latex:\exposid{value}@@ in place.
+#+begin_pnum
+/Remarks/: Increments @@latex:\exposid{value}@@@@html:<code><var>value</var></code>@@ in place.
+#+end_pnum
 
 #+begin_itemdecl
 template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<int> context);
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: The result of ~f~ applied to the dereferenced context.
+#+end_pnum
 
-** Class template `gauge` [counter.gauge]
+** Class template ~gauge~ [counter.gauge]
+:PROPERTIES:
+:CUSTOM_ID: counter.gauge
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_codeblock
 template<@\exposidnc{enabled}@ U,
@@ -79,14 +99,22 @@ public:
 int level() const;
 #+end_itemdecl
 
-/Constraints/: ~U~ models @@latex:\exposid{enabled}@@.
+#+begin_pnum
+/Constraints/: ~U~ models @@latex:\exposid{enabled}@@@@html:<code><var>enabled</var></code>@@.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~0~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T> bool fully_qualified_use();
 #+end_itemdecl
 
-/Constraints/: ~T~ models @@latex:\exposid{enabled}@@.
+#+begin_pnum
+/Constraints/: ~T~ models @@latex:\exposid{enabled}@@@@html:<code><var>enabled</var></code>@@.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~true~.
+#+end_pnum

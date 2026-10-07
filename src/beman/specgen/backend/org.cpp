@@ -35,12 +35,12 @@
 //      a code inline that carries a *span* -- and only such an inline --
 //      leaves org for an `@@latex:...@@` export snippet.
 //
-//   4. No paragraph numbers, and no `#+begin_wording` wrapper. `\pnum` and
-//      `[#]{.pnum}` are self-numbering and org has no equivalent, so numbering
-//      here would be the first that specgen itself counted; and design §8's
-//      "the including document owns framing" applies with nothing to override
-//      it, since org's `wording` environment restyles section numbering rather
-//      than enabling anything the fragment needs.
+//   4. Normative paragraphs go in `#+begin_pnum` special blocks, whose wg21org
+//      exporters supply the target-specific counter. The top-level generated
+//      sections are `:UNNUMBERED:` like mpark's `{-}` headings. Top-level
+//      sections also carry `:WG21_WORDING: t`; wg21org uses that property to
+//      apply wording paragraph numbering and presentation to exactly the
+//      generated subtree, while the including paper still owns its framing.
 
 #include <beman/specgen/backend/org.hpp>
 
@@ -53,6 +53,7 @@
 #include <cstddef>
 #include <format>
 #include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -87,6 +88,27 @@ std::string render_block(std::string_view env, const ir::CodeText& code) {
     return std::format("#+begin_{}\n{}\n#+end_{}\n", env, render_code(code), env);
 }
 
+std::string wrap_pnum(std::string text) {
+    return "#+begin_pnum\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_pnum\n";
+}
+
+std::string wrap_added(std::string text) {
+    return "#+begin_addedblock\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_addedblock\n";
+}
+
+std::string number_added_pnums_from(std::string text, std::size_t pos, std::size_t count) {
+    constexpr std::string_view marker = "#+begin_pnum\n";
+    pos                               = text.find(marker, pos);
+    if (pos == std::string::npos)
+        return text;
+    const std::string label       = count == 0 ? "x" : std::format("x+{}", count);
+    const std::string replacement = std::format("#+begin_pnum {}\n", label);
+    text.replace(pos, marker.size(), replacement);
+    return number_added_pnums_from(std::move(text), pos + replacement.size(), count + 1);
+}
+
+std::string number_added_pnums(std::string text) { return number_added_pnums_from(std::move(text), 0, 0); }
+
 // --- prose ------------------------------------------------------------------
 
 // Org's code markup is `~x~`, and org has no escape for a literal `~` inside
@@ -100,10 +122,71 @@ bool needs_latex_snippet(const ir::CodeInline& v) {
     return !v.code.spans.empty() || v.code.text.contains('~') || v.code.text.empty();
 }
 
+std::string html_escape(std::string_view text) {
+    return text | std::views::transform([](const char ch) {
+               switch (ch) {
+               case '&':
+                   return std::string{"&amp;"};
+               case '<':
+                   return std::string{"&lt;"};
+               case '>':
+                   return std::string{"&gt;"};
+               default:
+                   return std::string(1, ch);
+               }
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string html_span(const ir::Span& span, std::string_view spelling) {
+    switch (span.kind) {
+    case ir::SpanKind::ExposId:
+        return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::SeeBelow:
+        return "<var>see below</var>";
+    case ir::SpanKind::ImplDefined:
+        return "<var>implementation-defined</var>";
+    case ir::SpanKind::Placeholder:
+        return "<var>" + html_escape(span.payload) + "</var>";
+    case ir::SpanKind::Ref:
+        return "[" + html_escape(span.payload) + "]";
+    case ir::SpanKind::LibraryIndex:
+        return html_escape(spelling);
+    }
+    std::unreachable();
+}
+
+std::string html_code_inline(const ir::CodeInline& v) {
+    struct State {
+        std::string out;
+        std::size_t pos = 0;
+    };
+    const std::string_view text = v.code.text;
+    State state = std::ranges::fold_left(v.code.spans, State{}, [text](State state, const ir::Span& span) {
+        if (span.begin <= text.size() && span.end <= text.size() && span.begin >= state.pos &&
+            span.end >= span.begin) {
+            state.out += html_escape(text.substr(state.pos, span.begin - state.pos));
+            state.out += html_span(span, text.substr(span.begin, span.end - span.begin));
+            state.pos = span.end;
+        }
+        return state;
+    });
+    state.out += html_escape(text.substr(state.pos));
+    return "<code>" + state.out + "</code>";
+}
+
+bool under_new_root(std::string_view name, std::span<const std::string> new_roots) {
+    return std::ranges::any_of(new_roots, [name](std::string_view root) {
+        return name == root || (name.starts_with(root) && name.size() > root.size() && name[root.size()] == '.');
+    });
+}
+
 // Dispatches one Inline (a Paragraph's Piece) to its org rendering. Four
 // alternatives (decision visitation-rules' >3 rule), so a named visitor
 // struct, mirroring the PieceRenderer in each of the other two backends.
 struct PieceRenderer {
+    std::span<const std::string> new_roots;
+
     // Plain prose text, verbatim -- the same treatment the other two backends
     // give it, and with the same justification: the author's prose is the
     // author's. Note that org is the most active of the three targets here
@@ -122,18 +205,17 @@ struct PieceRenderer {
     // a doubled-up `\tcode{\exposid{value}}`.
     std::string operator()(const ir::CodeInline& v) const {
         if (needs_latex_snippet(v))
-            return "@@latex:" + common::draft_code_inline(v) + "@@";
+            return "@@latex:" + common::draft_code_inline(v) + "@@@@html:" + html_code_inline(v) + "@@";
         return '~' + v.code.text + '~';
     }
 
-    // A cross-reference to another stable name. `\iref{x}` renders "([x])" in
-    // the draft, so the parentheses belong to this rendering and not to the
-    // authored prose around it -- and plain text is what `view-maybe.org`
-    // already writes ("the exposition-only dereferenceable concept
-    // ([iterator.synopsis])"). A `:CUSTOM_ID:` drawer on the heading plus a
-    // real org link is deliberately declined: nothing
-    // needs resolving yet, and adding the target later moves no heading.
-    std::string operator()(const ir::RefInline& v) const { return "([" + v.stable_name + "])"; }
+    // A cross-reference to another stable name.  Build the link here, while
+    // the IR still distinguishes it from authored prose and C++ punctuation.
+    std::string operator()(const ir::RefInline& v) const {
+        const std::string target =
+            (under_new_root(v.stable_name, new_roots) ? "#" : "https://eel.is/c++draft/") + v.stable_name;
+        return "([[" + target + "][@@html:[" + v.stable_name + "]@@@@latex:{[}" + v.stable_name + "{]}@@]])";
+    }
 
     // A library concept name. The draft's \libconcept sets the code font and
     // links; org has only the code font to offer, which is what `~...~` gives
@@ -141,31 +223,41 @@ struct PieceRenderer {
     std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
 };
 
-std::string render_paragraph(const ir::Paragraph& para) {
-    return para | std::views::transform([](const ir::Inline& piece) {
-               return std::visit(overloaded{PieceRenderer{}}, piece);
+std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
+    return para | std::views::transform([new_roots](const ir::Inline& piece) {
+               return std::visit(overloaded{PieceRenderer{new_roots}}, piece);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
-std::string render_table_cell(const ir::Paragraph& paragraph) {
-    return render_paragraph(paragraph) | std::views::transform([](const char ch) {
+std::string render_table_cell(const ir::Paragraph& paragraph, std::span<const std::string> new_roots) {
+    return render_paragraph(paragraph, new_roots) | std::views::transform([](const char ch) {
                return ch == '|' ? std::string{"\\vert{}"} : std::string(1, ch);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
-std::string render_table(const ir::Table2D& table) {
-    std::string out = std::format("#+name: {}\n#+caption: {}\n| | {} | {} |\n|-\n",
+// Section titles use the source markup's backticks for code names.  They are
+// not Paragraphs, so PieceRenderer never sees them; translate that one piece
+// of inline markup explicitly for an org heading.
+std::string render_section_title(std::string title) {
+    std::ranges::replace(title, '`', '~');
+    return title;
+}
+
+std::string render_table(const ir::Table2D& table, std::span<const std::string> new_roots) {
+    std::string out = std::format("#+name: {}\n#+caption: {}\n"
+                                  "#+ATTR_WG21: :columns 18 36 36\n"
+                                  "| | {} | {} |\n|-\n",
                                   table.stable_name,
-                                  render_paragraph(table.caption),
-                                  render_table_cell(table.column1),
-                                  render_table_cell(table.column2));
-    out += table.rows | std::views::transform([](const ir::Table2DRow& row) {
+                                  render_paragraph(table.caption, new_roots),
+                                  render_table_cell(table.column1, new_roots),
+                                  render_table_cell(table.column2, new_roots));
+    out += table.rows | std::views::transform([new_roots](const ir::Table2DRow& row) {
                return std::format("| {} | {} | {} |\n",
-                                  render_table_cell(row.header),
-                                  render_table_cell(row.cell1),
-                                  render_table_cell(row.cell2));
+                                  render_table_cell(row.header, new_roots),
+                                  render_table_cell(row.cell1, new_roots),
+                                  render_table_cell(row.cell2, new_roots));
            }) |
            std::views::join | std::ranges::to<std::string>();
     return out;
@@ -173,14 +265,17 @@ std::string render_table(const ir::Table2D& table) {
 
 // \libtab2's flat two-column table (issue #74): a named, captioned org table
 // with no row-heading column to spare.
-std::string render_flat_table(const ir::Table1D& table) {
-    std::string out = std::format("#+name: {}\n#+caption: {}\n| {} | {} |\n|-\n",
+std::string render_flat_table(const ir::Table1D& table, std::span<const std::string> new_roots) {
+    std::string out = std::format("#+name: {}\n#+caption: {}\n"
+                                  "#+ATTR_WG21: :columns 25 67\n"
+                                  "| {} | {} |\n|-\n",
                                   table.stable_name,
-                                  render_paragraph(table.caption),
-                                  render_table_cell(table.column1),
-                                  render_table_cell(table.column2));
-    out += table.rows | std::views::transform([](const ir::Table1DRow& row) {
-               return std::format("| {} | {} |\n", render_table_cell(row.cell1), render_table_cell(row.cell2));
+                                  render_paragraph(table.caption, new_roots),
+                                  render_table_cell(table.column1, new_roots),
+                                  render_table_cell(table.column2, new_roots));
+    out += table.rows | std::views::transform([new_roots](const ir::Table1DRow& row) {
+               return std::format(
+                   "| {} | {} |\n", render_table_cell(row.cell1, new_roots), render_table_cell(row.cell2, new_roots));
            }) |
            std::views::join | std::ranges::to<std::string>();
     return out;
@@ -199,22 +294,25 @@ std::string render_flat_table(const ir::Table1D& table) {
 // (note 4 at the top of this file).
 std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                                         const std::vector<ir::Table2D>& tables,
-                                        const std::vector<ir::Table1D>& flat_tables) {
+                                        const std::vector<ir::Table1D>& flat_tables,
+                                        std::span<const std::string>    new_roots) {
     std::vector<std::string> blocks;
     const std::string        label = std::format("/{}/: ", common::element_label(element.kind));
 
     if (!element.paragraphs.empty()) {
-        blocks.push_back(label + render_paragraph(element.paragraphs.front()) + '\n');
-        blocks.append_range(
-            element.paragraphs | std::views::drop(1) |
-            std::views::transform([](const ir::Paragraph& para) { return render_paragraph(para) + '\n'; }));
+        blocks.push_back(label + render_paragraph(element.paragraphs.front(), new_roots) + '\n');
+        blocks.append_range(element.paragraphs | std::views::drop(1) |
+                            std::views::transform([new_roots](const ir::Paragraph& para) {
+                                return render_paragraph(para, new_roots) + '\n';
+                            }));
     }
 
     if (element.itemize) {
-        const std::string items =
-            element.itemize->items |
-            std::views::transform([](const ir::Paragraph& item) { return "- " + render_paragraph(item) + '\n'; }) |
-            std::views::join | std::ranges::to<std::string>();
+        const std::string items = element.itemize->items |
+                                  std::views::transform([new_roots](const ir::Paragraph& item) {
+                                      return "- " + render_paragraph(item, new_roots) + '\n';
+                                  }) |
+                                  std::views::join | std::ranges::to<std::string>();
 
         // Same placement rule as the other two backends: the list belongs to
         // the paragraph it enumerates, so it follows the lead-in prose when
@@ -229,7 +327,9 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
     }
 
     const std::string rendered_tables =
-        tables | std::views::transform(render_table) | std::views::join_with('\n') | std::ranges::to<std::string>();
+        tables |
+        std::views::transform([new_roots](const ir::Table2D& table) { return render_table(table, new_roots); }) |
+        std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_tables.empty()) {
         if (blocks.empty())
             blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_tables);
@@ -237,8 +337,10 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
             blocks.back() += '\n' + rendered_tables;
     }
 
-    const std::string rendered_flat_tables = flat_tables | std::views::transform(render_flat_table) |
-                                             std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::string rendered_flat_tables =
+        flat_tables |
+        std::views::transform([new_roots](const ir::Table1D& table) { return render_flat_table(table, new_roots); }) |
+        std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_flat_tables.empty()) {
         if (blocks.empty())
             blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_flat_tables);
@@ -252,6 +354,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                          render_block("codeblock", element.equivalent->code));
     }
 
+    std::ranges::transform(blocks, blocks.begin(), [](std::string block) { return wrap_pnum(std::move(block)); });
     return blocks;
 }
 
@@ -284,7 +387,8 @@ ir::DescriptionElement merge_element_group(std::ranges::range auto&& group) {
     return out;
 }
 
-std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
+std::vector<std::string> element_group_blocks(std::ranges::range auto&&    group,
+                                              std::span<const std::string> new_roots) {
     const std::vector<ir::Table2D> tables =
         group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
         std::views::transform([](const auto& e) -> const ir::Table2D& { return *e.table; }) |
@@ -293,10 +397,10 @@ std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
         group | std::views::filter([](const auto& e) { return e.flat_table.has_value(); }) |
         std::views::transform([](const auto& e) -> const ir::Table1D& { return *e.flat_table; }) |
         std::ranges::to<std::vector>();
-    return element_blocks(merge_element_group(group), tables, flat_tables);
+    return element_blocks(merge_element_group(group), tables, flat_tables, new_roots);
 }
 
-std::string render_item(const ir::SpecItem& item) {
+std::string render_item(const ir::SpecItem& item, std::span<const std::string> new_roots) {
     // Index entries are dropped (design §8: "draft backend expands, others
     // drop"). `\indexlibrarymember` builds the draft's own index; a paper
     // fragment has none to build. Note this is a *policy* about papers rather
@@ -322,8 +426,8 @@ std::string render_item(const ir::SpecItem& item) {
         item.descr.elements |
         std::views::chunk_by(
             [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
-        std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
-        std::ranges::to<std::vector>();
+        std::views::transform([new_roots](auto&& group) { return element_group_blocks(group, new_roots); }) |
+        std::views::join | std::ranges::to<std::vector>();
 
     if (!out.empty())
         out += '\n';
@@ -334,10 +438,12 @@ std::string render_item(const ir::SpecItem& item) {
 // --- the direct algebra over backend::common::RenderF ---------------------
 
 // Inherited attribute carrier, handed down through `project` below. Only the
-// outline level travels: like the mpark backend and unlike the LaTeX one there
-// is no `pnum_base` companion, because this backend numbers nothing.
+// outline level travels. Paragraph numbering is delegated to wg21org's pnum
+// special block and therefore needs no counter in this rendering context.
 struct RenderCtx {
-    int level;
+    int  level;
+    bool wording_root;
+    bool paper_mode;
 };
 
 // The fold's seed/handle type: a node paired with the RenderCtx its parent
@@ -357,20 +463,22 @@ struct SeededProjector {
     // only here during descent, so it is rendered now into
     // `RenderedSectionF::header` -- the field named for exactly this.
     //
-    // The stable name rides the heading as plain bracketed text, a
-    // deliberate checkpoint call. No `:CUSTOM_ID:` drawer: an org
-    // link target is what a *numbered* cross-reference would need, and nothing
-    // in a fragment resolves one yet (the mpark backend's `{- .sref}` is the
-    // analogous decision, made the other way only because that framework has a
-    // srefs database to miss in).
+    // The stable name rides the heading as bracketed text and as its export
+    // target.  The wg21org exporters preserve CUSTOM_ID verbatim for both
+    // HTML anchors and LaTeX labels, so no target-specific markup is needed.
     common::RenderF<Seeded> operator()(const ir::Section& s) const {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header = s.title.empty() ? std::format("{} [{}]\n", stars, s.stable_name)
-                                             : std::format("{} {} [{}]\n", stars, s.title, s.stable_name);
+        std::string header = s.title.empty()
+                                 ? std::format("{} [{}]\n", stars, s.stable_name)
+                                 : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
+        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
+                              s.stable_name,
+                              ctx.wording_root ? ":WG21_WORDING: t\n" : "",
+                              ctx.wording_root && ctx.paper_mode ? ":WG21_CHANGE: add\n" : "");
 
-        const RenderCtx     child_ctx{ctx.level + 1};
+        const RenderCtx     child_ctx{ctx.level + 1, false, ctx.paper_mode};
         std::vector<Seeded> children =
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
@@ -395,6 +503,8 @@ common::RenderF<Seeded> project(const Seeded& seeded) {
 // already been resolved by `project`, so every case is a plain
 // RenderF<std::string> -> std::string mapping.
 struct OrgAlgebra {
+    std::span<const std::string> new_roots;
+
     std::string operator()(const common::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
             return s.header;
@@ -405,29 +515,47 @@ struct OrgAlgebra {
     // -- the same two environments the LaTeX backend picks, because they are
     // the same two environments.
     std::string operator()(const ir::Synopsis& v) const { return render_block("codeblock", v.code); }
-    std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
-    std::string operator()(const ir::FreeParagraph& v) const { return render_paragraph(v.text) + '\n'; }
+    std::string operator()(const ir::SpecItem& v) const { return render_item(v, new_roots); }
+    std::string operator()(const ir::FreeParagraph& v) const {
+        return wrap_pnum(render_paragraph(v.text, new_roots) + '\n');
+    }
 };
 
-std::string render_layer(const common::RenderF<std::string>& layer) {
-    return std::visit(overloaded{OrgAlgebra{}}, layer);
+std::string render_layer(const common::RenderF<std::string>& layer, std::span<const std::string> new_roots) {
+    return std::visit(overloaded{OrgAlgebra{new_roots}}, layer);
 }
 
-std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
+std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx, std::span<const std::string> new_roots) {
     return beman::tree_algorithms::fold_with<std::string>(
-        render_layer, common::render_fmap, project, Seeded{&node, ctx});
+        [new_roots](const common::RenderF<std::string>& layer) { return render_layer(layer, new_roots); },
+        common::render_fmap,
+        project,
+        Seeded{&node, ctx});
 }
 
 } // namespace
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_heading_level};
-    const std::vector<std::string> rendered =
-        doc.nodes | std::views::transform([&ctx](const ir::Node& node) { return render_node_to_string(node, ctx); }) |
-        std::ranges::to<std::vector>();
-    return rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    const RenderCtx                ctx{options.base_heading_level, true, options.paper_mode};
+    const std::vector<std::string> rendered = doc.nodes | std::views::transform([&](const ir::Node& node) {
+                                                  std::string text =
+                                                      render_node_to_string(node, ctx, options.new_roots);
+                                                  if (options.paper_mode && !std::holds_alternative<ir::Section>(node))
+                                                      return wrap_added(std::move(text));
+                                                  return text;
+                                              }) |
+                                              std::ranges::to<std::vector>();
+    std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    if (options.paper_mode)
+        out = number_added_pnums(std::move(out));
+    return out;
 }
 
-std::string render_to_string(const ir::SpecItem& item, const Options&) { return render_item(item); }
+std::string render_to_string(const ir::SpecItem& item, const Options& options) {
+    std::string out = render_item(item, options.new_roots);
+    if (options.paper_mode)
+        out = wrap_added(number_added_pnums(std::move(out)));
+    return out;
+}
 
 } // namespace beman::specgen::backend::org

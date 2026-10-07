@@ -54,118 +54,191 @@ private:
 #+end_codeblock
 
 ** Constructors [optional.ctor]
+:PROPERTIES:
+:CUSTOM_ID: optional.ctor
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 constexpr optional() noexcept;
 constexpr optional(nullopt_t) noexcept;
 #+end_itemdecl
 
+#+begin_pnum
 /Postconditions/: ~*this~ does not contain a value.
+#+end_pnum
 
 #+begin_itemdecl
 constexpr optional(const optional& rhs);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_trivially_copy_constructible_v<T>~ is ~false~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~is_constructible_v<T, Args...>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is ~true~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class U>
 constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/:
 
 - ~is_constructible_v<T, const U&>~ is ~true~,
 - ~is_convertible_v<U, T>~ is ~true~,
 - ~is_same_v<T, U>~ is ~false~,
 - ~is_constructible_v<T, optional<U>>~ is ~false~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: If ~rhs~ contains a value, direct-non-list-initializes the contained value with ~*rhs~.
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is equal to ~rhs.has_value()~.
+#+end_pnum
 
 ** Assignment [optional.assign]
+:PROPERTIES:
+:CUSTOM_ID: optional.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class... Args> constexpr T& emplace(Args&&... args);
 #+end_itemdecl
 
+#+begin_pnum
 /Mandates/: ~is_constructible_v<T, Args...>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Destroys any contained value, then direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: A reference to the new contained value.
+#+end_pnum
 
 ** Observers [optional.observe]
+:PROPERTIES:
+:CUSTOM_ID: optional.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 constexpr bool has_value() const noexcept;
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: ~true~ if and only if ~*this~ contains a value.
+#+end_pnum
 
 #+begin_itemdecl
 constexpr const T& operator*() const&;
 #+end_itemdecl
 
+#+begin_pnum
 /Hardened preconditions/: ~*this~ contains a value.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: A reference to the contained value.
+#+end_pnum
 
 #+begin_itemdecl
 template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
 #+end_itemdecl
 
+#+begin_pnum
 /Mandates/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_convertible_v<U, T>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
 return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 #+end_codeblock
+#+end_pnum
 
 ** Monadic operations [optional.monadic]
+:PROPERTIES:
+:CUSTOM_ID: optional.monadic
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class F> constexpr @\seebelow@ transform(F&& f) const&;
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: If ~*this~ contains a value, returns an optional holding the result of invoking ~f~ with the contained value; otherwise returns an empty optional.
+#+end_pnum
 
+#+begin_pnum
 /Remarks/: The return type is ~remove_cvref_t<invoke_result_t<F, const T&>>~.
+#+end_pnum
 
 ** Modifiers [optional.mod]
+:PROPERTIES:
+:CUSTOM_ID: optional.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 constexpr void reset() noexcept;
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Equivalent to:
 
 #+begin_codeblock
 @\exposidnc{engaged}@ = false;
 #+end_codeblock
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is ~false~.
+#+end_pnum
 
 #+begin_itemdecl
 friend constexpr bool operator==(const optional& x, const optional& y);
 #+end_itemdecl
 
+#+begin_pnum
 /Returns/: ~true~ if both operands are disengaged, or both are engaged with equal contained values.
+#+end_pnum

@@ -1,4 +1,9 @@
-** Class `box` [demo.box]
+** Class ~box~ [demo.box]
+:PROPERTIES:
+:CUSTOM_ID: demo.box
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_codeblock
 struct box {
@@ -26,40 +31,65 @@ struct box {
 template<class T> constexpr int with_req_expr(T) const;
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~requires(T t) { { t == 0 }; }~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~0~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T> constexpr int with_named(T) const;
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~T~ models ~nonzero~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~1~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class I> friend constexpr bool operator==(const I& it, box);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~requires(I i) { { *i == 0 }; }~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: Whether ~it~ is at the end.
+#+end_pnum
 
 ** Free functions [demo.free]
+:PROPERTIES:
+:CUSTOM_ID: demo.free
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class T> constexpr int free_with_req_expr(T);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~requires(T t) { { t == 0 }; }~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~2~.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T> constexpr int free_with_named(T);
 #+end_itemdecl
 
+#+begin_pnum
 /Constraints/: ~T~ models ~nonzero~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: ~3~.
+#+end_pnum

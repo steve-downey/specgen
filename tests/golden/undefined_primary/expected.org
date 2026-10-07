@@ -1,11 +1,18 @@
 ** Undefined primaries [undef.primary]
+:PROPERTIES:
+:CUSTOM_ID: undef.primary
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class L, class R>
 struct join;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: A program may specialize ~join~ for cv-unqualified program-defined types.
+#+end_pnum
 
 #+begin_itemdecl
 template<class T>
@@ -14,13 +21,17 @@ template<class T>
 struct unit;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: Registration points for the bottom element.
+#+end_pnum
 
 #+begin_itemdecl
 struct bottom_tag;
 #+end_itemdecl
 
+#+begin_pnum
 /Remarks/: An undefined primary with a non-template head.
+#+end_pnum
 
 #+begin_codeblock
 struct registry {};

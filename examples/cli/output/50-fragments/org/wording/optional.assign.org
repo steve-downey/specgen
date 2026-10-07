@@ -1,13 +1,26 @@
 ** Assignment [optional.assign]
+:PROPERTIES:
+:CUSTOM_ID: optional.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_itemdecl
 template<class... Args> constexpr T& emplace(Args&&... args);
 #+end_itemdecl
 
+#+begin_pnum
 /Mandates/: ~is_constructible_v<T, Args...>~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Effects/: Destroys any contained value, then direct-non-list-initializes the contained value with ~std::forward<Args>(args)...~.
+#+end_pnum
 
+#+begin_pnum
 /Postconditions/: ~has_value()~ is ~true~.
+#+end_pnum
 
+#+begin_pnum
 /Returns/: A reference to the new contained value.
+#+end_pnum

@@ -258,9 +258,11 @@ output, split into per-clause fragments, or both.
 of a two-stage build whose `generate --emit-ir` step wrote the first.
 
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
-the mpark/wg21 framework; `--paper` also wraps the fragment in an
-editing-instruction `::: add` div and is valid only with that backend. The `org`
-backend emits org for the wg21org exporter.
+the mpark/wg21 framework, and the `org` backend emits org for the wg21org
+exporter. With either paper backend, `--paper` marks the complete fragment as
+added and numbers its paragraphs `x`, `x+1`, and so on. Mpark uses an
+editing-instruction `::: add` div; org uses `addedblock` around rootless
+material and `WG21_CHANGE=add` on generated clause roots.
 
 `--split <dir>` writes one file per top-level section and prints an ordered
 manifest of written paths to standard output. File stems are stable names and
@@ -300,7 +302,7 @@ not exceed 6, markdown's deepest heading. The base moves only where the
 outermost section sits: nested sections still descend one step at a time from
 it, and `--split` starts every fragment at the same base a whole render would.
 
-### Proposed stable names in mpark papers
+### Proposed stable names in mpark and wg21org papers
 
 The mpark/wg21 framework's `.sref` class looks stable names up in the current
 working draft. A paper's newly proposed clauses are not there yet, so leaving
@@ -312,11 +314,13 @@ specgen render --from-ir wording.json --backend mpark \
   --new-root transcode --new-root null.term
 ```
 
-The option is mpark-only and repeatable. It removes `.sref` from an exact root
-and every stable name below it, whether the name occurs on a heading or in a
-cross-reference. References to existing standard clauses retain `.sref` and
-continue to resolve normally. This is deliberately narrower than stripping
-the class from every stable name in a paper.
+The option applies to the `mpark` and `org` backends and is repeatable. For
+mpark it removes `.sref` from an exact root and every stable name below it,
+whether the name occurs on a heading or in a cross-reference. For org it makes
+references beneath those roots internal `CUSTOM_ID` links; references to all
+other stable names link to the current working draft at `eel.is/c++draft`.
+This is deliberately narrower than treating every stable name in a paper as
+new wording.
 
 ### Integrating generated fragments into a paper
 

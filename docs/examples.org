@@ -111,17 +111,23 @@ org, for the =wg21org= exporter:
 
 #+transclude: [[file:../examples/cli/output/30-render-backends/value_or.org]] :src org
 
-* Mpark Paper Mode
+* Paper Mode
 :PROPERTIES:
-:CUSTOM_ID: mpark-paper-mode
+:CUSTOM_ID: paper-mode
 :END:
 
-Paper mode is mpark-only.
-It wraps the fragment in an editing-instruction div and numbers added paragraphs as =x=, =x+1=, and so on.
+Paper mode marks a complete mpark or org fragment as added wording and numbers
+added paragraphs as =x=, =x+1=, and so on. Mpark uses its editing-instruction
+div; org uses =addedblock= for rootless material and a =WG21_CHANGE= property
+for complete clause subtrees.
 
 #+transclude: [[file:../examples/cli/40-paper-mode.sh]] :src sh
 
 #+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.md]] :src markdown
+
+The same IR in org:
+
+#+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.org]] :src org
 
 * Fragment Output
 :PROPERTIES:

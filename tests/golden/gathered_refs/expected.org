@@ -1,4 +1,9 @@
 ** Header synopsis [demo.syn]
+:PROPERTIES:
+:CUSTOM_ID: demo.syn
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
 
 #+begin_codeblock
 template<typename I>
@@ -15,18 +20,30 @@ public:
 template<typename I> void swap(holder<I>&, holder<I>&);
 #+end_codeblock
 
-*** Class template `holder` [demo.holder]
+*** Class template ~holder~ [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:UNNUMBERED: t
+:END:
 
 #+begin_itemdecl
 constexpr explicit holder(I ptr);
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Initializes the holder with ~ptr~.
+#+end_pnum
 
 *** Operations [demo.ops]
+:PROPERTIES:
+:CUSTOM_ID: demo.ops
+:UNNUMBERED: t
+:END:
 
 #+begin_itemdecl
 template<typename I> void swap(holder<I>&, holder<I>&);
 #+end_itemdecl
 
+#+begin_pnum
 /Effects/: Exchanges the states of ~a~ and ~b~.
+#+end_pnum
