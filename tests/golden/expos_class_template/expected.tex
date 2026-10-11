@@ -42,6 +42,39 @@ concept @\exposidnc{mixes-with-model}@ =
                     FALLBACK_PARAMETER>::value; // exposition only
 \end{codeblock}
 
+\begin{codeblock}
+template<typename T>
+struct @\exposidnc{holder}@ {
+  using value_type = T;
+
+  constexpr T get() const;
+
+  constexpr bool empty() const;
+}; // exposition only
+\end{codeblock}
+
+\indexlibrarymember{get}{holder}%
+\begin{itemdecl}
+constexpr T get() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The held value.
+\end{itemdescr}
+
+\indexlibrarymember{empty}{holder}%
+\begin{itemdecl}
+constexpr bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{false}.
+\end{itemdescr}
+
 \indexlibraryglobal{make}%
 \begin{itemdecl}
 template<typename T> constexpr @\exposidnc{box}@<T> make(T t);

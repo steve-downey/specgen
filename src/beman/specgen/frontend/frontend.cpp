@@ -2075,6 +2075,26 @@ const clang::Expr* head_requires_clause(const clang::FunctionDecl* fn) {
     return params != nullptr ? params->getRequiresClause() : nullptr;
 }
 
+// Blank lines left directly before a class's closing brace -- by a member
+// removed from the end of the body -- are dropped before formatting.
+// clang-format drops them itself unless the closing `};` carries a trailing
+// comment, which an exposition-only class's `// exposition only` is, so
+// without this the marked class kept a blank line its unmarked twin does not.
+std::string drop_blank_lines_before_close(std::string text) {
+    const std::size_t close = text.rfind('}');
+    if (close == std::string::npos)
+        return text;
+    const std::size_t content = text.find_last_not_of(" \t\n", close == 0 ? 0 : close - 1);
+    if (content == std::string::npos)
+        return text;
+    const std::size_t first_newline = text.find('\n', content);
+    const std::size_t last_newline  = text.rfind('\n', close);
+    if (first_newline == std::string::npos || first_newline >= last_newline)
+        return text;
+    text.erase(first_newline, last_newline - first_newline);
+    return text;
+}
+
 beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*                      record,
                                               const clang::SourceManager&                      sm,
                                               const clang::LangOptions&                        lang_opts,
@@ -2102,7 +2122,12 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // global facility; eligible member names carry the enclosing class as the
     // span payload and render as \libmember. Use source locations before
     // formatting, like every other semantic synopsis rewrite.
+    // An exposition-only class is not a library entity, so neither it nor its
+    // members take an index entry; it is named by its exposid below.
+    const auto expos_self        = expos_set.find(head->getCanonicalDecl());
     const auto add_library_index = [&](const clang::NamedDecl* named, std::string parent) {
+        if (expos_self != expos_set.end())
+            return;
         if (named == nullptr || named->getName().empty() || named->getLocation().isInvalid())
             return;
         const unsigned begin = sm.getDecomposedLoc(named->getLocation()).second;
@@ -2115,8 +2140,6 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             SpanInfo{beman::specgen::ir::SpanKind::LibraryIndex, named->getNameAsString(), std::move(parent)};
         edits.push_back(SynopsisEdit{begin, end, sentinel});
     };
-
-    add_library_index(record, {});
 
     // Rewrite `member_decl`'s declared name to an `\exposid` sentinel and append a
     // `// exposition only` comment after its `;`. Used for exposition-only data
@@ -2137,6 +2160,30 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             semi_end = sm.getDecomposedLoc(semi->getLocation()).second + 1;
         edits.push_back(SynopsisEdit{semi_end, semi_end, " // exposition only"});
     };
+
+    // An exposition-only class is named by its exposid; an ordinary one
+    // carries its library index. The marker is keyed on the declaration the
+    // class arm extracts from: the ClassTemplateDecl for a primary template,
+    // the record itself for a specialization. The `// exposition only` tail
+    // goes in before formatting, so clang-format wraps the line it ends.
+    if (expos_self != expos_set.end()) {
+        const auto*       named    = llvm::cast<clang::NamedDecl>(head);
+        const std::string sentinel = span_sentinel(span_n++);
+        sentinels[sentinel] = SpanInfo{beman::specgen::ir::SpanKind::ExposId, expos_self->second, expos_self->second};
+        const unsigned name_begin = sm.getDecomposedLoc(named->getLocation()).second;
+        const unsigned name_end =
+            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(named->getLocation(), 0, sm, lang_opts)).second;
+        edits.push_back(SynopsisEdit{name_begin, name_end, sentinel});
+        const unsigned semi_end =
+            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(record->getEndLoc(), 0, sm, lang_opts)).second;
+        unsigned tail = semi_end;
+        if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(record->getEndLoc(), sm, lang_opts);
+            semi && semi->is(clang::tok::semi))
+            tail = sm.getDecomposedLoc(semi->getLocation()).second + 1;
+        edits.push_back(SynopsisEdit{tail, tail, " // exposition only"});
+    } else {
+        add_library_index(record, {});
+    }
 
     // Start of the physical line containing `pos`, never earlier than
     // `class_begin` -- the reverse scan omit_line and the docblock-removal
@@ -2679,7 +2726,9 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // *before* span recovery — span offsets are only ever computed against
     // already-formatted text, never the other way around.
     const llvm::StringRef record_tag = record->getKindName();
-    return format_and_recover(std::move(text), sentinels, std::string_view(record_tag.data(), record_tag.size()));
+    return format_and_recover(drop_blank_lines_before_close(std::move(text)),
+                              sentinels,
+                              std::string_view(record_tag.data(), record_tag.size()));
 }
 
 // The first offset of the run of cv-qualifier keywords written immediately
@@ -4950,6 +4999,20 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
     return variable != nullptr && variable->getDeclContext()->isFileContext();
 }
 
+// A class definition among the candidates above: a class template whose
+// templated record is defined, or a class-template specialization that is.
+// Being exposition-only changes how such a class is *named* and nothing else,
+// so it is extracted like any other class (design §3.4) rather than copied
+// through as a free-standing declaration.
+bool is_defined_record(const clang::Decl* decl) {
+    if (const auto* tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(decl)) {
+        const clang::CXXRecordDecl* templated = tmpl->getTemplatedDecl();
+        return templated != nullptr && templated->isThisDeclarationADefinition();
+    }
+    const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(decl);
+    return record != nullptr && record->isThisDeclarationADefinition();
+}
+
 // The documented-wording counterpart: the same namespace-owned entity kinds,
 // asked about by a docblock with description content rather than `\expos` —
 // ordinary wording items (design §6) instead of standalone synopses. The
@@ -5928,8 +5991,16 @@ db::DocEvent classify(const RawItem&                                   ev,
     // A marked namespace-scope concept or variable is a
     // complete free-standing synopsis. The source spelling remains its IR
     // name; only the rendered declaration identifier takes the exposid name.
+    //
+    // A *defined* class template, or a specialization of one, is the
+    // exception: it takes the ordinary class arms below, where extract_synopsis
+    // gives it its exposid name and `// exposition only` tail. The standalone
+    // arm copies the declaration's text through its semicolon, which for a
+    // class definition kept every member body, every `\omit`ted member, and
+    // every docblock and Doxygen comment in the class body, and collected none
+    // of its members' own wording.
     const clang::NamedDecl* namespace_expos = nullptr;
-    if (is_namespace_expos_candidate(ev.decl))
+    if (is_namespace_expos_candidate(ev.decl) && !is_defined_record(ev.decl))
         namespace_expos = llvm::cast<clang::NamedDecl>(ev.decl);
     if (namespace_expos != nullptr && expos_set.contains(namespace_expos->getCanonicalDecl())) {
         // The marker that brought it here is not the only one its docblock may

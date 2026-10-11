@@ -42,6 +42,37 @@ concept $mixes-with-model$ =
                     FALLBACK_PARAMETER>::value; // exposition only
 ```
 
+```cpp
+template<typename T>
+struct $holder$ {
+  using value_type = T;
+
+  constexpr T get() const;
+
+  constexpr bool empty() const;
+}; // exposition only
+```
+
+::: wording
+
+```cpp
+constexpr T get() const;
+```
+
+[#]{.pnum} *Returns*: The held value.
+
+:::
+
+::: wording
+
+```cpp
+constexpr bool empty() const;
+```
+
+[#]{.pnum} *Returns*: `false`.
+
+:::
+
 ::: wording
 
 ```cpp

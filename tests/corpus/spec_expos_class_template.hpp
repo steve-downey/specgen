@@ -63,6 +63,45 @@ struct same_model_impl {
 template <typename MODEL_GRADE_PARAMETER, typename OPERAND_PARAMETER, typename FALLBACK_PARAMETER>
 concept mixes_with_model = same_model_impl<MODEL_GRADE_PARAMETER, OPERAND_PARAMETER, FALLBACK_PARAMETER>::value;
 
+template <typename...>
+inline constexpr bool never_ = false;
+
+// `\expos` changes how a defined class is named and nothing else: it is
+// extracted the way any class is (design §3.4). An `\omit`ted member leaves
+// with its body -- here one naming `never_`, which no wording documents --
+// Doxygen and markup comments in the body are dropped, its members keep their
+// wording, and the class meets the coverage rule like any other. It used to be
+// copied through as a free-standing declaration, body, comments and `\omit`ted
+// member included, so the helper leaked and validation failed.
+//! \expos
+template <typename T>
+struct holder {
+    /// Doxygen, which no synopsis keeps.
+    using value_type = T;
+
+    constexpr T get() const;
+
+    constexpr bool empty() const;
+
+    //! \omit
+    template <typename... A>
+    constexpr void refuse(A&&...) const {
+        static_assert(never_<A...>, "refused");
+    }
+};
+
+//! \returns The held value.
+template <typename T>
+constexpr T holder<T>::get() const {
+    return T{};
+}
+
+//! \returns `false`.
+template <typename T>
+constexpr bool holder<T>::empty() const {
+    return false;
+}
+
 //! \returns A boxed copy of `t`.
 template <typename T>
 constexpr box<T> make(T t) {
