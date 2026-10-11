@@ -7,6 +7,10 @@ template<class T>
 concept @\exposidnc{enabled}@ = true; // exposition only
 #+end_codeblock
 
+#+begin_pnum
+/Remarks/: The exposition-only concept ~enabled~ is satisfied for every type.
+#+end_pnum
+
 #+begin_codeblock
 using @\exposidnc{token}@ = int; // exposition only
 #+end_codeblock
@@ -14,6 +18,10 @@ using @\exposidnc{token}@ = int; // exposition only
 #+begin_codeblock
 template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*; // exposition only
 #+end_codeblock
+
+#+begin_pnum
+/Remarks/: The type through which a traversal names its context.
+#+end_pnum
 
 #+begin_codeblock
 class counter {
