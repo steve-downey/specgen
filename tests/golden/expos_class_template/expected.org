@@ -42,6 +42,33 @@ concept @\exposidnc{mixes-with-model}@ =
                     FALLBACK_PARAMETER>::value; // exposition only
 #+end_codeblock
 
+#+begin_codeblock
+template<typename T>
+struct @\exposidnc{holder}@ {
+  using value_type = T;
+
+  constexpr T get() const;
+
+  constexpr bool empty() const;
+}; // exposition only
+#+end_codeblock
+
+#+begin_itemdecl
+constexpr T get() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: The held value.
+#+end_pnum
+
+#+begin_itemdecl
+constexpr bool empty() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~false~.
+#+end_pnum
+
 #+begin_itemdecl
 template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
 #+end_itemdecl

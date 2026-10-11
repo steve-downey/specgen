@@ -476,7 +476,15 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   in IR or JSON.
 - `\expos` / `\expos(name)` — exposition-only; name derived by stripping trailing
   underscores then `_` → `-` kebab conversion; `\expos(name)` overrides. Rendered
-  in synopsis with italic name + `// exposition only`.
+  in synopsis with italic name + `// exposition only`. **On a defined class template
+  or specialization it changes the naming and nothing else**: the class is extracted
+  like any other (§3.4) — bodies spliced, `\omit`/`\merge` honored, docblock and Doxygen
+  comments dropped, members' wording collected, the coverage rule applied — with its
+  declared name as an exposid, no library index for it or its members, and the
+  `// exposition only` tail. Blank lines directly before a class's closing brace are
+  dropped before formatting, because clang-format keeps an empty last line in a block
+  whose `};` carries a trailing comment. It used to be copied through as a
+  free-standing declaration, which kept all of that in the synopsis.
 - `\seebelow` — substitute *see below* for a return type: a leading one
   (deduced `auto` included) is replaced whole, and an explicit trailing
   return type keeps its SFINAE-friendly shape and renders
