@@ -6026,6 +6026,12 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.name = namespace_expos->getNameAsString();
         out.synopsis.code = extract_namespace_expos_synopsis(
             namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below);
+        // Its description renders beside that synopsis, the way a class's own
+        // description does (design §4.3): the draft describes exposition-only
+        // concepts and aliases in prose -- "the exposition-only concept ... is
+        // satisfied when". The docblock was parsed for the directives above and
+        // its description then discarded, which dropped that wording silently.
+        out.descr       = std::move(marked.item.descr);
         out.diagnostics = std::move(marked.diagnostics);
         return out;
     }

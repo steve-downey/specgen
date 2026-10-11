@@ -29,7 +29,11 @@ namespace detail {
 //! \expos(limit)
 inline constexpr int exposed_limit = 1;
 
+// An exposition-only entity's description renders beside its synopsis, the
+// way the draft describes one in prose. It used to be parsed and dropped.
 //! \expos(enabled)
+//! \remarks The exposition-only concept `enabled` is satisfied for every
+//! type.
 template <class T>
 concept enabled_for = true;
 
@@ -37,6 +41,7 @@ concept enabled_for = true;
 using token_ = int;
 
 //! \expos
+//! \remarks The type through which a traversal names its context.
 template <class T>
 using traverse_context_t = token_*;
 

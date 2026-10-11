@@ -506,6 +506,10 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   constraint-expression, the same way it masks an alias's RHS (issue #50). The two are one
   rule: an entity whose *definition* is the implementation writes that definition as *see
   below*, where an entity whose *declared type* is writes the type as *unspecified*.
+- **A namespace-scope `\expos` entity keeps its description.** It renders beside the
+  standalone synopsis, as a class's own description does -- the draft describes
+  exposition-only concepts and aliases in prose. The docblock used to be parsed only for
+  its directives, so the description was dropped without a finding.
 - `\expos` composes with either mask rather than displacing it (issues #38, #50): a variable
   carrying both renders `inline constexpr unspecified $name$; // exposition only`, and an
   alias or concept renders `using $name$ = see below; // exposition only`. The
