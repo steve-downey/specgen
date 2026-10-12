@@ -6,8 +6,10 @@
 :END:
 
 #+begin_codeblock
-template<class T>
-class box {};
+namespace std {
+  template<class T>
+  class box {};
+}
 #+end_codeblock
 
 #+begin_pnum

@@ -34,5 +34,7 @@ struct bottom_tag;
 #+end_pnum
 
 #+begin_codeblock
-struct registry {};
+namespace std {
+  struct registry {};
+}
 #+end_codeblock

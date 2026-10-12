@@ -13,7 +13,7 @@ constexpr optional(nullopt_t) noexcept;
 constexpr optional(const optional& rhs);
 ```
 
-[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true` and `is_trivially_copy_constructible_v<T>` is `false`.
+[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true`.
 
 [#]{.pnum} *Effects*: If `rhs` contains a value, direct-non-list-initializes the contained value with `*rhs`.
 

@@ -1,5 +1,7 @@
 #+begin_codeblock
-struct tag {};
+namespace std {
+  struct tag {};
+}
 #+end_codeblock
 
 #+begin_pnum
@@ -7,8 +9,10 @@ struct tag {};
 #+end_pnum
 
 #+begin_codeblock
-template<class T>
-struct checked {};
+namespace std {
+  template<class T>
+  struct checked {};
+}
 #+end_codeblock
 
 #+begin_pnum
@@ -20,8 +24,10 @@ struct checked {};
 #+end_pnum
 
 #+begin_codeblock
-template<class T>
-struct probe {};
+namespace std {
+  template<class T>
+  struct probe {};
+}
 #+end_codeblock
 
 #+begin_pnum
@@ -33,11 +39,13 @@ A program that instantiates ~probe<T>~ is ill-formed unless ~acceptable_v<T>~ is
 #+end_pnum
 
 #+begin_codeblock
-template<class T>
-struct box {
-  // \ref{box.mem}, member types
-  using type = T;
-};
+namespace std {
+  template<class T>
+  struct box {
+    // \ref{box.mem}, member types
+    using type = T;
+  };
+}
 #+end_codeblock
 
 #+begin_pnum

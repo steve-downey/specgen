@@ -1,10 +1,14 @@
 #+begin_codeblock
-struct adaptor {};
+namespace std {
+  struct adaptor {};
+}
 #+end_codeblock
 
 #+begin_codeblock
-template<typename T>
-struct tagger {};
+namespace std {
+  template<typename T>
+  struct tagger {};
+}
 #+end_codeblock
 
 #+begin_itemdecl
@@ -40,5 +44,7 @@ inline constexpr @\placeholder{unspecified}@ forwarded;
 #+end_pnum
 
 #+begin_codeblock
-inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+namespace std {
+  inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+}
 #+end_codeblock

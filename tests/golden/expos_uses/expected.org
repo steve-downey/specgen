@@ -1,10 +1,14 @@
 #+begin_codeblock
-inline constexpr int @\exposidnc{limit}@ = 1; // exposition only
+namespace std {
+  inline constexpr int @\exposidnc{limit}@ = 1; // exposition only
+}
 #+end_codeblock
 
 #+begin_codeblock
-template<class T>
-concept @\exposidnc{enabled}@ = true; // exposition only
+namespace std {
+  template<class T>
+  concept @\exposidnc{enabled}@ = true; // exposition only
+}
 #+end_codeblock
 
 #+begin_pnum
@@ -12,11 +16,15 @@ concept @\exposidnc{enabled}@ = true; // exposition only
 #+end_pnum
 
 #+begin_codeblock
-using @\exposidnc{token}@ = int; // exposition only
+namespace std {
+  using @\exposidnc{token}@ = int; // exposition only
+}
 #+end_codeblock
 
 #+begin_codeblock
-template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*; // exposition only
+namespace std {
+  template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*; // exposition only
+}
 #+end_codeblock
 
 #+begin_pnum
@@ -24,15 +32,17 @@ template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*;
 #+end_pnum
 
 #+begin_codeblock
-class counter {
-public:
-  // \ref{counter.obs}, observers
-  int get() const;
-  void bump();
+namespace std {
+  class counter {
+  public:
+    // \ref{counter.obs}, observers
+    int get() const;
+    void bump();
 
-private:
-  int @\exposidnc{value}@ = 0; // exposition only
-};
+  private:
+    int @\exposidnc{value}@ = 0; // exposition only
+  };
+}
 #+end_codeblock
 
 ** Observers [counter.obs]
@@ -92,15 +102,17 @@ template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<i
 :END:
 
 #+begin_codeblock
-template<@\exposidnc{enabled}@ U,
-class T = @\exposidnc{token}@>
-  requires @\exposidnc{enabled}@<T>
-class gauge {
-public:
-  // \ref{counter.gauge}, observers
-  int level() const
-    requires @\exposidnc{enabled}@<U>;
-};
+namespace std {
+  template<@\exposidnc{enabled}@ U,
+  class T = @\exposidnc{token}@>
+    requires @\exposidnc{enabled}@<T>
+  class gauge {
+  public:
+    // \ref{counter.gauge}, observers
+    int level() const
+      requires @\exposidnc{enabled}@<U>;
+  };
+}
 #+end_codeblock
 
 #+begin_itemdecl

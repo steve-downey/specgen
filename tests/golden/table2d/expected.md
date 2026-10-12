@@ -1,12 +1,14 @@
 ```cpp
-class optional {
-public:
-  // @[optional.assign]{- .sref}@, assignment
-  optional& operator=(const optional& rhs);
+namespace std {
+  class optional {
+  public:
+    // @[optional.assign]{- .sref}@, assignment
+    optional& operator=(const optional& rhs);
 
-private:
-  int $val$ = 0; // exposition only
-};
+  private:
+    int $val$ = 0; // exposition only
+  };
+}
 ```
 
 ::: wording

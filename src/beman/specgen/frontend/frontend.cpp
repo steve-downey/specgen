@@ -44,6 +44,7 @@
 #include <clang/Tooling/Core/Replacement.h>
 #include <clang/Tooling/Tooling.h>
 
+#include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/Path.h>
@@ -2019,6 +2020,163 @@ member_declaration_end(const clang::Decl* decl, const clang::SourceManager& sm, 
     return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts)).second;
 }
 
+// --- merged twins (design §4.3) ----------------------------------------------
+// A conditionally trivial special member is two declarations in C++: a
+// defaulted one, constrained to where `T`'s member is trivial, and a
+// user-provided one constrained to everywhere else. `\merge` drops the first,
+// and the second -- the *survivor* -- stands for both. The pair is one
+// specification entity, so the survivor's constraint is what the two share:
+// the conjunct that only tells them apart is how the implementation chooses
+// between them, not part of the contract. The draft's
+// `constexpr optional(const optional&);` has no
+// `!is_trivially_copy_constructible_v<T>` in it.
+//
+// A twin is a sibling with the same name, parameter types and object
+// qualifiers whose markup says `\merge`, on the in-class declaration or on an
+// out-of-line definition. A survivor conjunct is dropped when it is the
+// logical negation of a conjunct of one of its twins, either way round,
+// compared as expressions rather than as text.
+
+void split_conjuncts(const clang::Expr* e, std::vector<const clang::Expr*>& out);
+
+std::vector<const clang::Expr*> trailing_conjuncts(const clang::FunctionDecl* fn) {
+    std::vector<const clang::Expr*> out;
+    if (const clang::Expr* clause = fn->getTrailingRequiresClause().ConstraintExpr)
+        split_conjuncts(clause, out);
+    return out;
+}
+
+bool is_merged(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
+    if (docblock_directives(fn, sm).merge)
+        return true;
+    const clang::FunctionDecl* def = fn->getDefinition();
+    return def != nullptr && def != fn && docblock_directives(def, sm).merge;
+}
+
+bool same_signature(const clang::FunctionDecl* a, const clang::FunctionDecl* b) {
+    if (a->getDeclName() != b->getDeclName() || a->param_size() != b->param_size())
+        return false;
+    const clang::ASTContext& ctx = a->getASTContext();
+    if (!std::ranges::equal(a->parameters(), b->parameters(), [&ctx](const auto* x, const auto* y) {
+            return ctx.hasSameType(x->getType(), y->getType());
+        }))
+        return false;
+    const auto* ma = llvm::dyn_cast<clang::CXXMethodDecl>(a);
+    const auto* mb = llvm::dyn_cast<clang::CXXMethodDecl>(b);
+    if ((ma == nullptr) != (mb == nullptr))
+        return false;
+    return ma == nullptr ||
+           (ma->getMethodQualifiers() == mb->getMethodQualifiers() && ma->getRefQualifier() == mb->getRefQualifier());
+}
+
+// The trailing-clause conjuncts of every `\merge`d twin of `fn`, which may be
+// any redeclaration of the survivor. Empty for a member template (a twin pair
+// is a pair of special members, never templates) and for a twin itself.
+std::vector<const clang::Expr*> merged_twin_conjuncts(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
+    const clang::FunctionDecl* in_class = fn->getFirstDecl();
+    const auto*                record   = llvm::dyn_cast<clang::CXXRecordDecl>(in_class->getDeclContext());
+    if (record == nullptr || in_class->getDescribedFunctionTemplate() != nullptr || is_merged(in_class, sm))
+        return {};
+    return record->decls() | std::views::transform([](const clang::Decl* member) {
+               return llvm::dyn_cast<clang::FunctionDecl>(member);
+           }) |
+           std::views::filter([&](const clang::FunctionDecl* twin) {
+               return twin != nullptr && twin != in_class && same_signature(twin, in_class) && is_merged(twin, sm);
+           }) |
+           std::views::transform(trailing_conjuncts) | std::views::join | std::ranges::to<std::vector>();
+}
+
+bool complementary(const clang::Expr* a, const clang::Expr* b, const clang::ASTContext& ctx) {
+    const auto negated = [](const clang::Expr* e) -> const clang::Expr* {
+        const auto* op = llvm::dyn_cast<clang::UnaryOperator>(e->IgnoreParenImpCasts());
+        return op != nullptr && op->getOpcode() == clang::UO_LNot ? op->getSubExpr()->IgnoreParenImpCasts() : nullptr;
+    };
+    const auto same = [&ctx](const clang::Expr* x, const clang::Expr* y) {
+        llvm::FoldingSetNodeID x_id;
+        llvm::FoldingSetNodeID y_id;
+        x->Profile(x_id, ctx, /*Canonical=*/true);
+        y->Profile(y_id, ctx, /*Canonical=*/true);
+        return x_id == y_id;
+    };
+    const clang::Expr* not_a = negated(a);
+    const clang::Expr* not_b = negated(b);
+    return (not_a != nullptr && same(not_a, b->IgnoreParenImpCasts())) ||
+           (not_b != nullptr && same(not_b, a->IgnoreParenImpCasts()));
+}
+
+// Which of `fn`'s trailing-clause conjuncts its merged twins cut, one flag per
+// conjunct in source order -- or empty, meaning cut nothing. Everything that
+// renders the clause (the synopsis, an itemdecl that keeps it, the derived
+// Constraints) asks this one question, so they cannot disagree. The cut is
+// made only on a clause that is a flat `&&` chain in the file's own text:
+// removing a conjunct from inside parentheses, or from a macro expansion,
+// would need more than deleting it and its `&&`.
+std::vector<bool>
+twin_cut_mask(const clang::FunctionDecl* fn, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    const std::vector<const clang::Expr*> twin = merged_twin_conjuncts(fn, sm);
+    if (twin.empty())
+        return {};
+    const std::vector<const clang::Expr*> leaves = trailing_conjuncts(fn);
+    if (std::ranges::any_of(leaves, [](const clang::Expr* leaf) {
+            return leaf->getBeginLoc().isMacroID() || leaf->getEndLoc().isMacroID();
+        }))
+        return {};
+    const auto flat_separator = [&](const clang::Expr* left, const clang::Expr* right) {
+        const clang::CharSourceRange between = clang::CharSourceRange::getCharRange(
+            clang::Lexer::getLocForEndOfToken(left->getEndLoc(), 0, sm, lang_opts), right->getBeginLoc());
+        const llvm::StringRef text = clang::Lexer::getSourceText(between, sm, lang_opts).trim();
+        return text == "&&" || text == "and";
+    };
+    if (!std::ranges::all_of(leaves | std::views::adjacent<2>,
+                             [&](const auto& pair) { return flat_separator(std::get<0>(pair), std::get<1>(pair)); }))
+        return {};
+    const clang::ASTContext& ctx  = fn->getASTContext();
+    std::vector<bool>        mask = leaves | std::views::transform([&](const clang::Expr* leaf) {
+                                 return std::ranges::any_of(
+                                     twin, [&](const clang::Expr* other) { return complementary(leaf, other, ctx); });
+                                    }) |
+                                    std::ranges::to<std::vector<bool>>();
+    if (std::ranges::none_of(mask, std::identity{}))
+        return {};
+    return mask;
+}
+
+// The source edits that make `fn`'s trailing requires-clause say what its
+// twin cut mask keeps: each cut conjunct goes with the `&&` joining it to its
+// neighbour, and when every conjunct is cut, the `requires` keyword goes too.
+// The edits are dominant over anything nested in what they remove.
+std::vector<SynopsisEdit>
+twin_cut_edits(const clang::FunctionDecl* fn, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    const std::vector<bool> mask = twin_cut_mask(fn, sm, lang_opts);
+    if (mask.empty())
+        return {};
+    const std::vector<const clang::Expr*> leaves = trailing_conjuncts(fn);
+    const auto begin_of = [&sm](const clang::Expr* e) { return sm.getDecomposedLoc(e->getBeginLoc()).second; };
+    const auto end_of   = [&](const clang::Expr* e) {
+        return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(e->getEndLoc(), 0, sm, lang_opts)).second;
+    };
+    if (std::ranges::all_of(mask, std::identity{})) {
+        // The raw lexer reports a keyword as a raw identifier.
+        const std::optional<clang::Token> keyword =
+            clang::Lexer::findPreviousToken(leaves.front()->getBeginLoc(), sm, lang_opts, /*IncludeComments=*/false);
+        if (!keyword || !keyword->is(clang::tok::raw_identifier) || keyword->getRawIdentifier() != "requires")
+            return {};
+        return {SynopsisEdit{sm.getDecomposedLoc(keyword->getLocation()).second, end_of(leaves.back()), ""}};
+    }
+    // A cut conjunct with a kept one before it takes the `&&` on its left; a
+    // leading run of cut conjuncts takes the `&&` on its right instead, and
+    // leaves a space, since `requires(` needs none before its parenthesis
+    // and the kept conjunct after it may. The ranges abut rather than
+    // overlap, so every one of them applies.
+    const std::size_t first_kept = static_cast<std::size_t>(std::ranges::find(mask, false) - mask.begin());
+    return std::views::iota(std::size_t{0}, leaves.size()) |
+           std::views::filter([&mask](std::size_t i) { return mask[i]; }) | std::views::transform([&](std::size_t i) {
+               return i < first_kept ? SynopsisEdit{begin_of(leaves[i]), begin_of(leaves[i + 1]), " "}
+                                     : SynopsisEdit{end_of(leaves[i - 1]), end_of(leaves[i]), ""};
+           }) |
+           std::ranges::to<std::vector>();
+}
+
 // Subtractive synopsis extraction (design §3.4): lex the class's own text out
 // of the main file, then remove/splice exactly two things — nothing else —
 // and (design §3.6 step 2) reformat the result with the draft
@@ -2522,6 +2680,10 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         if (const auto it = expos_set.find(fn->getCanonicalDecl()); it != expos_set.end())
             add_exposid(fn, it->second);
         mark_survivor();
+
+        // A survivor of `\merge`d twins says only what the pair shares; the
+        // cuts are dominant like the see-below edits, and applied with them.
+        seebelow_edits.append_range(twin_cut_edits(fn, sm, lang_opts));
 
         // Bare \seebelow replaces the return type. The named
         // targets replace only the operand of noexcept(...) / explicit(...),
@@ -3124,6 +3286,13 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     }
     if (seebelow_edit)
         add_dominant_edit(edits, std::move(*seebelow_edit));
+    // A kept trailing clause says only what a pair of merged twins shares.
+    if (!strip_requires_clause) {
+        // substrate generic algorithm: each dominant edit erases the nested
+        // edits it overlaps, as for the see-below edit above.
+        for (SynopsisEdit& edit : twin_cut_edits(in_class, sm, lang_opts))
+            add_dominant_edit(edits, std::move(edit));
+    }
 
     // Back to front, skipping overlaps and anything past the trimmed end.
     std::sort(
@@ -3442,8 +3611,13 @@ derive_constraints(const clang::FunctionDecl*                       fn,
     std::vector<const clang::Expr*> leaves;
     if (const clang::Expr* head_clause = head_requires_clause(fn))
         split_conjuncts(head_clause, leaves);
-    if (const clang::Expr* trailing = fn->getTrailingRequiresClause().ConstraintExpr)
-        split_conjuncts(trailing, leaves);
+    // The trailing clause less what only tells `fn` apart from a merged twin.
+    const std::vector<const clang::Expr*> trailing = trailing_conjuncts(fn);
+    const std::vector<bool>               cut      = twin_cut_mask(fn, sm, lang_opts);
+    leaves.append_range(
+        std::views::zip(trailing, std::views::iota(std::size_t{0})) |
+        std::views::filter([&cut](const auto& leaf) { return cut.empty() || !cut[std::get<1>(leaf)]; }) |
+        std::views::elements<0>);
     if (leaves.empty())
         return std::nullopt;
 
@@ -5938,6 +6112,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                     db::SynopsisDecl out;
                     out.offset        = ev.offset;
                     out.synopsis.code = ir::CodeText{parsed.block.verbatim_synopsis.value_or(""), {}};
+                    out.exact         = true;
                     out.diagnostics   = std::move(diagnostics);
                     return out;
                 }
@@ -6505,6 +6680,40 @@ std::optional<SectionEndFence> section_end_fence(std::string_view raw) {
         begin = newline + 1;
     }
     return std::nullopt;
+}
+
+// The draft writes every synopsis at namespace scope inside the namespace
+// it belongs to -- `namespace std {`, its body indented two spaces, then the
+// closing brace -- and the namespace mapping (design §3.5) has already made
+// that namespace `std` by dropping the implementation's own. Each span moves
+// with the character it starts on; an end moves with the last character it
+// covers, so the indentation added at the start of the next line stays
+// outside it.
+void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
+    if (code.text.empty())
+        return;
+    std::string              text = "namespace std {\n";
+    std::vector<std::size_t> moved(code.text.size());
+    bool                     line_start = true;
+    // substrate generic algorithm: one pass building the indented text and
+    // the old-to-new offset map the spans are rewritten through.
+    for (std::size_t k = 0; k < code.text.size(); ++k) {
+        const char c = code.text[k];
+        if (line_start && c != '\n')
+            text.append("  ");
+        moved[k] = text.size();
+        text.push_back(c);
+        line_start = c == '\n';
+    }
+    if (!text.ends_with('\n'))
+        text.push_back('\n');
+    text.push_back('}');
+    std::ranges::for_each(code.spans, [&moved](ir::Span& span) {
+        const std::size_t begin = span.begin;
+        span.begin              = moved[begin];
+        span.end                = span.end > begin ? moved[span.end - 1] + 1 : span.begin;
+    });
+    code.text = std::move(text);
 }
 
 void append_synopsis_code(beman::specgen::ir::CodeText& out, beman::specgen::ir::CodeText part) {
@@ -7215,6 +7424,13 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     // rather than as a separate pass over the finished tree. Both clang-free,
     // both unit-tested with synthetic events in
     // tests/beman/specgen/document_build.test.cpp.
+    // Last, so a gathered region is enclosed once, as a whole, rather than
+    // once per class folded into it.
+    std::ranges::for_each(events, [](db::DocEvent& event) {
+        if (auto* synopsis = std::get_if<db::SynopsisDecl>(&event); synopsis != nullptr && !synopsis->exact)
+            enclose_in_namespace_std(synopsis->synopsis.code);
+    });
+
     db::BuildResult built               = db::build_tree(events);
     built.document.paper_entities       = paper_entities;
     built.document.foreign_namespaces   = foreign;

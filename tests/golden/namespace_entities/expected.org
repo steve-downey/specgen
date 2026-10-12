@@ -65,12 +65,16 @@ concept masked = @\seebelow@;
 #+end_pnum
 
 #+begin_codeblock
-template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+namespace std {
+  template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+}
 #+end_codeblock
 
 #+begin_codeblock
-template<class T>
-concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+namespace std {
+  template<class T>
+  concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+}
 #+end_codeblock
 
 #+begin_itemdecl
@@ -93,7 +97,9 @@ enum link_width : unsigned char { narrow = 1, wide = 2 };
 #+end_pnum
 
 #+begin_codeblock
-enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+namespace std {
+  enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+}
 #+end_codeblock
 
 #+begin_itemdecl

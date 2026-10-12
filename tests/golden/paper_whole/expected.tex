@@ -1,12 +1,14 @@
 \begin{codeblock}
-template<class T>
-class @\libglobal{mixer}@ {
-public:
-  // \ref{paper.mix}, mixing
-  int mix(tag_t, const T& part) const
-    requires requires { tag; } && (!@\exposidnc{is-void-v}@<T>) && (alpha_policy<T> == 0) &&
-             requires(const blend_policy& policy) { policy.strength(); };
-};
+namespace std {
+  template<class T>
+  class @\libglobal{mixer}@ {
+  public:
+    // \ref{paper.mix}, mixing
+    int mix(tag_t, const T& part) const
+      requires requires { tag; } && (!@\exposidnc{is-void-v}@<T>) && (alpha_policy<T> == 0) &&
+               requires(const blend_policy& policy) { policy.strength(); };
+  };
+}
 \end{codeblock}
 
 \rSec3[paper.mix]{Mixing}
@@ -43,11 +45,13 @@ This variable template is the lookup point for the alpha policy of a type. A pro
 \end{itemdescr}
 
 \begin{codeblock}
-class @\libglobal{blend_policy}@ {
-public:
-  // \ref{paper.blend}, observers
-  int strength() const;
-};
+namespace std {
+  class @\libglobal{blend_policy}@ {
+  public:
+    // \ref{paper.blend}, observers
+    int strength() const;
+  };
+}
 \end{codeblock}
 
 \rSec3[paper.blend]{Blend policy}

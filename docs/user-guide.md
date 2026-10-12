@@ -89,6 +89,8 @@ The class body supplies the synopsis. Its `\ref` comments say which clause
 describes each member. The definitions supply both clause order and the
 wording attached to each declaration. specgen takes code spelling from the
 source tokens; it does not pretty-print the AST back into a guessed interface.
+The header's own namespace is dropped, and each synopsis is enclosed in
+`namespace std { … }`, as the draft writes it.
 
 Render the complete document while editing:
 
@@ -659,6 +661,15 @@ derivation as validation evidence for drift checks.
   specification entity. It removes the marked declaration from synopsis and
   wording; on a namespace-scope record definition it suppresses the whole
   record contribution.
+  The usual case is a conditionally trivial special member: a defaulted twin
+  marked `\merge`, constrained to where `T`'s member is trivial, and a
+  user-provided survivor that carries the wording. The survivor's
+  `requires`-clause conjunct that only distinguishes it from the twin -- its
+  `!X` against the twin's `X` -- is dropped from the synopsis, the item
+  declaration, and the derived *Constraints*, since the pair is one entity:
+  `requires copy_constructible<T> && (!is_trivially_copy_constructible_v<T>)`
+  renders as `requires copy_constructible<T>`. This applies to a trailing
+  clause written as a flat `&&` chain; any other shape is left whole.
 - `\describe` forces an item declaration for a documented `= default` or
   `= delete` entity.
 - Bare `\also`, or an empty docblock, joins an overload's signature to the
@@ -730,8 +741,10 @@ its own house style. `T const&` and `const T&` both render `const T&`, and
   exact, span-free synopsis without C++ parsing or formatting. Written as a
   class definition's own docblock (no blank line before the class), the
   authored text *replaces* the extracted synopsis while the class's members,
-  roster, and routing are processed as usual; detached, the block stands
-  alone as an anonymous synopsis.
+  roster, and routing are processed as usual, including the `namespace std {`
+  enclosure every synopsis gets; detached, the block stands alone as an
+  anonymous synopsis and is left exactly as written, so it writes its own
+  namespace.
 - `\verbatim-itemdecl` is terminal. Authored elements before it remain the
   item description; all following decorated lines form one exact, span-free
   item declaration. Multiple declaration lines are not split, parsed,

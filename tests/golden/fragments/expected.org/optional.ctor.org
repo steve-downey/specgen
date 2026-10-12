@@ -19,7 +19,7 @@ constexpr optional(const optional& rhs);
 #+end_itemdecl
 
 #+begin_pnum
-/Constraints/: ~is_copy_constructible_v<T>~ is ~true~ and ~is_trivially_copy_constructible_v<T>~ is ~false~.
+/Constraints/: ~is_copy_constructible_v<T>~ is ~true~.
 #+end_pnum
 
 #+begin_pnum

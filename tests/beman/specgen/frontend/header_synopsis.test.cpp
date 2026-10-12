@@ -70,7 +70,11 @@ TEST_CASE("build_document gathers a bounded header synopsis into one node") {
     CHECK(code.text.contains("bool operator==(const widget<T>&, const widget<T>&);"));
     CHECK(code.text.contains("struct sentinel {"));
     CHECK_FALSE(code.text.contains("operator===="));
-    CHECK(code.text.contains("namespace std {\n  template<class T> struct hash<demo::widget<T>>;\n}"));
+    // The region is enclosed in `namespace std` once, as a whole, so a
+    // verbatim payload inside it is written as the draft writes it there.
+    CHECK(code.text.starts_with("namespace std {\n  struct tag {};\n"));
+    CHECK(code.text.ends_with("\n  template<class T> struct hash<widget<T>>;\n}"));
+    CHECK_FALSE(code.text.contains("namespace std {\n  namespace std"));
     CHECK_FALSE(code.text.contains("API documentation"));
     CHECK_FALSE(code.text.contains("verbatim-synopsis"));
     CHECK_FALSE(code.text.contains("END [widget.syn]"));

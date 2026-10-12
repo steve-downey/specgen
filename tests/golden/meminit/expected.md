@@ -3,17 +3,19 @@
 ## Class template `holder` [demo.holder]{- .sref} {-}
 
 ```cpp
-template<typename R>
-class holder {
-  R $base$;    // exposition only
-  int $count$; // exposition only
+namespace std {
+  template<typename R>
+  class holder {
+    R $base$;    // exposition only
+    int $count$; // exposition only
 
-public:
-  // @[demo.holder]{- .sref}@, construction
-  constexpr explicit holder(R base);
+  public:
+    // @[demo.holder]{- .sref}@, construction
+    constexpr explicit holder(R base);
 
-  constexpr holder();
-};
+    constexpr holder();
+  };
+}
 ```
 
 ```cpp

@@ -3,20 +3,22 @@
 ## Class template `demo_view` [demo.view]{- .sref} {-}
 
 ```cpp
-template<class R>
-class demo_view {
-  R $base$; // exposition only
+namespace std {
+  template<class R>
+  class demo_view {
+    R $base$; // exposition only
 
-  class $iterator$; // exposition only
+    class $iterator$; // exposition only
 
-  struct $state$ {
-    bool started = false;
-  }; // exposition only
+    struct $state$ {
+      bool started = false;
+    }; // exposition only
 
-public:
-  // @[demo.view]{- .sref}@, access
-  constexpr $iterator$ begin() const;
-};
+  public:
+    // @[demo.view]{- .sref}@, access
+    constexpr $iterator$ begin() const;
+  };
+}
 ```
 
 ```cpp

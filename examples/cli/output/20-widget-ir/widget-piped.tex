@@ -1,13 +1,15 @@
 \begin{codeblock}
-class @\libglobal{widget}@ {
-public:
-  // \ref{widget.cons}, constructors
-  widget();
-  explicit widget(int value);
+namespace std {
+  class @\libglobal{widget}@ {
+  public:
+    // \ref{widget.cons}, constructors
+    widget();
+    explicit widget(int value);
 
-  // \ref{widget.observers}, observers
-  bool empty() const;
-};
+    // \ref{widget.observers}, observers
+    bool empty() const;
+  };
+}
 \end{codeblock}
 
 \rSec3[widget.cons]{Constructors}

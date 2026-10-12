@@ -1,5 +1,7 @@
 \begin{codeblock}
-struct @\libglobal{tag}@ {};
+namespace std {
+  struct @\libglobal{tag}@ {};
+}
 \end{codeblock}
 
 \begin{itemdescr}
@@ -9,8 +11,10 @@ A defined record's own description.
 \end{itemdescr}
 
 \begin{codeblock}
-template<class T>
-struct @\libglobal{checked}@ {};
+namespace std {
+  template<class T>
+  struct @\libglobal{checked}@ {};
+}
 \end{codeblock}
 
 \begin{itemdescr}
@@ -24,8 +28,10 @@ Instantiating \tcode{checked} registers nothing; it only constrains.
 \end{itemdescr}
 
 \begin{codeblock}
-template<class T>
-struct @\libglobal{probe}@ {};
+namespace std {
+  template<class T>
+  struct @\libglobal{probe}@ {};
+}
 \end{codeblock}
 
 \pnum
@@ -38,11 +44,13 @@ The derived paragraph above states the requirement; this says what the type is f
 \end{itemdescr}
 
 \begin{codeblock}
-template<class T>
-struct @\libglobal{box}@ {
-  // \ref{box.mem}, member types
-  using type = T;
-};
+namespace std {
+  template<class T>
+  struct @\libglobal{box}@ {
+    // \ref{box.mem}, member types
+    using type = T;
+  };
+}
 \end{codeblock}
 
 \begin{itemdescr}

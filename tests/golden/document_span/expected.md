@@ -3,23 +3,25 @@
 ## Header `<span>` synopsis [span.syn]{- .sref} {-}
 
 ```cpp
-// @[span.errors]{- .sref}@, error types
+namespace std {
+  // @[span.errors]{- .sref}@, error types
 
-enum class error_kind { bad_input, truncated };
+  enum class error_kind { bad_input, truncated };
 
-template<class T> inline constexpr bool flag = false;
+  template<class T> inline constexpr bool flag = false;
 
-inline constexpr bool flag_int = flag<int>;
+  inline constexpr bool flag_int = flag<int>;
 
-inline constexpr bool flag_char = flag<char>;
+  inline constexpr bool flag_char = flag<char>;
 
-class widget {
-  int $count$ = 0; // exposition only
+  class widget {
+    int $count$ = 0; // exposition only
 
-public:
-  // @[span.widget]{- .sref}@, observers
-  int count() const;
-};
+  public:
+    // @[span.widget]{- .sref}@, observers
+    int count() const;
+  };
+}
 ```
 
 :::

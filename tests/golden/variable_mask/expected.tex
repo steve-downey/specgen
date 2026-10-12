@@ -1,10 +1,14 @@
 \begin{codeblock}
-struct @\libglobal{adaptor}@ {};
+namespace std {
+  struct @\libglobal{adaptor}@ {};
+}
 \end{codeblock}
 
 \begin{codeblock}
-template<typename T>
-struct @\libglobal{tagger}@ {};
+namespace std {
+  template<typename T>
+  struct @\libglobal{tagger}@ {};
+}
 \end{codeblock}
 
 \indexlibraryglobal{thing}%
@@ -52,5 +56,7 @@ The name \tcode{forwarded} denotes an object forwarding to the implementation's 
 \end{itemdescr}
 
 \begin{codeblock}
-inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+namespace std {
+  inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+}
 \end{codeblock}

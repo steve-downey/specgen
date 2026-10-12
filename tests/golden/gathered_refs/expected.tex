@@ -1,18 +1,20 @@
 \rSec3[demo.syn]{Header synopsis}
 
 \begin{codeblock}
-template<typename I>
-class @\libglobal{holder}@ {
-  I @\exposidnc{ptr}@; // exposition only
+namespace std {
+  template<typename I>
+  class @\libglobal{holder}@ {
+    I @\exposidnc{ptr}@; // exposition only
 
-public:
-  // \ref{demo.holder}, construction
-  constexpr explicit holder(I ptr);
-};
+  public:
+    // \ref{demo.holder}, construction
+    constexpr explicit holder(I ptr);
+  };
 
-// \ref{demo.ops}, operations
+  // \ref{demo.ops}, operations
 
-template<typename I> void @\libglobal{swap}@(holder<I>&, holder<I>&);
+  template<typename I> void @\libglobal{swap}@(holder<I>&, holder<I>&);
+}
 \end{codeblock}
 
 \rSec4[demo.holder]{Class template `holder`}

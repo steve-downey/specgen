@@ -306,15 +306,17 @@ The second command is the whole pipeline in one process. `generate` without `--e
 
 ```latex
 \begin{codeblock}
-class @\libglobal{widget}@ {
-public:
-  // \ref{widget.cons}, constructors
-  widget();
-  explicit widget(int value);
+namespace std {
+  class @\libglobal{widget}@ {
+  public:
+    // \ref{widget.cons}, constructors
+    widget();
+    explicit widget(int value);
 
-  // \ref{widget.observers}, observers
-  bool empty() const;
-};
+    // \ref{widget.observers}, observers
+    bool empty() const;
+  };
+}
 \end{codeblock}
 
 \rSec3[widget.cons]{Constructors}
@@ -363,15 +365,17 @@ The third command is the same wording reached the long way, as two processes wit
 
 ```latex
 \begin{codeblock}
-class @\libglobal{widget}@ {
-public:
-  // \ref{widget.cons}, constructors
-  widget();
-  explicit widget(int value);
+namespace std {
+  class @\libglobal{widget}@ {
+  public:
+    // \ref{widget.cons}, constructors
+    widget();
+    explicit widget(int value);
 
-  // \ref{widget.observers}, observers
-  bool empty() const;
-};
+    // \ref{widget.observers}, observers
+    bool empty() const;
+  };
+}
 \end{codeblock}
 
 \rSec3[widget.cons]{Constructors}
@@ -643,8 +647,8 @@ The same IR in org:
 
 \#+begin\_src org
 
-<div class="addedblock" id="org2806f94">
-<div class="codeblock" id="orgab7aeb4">
+<div class="addedblock" id="org3eba420">
+<div class="codeblock" id="orgacad652">
 <p>
 class gadget {
 public:
@@ -661,14 +665,14 @@ public:
 
 ## Observers [gadget.observe]
 
-<div class="itemdecl" id="org0ae3fb5">
+<div class="itemdecl" id="org6357e7e">
 <p>
 constexpr bool ready() const noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="org2977a75">
+<div class="pnum" id="org50dd7f6">
 <p>
 <i>Constraints</i>:
 </p>
@@ -680,21 +684,21 @@ constexpr bool ready() const noexcept;
 
 </div>
 
-<div class="pnum" id="org8ed3f66">
+<div class="pnum" id="orga10f22e">
 <p>
 <i>Returns</i>: <code>true</code> if and only if the gadget is ready.
 </p>
 
 </div>
 
-<div class="pnum" id="org4c772c8">
+<div class="pnum" id="org0633b3c">
 <p>
 A second paragraph, so the added numbering has to advance.
 </p>
 
 </div>
 
-<div class="pnum" id="org875ba82">
+<div class="pnum" id="org497beec">
 <p>
 A free paragraph closing the subclause.
 </p>
@@ -706,14 +710,14 @@ A free paragraph closing the subclause.
 
 ## Modifiers [gadget.mod]
 
-<div class="itemdecl" id="org7cced6d">
+<div class="itemdecl" id="org43e4fbe">
 <p>
 constexpr void reset() noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="org6aa89d4">
+<div class="pnum" id="org03d869e">
 <p>
 <i>Effects</i>: Resets the gadget.
 </p>
@@ -803,7 +807,7 @@ constexpr optional(const optional& rhs);
 \begin{itemdescr}
 \pnum
 \constraints
-\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_trivially_copy_constructible_v<T>} is \tcode{false}.
+\tcode{is_copy_constructible_v<T>} is \tcode{true}.
 
 \pnum
 \effects
@@ -875,7 +879,7 @@ constexpr optional(nullopt_t) noexcept;
 constexpr optional(const optional& rhs);
 ```
 
-[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true` and `is_trivially_copy_constructible_v<T>` is `false`.
+[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true`.
 
 [#]{.pnum} *Effects*: If `rhs` contains a value, direct-non-list-initializes the contained value with `*rhs`.
 
@@ -912,58 +916,64 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
 ```org
 #+begin_codeblock
-struct nullopt_t {};
+namespace std {
+  struct nullopt_t {};
+}
 #+end_codeblock
 
 #+begin_codeblock
-struct in_place_t {
-  explicit in_place_t() = default;
-};
+namespace std {
+  struct in_place_t {
+    explicit in_place_t() = default;
+  };
+}
 #+end_codeblock
 
 #+begin_codeblock
-template<class T>
-class optional {
-public:
-  using value_type = T;
+namespace std {
+  template<class T>
+  class optional {
+  public:
+    using value_type = T;
 
-  // \ref{optional.ctor}, constructors
-  constexpr optional() noexcept;
-  constexpr optional(nullopt_t) noexcept;
+    // \ref{optional.ctor}, constructors
+    constexpr optional() noexcept;
+    constexpr optional(nullopt_t) noexcept;
 
-  constexpr optional(const optional& rhs)
-    requires is_copy_constructible_v<T> && (!is_trivially_copy_constructible_v<T>);
+    constexpr optional(const optional& rhs)
+      requires is_copy_constructible_v<T>;
 
-  template<class... Args>
-  constexpr explicit optional(in_place_t, Args&&... args)
-    requires is_constructible_v<T, Args...>;
+    template<class... Args>
+    constexpr explicit optional(in_place_t, Args&&... args)
+      requires is_constructible_v<T, Args...>;
 
-  template<class U>
-  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
-    requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
-	     (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+    template<class U>
+    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
+      requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
+	       (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
 
-  // \ref{optional.assign}, assignment
-  template<class... Args> constexpr T& emplace(Args&&... args);
+    // \ref{optional.assign}, assignment
+    template<class... Args> constexpr T& emplace(Args&&... args);
 
-  // \ref{optional.observe}, observers
-  constexpr bool has_value() const noexcept;
-  constexpr const T& operator*() const&;
+    // \ref{optional.observe}, observers
+    constexpr bool has_value() const noexcept;
+    constexpr const T& operator*() const&;
 
-  template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+    template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
 
-  // \ref{optional.monadic}, monadic operations
-  template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+    // \ref{optional.monadic}, monadic operations
+    template<class F> constexpr @\seebelow@ transform(F&& f) const&;
 
-  // \ref{optional.mod}, modifiers
-  constexpr void reset() noexcept;
+    // \ref{optional.mod}, modifiers
+    constexpr void reset() noexcept;
 
-  friend constexpr bool operator==(const optional& x, const optional& y);
+    friend constexpr bool operator==(const optional& x, const optional& y);
 
-private:
-  T @\exposidnc{value}@;              // exposition only
-  bool @\exposidnc{engaged}@ = false; // exposition only
-};
+  private:
+    T @\exposidnc{value}@;              // exposition only
+    bool @\exposidnc{engaged}@ = false; // exposition only
+  };
+}
 #+end_codeblock
 ```
 
@@ -1489,58 +1499,64 @@ The markdown below is rendered from the IR the command above generated, not from
 
 ````markdown
 ```cpp
-struct nullopt_t {};
+namespace std {
+  struct nullopt_t {};
+}
 ```
 
 ```cpp
-struct in_place_t {
-  explicit in_place_t() = default;
-};
+namespace std {
+  struct in_place_t {
+    explicit in_place_t() = default;
+  };
+}
 ```
 
 ```cpp
-template<class T>
-class optional {
-public:
-  using value_type = T;
+namespace std {
+  template<class T>
+  class optional {
+  public:
+    using value_type = T;
 
-  // @[optional.ctor]{- .sref}@, constructors
-  constexpr optional() noexcept;
-  constexpr optional(nullopt_t) noexcept;
+    // @[optional.ctor]{- .sref}@, constructors
+    constexpr optional() noexcept;
+    constexpr optional(nullopt_t) noexcept;
 
-  constexpr optional(const optional& rhs)
-    requires is_copy_constructible_v<T> && (!is_trivially_copy_constructible_v<T>);
+    constexpr optional(const optional& rhs)
+      requires is_copy_constructible_v<T>;
 
-  template<class... Args>
-  constexpr explicit optional(in_place_t, Args&&... args)
-    requires is_constructible_v<T, Args...>;
+    template<class... Args>
+    constexpr explicit optional(in_place_t, Args&&... args)
+      requires is_constructible_v<T, Args...>;
 
-  template<class U>
-  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
-    requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
-	     (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+    template<class U>
+    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
+      requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
+	       (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
 
-  // @[optional.assign]{- .sref}@, assignment
-  template<class... Args> constexpr T& emplace(Args&&... args);
+    // @[optional.assign]{- .sref}@, assignment
+    template<class... Args> constexpr T& emplace(Args&&... args);
 
-  // @[optional.observe]{- .sref}@, observers
-  constexpr bool has_value() const noexcept;
-  constexpr const T& operator*() const&;
+    // @[optional.observe]{- .sref}@, observers
+    constexpr bool has_value() const noexcept;
+    constexpr const T& operator*() const&;
 
-  template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+    template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
 
-  // @[optional.monadic]{- .sref}@, monadic operations
-  template<class F> constexpr $see below$ transform(F&& f) const&;
+    // @[optional.monadic]{- .sref}@, monadic operations
+    template<class F> constexpr $see below$ transform(F&& f) const&;
 
-  // @[optional.mod]{- .sref}@, modifiers
-  constexpr void reset() noexcept;
+    // @[optional.mod]{- .sref}@, modifiers
+    constexpr void reset() noexcept;
 
-  friend constexpr bool operator==(const optional& x, const optional& y);
+    friend constexpr bool operator==(const optional& x, const optional& y);
 
-private:
-  T $value$;              // exposition only
-  bool $engaged$ = false; // exposition only
-};
+  private:
+    T $value$;              // exposition only
+    bool $engaged$ = false; // exposition only
+  };
+}
 ```
 
 ::: wording
@@ -1558,7 +1574,7 @@ constexpr optional(nullopt_t) noexcept;
 constexpr optional(const optional& rhs);
 ```
 
-[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true` and `is_trivially_copy_constructible_v<T>` is `false`.
+[#]{.pnum} *Constraints*: `is_copy_constructible_v<T>` is `true`.
 
 [#]{.pnum} *Effects*: If `rhs` contains a value, direct-non-list-initializes the contained value with `*rhs`.
 

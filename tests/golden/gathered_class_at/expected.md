@@ -3,26 +3,28 @@
 ## Header <box> synopsis [box.syn]{- .sref} {-}
 
 ```cpp
-struct crate {
-  int size;
-};
+namespace std {
+  struct crate {
+    int size;
+  };
 
-template<class T>
-struct pallet {
-  T slot;
-};
+  template<class T>
+  struct pallet {
+    T slot;
+  };
 
-struct label {
-  int id;
-};
+  struct label {
+    int id;
+  };
 
-struct crumb {
-  int weight;
-};
+  struct crumb {
+    int weight;
+  };
 
-struct strap {
-  int length;
-};
+  struct strap {
+    int length;
+  };
+}
 ```
 
 [#]{.pnum} A program that instantiates `crumb` is ill-formed unless `sizeof(short) >= 2` is `true`.
@@ -46,9 +48,11 @@ struct strap {
 ### Class `hinge` [box.hinge]{- .sref} {-}
 
 ```cpp
-struct hinge {
-  int pin;
-};
+namespace std {
+  struct hinge {
+    int pin;
+  };
+}
 ```
 
 #### General [box.hinge.general]{- .sref} {-}

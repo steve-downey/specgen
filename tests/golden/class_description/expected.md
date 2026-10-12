@@ -1,5 +1,7 @@
 ```cpp
-struct tag {};
+namespace std {
+  struct tag {};
+}
 ```
 
 ::: wording
@@ -9,8 +11,10 @@ struct tag {};
 :::
 
 ```cpp
-template<class T>
-struct checked {};
+namespace std {
+  template<class T>
+  struct checked {};
+}
 ```
 
 ::: wording
@@ -22,8 +26,10 @@ struct checked {};
 :::
 
 ```cpp
-template<class T>
-struct probe {};
+namespace std {
+  template<class T>
+  struct probe {};
+}
 ```
 
 ::: wording
@@ -39,11 +45,13 @@ struct probe {};
 :::
 
 ```cpp
-template<class T>
-struct box {
-  // @[box.mem]{- .sref}@, member types
-  using type = T;
-};
+namespace std {
+  template<class T>
+  struct box {
+    // @[box.mem]{- .sref}@, member types
+    using type = T;
+  };
+}
 ```
 
 ::: wording
