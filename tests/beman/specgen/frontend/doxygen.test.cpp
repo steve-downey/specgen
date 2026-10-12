@@ -101,8 +101,8 @@ TEST_CASE("build_document - no Doxygen comment reaches the synopsis") {
 
     // And the declarations themselves are untouched, with no gap left where
     // a stripped block sat: this is `spec_widget.hpp`'s synopsis, renamed.
-    CHECK(contains(text, "// [gadget.cons], constructors\n  gadget();\n  explicit gadget(int value);"));
-    CHECK(contains(text, "// [gadget.observers], observers\n  bool empty() const;"));
+    CHECK(contains(text, "// [gadget.cons], constructors\n    gadget();\n    explicit gadget(int value);"));
+    CHECK(contains(text, "// [gadget.observers], observers\n    bool empty() const;"));
 }
 
 TEST_CASE("build_document - specgen markup below a Doxygen comment is still read") {

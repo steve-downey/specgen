@@ -6,17 +6,19 @@
 :END:
 
 #+begin_codeblock
-template<typename I>
-class holder {
-  I @\exposidnc{ptr}@; // exposition only
+namespace std {
+  template<typename I>
+  class holder {
+    I @\exposidnc{ptr}@; // exposition only
 
-public:
-  constexpr explicit holder(I ptr);
+  public:
+    constexpr explicit holder(I ptr);
 
-  constexpr I get() const;
-};
+    constexpr I get() const;
+  };
 
-template<typename I> holder(I) -> holder<I>;
+  template<typename I> holder(I) -> holder<I>;
+}
 #+end_codeblock
 
 *** Class template ~holder~ [demo.holder]

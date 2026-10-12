@@ -299,6 +299,13 @@ back to name match within the class's fragments only):
   built from **prefix-minimal** paths, so a nested namespace written out in full
   (`demo::detail::storage`) renders the same as the abbreviated spelling instead of losing
   its qualifier.
+- **Every synopsis is enclosed in `namespace std`.** The draft writes a synopsis at namespace
+  scope inside its namespace, body indented two spaces, and the mapping above has already made
+  that namespace `std`. The front end adds the enclosure as the last step before the tree is
+  built, so a gathered header region is enclosed once, as a whole, and spans move with the
+  text they cover. A class's attached `\verbatim-synopsis` stands in for the extracted text and
+  is enclosed like it; a standalone `\verbatim-synopsis` is the author's whole synopsis,
+  namespace included, and is left exactly as written.
 - **Qualifier removal follows declaration ownership through a using-declaration.** A
   qualifier written as an implementation namespace is dropped for a use only when the
   referenced declaration is owned by a namespace already in the drop set, such as `std`. The
@@ -455,6 +462,17 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   itemdecl. On a namespace-scope record or class-template definition, suppress
   the complete record event instead; this lets separately authored wording
   replace an implementation definition without leaking a second synopsis.
+  **The survivor's constraint is what the pair shares.** A conditionally trivial special
+  member is a defaulted twin constrained to where `T`'s member is trivial and a
+  user-provided survivor constrained to everywhere else; the conjunct that tells them apart
+  is how the implementation picks a declaration, not part of the contract, and the draft
+  does not write it (`constexpr optional(const optional&);`). So a survivor conjunct that is
+  the logical negation of a conjunct of a `\merge`d twin -- a sibling with the same name,
+  parameter types and object qualifiers -- is cut from the synopsis, from an itemdecl that
+  keeps the clause (`\constraints-in-decl`), and from the derived Constraints, with the
+  `requires` keyword when nothing is left. The conjuncts are compared as expressions, not
+  as text. The cut is made only on a trailing clause that is a flat `&&` chain written in
+  the file; any other shape is left whole everywhere, so the three never disagree.
 - `\omit` — exclude a decl. A namespace-scope record or class-template
   definition is suppressed before synopsis extraction, roster construction, or
   class-head Mandates derivation.

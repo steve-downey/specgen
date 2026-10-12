@@ -991,6 +991,17 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_spelling.hpp"
 )
 
+# A `\merge`d twin and its survivor are one specification entity, so the
+# survivor's constraint is what the pair shares: the conjunct that only tells
+# them apart is cut from the synopsis, from an itemdecl that keeps the clause,
+# and from the derived Constraints, with the `requires` keyword when nothing
+# is left. A clause that is not a flat `&&` chain is left whole everywhere.
+specgen_add_golden(
+    merge_twin_constraints
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_merge_twin_constraints.hpp"
+)
+
 # A derived Constraints element is not "something to specify" for the
 # in-class collection gate (issue #121): a `= delete`d member with no
 # authored description element must stay synopsis-only even though

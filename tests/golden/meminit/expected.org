@@ -6,17 +6,19 @@
 :END:
 
 #+begin_codeblock
-template<typename R>
-class holder {
-  R @\exposidnc{base}@;    // exposition only
-  int @\exposidnc{count}@; // exposition only
+namespace std {
+  template<typename R>
+  class holder {
+    R @\exposidnc{base}@;    // exposition only
+    int @\exposidnc{count}@; // exposition only
 
-public:
-  // \ref{demo.holder}, construction
-  constexpr explicit holder(R base);
+  public:
+    // \ref{demo.holder}, construction
+    constexpr explicit holder(R base);
 
-  constexpr holder();
-};
+    constexpr holder();
+  };
+}
 #+end_codeblock
 
 #+begin_itemdecl

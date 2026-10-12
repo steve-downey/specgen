@@ -52,8 +52,8 @@ TEST_CASE("build_document - spec_template.hpp recognizes the class template as a
     // requires-clause; the draft FormatStyle (design §3.6 step 2) removes the
     // post-template space while keeping a record's template head on its own
     // line. Short function-template declarations may share one line.
-    CHECK(text.starts_with("template<class T>\n"));
-    CHECK_FALSE(text.starts_with("template<class T> class box"));
+    CHECK(text.starts_with("namespace std {\n  template<class T>\n"));
+    CHECK_FALSE(text.starts_with("namespace std {\n  template<class T> class box"));
     CHECK_FALSE(contains(text, "template <"));
     CHECK(contains(text, "requires regular<T>"));
     CHECK(contains(text, "T get() const;"));

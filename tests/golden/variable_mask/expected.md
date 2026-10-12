@@ -1,10 +1,14 @@
 ```cpp
-struct adaptor {};
+namespace std {
+  struct adaptor {};
+}
 ```
 
 ```cpp
-template<typename T>
-struct tagger {};
+namespace std {
+  template<typename T>
+  struct tagger {};
+}
 ```
 
 ::: wording
@@ -48,5 +52,7 @@ inline constexpr $unspecified$ forwarded;
 :::
 
 ```cpp
-inline constexpr $unspecified$ $helper-obj$; // exposition only
+namespace std {
+  inline constexpr $unspecified$ $helper-obj$; // exposition only
+}
 ```

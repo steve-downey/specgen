@@ -10,9 +10,11 @@ This variable template is the lookup point for the alpha policy of a type. A pro
 \end{itemdescr}
 
 \begin{codeblock}
-class @\libglobal{blend_policy}@ {
-public:
-  // \ref{paper.blend}, observers
-  int strength() const;
-};
+namespace std {
+  class @\libglobal{blend_policy}@ {
+  public:
+    // \ref{paper.blend}, observers
+    int strength() const;
+  };
+}
 \end{codeblock}

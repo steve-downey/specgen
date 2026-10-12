@@ -3,25 +3,27 @@
 ## Class `box` [demo.box]{- .sref} {-}
 
 ```cpp
-struct box {
-  // @[demo.box]{- .sref}@, observers
+namespace std {
+  struct box {
+    // @[demo.box]{- .sref}@, observers
 
-  template<class T>
-    requires requires(T t) {
-      { t == 0 };
-    }
-  constexpr int with_req_expr(T) const;
+    template<class T>
+      requires requires(T t) {
+        { t == 0 };
+      }
+    constexpr int with_req_expr(T) const;
 
-  template<class T>
-    requires nonzero<T>
-  constexpr int with_named(T) const;
+    template<class T>
+      requires nonzero<T>
+    constexpr int with_named(T) const;
 
-  template<class I>
-    requires requires(I i) {
-      { *i == 0 };
-    }
-  friend constexpr bool operator==(const I& it, box);
-};
+    template<class I>
+      requires requires(I i) {
+        { *i == 0 };
+      }
+    friend constexpr bool operator==(const I& it, box);
+  };
+}
 ```
 
 ```cpp

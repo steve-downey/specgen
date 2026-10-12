@@ -1,9 +1,11 @@
 #+begin_codeblock
-class widget {
-public:
-  // \ref{widget.mod}, modifiers
-  void configure(int mode);
-};
+namespace std {
+  class widget {
+  public:
+    // \ref{widget.mod}, modifiers
+    void configure(int mode);
+  };
+}
 #+end_codeblock
 
 ** Modifiers [widget.mod]

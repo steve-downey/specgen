@@ -1,9 +1,11 @@
 ```cpp
-class widget {
-public:
-  // @[widget.mod]{- .sref}@, modifiers
-  void configure(int mode);
-};
+namespace std {
+  class widget {
+  public:
+    // @[widget.mod]{- .sref}@, modifiers
+    void configure(int mode);
+  };
+}
 ```
 
 ::: wording

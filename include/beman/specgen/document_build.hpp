@@ -220,6 +220,12 @@ struct SynopsisDecl {
     // Empty when the class's docblock carries an `\at`, for the reason
     // `general` above gives.
     beman::specgen::ir::ItemDescr descr = {};
+    // A standalone `\verbatim-synopsis`: the author's text is the whole
+    // synopsis, namespace and all, so the front end's `namespace std`
+    // enclosure leaves it as written. Every other synopsis -- extracted, a
+    // class's attached `\verbatim-synopsis`, or a gathered header region --
+    // is declarations at namespace scope and gets the enclosure.
+    bool exact = false;
 };
 
 // An out-of-line function definition's SpecItem (design §3.3), keyed by its

@@ -1,17 +1,19 @@
 \rSec3[demo.holder]{Class template `holder`}
 
 \begin{codeblock}
-template<typename R>
-class @\libglobal{holder}@ {
-  R @\exposidnc{base}@;    // exposition only
-  int @\exposidnc{count}@; // exposition only
+namespace std {
+  template<typename R>
+  class @\libglobal{holder}@ {
+    R @\exposidnc{base}@;    // exposition only
+    int @\exposidnc{count}@; // exposition only
 
-public:
-  // \ref{demo.holder}, construction
-  constexpr explicit holder(R base);
+  public:
+    // \ref{demo.holder}, construction
+    constexpr explicit holder(R base);
 
-  constexpr holder();
-};
+    constexpr holder();
+  };
+}
 \end{codeblock}
 
 \indexlibraryctor{holder}%

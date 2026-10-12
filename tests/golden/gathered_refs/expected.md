@@ -3,18 +3,20 @@
 ## Header synopsis [demo.syn]{- .sref} {-}
 
 ```cpp
-template<typename I>
-class holder {
-  I $ptr$; // exposition only
+namespace std {
+  template<typename I>
+  class holder {
+    I $ptr$; // exposition only
 
-public:
-  // @[demo.holder]{- .sref}@, construction
-  constexpr explicit holder(I ptr);
-};
+  public:
+    // @[demo.holder]{- .sref}@, construction
+    constexpr explicit holder(I ptr);
+  };
 
-// @[demo.ops]{- .sref}@, operations
+  // @[demo.ops]{- .sref}@, operations
 
-template<typename I> void swap(holder<I>&, holder<I>&);
+  template<typename I> void swap(holder<I>&, holder<I>&);
+}
 ```
 
 ### Class template `holder` [demo.holder]{- .sref} {-}

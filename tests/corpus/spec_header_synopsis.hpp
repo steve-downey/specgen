@@ -90,10 +90,11 @@ inline constexpr detail::adaptor tag_of{};
 //! \effects Returns a `widget<T>` over `E`.
 inline constexpr detail::adaptor make_widget{};
 
+// A verbatim payload inside the region is part of the region's text, which is
+// enclosed in `namespace std` as a whole, so it is written as the draft writes
+// it there: no namespace of its own.
 //! \verbatim-synopsis
-//! namespace std {
-//!   template<class T> struct hash<demo::widget<T>>;
-//! }
+//! template<class T> struct hash<widget<T>>;
 
 } // namespace demo
 

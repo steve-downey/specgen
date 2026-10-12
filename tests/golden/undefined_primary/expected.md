@@ -25,7 +25,9 @@ struct bottom_tag;
 [#]{.pnum} *Remarks*: An undefined primary with a non-template head.
 
 ```cpp
-struct registry {};
+namespace std {
+  struct registry {};
+}
 ```
 
 :::

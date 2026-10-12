@@ -82,12 +82,16 @@ The concept is specified below.
 \end{itemdescr}
 
 \begin{codeblock}
-template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+namespace std {
+  template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+}
 \end{codeblock}
 
 \begin{codeblock}
-template<class T>
-concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+namespace std {
+  template<class T>
+  concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+}
 \end{codeblock}
 
 \indexlibraryglobal{color}%
@@ -117,7 +121,9 @@ The width of a link, in bytes.
 \end{itemdescr}
 
 \begin{codeblock}
-enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+namespace std {
+  enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+}
 \end{codeblock}
 
 \indexlibraryglobal{initial_state}%

@@ -1,12 +1,14 @@
 \begin{codeblock}
-class @\libglobal{optional}@ {
-public:
-  // \ref{optional.assign}, assignment
-  optional& operator=(const optional& rhs);
+namespace std {
+  class @\libglobal{optional}@ {
+  public:
+    // \ref{optional.assign}, assignment
+    optional& operator=(const optional& rhs);
 
-private:
-  int @\exposidnc{val}@ = 0; // exposition only
-};
+  private:
+    int @\exposidnc{val}@ = 0; // exposition only
+  };
+}
 \end{codeblock}
 
 \rSec3[optional.assign]{Assignment}

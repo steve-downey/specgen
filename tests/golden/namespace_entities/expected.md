@@ -48,12 +48,16 @@ concept masked = $see below$;
 [#]{.pnum} *Remarks*: The concept is specified below.
 
 ```cpp
-template<class T> using $hidden-t$ = $see below$; // exposition only
+namespace std {
+  template<class T> using $hidden-t$ = $see below$; // exposition only
+}
 ```
 
 ```cpp
-template<class T>
-concept $hidden-usable$ = $see below$; // exposition only
+namespace std {
+  template<class T>
+  concept $hidden-usable$ = $see below$; // exposition only
+}
 ```
 
 ```cpp
@@ -72,7 +76,9 @@ enum link_width : unsigned char { narrow = 1, wide = 2 };
 [#]{.pnum} *Remarks*: The width of a link, in bytes.
 
 ```cpp
-enum class $channel-state$ { open, closed }; // exposition only
+namespace std {
+  enum class $channel-state$ { open, closed }; // exposition only
+}
 ```
 
 ```cpp

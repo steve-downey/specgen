@@ -3,8 +3,10 @@
 ## Class template `crate` [demo.crate]{- .sref} {-}
 
 ```cpp
-template<class T>
-class crate {};
+namespace std {
+  template<class T>
+  class crate {};
+}
 ```
 
 [#]{.pnum} *Remarks*: A crate.
