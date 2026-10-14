@@ -105,10 +105,15 @@ jobs:
         id: stage
         run: uv run tools/release/stage.sh build/manylinux-release dist
 
+      # The image's only C++ standard library is gcc-toolset-16's, which
+      # Clang's GCC detection does not find under /opt/rh; name it as a user
+      # with only a toolset would.
       - name: Check portability
         env:
           STAGE: ${{ steps.stage.outputs.stage }}
-        run: tools/release/check-portable.sh "$STAGE" "$GITHUB_SHA"
+        run: >
+          tools/release/check-portable.sh "$STAGE" "$GITHUB_SHA"
+          "--gcc-install-dir=$(dirname "$(g++ -print-libgcc-file-name)")"
 
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

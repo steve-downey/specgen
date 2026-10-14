@@ -2,7 +2,7 @@
 # tools/release/check-portable.sh                                   -*-sh-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# usage: check-portable.sh <staged dir> [<expected git commit>]
+# usage: check-portable.sh <staged dir> [<expected git commit> [<clang argument>...]]
 #
 # Is the staged release tree (stage.sh's output: bin/specgen beside
 # lib/clang/<major>/include) what the manylinux_2_34_x86_64 name promises?
@@ -14,7 +14,8 @@
 #   - it references no symbol version newer than EL9's own: GLIBC_2.34,
 #     GLIBCXX_3.4.29 and CXXABI_1.3.13 (gcc-toolset's libstdc++_nonshared.a
 #     carries anything newer inside the binary);
-#   - it works from an empty directory (smoke.sh).
+#   - it works from an empty directory (smoke.sh, which is handed the commit
+#     and any Clang arguments).
 #
 # auditwheel is the policy's authoritative reading and the wheel gets it; this
 # is the same claim made for the archive, which no PyPA tool looks at.
@@ -22,6 +23,8 @@ set -eu
 
 stage=$1
 expected_commit=${2:-}
+shift
+[ $# -eq 0 ] || shift
 specgen=$stage/bin/specgen
 status=0
 
@@ -64,7 +67,7 @@ check_version GLIBC 2.34
 check_version GLIBCXX 3.4.29
 check_version CXXABI 1.3.13
 
-"$(dirname "$0")/smoke.sh" "$specgen" "$expected_commit" || status=1
+"$(dirname "$0")/smoke.sh" "$specgen" "$expected_commit" "$@" || status=1
 
 [ "$status" -eq 0 ] && echo "check-portable: ok"
 exit "$status"

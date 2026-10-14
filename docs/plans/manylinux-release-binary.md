@@ -365,6 +365,12 @@ presets, `packaging/release/images.env`, and `tools/release/{stage,check-portabl
   stderr, and `generate --emit-ir` piped through `render --from-ir` agreeing byte for byte with the single pass. That
   exercises `render --from-ir` without an IR file that would need regenerating whenever the IR changes.
   `check-portable.sh` runs it in the build image; the smoke matrix runs it on each distribution.
+- **Clang does not find gcc-toolset's libstdc++.** Its GCC detection finds EL9's system GCC 11 under `/usr/lib/gcc`,
+  which in the build image has no C++ headers, and never looks under `/opt/rh/gcc-toolset-16`. So the in-image check
+  passes `--gcc-install-dir=$(dirname "$(g++ -print-libgcc-file-name)")` in the Clang tail, which is the same escape
+  a user with only a toolset installed needs, and which [std-headers-at-run-time](#std-headers-at-run-time) names;
+  `smoke.sh` and `check-portable.sh` pass any Clang arguments after the commit through. The stock distributions in
+  the smoke matrix need none. [docs-and-records](#docs-and-records) should say this in the user guide.
 - **The preset keeps the examples on.** They build in the image and their `examples.*` cases are more of the suite run
   against the binary that ships. There is no toolchain file either: the image's `CC`/`CXX` are GCC 16.
 - **Checkout is shallow.** Nothing reads tags; the version comes from `CMakeCache.txt` and the commit from `HEAD`.
