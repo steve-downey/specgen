@@ -33,6 +33,27 @@ answers with it. After the pin moves, start a fresh build directory rather than
 reconfiguring the old one (the Makefile refuses to, see below).
 See [decisions/llvm-toolchain-pin.md](decisions/llvm-toolchain-pin.md).
 
+### Linking Clang
+
+`BEMAN_SPECGEN_LLVM_LINK` picks how the front end links Clang: `shared` (the
+distribution's `clang-cpp` and `LLVM`), `static` (the Clang component archives,
+with `--gc-sections`), or `auto` (the default: `shared` when the LLVM has a
+`clang-cpp`, `static` when it does not). How LLVM itself is linked follows from
+the Clang package rather than from this option: Debian's static Clang archives
+name the shared `libLLVM`, so `static` against apt.llvm.org's LLVM still loads
+`libLLVM.so`, while against the official release tarball (or an LLVM built
+without `LLVM_LINK_LLVM_DYLIB`) the driver loads no LLVM library at all. The
+second is the portable release binary
+([plans/manylinux-release-binary.md](plans/manylinux-release-binary.md)).
+
+```sh
+uv run cmake --preset gcc-release -B build/static-tarball \
+  -DClang_DIR=<LLVM-23.1.x-Linux-X64>/lib/cmake/clang -DBEMAN_SPECGEN_LLVM_LINK=static
+```
+
+Without `clang-tidy` beside that LLVM, `style.no-raw-loops` fails rather than
+passing silently; that is the gate working, not the build breaking.
+
 ## The preset lane
 
 One preset, one configuration:

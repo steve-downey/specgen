@@ -204,7 +204,8 @@ beman_install_library(beman.specgen TARGETS beman.specgen)
 configure_build_telemetry()
 
 # The Clang front end, required rather than optional (decision llvm-toolchain-pin).
-# System LLVM 23 links via shared clang-cpp + LLVM, built under GCC.
+# A distribution LLVM 23 links via shared clang-cpp + LLVM; one with no clang-cpp
+# links Clang statically (BEMAN_SPECGEN_LLVM_LINK, src/beman/specgen/frontend).
 # ClangConfig pulls in LLVMConfig, so LLVM_INCLUDE_DIRS and CLANG_INCLUDE_DIRS
 # are both defined after this. LLVMConfig's transitive FindFFI/FindLibEdit run
 # C-compiler probes, so C must be enabled first.

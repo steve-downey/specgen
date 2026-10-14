@@ -40,6 +40,15 @@ struct SmokeResult {
 // carries no wording-generation logic yet.
 SmokeResult smoke_check(std::string_view source);
 
+// Install LLVM's crash handler for the life of the process: on a fatal signal,
+// write `banner` to stderr and then LLVM's stack trace. Called once, first
+// thing, by the driver. A release binary is fully stripped, so its trace is a
+// list of `specgen(+0x...)` offsets; the banner says which build those offsets
+// belong to, which is what makes the release's separate debug-information
+// asset usable against them. It lives here rather than in the driver because
+// this tier is the one place LLVM is reachable from (decision ir-boundary).
+void install_crash_handler(std::string_view argv0, std::string banner);
+
 // One entry in the decl/comment interleave (design §3.2): either a main-file
 // top-level declaration or a main-file raw comment, tagged with its source
 // offset so the two streams can be merged into a single, source-ordered
