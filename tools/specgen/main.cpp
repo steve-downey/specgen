@@ -1400,6 +1400,12 @@ int dump_decls_command(const std::vector<std::string>& args) {
 } // namespace
 
 int main(int argc, char** argv) {
+    beman::specgen::frontend::install_crash_handler(
+        argv[0],
+        std::format("specgen {} (git {}) crashed. To report it, include this output and the header it was run on;\n"
+                    "the release's specgen.debug asset resolves the offsets below.\n",
+                    kVersion,
+                    kGitCommit));
     const std::vector<std::string> args(argv + 1, argv + argc);
     if (args.empty())
         return usage(stderr, 2);

@@ -187,6 +187,42 @@ Let the front end link LLVM and Clang statically when the LLVM it is given has n
   shared-linked; in the release image there is no clang-tidy, the probe comes up empty, and `style.*` is excluded
   explicitly ([style-gate-in-release-job](#style-gate-in-release-job)).
 
+**Landed** (2026-10-13), with these differences from the bullets above:
+
+- The `ldd` expectation for the dev box was wrong. Debian builds LLVM with `LLVM_LINK_LLVM_DYLIB`, and its exported
+  static `clang*` targets name the shared `LLVM` in their link interface, so `static` against apt.llvm.org's LLVM gives
+  static Clang **plus `libLLVM.so`**: no `libclang-cpp`, but not LLVM-free. Naming the static LLVM components as well
+  would put two LLVMs in one process. The option therefore chooses only how *Clang* is linked; LLVM follows from the
+  package. Verified both ways: the Debian `static` driver loads `libLLVM.so.23.1` and generates correctly; the
+  tarball's targets name static `LLVM*` components and the driver links no LLVM library at all.
+- The static component list gains `clangOptions` (home of `clang::GetResourcesPath`, from
+  [resource-dir-discovery](#resource-dir-discovery)).
+- `-Wl,--gc-sections` is an `INTERFACE` link option of the front-end library, so it reaches the driver and the
+  front-end unit tests alike.
+- The crash handler is `frontend::install_crash_handler`, called first thing in `main`: the driver includes no LLVM
+  header, by [ir-boundary](../decisions/ir-boundary.md), so the LLVM call lives behind the front-end seam. The banner is
+  registered as a signal handler ahead of `PrintStackTraceOnErrorSignal`'s and written with `write(2)`. Checked by
+  sending `SIGSEGV` to a running `render --from-ir -`; there is no ctest case for it.
+
+**The link measurement on the dev box** (the fourth question of
+[llvm-from-release-tarball](#llvm-from-release-tarball), short of the image), 2026-10-13: `static` against the
+unpacked `LLVM-23.1.3-Linux-X64` tarball, built by GCC 16.0.1, links with no undefined symbols in 4 min 52 s wall
+(1790 CPU-seconds, 8 jobs) and passes every ctest case but `style.no-raw-loops`, which fails as designed with no
+`clang-tidy` beside that LLVM (978 of 979; the ten tidy-plugin cases are not registered without it). The driver:
+
+```sh
+ldd specgen          # libz, libstdc++, libm, libgcc_s, libc: nothing outside the manylinux whitelist
+objdump -T specgen | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1     # GLIBC_2.34
+objdump -T specgen | grep -o 'GLIBCXX_[0-9.]*' | sort -Vu | tail -1   # GLIBCXX_3.4.31 (dev box GCC 16's libstdc++;
+                                                                      # the EL9 nonshared shim is the image's job)
+size specgen         # text 37.8 MB, data 1.5 MB; 145 MB with DWARF
+strip --strip-unneeded specgen   # 39.3 MB; xz -T0: 10.5 MB
+nm -D specgen | grep -i zstd     # only the weak ZSTD_trace_* hooks: LLVM's Findzstd took libzstd.a
+```
+
+zstd resolving from Debian's `libzstd.a` confirms the `base` layer needs a static zstd built from source, since EL9
+has no `libzstd-static`. Size lands inside the 35–50 MB / 10–12 MB estimate.
+
 ### [toolchain-image](#toolchain-image)
 
 Two Dockerfiles under `infra/release/` and one workflow, `.github/workflows/toolchain-image.yml`, that publishes two
@@ -383,6 +419,19 @@ So the `llvm` layer is, until the link says otherwise, **download, verify the ch
 `lib/*.a`, `lib/cmake`, `include`, `lib/clang/23`) — minutes, not hours. The source build in
 [toolchain-image](#toolchain-image) stays written down as the fallback and as the route to an aarch64 lane, for which
 the official `Linux-ARM64` tarball needs the same four checks.
+
+The prune as written breaks `find_package(Clang)`: `LLVMExports-release.cmake` and `ClangTargets-release.cmake` check
+that every imported file exists, and between them they name 105 tools in `bin/` and five shared libraries
+(`libclang-cpp`, `libclang`, `libLTO`, `libRemarks`, `LLVMPolly`). Extracting all of them is gigabytes; the measurement
+instead kept the real `bin/clang-format` (statically linked, and what the `.eastconst` goldens run) and created an
+**empty, non-executable placeholder** for each of the rest, from the list that
+`grep -ho '"${_IMPORT_PREFIX}/[^"]*"'` yields over those two files. Non-executable matters: `find_program` then
+reports `clang-tidy` absent, which is what
+[style-gate-in-release-job](#style-gate-in-release-job) assumes. A `clang-cpp` target still exists (it names the
+placeholder), so the release preset sets `BEMAN_SPECGEN_LLVM_LINK=static` explicitly rather than trusting `auto`. The
+tarball's provenance checks out with `gh attestation verify --repo llvm/llvm-project --bundle <tarball>.jsonl`; the
+image pins the SHA-256 instead (`ca9fe385a5d9e2d88132dc0e23a00e9f87f38fa75f67207b5e457d208e71d013` for
+23.1.3 x86_64).
 
 No distribution packages LLVM 23 for EL9: AlmaLinux 9.8 AppStream carries 21.1.8 and EPEL 9's compat packages stop at
 `llvm20`; `llvm-toolset` follows RHEL's rebase cadence, which puts 23 in 2027 at the earliest. Measured:
