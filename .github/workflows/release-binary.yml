@@ -86,12 +86,12 @@ jobs:
         with:
           persist-credentials: false
 
-      # CMake comes from uv, pinned by the lock file, exactly as on the dev box.
+      # CMake comes from uv, pinned in pyproject.toml, exactly as on the dev box.
       - name: Configure
-        run: uv run --frozen cmake --preset manylinux-release
+        run: uv run cmake --preset manylinux-release
 
       - name: Build
-        run: uv run --frozen cmake --build --preset manylinux-release
+        run: uv run cmake --build --preset manylinux-release
 
       # The whole suite against the binary that ships, less the style gate.
       # Lint is a pull-request check, where a finding can still change what
@@ -99,11 +99,11 @@ jobs:
       # whether the binary works (style-gate-in-release-job). The image has no
       # clang-tidy for it to run with in any case.
       - name: Test
-        run: uv run --frozen ctest --preset manylinux-release -E '^style\.'
+        run: uv run ctest --preset manylinux-release -E '^style\.'
 
       - name: Stage
         id: stage
-        run: uv run --frozen tools/release/stage.sh build/manylinux-release dist
+        run: uv run tools/release/stage.sh build/manylinux-release dist
 
       - name: Check portability
         env:
