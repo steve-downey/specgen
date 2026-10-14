@@ -7,6 +7,13 @@
 # request -- published as a GitHub Release tagged v<PROJECT_VERSION>-<run>
 # (release-trigger: main is always releasable, so each push is a release).
 #
+# The same staged tree is also packaged as the beman-specgen wheel and tagged
+# by auditwheel. Publishing it to PyPI is off unless the repository variable
+# PYPI_PUBLISH is `testpypi` or `pypi`, which needs the project registered
+# there with this workflow as its trusted publisher; even then it publishes
+# only a PROJECT_VERSION that index does not have yet, since every version on
+# PyPI is immutable and a release per push cannot be mirrored there.
+#
 # The image is named by digest in packaging/release/images.env, so moving the
 # release onto a new toolchain is a reviewed commit, never a moving tag; the
 # toolchain-image workflow's summary prints the digest to put there.
@@ -25,6 +32,8 @@ on:
       - 'packaging/release/**'
       - 'tools/release/**'
       - 'CMakePresets.json'
+      - 'packaging/pypi/**'
+      - 'pyproject.toml'
       - '.github/workflows/release-binary.yml'
   workflow_dispatch:
 
@@ -114,6 +123,31 @@ jobs:
         run: >
           tools/release/check-portable.sh "$STAGE" "$GITHUB_SHA"
           "--gcc-install-dir=$(dirname "$(g++ -print-libgcc-file-name)")"
+
+      # The wheel packages the tree just checked; build-wheel.sh fails unless
+      # auditwheel tags it manylinux_2_34_x86_64, and its version is CMake's.
+      - name: Build the wheel
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+          VERSION: ${{ steps.stage.outputs.version }}
+        run: |
+          tools/release/build-wheel.sh "$STAGE" dist/wheel
+          case "$(ls dist/wheel/*.whl)" in
+              */beman_specgen-"$VERSION"-py3-none-*.whl) ;;
+              *) echo "the wheel's version is not PROJECT_VERSION $VERSION" >&2; exit 1 ;;
+          esac
+
+      - name: Check the wheel
+        run: >
+          tools/release/check-wheel.sh dist/wheel/*.whl "$GITHUB_SHA"
+          "--gcc-install-dir=$(dirname "$(g++ -print-libgcc-file-name)")"
+
+      - name: Upload the wheel
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: beman-specgen-wheel
+          if-no-files-found: error
+          path: dist/wheel/*.whl
 
       - name: Upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -218,3 +252,51 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: dist/*
+
+  # Off until the repository variable PYPI_PUBLISH names an index: `testpypi`
+  # for TestPyPI, `pypi` for PyPI. Each is a GitHub environment of the same
+  # name, which the index's trusted-publisher entry for this workflow names
+  # too; no token is stored anywhere.
+  pypi:
+    name: Publish the wheel
+    needs: [build, smoke]
+    if: >
+      github.event_name == 'push' && github.ref == 'refs/heads/main'
+      && (vars.PYPI_PUBLISH == 'testpypi' || vars.PYPI_PUBLISH == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ vars.PYPI_PUBLISH }}
+      url: ${{ vars.PYPI_PUBLISH == 'pypi' && 'https://pypi.org/p/beman-specgen' || 'https://test.pypi.org/p/beman-specgen' }}
+    permissions:
+      id-token: write
+    env:
+      INDEX: ${{ vars.PYPI_PUBLISH == 'pypi' && 'https://pypi.org' || 'https://test.pypi.org' }}
+      UPLOAD: ${{ vars.PYPI_PUBLISH == 'pypi' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      # Every version on an index is immutable, so a push to main publishes
+      # only when PROJECT_VERSION is new there: bumping the CMake version is
+      # what publishes.
+      - name: Is this version new?
+        id: new
+        run: |
+          status=$(curl -s -o /dev/null -w '%{http_code}' "$INDEX/pypi/beman-specgen/$VERSION/json")
+          case "$status" in
+              404) echo "publish=true" >> "$GITHUB_OUTPUT" ;;
+              200) echo "beman-specgen $VERSION is already on $INDEX; nothing to publish" ;;
+              *) echo "$INDEX answered $status for beman-specgen $VERSION" >&2; exit 1 ;;
+          esac
+
+      - name: Download
+        if: steps.new.outputs.publish == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: beman-specgen-wheel
+          path: dist
+
+      - name: Publish
+        if: steps.new.outputs.publish == 'true'
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: ${{ env.UPLOAD }}
+          packages-dir: dist

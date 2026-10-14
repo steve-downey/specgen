@@ -14,6 +14,10 @@
 #   - it references no symbol version newer than EL9's own: GLIBC_2.34,
 #     GLIBCXX_3.4.29 and CXXABI_1.3.13 (gcc-toolset's libstdc++_nonshared.a
 #     carries anything newer inside the binary);
+#   - it needs no instruction set beyond x86-64-v2, the floor everything
+#     linked on EL9 is marked with (the GNU property note; auditwheel's ISA
+#     check is the one part of the policy the wheel build turns off, so this
+#     is where that line is held);
 #   - it works from an empty directory (smoke.sh, which is handed the commit
 #     and any Clang arguments).
 #
@@ -66,6 +70,12 @@ check_version() {
 check_version GLIBC 2.34
 check_version GLIBCXX 3.4.29
 check_version CXXABI 1.3.13
+
+isa=$(readelf -n "$specgen" | sed -n 's/.*x86 ISA needed: //p')
+echo "x86 ISA needed: ${isa:-none}"
+case "$isa" in
+    *v3* | *v4*) fail "needs an instruction set beyond x86-64-v2: $isa" ;;
+esac
 
 "$(dirname "$0")/smoke.sh" "$specgen" "$expected_commit" "$@" || status=1
 

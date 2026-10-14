@@ -1,10 +1,11 @@
 # Plan: a downloadable `specgen` binary (manylinux_2_34, x86_64)
 
-**Status:** IN PROGRESS, 2026-10-14. [resource-dir-discovery](#resource-dir-discovery),
-[static-llvm-link](#static-llvm-link), [toolchain-image](#toolchain-image) and
-[release-build-workflow](#release-build-workflow) and [docs-and-records](#docs-and-records) have landed, each with a
-**Landed** note recording how it differed from what is written here; [pypi-wheel](#pypi-wheel) remains. Every open
-question is resolved. Drafted 2026-10-12; the measurements below are from that date unless marked, on the dev box
+**Status:** LANDED, 2026-10-14, except publishing to PyPI, which waits on the project's registration there. Every
+step has landed ([resource-dir-discovery](#resource-dir-discovery), [static-llvm-link](#static-llvm-link),
+[toolchain-image](#toolchain-image), [release-build-workflow](#release-build-workflow),
+[docs-and-records](#docs-and-records), [pypi-wheel](#pypi-wheel)), each with a **Landed** note recording how it
+differed from what is written here. Every open question is resolved. Drafted 2026-10-12; the measurements below are
+from that date unless marked, on the dev box
 (Ubuntu, GCC 16.0.1 snapshot, LLVM 23.1.3 from apt.llvm.org) and in throwaway containers; each one records the command
 that produced it so a later reader can redo it rather than trust it.
 
@@ -450,6 +451,31 @@ Publishing is last; the wheel itself exists from Step 4.
   PyPI rejects local version labels and every version is immutable, so a release per `main` push cannot be mirrored
   there as-is: the job publishes **only when `PROJECT_VERSION` is not yet on PyPI**, so bumping the CMake version is
   what publishes, and the GitHub Release stream stays per-push.
+
+**Landed** (2026-10-14) as `packaging/pypi/` (`pyproject.toml`, `CMakeLists.txt`, the `beman_specgen` shim, a
+README, and `LICENSE` as a link to the root one), `tools/release/{build,check}-wheel.sh`, wheel steps and a `pypi`
+job in `release-binary.yml`, and the root `pyproject.toml` renamed `beman-specgen-dev`, with these differences:
+
+- **Publishing is built but off.** The `pypi` job runs only when the repository variable `PYPI_PUBLISH` is
+  `testpypi` or `pypi`, in a GitHub environment of that name, after checking that the index lacks `PROJECT_VERSION`.
+  The steps to register the trusted publisher and turn it on are in `docs/building.md`. A pending publisher replaces
+  the first manual TestPyPI upload this step planned.
+- **auditwheel's ISA check is disabled.** `auditwheel repair` refused the wheel at first because the driver is marked
+  as needing x86-64-v2, and so is every executable linked on EL9: both gcc-toolsets default to
+  `-march=x86-64-v2`, and `int main(){}` built with `-march=x86-64` is still marked, by EL9's own `crt1.o`. The
+  `manylinux_2_34_x86_64` tag cannot say v2, so `build-wheel.sh` passes `--disable-isa-ext-check`, the docs carry
+  the requirement, and `check-portable.sh` now fails on any v3 or v4 marking. Every other part of the policy is
+  auditwheel's verdict: it computes `manylinux_2_34_x86_64` from the driver's `GLIBC_2.34` and `GLIBCXX_3.4.29`.
+- **The version comes from `CMakeLists.txt` by regex** (scikit-build-core 1.0's `[[tool.dynamic-metadata]]`), and
+  the workflow also checks the wheel's file name against the build's `PROJECT_VERSION`.
+- **No cibuildwheel.** `uv build --wheel` and `auditwheel repair` run in the build job, on the tree the suite and
+  `check-portable.sh` already passed; `check-wheel.sh` installs the result into a fresh virtual environment and runs
+  `smoke.sh` through the console script.
+- **The README and user guide do not advertise `uv tool install beman-specgen` yet**, since nothing is published;
+  they should once the first upload is live.
+
+**The in-image measurement**, 2026-10-14: `beman_specgen-0.2.0-py3-none-manylinux_2_34_x86_64.whl`, 16.1 MB;
+`check-wheel.sh` passes with `--gcc-install-dir` naming gcc-toolset-16.
 
 ### Later, and deliberately out of scope
 
