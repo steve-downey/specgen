@@ -29,4 +29,6 @@ toolchain set — narrowed further by [cxx26-baseline](cxx26-baseline.md) to
   product.
 - The packaging apparatus (vcpkg port, install/export rules, header
   `FILE_SET`s) is an inheritance from the consumable-library assumption and
-  awaits revisiting.
+  awaits revisiting. The executable's own packaging is settled separately: a
+  portable binary released from every push to `main`
+  ([portable-release-binary](portable-release-binary.md)).

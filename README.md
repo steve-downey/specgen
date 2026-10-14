@@ -27,9 +27,25 @@ LaTeX, mpark/wg21 markdown, or org fragments.
 - [Decision records](docs/decisions/README.md): the project's settled architectural decisions
 - [Acid test](docs/acid-test.md): running specgen against the real `beman.optional` header out of tree
 
+## Install a prebuilt binary
+
+Every push to `main` publishes a [GitHub Release](https://github.com/steve-downey/specgen/releases) with a
+prebuilt `specgen` for x86_64 Linux. It runs on glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35,
+RHEL 9 and their derivatives, or later) on an x86-64-v2 processor, and needs neither GCC 16 nor LLVM:
+
+```bash
+curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz | tar -xz
+specgen-*-manylinux_2_34_x86_64/bin/specgen --version
+```
+
+Keep the unpacked directory together; `lib/clang/` beside `bin/` holds Clang's builtin headers.
+`specgen` does not carry a C++ standard library: a header that includes one is parsed against the host's,
+so install `g++` (see the [user guide](docs/user-guide.md#what-specgen-needs-when-it-runs)).
+Each release also carries `specgen.debug.xz`, which resolves the offsets in a crash report.
+
 ## Quick Start
 
-The build requires the pinned LLVM/Clang development packages (see [Requirements](#requirements)):
+Building from source requires the pinned LLVM/Clang development packages (see [Requirements](#requirements)):
 
 ```bash
 uv run cmake --preset gcc-release
@@ -67,6 +83,9 @@ Its commands are the scripts in [`examples/cli/`](examples/cli), and its output 
 `examples/cli/run-all.sh` captures it; `ctest -R examples.` checks every captured file, most against the golden suite.
 
 ## Requirements
+
+Building from source needs the following; the [prebuilt binary](#install-a-prebuilt-binary) needs only glibc 2.34
+and the host's `g++`.
 
 - GCC 16 with libstdc++ and C++26 support
 - CMake 3.30 or later

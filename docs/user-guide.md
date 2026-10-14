@@ -15,7 +15,19 @@ integration workflows that have proved useful in `beman.transcode` and
 
 ## Requirements and build
 
-The project requires GCC 16 with C++26 libstdc++, CMake 3.30 or later, `uv`,
+The quickest way to run `specgen` is the prebuilt binary that every push to
+`main` publishes as a GitHub Release. It needs glibc 2.34 or newer (Ubuntu
+22.04, Debian 12, Fedora 35, RHEL 9 and their derivatives, or later), an
+x86-64-v2 processor, and the host's `g++` for headers that include the
+standard library, and nothing else:
+
+```sh
+curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz | tar -xz
+export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
+specgen --version
+```
+
+The rest of this section is about building from source. The project requires GCC 16 with C++26 libstdc++, CMake 3.30 or later, `uv`,
 and the LLVM/Clang 23.1 development packages. The LLVM version is exact, not a
 minimum: the Clang C++ API is not stable between releases.
 
@@ -67,6 +79,21 @@ On a machine with several GCC installations, pick one in the `--` tail:
 specgen generate header.hpp -- --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/16
 specgen generate header.hpp -- --gcc-toolchain=/opt/gcc-16
 ```
+
+Clang's search covers the distribution's own GCC (under `/usr/lib/gcc`) but
+not Red Hat's GCC Toolsets under `/opt/rh`. On a RHEL-family machine whose C++
+compiler is a `gcc-toolset-<N>`, name it, using the toolset's own `g++` to find
+the directory:
+
+```sh
+specgen generate header.hpp -- \
+  --gcc-install-dir="$(dirname "$(/opt/rh/gcc-toolset-16/root/usr/bin/g++ -print-libgcc-file-name)")"
+```
+
+A release binary is stripped, so its crash report shows offsets rather than
+function names. The same release's `specgen.debug.xz` asset turns them back
+into names: decompress it and run `llvm-symbolizer --obj=specgen.debug
+<offset>`.
 
 ## Start with one header
 
