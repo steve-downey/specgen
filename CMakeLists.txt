@@ -384,6 +384,14 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
                 "-DEXPECTED_COMMIT=${BEMAN_SPECGEN_GIT_COMMIT}" -P
                 "${PROJECT_SOURCE_DIR}/tests/run-version.cmake"
         )
+        add_test(
+            NAME driver.resource-dir
+            COMMAND
+                ${CMAKE_COMMAND} "-DDRIVER=$<TARGET_FILE:specgen>"
+                "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/spec_builtin_include.hpp"
+                "-DWORK_DIR=${PROJECT_BINARY_DIR}/tests/resource-dir" -P
+                "${PROJECT_SOURCE_DIR}/tests/run-resource-dir.cmake"
+        )
         add_subdirectory(tests/golden)
     endif()
     add_subdirectory(tests/examples)

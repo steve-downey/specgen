@@ -47,6 +47,27 @@ examples assume. `PREFIX` selects a different prefix. Installing from
 the preset build tree needs an explicit `--prefix`, because that tree is
 configured with `/usr/local`.
 
+### What `specgen` needs when it runs
+
+`specgen` carries Clang's builtin headers (`<stddef.h>`, `<stdarg.h>`, and the
+rest of Clang's resource directory) beside itself, in `lib/clang/23/include`
+next to the `bin/` that holds the executable, and finds them from its own
+location. The build tree and every install lay that directory out; moving the
+executable away from it loses them.
+
+It does **not** carry a C++ standard library. A header that includes nothing,
+or only Clang's builtin headers, needs nothing else on the machine. A header
+that includes a standard library header such as `<optional>` is parsed against
+the host's own libstdc++, found the way `clang++` finds it: the newest GCC
+installation on the machine. That is deliberate, since a paper's wording should
+come from the same standard library its implementation builds and tests with.
+On a machine with several GCC installations, pick one in the `--` tail:
+
+```sh
+specgen generate header.hpp -- --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/16
+specgen generate header.hpp -- --gcc-toolchain=/opt/gcc-16
+```
+
 ## Start with one header
 
 The smallest useful input has a declaration-only class, draft-form `\ref`

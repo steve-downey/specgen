@@ -145,6 +145,22 @@ Make the driver carry its own builtin headers and find them from its own locatio
 Done when the relocated-binary reproduction above reports an absolute, existing resource directory and parses
 `<cstddef>` with `/usr/include/clang` renamed away.
 
+**Landed** (2026-10-13), with three differences from the bullets above, each found while doing it:
+
+- The directory comes from Clang's own `clang::GetResourcesPath(argv0, addr)` (`clang/Options/OptionUtils.h`), the
+  function the `clang` driver itself uses, rather than a hand-assembled path and a `LLVM_VERSION_MAJOR` compile
+  definition; it is computed once and passed **only when it exists**, so a unit-test binary with no sibling `lib/`
+  keeps Clang's default. It is placed ahead of the resolved arguments, so a caller's `-resource-dir` wins by last-wins
+  parsing, the same rule the `-std` default already relies on. The function lives in `libclangOptions.a`, which
+  [static-llvm-link](#static-llvm-link)'s component list must therefore include.
+- The install destination is the literal `lib/clang/<major>/include`, not `CMAKE_INSTALL_LIBDIR`: Clang's rule says
+  `lib`, and GNUInstallDirs says `lib64` on EL9. The source is `${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION_MAJOR}`,
+  which is right for both the Debian layout and an upstream install.
+- `golden.builtin_include` (`-nostdlibinc`) passes on Debian even with the resource directory gone, because Debian's
+  baked-in `/usr/include/clang/<version>/include` survives `-nostdlibinc`; `driver.resource-dir`, which reads back
+  the `-resource-dir` Clang was given, is the case that fails there. The reproduction now shows that fallback absent
+  from the search list altogether, which is the "renamed away" condition without renaming anything.
+
 ### [static-llvm-link](#static-llvm-link)
 
 Let the front end link LLVM and Clang statically when the LLVM it is given has no shared libraries.
