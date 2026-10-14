@@ -53,6 +53,23 @@
       }
     },
     {
+      "name": "manylinux-release",
+      "displayName": "manylinux_2_34 release binary (inside the specgen-toolchain image)",
+      "inherits": [
+        "_root-config",
+        "_release-base"
+      ],
+      "cacheVariables": {
+        "Clang_DIR": "/opt/llvm/lib/cmake/clang",
+        "BEMAN_SPECGEN_LLVM_LINK": "static"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
       "name": "llvm-debug",
       "displayName": "Clang Debug Build",
       "inherits": [
@@ -174,6 +191,13 @@
       ]
     },
     {
+      "name": "manylinux-release",
+      "configurePreset": "manylinux-release",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
       "name": "llvm-debug",
       "configurePreset": "llvm-debug",
       "inherits": [
@@ -237,6 +261,11 @@
       "name": "gcc-release",
       "inherits": "_test_base",
       "configurePreset": "gcc-release"
+    },
+    {
+      "name": "manylinux-release",
+      "inherits": "_test_base",
+      "configurePreset": "manylinux-release"
     },
     {
       "name": "llvm-debug",

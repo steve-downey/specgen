@@ -1,8 +1,10 @@
 # Plan: a downloadable `specgen` binary (manylinux_2_34, x86_64)
 
-**Status:** DRAFT, 2026-10-12. Every question that was the user's to decide is decided; the one still open,
-[llvm-from-release-tarball](#llvm-from-release-tarball), is a measurement and the first act of execution. Nothing
-below has landed. The measurements are from this date, on the dev box
+**Status:** IN PROGRESS, 2026-10-14. [resource-dir-discovery](#resource-dir-discovery),
+[static-llvm-link](#static-llvm-link), [toolchain-image](#toolchain-image) and
+[release-build-workflow](#release-build-workflow) have landed, each with a **Landed** note recording how it differed
+from what is written here; [docs-and-records](#docs-and-records) and [pypi-wheel](#pypi-wheel) remain. Every open
+question is resolved. Drafted 2026-10-12; the measurements below are from that date unless marked, on the dev box
 (Ubuntu, GCC 16.0.1 snapshot, LLVM 23.1.3 from apt.llvm.org) and in throwaway containers; each one records the command
 that produced it so a later reader can redo it rather than trust it.
 
@@ -346,6 +348,36 @@ release files, and on `workflow_dispatch`:
 
 The main CI's `build-and-test` matrix is untouched; this workflow is additive and its first lane's name is chosen once
 and then left alone, for the branch-protection reason `ci_tests.yml` already documents.
+
+**Landed** (2026-10-14) as `.github/workflows/release-binary.yml`, the `manylinux-release` configure, build and test
+presets, `packaging/release/images.env`, and `tools/release/{stage,check-portable,smoke}.sh` with
+`tools/release/smoke/smoke.hpp`, with these differences:
+
+- **No wheel and no `auditwheel` yet.** Step 6 moves to [pypi-wheel](#pypi-wheel), which builds the wheel from the
+  staged tree this step produces; until then `check-portable.sh` makes the same claim for the archive (whitelisted
+  `NEEDED` entries, symbol-version ceilings), which no PyPA tool reads anyway.
+- **Staging is a script, `stage.sh`,** so the workflow and a local `docker run` lay out the same tree: it installs the
+  `specgen_Runtime` component with `--prefix` (the preset sets no `CMAKE_INSTALL_PREFIX`), adds `LICENSE` and
+  `packaging/release/README.md`, splits and `xz`s the debug information, strips with `--strip-all`, and writes a
+  `tar.gz` with fixed owner and order beside its `.sha256`.
+- **The smoke test is `smoke.sh` over a header, not a checked-in IR.** It runs from an empty directory: `--version`
+  naming the commit, `generate` on `smoke.hpp` (which includes the host's `<cstddef>` and `<optional>`) with nothing on
+  stderr, and `generate --emit-ir` piped through `render --from-ir` agreeing byte for byte with the single pass. That
+  exercises `render --from-ir` without an IR file that would need regenerating whenever the IR changes.
+  `check-portable.sh` runs it in the build image; the smoke matrix runs it on each distribution.
+- **The preset keeps the examples on.** They build in the image and their `examples.*` cases are more of the suite run
+  against the binary that ships. There is no toolchain file either: the image's `CC`/`CXX` are GCC 16.
+- **Checkout is shallow.** Nothing reads tags; the version comes from `CMakeCache.txt` and the commit from `HEAD`.
+- **A `toolchain` job reads `images.env`**, because `container:` cannot read a file, and the build job passes registry
+  credentials anyway, so the window before the package is made public does not break it.
+- **`concurrency` cancels only pull-request runs.** On `main` every run is a release, and a cancelled one could leave a
+  tag without its assets.
+
+**The in-image measurement**, 2026-10-14, on the published `llvm` layer pinned in `images.env`: 978 of 978 tests with
+`-E '^style\.'`; `NEEDED` is `libz`, `libgcc_s`, `libstdc++`, `libm`, `libc` and the loader; newest `GLIBC_2.34`,
+`GLIBCXX_3.4.29`, `CXXABI_1.3.11`. The stripped driver is 37.3 MB, the `tar.gz` 15.9 MB (the plan's 10–12 MB guess
+was for `xz`), and `specgen.debug.xz` 15.5 MB. `smoke.sh` passed on the archive in `ubuntu:22.04`, `debian:12`,
+`fedora:latest` and `almalinux:9` with each distribution's own `g++`.
 
 ### [docs-and-records](#docs-and-records)
 
