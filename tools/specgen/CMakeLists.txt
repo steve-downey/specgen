@@ -20,6 +20,41 @@ target_compile_definitions(
 target_link_libraries(specgen PRIVATE beman::specgen.frontend)
 target_compile_definitions(specgen PRIVATE BEMAN_SPECGEN_ENABLE_CLANG)
 
+# Clang's builtin headers (<stddef.h>, <stdarg.h>, ...), which the front end
+# finds at `<driver dir>/../lib/clang/<major>` -- Clang's own rule, asked of the
+# executable at run time (frontend.cpp, bundled_resource_dir_args). Both trees
+# lay that directory out, so the driver never depends on a distribution's
+# baked-in fallback for it: the build tree links the pinned LLVM's own resource
+# directory into place, and the install copies its headers. The path is the
+# literal `lib`, never CMAKE_INSTALL_LIBDIR: Clang's rule says `lib`, and
+# GNUInstallDirs says `lib64` on the EL9 the release binary is built on.
+set(BEMAN_SPECGEN_RESOURCE_DIR
+    "${LLVM_LIBRARY_DIR}/clang/${LLVM_VERSION_MAJOR}"
+)
+if(NOT IS_DIRECTORY "${BEMAN_SPECGEN_RESOURCE_DIR}/include")
+    message(
+        FATAL_ERROR
+        "beman.specgen: no Clang resource directory at ${BEMAN_SPECGEN_RESOURCE_DIR}"
+    )
+endif()
+set(specgen_resource_link
+    "${CMAKE_CURRENT_BINARY_DIR}/../lib/clang/${LLVM_VERSION_MAJOR}"
+)
+cmake_path(NORMAL_PATH specgen_resource_link)
+add_custom_command(
+    OUTPUT "${specgen_resource_link}"
+    COMMAND
+        ${CMAKE_COMMAND} -E make_directory
+        "${CMAKE_CURRENT_BINARY_DIR}/../lib/clang"
+    COMMAND
+        ${CMAKE_COMMAND} -E create_symlink "${BEMAN_SPECGEN_RESOURCE_DIR}"
+        "${specgen_resource_link}"
+    COMMENT "Linking the Clang resource directory beside the driver"
+    VERBATIM
+)
+add_custom_target(specgen_resource_dir DEPENDS "${specgen_resource_link}")
+add_dependencies(specgen specgen_resource_dir)
+
 if(BEMAN_SPECGEN_USE_MODULES)
     set_target_properties(specgen PROPERTIES CXX_MODULE_STD ON)
 endif()
@@ -41,5 +76,12 @@ if(NOT CMAKE_SKIP_INSTALL_RULES)
     install(
         TARGETS specgen
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT specgen_Runtime
+    )
+    # Only `include/`: the resource directory's `lib/` holds sanitizer and
+    # builtins runtimes for a linker specgen never runs.
+    install(
+        DIRECTORY "${BEMAN_SPECGEN_RESOURCE_DIR}/include"
+        DESTINATION "lib/clang/${LLVM_VERSION_MAJOR}"
+        COMPONENT specgen_Runtime
     )
 endif()

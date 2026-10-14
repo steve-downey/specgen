@@ -39,6 +39,7 @@
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/PreprocessingRecord.h>
+#include <clang/Options/OptionUtils.h>
 #include <clang/Lex/Preprocessor.h>
 #include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Core/Replacement.h>
@@ -67,6 +68,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -198,6 +200,38 @@ struct ParsedHeader {
     bool                            had_error = false;
 };
 
+// The `-resource-dir` that points Clang at the builtin headers (<stddef.h>,
+// <stdarg.h>, ...) specgen carries beside itself, or nothing when that
+// directory is not there.
+//
+// Left to itself, buildASTFromCodeWithArgs names the compiler `clang-tool`,
+// with no path in it, and derives the resource directory from that name: the
+// *relative* `lib/clang/<major>`, resolved against whatever directory the user
+// happens to be in. A distribution's libclang-cpp may bake in a fallback
+// search directory that hides this, but a machine without the pinned LLVM has
+// no such fallback, and every header that reaches the standard library reaches
+// <stddef.h>. So ask Clang's own rule, `<executable dir>/../lib/clang/<major>`,
+// with the executable this process really is; the build tree and the install
+// both lay that directory out (tools/specgen/CMakeLists.txt). A driver that
+// finds nothing there -- a unit-test binary, which has no such sibling -- keeps
+// Clang's default rather than being handed a directory that does not exist.
+//
+// It goes ahead of the resolved arguments so that a `-resource-dir` from the
+// `--` tail or a compile command overrides it by the same last-wins parsing
+// the `-std` default relies on.
+std::vector<std::string> bundled_resource_dir_args() {
+    static const std::vector<std::string> args = [] {
+        // Any address inside this executable, for the platforms where the
+        // executable is found by asking which image holds it.
+        static const int  anchor = 0;
+        const std::string dir    = clang::GetResourcesPath("specgen", const_cast<int*>(&anchor));
+        if (std::error_code ec; !std::filesystem::is_directory(dir, ec))
+            return std::vector<std::string>{};
+        return std::vector<std::string>{"-resource-dir", dir};
+    }();
+    return args;
+}
+
 // Shared parse path (design §3.1): slurp the header as text — buildASTFromCodeWithArgs
 // takes the source by value and a separate display path, rather than opening the file
 // itself (a real compilation database's ClangTool would; this tier does not stand one
@@ -218,6 +252,7 @@ ParsedHeader parse_header(std::string_view header_path, const ParseOptions& opti
     // structural requirements last, where that same last-wins parsing
     // protects them from being overridden by anything a caller supplies.
     std::vector<std::string> args = {"-std=c++2c"};
+    args.append_range(bundled_resource_dir_args());
     args.append_range(resolve_extra_args(header_path, options).args);
     args.push_back("-fsyntax-only");
     args.push_back("-fparse-all-comments");
