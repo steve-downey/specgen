@@ -1,0 +1,220 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# The downloadable specgen binary (docs/plans/manylinux-release-binary.md,
+# release-build-workflow): built in the specgen-toolchain image, tested,
+# stripped, archived, checked against the manylinux_2_34_x86_64 promise, run on
+# five stock distributions, and -- on every push to main, never on a pull
+# request -- published as a GitHub Release tagged v<PROJECT_VERSION>-<run>
+# (release-trigger: main is always releasable, so each push is a release).
+#
+# The image is named by digest in packaging/release/images.env, so moving the
+# release onto a new toolchain is a reviewed commit, never a moving tag; the
+# toolchain-image workflow's summary prints the digest to put there.
+#
+# The build job's name is chosen once and left alone: if branch protection
+# ever requires it, renaming it strands the rule, as ci_tests.yml explains.
+
+name: Release binary
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    paths:
+      - 'packaging/release/**'
+      - 'tools/release/**'
+      - 'CMakePresets.json'
+      - '.github/workflows/release-binary.yml'
+  workflow_dispatch:
+
+# A pull request's newer push supersedes its older run; on main every push is
+# a release, and a half-cancelled one would leave a tag without its assets.
+concurrency:
+  group: ${{format('{0}:{1}', github.workflow, github.ref)}}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # `container:` cannot read a file, so a job reads it and hands the
+  # reference on.
+  toolchain:
+    name: Toolchain image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.read.outputs.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          sparse-checkout: packaging/release/images.env
+          sparse-checkout-cone-mode: false
+
+      - name: Read images.env
+        id: read
+        run: |
+          . packaging/release/images.env
+          case "$SPECGEN_TOOLCHAIN_IMAGE" in
+              *@sha256:*) ;;
+              *) echo "images.env must name the image by digest: '$SPECGEN_TOOLCHAIN_IMAGE'" >&2; exit 1 ;;
+          esac
+          echo "image=$SPECGEN_TOOLCHAIN_IMAGE" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build manylinux_2_34_x86_64
+    needs: toolchain
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    # The package is public; the credentials cover the window between a first
+    # push and its visibility being set, and cost nothing after.
+    container:
+      image: ${{ needs.toolchain.outputs.image }}
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      version: ${{ steps.stage.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      # CMake comes from uv, pinned in pyproject.toml, exactly as on the dev box.
+      - name: Configure
+        run: uv run cmake --preset manylinux-release
+
+      - name: Build
+        run: uv run cmake --build --preset manylinux-release
+
+      # The whole suite against the binary that ships, less the style gate.
+      # Lint is a pull-request check, where a finding can still change what
+      # lands; on main it is too late to matter, and this job's question is
+      # whether the binary works (style-gate-in-release-job). The image has no
+      # clang-tidy for it to run with in any case.
+      - name: Test
+        run: uv run ctest --preset manylinux-release -E '^style\.'
+
+      - name: Stage
+        id: stage
+        run: uv run tools/release/stage.sh build/manylinux-release dist
+
+      # The image's only C++ standard library is gcc-toolset-16's, which
+      # Clang's GCC detection does not find under /opt/rh; name it as a user
+      # with only a toolset would.
+      - name: Check portability
+        env:
+          STAGE: ${{ steps.stage.outputs.stage }}
+        run: >
+          tools/release/check-portable.sh "$STAGE" "$GITHUB_SHA"
+          "--gcc-install-dir=$(dirname "$(g++ -print-libgcc-file-name)")"
+
+      - name: Upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: specgen-manylinux_2_34_x86_64
+          if-no-files-found: error
+          path: |
+            dist/specgen-manylinux_2_34_x86_64.tar.gz
+            dist/specgen-manylinux_2_34_x86_64.tar.gz.sha256
+            dist/specgen.debug.xz
+
+  # The archive as a user gets it, on stock images with that distribution's own
+  # g++: the only place the host-libstdc++ requirement (std-headers-at-run-time)
+  # meets libstdc++ versions other than the build's.
+  smoke:
+    name: Smoke (${{ matrix.image }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - ubuntu:22.04
+          - ubuntu:24.04
+          - debian:12
+          - fedora:latest
+          - almalinux:9
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install g++
+        run: |
+          if command -v apt-get >/dev/null; then
+              apt-get update -q
+              DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends g++
+          else
+              dnf install -y -q --setopt=install_weak_deps=False gcc-c++ diffutils tar gzip
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: specgen-manylinux_2_34_x86_64
+          path: dist
+
+      - name: Unpack
+        working-directory: dist
+        run: |
+          sha256sum -c specgen-manylinux_2_34_x86_64.tar.gz.sha256
+          tar -xzf specgen-manylinux_2_34_x86_64.tar.gz
+
+      - name: Smoke
+        run: tools/release/smoke.sh dist/specgen-*/bin/specgen "$GITHUB_SHA"
+
+  release:
+    name: Publish the release
+    needs: [build, smoke]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: specgen-manylinux_2_34_x86_64
+          path: dist
+
+      # The asset names carry no version, so
+      # releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz always
+      # serves head; the version is in the tag, the archive's directory, and
+      # `specgen --version`.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+          RUN: ${{ github.run_number }}
+        run: |
+          tag="v$VERSION-$RUN"
+          {
+              echo "specgen $VERSION, built from $GITHUB_SHA."
+              echo
+              echo "\`specgen-manylinux_2_34_x86_64.tar.gz\` runs on x86_64 Linux with glibc 2.34 or newer"
+              echo "(Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9, or later) and needs the host's g++ for"
+              echo "the C++ standard library headers. \`specgen.debug.xz\` resolves a crash report's offsets."
+          } > notes.md
+          gh release create "$tag" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "specgen $VERSION ($RUN)" \
+              --notes-file notes.md \
+              --latest
+
+      - name: Attest provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
