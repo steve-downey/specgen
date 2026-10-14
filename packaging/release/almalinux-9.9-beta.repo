@@ -1,0 +1,12 @@
+# packaging/release/almalinux-9.9-beta.repo
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# gcc-toolset-16 until AlmaLinux 9.9 is GA; see base.Dockerfile. Restricted to
+# the toolset's packages, so the beta supplies nothing else.
+[appstream-9.9-beta]
+name=AlmaLinux 9.9 beta - AppStream (gcc-toolset-16 only)
+baseurl=https://vault.almalinux.org/9.9-beta/AppStream/x86_64/os/
+gpgcheck=1
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-AlmaLinux-9
+enabled=1
+includepkgs=gcc-toolset-16*
