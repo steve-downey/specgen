@@ -2,8 +2,8 @@
 
 **Status:** IN PROGRESS, 2026-10-14. [resource-dir-discovery](#resource-dir-discovery),
 [static-llvm-link](#static-llvm-link), [toolchain-image](#toolchain-image) and
-[release-build-workflow](#release-build-workflow) have landed, each with a **Landed** note recording how it differed
-from what is written here; [docs-and-records](#docs-and-records) and [pypi-wheel](#pypi-wheel) remain. Every open
+[release-build-workflow](#release-build-workflow) and [docs-and-records](#docs-and-records) have landed, each with a
+**Landed** note recording how it differed from what is written here; [pypi-wheel](#pypi-wheel) remains. Every open
 question is resolved. Drafted 2026-10-12; the measurements below are from that date unless marked, on the dev box
 (Ubuntu, GCC 16.0.1 snapshot, LLVM 23.1.3 from apt.llvm.org) and in throwaway containers; each one records the command
 that produced it so a later reader can redo it rather than trust it.
@@ -104,10 +104,12 @@ means **no `-static-libstdc++`**. Availability on the day of writing:
 - The beman `infra-containers-gcc:16` image CI builds in is Gentoo-based with a newer glibc; a binary built there
   carries that glibc's floor. Unusable for any manylinux tag.
 
-**LLVM is built from source, once per pin, into a layered image.** No glibc-2.34 distribution packages LLVM 23, and the
-official release tarballs are built on a newer glibc and ship no static `clang-cpp`. The LLVM build is the one
-genuinely expensive step (hours on a 4-vCPU runner), so it lives in its own image layer that is rebuilt only when the
-pin or the Dockerfile changes, never per specgen commit. That is [toolchain-image](#toolchain-image).
+**LLVM is built from source, once per pin, into a layered image.** (Superseded by measurement: the `llvm` layer
+unpacks the official release tarball's static archives instead; see
+[llvm-from-release-tarball](#llvm-from-release-tarball). The paragraph is kept as the reasoning at the time.) No
+glibc-2.34 distribution packages LLVM 23, and the official release tarballs are built on a newer glibc and ship no
+static `clang-cpp`. The LLVM build is the one genuinely expensive step (hours on a 4-vCPU runner), so it lives in its
+own image layer that is rebuilt only when the pin or the Dockerfile changes, never per specgen commit. That is [toolchain-image](#toolchain-image).
 
 **Runner budget.** Public repositories get `ubuntu-latest` at 4 vCPU / 16 GB, free and unlimited, with a 6-hour job
 limit; arm64 runners are also free for public repositories, which is what makes an aarch64 lane cheap later. The
@@ -398,6 +400,19 @@ was for `xz`), and `specgen.debug.xz` 15.5 MB. `smoke.sh` passed on the archive 
   the same, in user terms.
 - `AGENTS.md` test count, with `docs/building.md`, after [resource-dir-discovery](#resource-dir-discovery) adds its
   cases.
+
+**Landed** (2026-10-14) as `docs/decisions/portable-release-binary.md` (indexed, and pointed to from
+[tool-not-library](../decisions/tool-not-library.md)), a "Release binary" section in `docs/building.md`, an "Install a
+prebuilt binary" section in `README.md`, and the prebuilt binary and gcc-toolset paragraphs in `docs/user-guide.md`,
+with these differences:
+
+- **The user guide names the gcc-toolset escape.** [release-build-workflow](#release-build-workflow) found that Clang's
+  GCC detection does not search `/opt/rh`, so "Requirements and build" shows `--gcc-install-dir=` for a host whose
+  only C++ compiler is a toolset, and the decision record says so.
+- **No test count change.** [resource-dir-discovery](#resource-dir-discovery) already moved `AGENTS.md` and
+  `docs/building.md` to 989, and no step since has added a case.
+- **The download URL is the `.tar.gz` one.** [Issue #132](https://github.com/steve-downey/specgen/issues/132)
+  proposes `.tar.xz`, which would change the URL these documents show.
 
 ### [pypi-wheel](#pypi-wheel)
 

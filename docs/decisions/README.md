@@ -18,6 +18,7 @@ and cite the design document as `docs/architecture.md` §N.
 | [golden-test-harness](golden-test-harness.md) | Byte-exact goldens; regeneration is reviewed |
 | [hermetic-corpus](hermetic-corpus.md) | Curated corpus; no submodules, no vendored draft |
 | [llvm-toolchain-pin](llvm-toolchain-pin.md) | `BEMAN_SPECGEN_LLVM_VERSION` pins the LLVM |
+| [portable-release-binary](portable-release-binary.md) | `manylinux_2_34_x86_64`; static Clang, host libstdc++ |
 | [subtree-consumption](subtree-consumption.md) | Git subtree or ported, provenance-tracked code |
 | [node-base-functor](node-base-functor.md) | `NodeF<A>` + `fold_with`; `ir.hpp` untouched |
 | [backend-direct-algebra](backend-direct-algebra.md) | A backend is a fold algebra straight to output |

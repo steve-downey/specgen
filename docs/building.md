@@ -158,6 +158,65 @@ publishes the report as an artifact; nothing uploads to an external service.
   not the Asan default) and commit the result — the captures compare stderr byte for
   byte, and a sanitizer has standing permission to write there.
 
+## Release binary
+
+Every push to `main` publishes a GitHub Release carrying a portable driver,
+`specgen-manylinux_2_34_x86_64.tar.gz`, built by
+`.github/workflows/release-binary.yml`
+([decisions/portable-release-binary.md](decisions/portable-release-binary.md);
+the plan and its measurements are
+[plans/manylinux-release-binary.md](plans/manylinux-release-binary.md)). Pull
+requests that touch the release files run everything but the publishing.
+
+It is built inside the `specgen-toolchain` image, whose two layers
+`packaging/release/{base,llvm}.Dockerfile` describe and
+`.github/workflows/toolchain-image.yml` publishes to
+`ghcr.io/steve-downey/specgen-toolchain`: AlmaLinux 9 with glibc 2.34, GCC 16
+from `gcc-toolset-16`, and the official LLVM 23.1 release's static archives in
+`/opt/llvm`. The release workflow takes the image by the digest in
+`packaging/release/images.env`; after a change to the Dockerfiles, copy the new
+`llvm` digest from the toolchain workflow's summary into that file.
+
+The `manylinux-release` preset is the build, and only works inside the image:
+`Clang_DIR=/opt/llvm/lib/cmake/clang`, `BEMAN_SPECGEN_LLVM_LINK=static`, and
+the image's own `cc`/`c++`. Three scripts in `tools/release/` do the rest, and
+the workflow runs them the same way a local build does:
+
+- `stage.sh <build> <out>` installs the `specgen_Runtime` component, adds
+  `LICENSE` and the archive's README (`packaging/release/README.md`), splits
+  out and compresses the debug information, strips the driver, and writes the
+  archive and its checksum.
+- `check-portable.sh <staged dir> [<commit> [<clang argument>...]]` fails
+  unless the driver needs only libraries `manylinux_2_34` allows, references no
+  symbol version newer than `GLIBC_2.34`, `GLIBCXX_3.4.29` and `CXXABI_1.3.13`,
+  and passes `smoke.sh`.
+- `smoke.sh <specgen> [<commit> [<clang argument>...]]` runs the driver from an
+  empty directory: `--version`, `generate` on `tools/release/smoke/smoke.hpp`
+  (which includes the host's `<cstddef>` and `<optional>`), and the
+  `--emit-ir` / `render --from-ir` round trip.
+
+To reproduce the release build locally, mount the checkout read-only and keep
+the build and the virtual environment out of it:
+
+```sh
+image=$(sed -n 's/^SPECGEN_TOOLCHAIN_IMAGE=//p' packaging/release/images.env)
+docker run --rm -v "$PWD":/src:ro -e UV_PROJECT_ENVIRONMENT=/tmp/venv -w /src "$image" sh -c '
+  uv run cmake --preset manylinux-release -B /tmp/build &&
+  uv run cmake --build /tmp/build &&
+  uv run ctest --test-dir /tmp/build -E "^style\." &&
+  uv run tools/release/stage.sh /tmp/build /tmp/dist &&
+  tools/release/check-portable.sh /tmp/dist/specgen-*-manylinux_2_34_x86_64 "" \
+    --gcc-install-dir="$(dirname "$(g++ -print-libgcc-file-name)")"'
+```
+
+The `style.` tests are excluded because the image has no `clang-tidy`; lint is
+a pull-request check. `--gcc-install-dir` is there because the image's only
+C++ standard library is gcc-toolset's, under `/opt/rh`, where Clang's GCC
+detection does not look. Mounting a git worktree rather than a clone also needs
+its git directory mounted at the path the worktree's `.git` file names, or
+`--version` reports `git unknown` and the commit check fails, which is why the
+command above passes an empty commit.
+
 ## End-to-end smoke test
 
 The fastest way to eyeball a change:
