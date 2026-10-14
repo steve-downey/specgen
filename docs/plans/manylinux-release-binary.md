@@ -225,7 +225,7 @@ has no `libzstd-static`. Size lands inside the 35–50 MB / 10–12 MB estimate.
 
 ### [toolchain-image](#toolchain-image)
 
-Two Dockerfiles under `infra/release/` and one workflow, `.github/workflows/toolchain-image.yml`, that publishes two
+Two Dockerfiles under `packaging/release/` and one workflow, `.github/workflows/toolchain-image.yml`, that publishes two
 images to `ghcr.io/steve-downey/specgen-toolchain`, each tagged by content and referenced downstream by digest:
 
 - **`base`** — `FROM quay.io/pypa/manylinux_2_34_x86_64@sha256:…` (a dated tag, pinned by digest). Adds
@@ -233,7 +233,7 @@ images to `ghcr.io/steve-downey/specgen-toolchain`, each tagged by content and r
   `pyproject.toml` pin). `/opt/rh/gcc-toolset-16/enable` is sourced in the image's `ENV`/`ENTRYPOINT` so `cc`/`c++`
   are GCC 16 for every later layer and every workflow step. Minutes to build.
 - **`llvm`** — `FROM` the `base` digest. Builds LLVM/Clang `llvmorg-23.1.3` (the pin's newest point release;
-  `ClangConfigVersion` matches on major.minor so 23.1.x is interchangeable) into `/opt/llvm-23` with:
+  `ClangConfigVersion` matches on major.minor so 23.1.x is interchangeable) into `/opt/llvm` with:
   `LLVM_ENABLE_PROJECTS=clang`, `LLVM_TARGETS_TO_BUILD=X86`, `CMAKE_BUILD_TYPE=Release`,
   `LLVM_BUILD_LLVM_DYLIB=OFF`, `LLVM_LINK_LLVM_DYLIB=OFF`, `CLANG_LINK_CLANG_DYLIB=OFF`, `LLVM_ENABLE_RTTI=ON`,
   `LLVM_ENABLE_ZLIB=OFF`, `LLVM_ENABLE_ZSTD=OFF`, `LLVM_ENABLE_LIBXML2=OFF`, `LLVM_ENABLE_LIBEDIT=OFF`,
@@ -242,10 +242,10 @@ images to `ghcr.io/steve-downey/specgen-toolchain`, each tagged by content and r
   `CLANG_ENABLE_STATIC_ANALYZER=OFF`, `LLVM_BUILD_TOOLS=OFF`, `CLANG_BUILD_TOOLS=OFF` (the libraries, the headers,
   the CMake package and the resource directory are all the front end needs; no `clang` driver binary),
   `LLVM_PARALLEL_LINK_JOBS=2`. The install is pruned to `lib/*.a`, `lib/cmake`, `include`, `lib/clang/23`.
-- **Triggers:** push to `main` touching `infra/release/**` or the workflow itself, and `workflow_dispatch` with an
+- **Triggers:** push to `main` touching `packaging/release/**` or the workflow itself, and `workflow_dispatch` with an
   input to force the `llvm` layer. `base` rebuilds on any change; `llvm` rebuilds only when the LLVM tag, the CMake
   flags, or `base`'s digest change. The job records the digests it produced in its summary, and the release workflow
-  consumes a digest written into `infra/release/images.env`, so a toolchain change is a reviewed commit, not a moving
+  consumes a digest written into `packaging/release/images.env`, so a toolchain change is a reviewed commit, not a moving
   tag.
 - **Time budget.** An X86-only, tools-off Release build of clang+LLVM on 4 vCPUs is estimated at 2–3 hours; the
   6-hour limit leaves room, and the first run measures it. If it does not fit: `-DLLVM_OPTIMIZED_TABLEGEN=ON`,
@@ -258,6 +258,45 @@ images to `ghcr.io/steve-downey/specgen-toolchain`, each tagged by content and r
   ([llvm-from-release-tarball](#llvm-from-release-tarball)). If they can, the `llvm` layer is a download and an
   unpack, and the time budget below is moot.
 
+**Landed** (2026-10-14) as `packaging/release/{base,llvm}.Dockerfile`, `almalinux-9.9-beta.repo`,
+`stub-llvm-exports.sh`, and `.github/workflows/toolchain-image.yml`, with these differences:
+
+- **`packaging/release/`, not `infra/release/`.** `infra/` is a vendored copy of `bemanproject/infra`
+  (`infra/.beman_submodule`), which the `beman-submodule-check` CI job holds to its upstream commit; files of our own
+  do not belong in it. `packaging/` is where the wheel goes too.
+- **The LLVM layer unpacks the release tarball** ([llvm-from-release-tarball](#llvm-from-release-tarball), resolved)
+  into `/opt/llvm`, with no version in the path since the image holds one LLVM. It keeps `libLLVM*.a` and
+  `libclang*.a`, the `llvm`/`llvm-c`/`clang`/`clang-c` headers, the two CMake packages, `lib/clang/23/include`, and
+  `bin/clang-format`; `stub-llvm-exports.sh` places the empty, non-executable files the CMake exports demand for
+  everything else. 649 MB under `/opt/llvm`; the layer builds in about four minutes locally, most of it the 2 GB
+  download.
+- **`base` needs `gcc-toolset-16-libatomic-devel`.** GCC 16 links `-latomic` by default and `gcc-toolset-16-gcc-c++`
+  does not pull in the archive, so without it CMake's compiler check fails at link time. The beta repository is
+  restricted with `includepkgs=gcc-toolset-16*`; the toolset brings in nothing from 9.9 but its own five packages.
+- **The image's environment is overridden.** PyPA's image points `PATH` and `LD_LIBRARY_PATH` at gcc-toolset-14 and puts
+  `/opt/clang/bin` first; `base` sets both for gcc-toolset-16 and `CC=gcc CXX=g++`, so the existing `gcc-release`
+  preset's toolchain file (`gcc`/`g++`) finds GCC 16 unchanged. A `manylinux-release` preset may not need a toolchain
+  of its own.
+- **Tags are content hashes** (`base-<hash>` of its inputs, `llvm-<hash>` of its inputs and `base`'s digest), and a
+  tag already in the registry is pulled rather than rebuilt; `workflow_dispatch` with `force` rebuilds both. Pull
+  requests touching these files build without pushing. The workflow uses `docker` directly, so there is no third-party
+  action to pin.
+- **`images.env` arrives with [release-build-workflow](#release-build-workflow)**, its first consumer.
+- **One manual step:** GHCR creates a package private. After the first push to `main`, the `specgen-toolchain`
+  package's visibility is set to public once in its settings, so the release job can pull it without credentials.
+
+**The in-image measurement**, 2026-10-14: `gcc-release` with `-DClang_DIR=/opt/llvm/lib/cmake/clang
+-DBEMAN_SPECGEN_LLVM_LINK=static`, built by GCC 16.2.1 and binutils 2.46 inside the `llvm` image, source mounted
+read-only and `UV_PROJECT_ENVIRONMENT` pointed out of the tree:
+
+```sh
+ctest -E '^style\.'   # 978 of 978
+ldd specgen           # libz, libgcc_s, libstdc++, libm, libc
+objdump -T specgen | grep -o 'GLIBC_[0-9.]*'   | sort -Vu | tail -1    # GLIBC_2.34
+objdump -T specgen | grep -o 'GLIBCXX_[0-9.]*' | sort -Vu | tail -1    # GLIBCXX_3.4.29, EL9's own
+strip --strip-unneeded specgen   # 37.3 MB; xz -T0: 10.3 MB
+```
+
 ### [release-build-workflow](#release-build-workflow)
 
 `.github/workflows/release-binary.yml`, running in `container: ghcr.io/steve-downey/specgen-toolchain@<llvm digest>`
@@ -267,7 +306,7 @@ release files, and on `workflow_dispatch`:
 1. Checkout with `fetch-depth: 0` (tags for the version check) and `git config --global --add safe.directory`,
    which the coverage job already needs for the same reason (a root container and a checked-out tree).
 2. Configure with a new preset `manylinux-release`: inherits `_root-config` and `_release-base`, plain `cc`/`c++`
-   from the toolset (no toolchain file), `-DClang_DIR=/opt/llvm-23/lib/cmake/clang`,
+   from the toolset (no toolchain file), `-DClang_DIR=/opt/llvm/lib/cmake/clang`,
    `-DBEMAN_SPECGEN_LLVM_LINK=static`, `-DBEMAN_SPECGEN_BUILD_EXAMPLES=OFF`, and `CMAKE_INSTALL_PREFIX` under a
    staging directory. The preset is usable locally by anyone who has the image (`docker run … cmake --preset
    manylinux-release`), which is how the workflow is debugged without pushing.
@@ -373,7 +412,9 @@ Publishing is last; the wheel itself exists from Step 4.
 ### [llvm-from-release-tarball](#llvm-from-release-tarball)
 
 **Question:** can the `llvm` image layer unpack the official `LLVM-23.1.3-Linux-X64.tar.xz` instead of building LLVM
-from source? **Status:** OPEN; the measurement is the first act of [toolchain-image](#toolchain-image). What is known
+from source? **Status:** RESOLVED (2026-10-14, by measurement): yes. Built inside the `llvm` image by gcc-toolset-16,
+the static driver passes the whole suite and needs nothing newer than `GLIBC_2.34` and `GLIBCXX_3.4.29`; the record is
+under [toolchain-image](#toolchain-image). What was known going in, and the first three measurements, follow. What is known
 from the release workflow and its cache file (`release-binaries.yml`, `clang/cmake/caches/Release.cmake` on
 `release/23.x`): the Linux binaries are built on **`ubuntu-22.04`** (glibc 2.35, one minor above the 2.34 floor),
 two-stage with ThinLTO, PGO and BOLT, with `LLVM_ENABLE_FATLTO=ON` (so the archives' objects carry native code and

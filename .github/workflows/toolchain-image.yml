@@ -1,0 +1,151 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# The release toolchain image (docs/plans/manylinux-release-binary.md,
+# toolchain-image): two layers published to ghcr.io/<owner>/specgen-toolchain.
+#
+#   base  packaging/release/base.Dockerfile: PyPA manylinux_2_34 (AlmaLinux 9,
+#         glibc 2.34) plus gcc-toolset-16, ninja, and a static zstd.
+#   llvm  packaging/release/llvm.Dockerfile: base plus the official LLVM
+#         release's static archives at /opt/llvm.
+#
+# Each tag is a hash of what went into the layer -- its Dockerfile and the files
+# it copies, and for `llvm` the digest of the `base` it was built on -- so an
+# unchanged layer is found in the registry and not rebuilt, and a changed one
+# gets a new tag rather than moving an old one. The release workflow consumes
+# the `llvm` image by digest, recorded in a reviewed commit, never by tag; this
+# job's summary prints the digests to copy.
+#
+# Pull requests that touch these files build both layers without pushing, so a
+# broken Dockerfile fails review rather than main.
+
+name: Release toolchain image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'packaging/release/**'
+      - '.github/workflows/toolchain-image.yml'
+  pull_request:
+    paths:
+      - 'packaging/release/**'
+      - '.github/workflows/toolchain-image.yml'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Rebuild both layers even if their tags already exist'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{format('{0}:{1}', github.workflow, github.ref)}}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Build toolchain image
+    runs-on: ubuntu-latest
+    # Unpacking LLVM is minutes; the limit is for a hung download.
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/specgen-toolchain
+      CONTEXT: packaging/release
+      PUSH: ${{ github.event_name != 'pull_request' }}
+      FORCE: ${{ inputs.force || false }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - name: Log in to ghcr.io
+        if: env.PUSH == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+
+      # build_layer <name> <dockerfile> <tag> [docker build args...]
+      # Pulls <tag> if it exists (and FORCE is off); otherwise builds it, and
+      # pushes when PUSH is on. Prints the image reference to use downstream:
+      # the registry digest when pushed or pulled, the local tag otherwise.
+      - name: Define the layer helper
+        run: |
+          cat > "$RUNNER_TEMP/build_layer.sh" <<'EOF'
+          build_layer() {
+              name=$1 dockerfile=$2 tag=$3
+              shift 3
+              ref="$IMAGE:$tag"
+              if [ "$FORCE" != "true" ] && docker pull -q "$ref" >/dev/null 2>&1; then
+                  echo "$name: $ref already published" >&2
+              else
+                  docker build -f "$CONTEXT/$dockerfile" -t "$ref" "$@" "$CONTEXT" >&2
+                  if [ "$PUSH" = "true" ]; then
+                      docker push -q "$ref" >&2
+                  fi
+              fi
+              if [ "$PUSH" = "true" ] || docker image inspect --format '{{len .RepoDigests}}' "$ref" | grep -qv '^0$'; then
+                  docker image inspect --format '{{index .RepoDigests 0}}' "$ref"
+              else
+                  echo "$ref"
+              fi
+          }
+          EOF
+
+      - name: Base layer
+        id: base
+        run: |
+          . "$RUNNER_TEMP/build_layer.sh"
+          hash=$(cat "$CONTEXT/base.Dockerfile" "$CONTEXT/almalinux-9.9-beta.repo" | sha256sum | cut -c1-16)
+          ref=$(build_layer base base.Dockerfile "base-$hash")
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: LLVM layer
+        id: llvm
+        env:
+          BASE_REF: ${{ steps.base.outputs.ref }}
+        run: |
+          . "$RUNNER_TEMP/build_layer.sh"
+          hash=$( { cat "$CONTEXT/llvm.Dockerfile" "$CONTEXT/stub-llvm-exports.sh"; echo "$BASE_REF"; } | sha256sum | cut -c1-16)
+          ref=$(build_layer llvm llvm.Dockerfile "llvm-$hash" --build-arg "BASE_IMAGE=$BASE_REF")
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: Check the toolchain
+        env:
+          LLVM_REF: ${{ steps.llvm.outputs.ref }}
+        run: |
+          docker run --rm "$LLVM_REF" sh -c '
+              set -e
+              g++ --version | head -1
+              ld --version | head -1
+              ls /opt/llvm/lib/cmake/clang/ClangConfig.cmake /opt/llvm/lib/libclangTooling.a /usr/local/lib/libzstd.a
+              /opt/llvm/bin/clang-format --version
+          '
+
+      - name: Summary
+        env:
+          BASE_REF: ${{ steps.base.outputs.ref }}
+          LLVM_REF: ${{ steps.llvm.outputs.ref }}
+        run: |
+          {
+              echo "### Release toolchain image"
+              echo
+              echo "| Layer | Reference |"
+              echo "| --- | --- |"
+              echo "| base | \`$BASE_REF\` |"
+              echo "| llvm | \`$LLVM_REF\` |"
+              echo
+              if [ "$PUSH" = "true" ]; then
+                  echo "To move the release build onto this toolchain, set \`SPECGEN_TOOLCHAIN_IMAGE\` in"
+                  echo "\`packaging/release/images.env\` to the llvm reference above, in a reviewed commit."
+              else
+                  echo "Built for review; nothing was pushed."
+              fi
+          } >> "$GITHUB_STEP_SUMMARY"
