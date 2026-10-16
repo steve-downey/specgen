@@ -1,0 +1,62 @@
+# packaging/pypi/pyproject.toml
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# The `beman-specgen` wheel (docs/plans/manylinux-release-binary.md,
+# pypi-wheel): the release workflow's staged tree -- bin/specgen beside
+# lib/clang/<major>/include -- under beman_specgen/data/, and a console script
+# `specgen` that execs it. Nothing is compiled here: the binary the suite ran
+# against is the one the wheel carries, so the wheel and the GitHub Release
+# archive are two packagings of one install tree. Shaped like the cmake, ninja
+# and clang-format wheels: scikit-build-core, one py3 wheel per platform, and
+# auditwheel deciding the manylinux tag.
+#
+# This is not the repository's root pyproject.toml, which is the development
+# environment (`beman-specgen-dev`) and is never built.
+#
+# Build, from a stage.sh output:
+#   uv build --wheel packaging/pypi -o <dir> \
+#     -C cmake.define.BEMAN_SPECGEN_STAGE=<absolute staged dir>
+
+[build-system]
+requires = ["scikit-build-core==1.0.3"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "beman-specgen"
+dynamic = ["version"]
+description = "Generate C++ standard-library description wording from structured headers"
+readme = "README.md"
+license = "Apache-2.0 WITH LLVM-exception"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: C++",
+    "Topic :: Documentation",
+    "Topic :: Software Development :: Documentation",
+]
+
+[project.urls]
+Homepage = "https://github.com/steve-downey/specgen"
+Documentation = "https://github.com/steve-downey/specgen/blob/main/docs/user-guide.md"
+Issues = "https://github.com/steve-downey/specgen/issues"
+
+[project.scripts]
+specgen = "beman_specgen:main"
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+# One wheel per platform, for any Python 3: the shim is the only Python.
+wheel.py-api = "py3"
+wheel.packages = ["src/beman_specgen"]
+
+# The version is CMake's PROJECT_VERSION, the one source of truth; the
+# release workflow also checks the built wheel's name against it.
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.regex"
+field = "version"
+input = "../../CMakeLists.txt"
+regex = 'project\([^)]*VERSION\s+(?P<value>[0-9]+\.[0-9]+\.[0-9]+)'

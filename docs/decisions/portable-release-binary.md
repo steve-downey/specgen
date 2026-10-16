@@ -83,5 +83,8 @@ arm64 runner, once there is demand.
   generally available; then `packaging/release/almalinux-9.9-beta.repo` goes.
 - The release job does not run the `style.` lint gate; lint is a pull-request
   check, and the image has no `clang-tidy`.
-- The planned PyPI wheel, `beman-specgen`, packages the same staged tree a
-  second way, and `auditwheel` will check this claim independently.
+- The PyPI wheel, `beman-specgen`, packages the same staged tree a second
+  way, and `auditwheel` checks this claim independently on every build. Its
+  instruction-set check is the exception: everything linked on EL9 needs
+  x86-64-v2, which the tag cannot express, so that requirement is documented
+  and held at v2 by `check-portable.sh` instead.

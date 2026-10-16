@@ -1,5 +1,8 @@
+# The development environment uv manages (CMake, clang-format, pre-commit,
+# gcovr); it is never built or published. The package users install is
+# packaging/pypi/, which owns the name `beman-specgen` on PyPI.
 [project]
-name = "beman-specgen"
+name = "beman-specgen-dev"
 version = "0.2.0"
 description = "Spec Generator"
 readme = "README.md"

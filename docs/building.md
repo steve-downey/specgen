@@ -179,8 +179,8 @@ from `gcc-toolset-16`, and the official LLVM 23.1 release's static archives in
 
 The `manylinux-release` preset is the build, and only works inside the image:
 `Clang_DIR=/opt/llvm/lib/cmake/clang`, `BEMAN_SPECGEN_LLVM_LINK=static`, and
-the image's own `cc`/`c++`. Three scripts in `tools/release/` do the rest, and
-the workflow runs them the same way a local build does:
+the image's own `cc`/`c++`. Scripts in `tools/release/` do the rest, and the
+workflow runs them the same way a local build does:
 
 - `stage.sh <build> <out>` installs the `specgen_Runtime` component, adds
   `LICENSE` and the archive's README (`packaging/release/README.md`), splits
@@ -189,11 +189,18 @@ the workflow runs them the same way a local build does:
 - `check-portable.sh <staged dir> [<commit> [<clang argument>...]]` fails
   unless the driver needs only libraries `manylinux_2_34` allows, references no
   symbol version newer than `GLIBC_2.34`, `GLIBCXX_3.4.29` and `CXXABI_1.3.13`,
-  and passes `smoke.sh`.
+  needs no instruction set beyond x86-64-v2, and passes `smoke.sh`.
 - `smoke.sh <specgen> [<commit> [<clang argument>...]]` runs the driver from an
   empty directory: `--version`, `generate` on `tools/release/smoke/smoke.hpp`
   (which includes the host's `<cstddef>` and `<optional>`), and the
   `--emit-ir` / `render --from-ir` round trip.
+- `build-wheel.sh <staged dir> <out>` packages the staged tree as the
+  `beman-specgen` wheel (`packaging/pypi/`, built with scikit-build-core; it
+  compiles nothing) and has `auditwheel repair` tag it `manylinux_2_34_x86_64`,
+  failing if auditwheel will not.
+- `check-wheel.sh <wheel> [<commit> [<clang argument>...]]` installs the wheel
+  into a fresh virtual environment and runs `smoke.sh` on its `specgen`
+  command.
 
 To reproduce the release build locally, mount the checkout read-only and keep
 the build and the virtual environment out of it:
@@ -216,6 +223,32 @@ detection does not look. Mounting a git worktree rather than a clone also needs
 its git directory mounted at the path the worktree's `.git` file names, or
 `--version` reports `git unknown` and the commit check fails, which is why the
 command above passes an empty commit.
+
+auditwheel's instruction-set check is the one part of the policy
+`build-wheel.sh` turns off. Everything linked on EL9 needs x86-64-v2 (its
+compilers default to `-march=x86-64-v2`, and its `crt1.o` carries the marking),
+while a `manylinux_2_34_x86_64` tag means baseline x86-64 and has no way to say
+v2. The requirement is documented instead, and `check-portable.sh` fails if
+anything ever needs more than v2.
+
+### Publishing the wheel
+
+The release workflow builds and checks the wheel on every run and uploads it
+as the `beman-specgen-wheel` artifact. It publishes only when the repository
+variable `PYPI_PUBLISH` is `testpypi` or `pypi`, from a push to `main`, and
+only a `PROJECT_VERSION` that index does not already have: versions on an index
+are immutable, so bumping the CMake version is what publishes. It uses PyPI's
+trusted publishing, so no token is stored. To turn it on for an index:
+
+1. On the index (`test.pypi.org` or `pypi.org`), under *Your projects →
+   Publishing*, add a pending publisher: project `beman-specgen`, owner
+   `steve-downey`, repository `specgen`, workflow `release-binary.yml`, and
+   environment `testpypi` or `pypi` to match.
+2. In the repository's *Settings → Secrets and variables → Actions →
+   Variables*, set `PYPI_PUBLISH` to that environment's name. The workflow
+   creates the environment on first use; add protection rules to it there if
+   publishing should wait for an approval.
+3. Push to `main`, or re-run the latest `main` run of the release workflow.
 
 ## End-to-end smoke test
 
