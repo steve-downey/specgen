@@ -4,7 +4,8 @@
 # The `beman-specgen` wheel (docs/plans/manylinux-release-binary.md,
 # pypi-wheel): the release workflow's staged tree -- bin/specgen beside
 # lib/clang/<major>/include -- under beman_specgen/data/, and a console script
-# `specgen` that execs it. Nothing is compiled here: the binary the suite ran
+# `specgen` that execs it, also installed as `beman-specgen` so that
+# `uvx beman-specgen` finds a command named for the package. Nothing is compiled here: the binary the suite ran
 # against is the one the wheel carries, so the wheel and the GitHub Release
 # archive are two packagings of one install tree. Shaped like the cmake, ninja
 # and clang-format wheels: scikit-build-core, one py3 wheel per platform, and
@@ -46,6 +47,7 @@ Issues = "https://github.com/steve-downey/specgen/issues"
 
 [project.scripts]
 specgen = "beman_specgen:main"
+beman-specgen = "beman_specgen:main"
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
