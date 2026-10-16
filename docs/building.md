@@ -248,7 +248,11 @@ trusted publishing, so no token is stored. To turn it on for an index:
    Variables*, set `PYPI_PUBLISH` to that environment's name. The workflow
    creates the environment on first use; add protection rules to it there if
    publishing should wait for an approval.
-3. Push to `main`, or re-run the latest `main` run of the release workflow.
+3. Push to `main`, or open the latest `main` run of the release workflow and
+   re-run only its *Publish the wheel* job. Do not re-run all jobs: *Publish
+   the release* would create the run's tag a second time, and fail. The
+   single job reads `PYPI_PUBLISH` afresh and reuses the run's wheel
+   artifact.
 
 ## End-to-end smoke test
 
