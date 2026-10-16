@@ -168,6 +168,16 @@ the plan and its measurements are
 [plans/manylinux-release-binary.md](plans/manylinux-release-binary.md)). Pull
 requests that touch the release files run everything but the publishing.
 
+Since each landing is a release, every pull request into `main` bumps
+`PROJECT_VERSION` in `CMakeLists.txt`, patch or minor as the change deserves,
+and the same version in `pyproject.toml`, `vcpkg.json` and the user guide's
+`specgen --version` example. The *Version bump* check
+(`.github/workflows/version-bump.yml`) runs `tools/release/check-version.sh`
+against the branch's base and fails without one; run it locally as
+`tools/release/check-version.sh origin/main`. Branch protection requires the
+check and an up-to-date branch, so after another pull request lands, rebase and
+bump again.
+
 It is built inside the `specgen-toolchain` image, whose two layers
 `packaging/release/{base,llvm}.Dockerfile` describe and
 `.github/workflows/toolchain-image.yml` publishes to

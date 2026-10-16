@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# Every push to main is a release, and PyPI publishes only a version it does
+# not have yet, so every pull request into main carries a new PROJECT_VERSION
+# (tools/release/check-version.sh says what is checked). Branch protection
+# requires this job and requires the branch to be up to date with main, which
+# is what makes the comparison sound: two pull requests that bump from the same
+# base cannot both land with the same version.
+#
+# The job's name is chosen once and left alone: branch protection requires it
+# by name, and renaming it strands the rule, as ci_tests.yml explains.
+
+name: Version bump
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  version-bump:
+    name: Version bump
+    runs-on: ubuntu-latest
+    steps:
+      # A pull_request run checks out the merge of the branch into main, so
+      # the merge's first parent is the main it would land on.
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Check the version
+        run: tools/release/check-version.sh HEAD^1

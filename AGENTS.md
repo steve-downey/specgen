@@ -86,6 +86,10 @@ The full statements live in `docs/architecture.md`; headlines only:
 
 - Changes are PR-sized and end green: full ctest, `make lint`, and (when
   wording output moves) regenerated goldens and captures in the same commit.
+- Every push to `main` is a release, so every PR bumps the version (patch or
+  minor; ask which) in `CMakeLists.txt`, `pyproject.toml`, `vcpkg.json` and
+  `docs/user-guide.md`. `tools/release/check-version.sh origin/main` checks
+  it, and the required *Version bump* check fails without it.
 - Taste-sensitive output (derived phrasing, FormatStyle) gets a first cut and
   the user's sign-off on the wording before committing.
 - If this file and the code ever disagree, trust the code and fix this file.
