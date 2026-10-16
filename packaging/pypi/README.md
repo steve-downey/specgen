@@ -15,6 +15,9 @@ specgen --version
 specgen generate my_header.hpp
 ```
 
+The same command is also installed as `beman-specgen`, the package's name, so
+`uvx beman-specgen generate my_header.hpp` runs it with no separate install step.
+
 It needs glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and
 their derivatives, or later) and, for any header that includes the standard
 library, the host's own `g++`: wording is generated against the standard
