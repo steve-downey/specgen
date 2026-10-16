@@ -13,8 +13,8 @@ SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 `beman.specgen` is a Clang-based command-line tool that generates C++ standard-library description
 wording from structured C++26 headers.
-It lowers source declarations and attached specgen markup to a semantic IR, then renders draft
-LaTeX, mpark/wg21 markdown, or org fragments.
+It reads a header's declarations and the specgen markup attached to them, and renders the wording as
+draft LaTeX, mpark/wg21 markdown, or org.
 
 **Status**: [Under development and not yet ready for production use.](https://github.com/bemanproject/beman/blob/main/docs/beman_library_maturity_model.md#under-development-and-not-yet-ready-for-production-use)
 
@@ -53,27 +53,24 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-Generate and render a document through the semantic IR:
+Generate the wording for a header:
 
 ```bash
-build/gcc-release/tools/specgen/specgen generate --emit-ir header.hpp -- \
-  -std=c++2c > wording.json
-build/gcc-release/tools/specgen/specgen render --from-ir wording.json \
-  --backend latex > wording.tex
+build/gcc-release/tools/specgen/specgen generate header.hpp --validate \
+  --backend latex -o wording.tex -- -std=c++2c
 ```
 
-Use `--backend mpark` or `--backend org` for the other serializers.
-`render --split <directory>` writes one fragment per top-level stable-name section.
-See the [user guide](docs/user-guide.md) for compiler arguments, compilation database discovery,
+`--backend mpark` and `--backend org` select the other two output formats, and
+`--split <directory>` writes one fragment per top-level stable-name section.
+The [user guide](docs/user-guide.md) covers compiler arguments, compilation database discovery,
 validation, and the complete marker vocabulary.
 
 A very small in-tree example uses the widget corpus header:
 
 ```bash
 SPECGEN=build/gcc-release/tools/specgen/specgen
-$SPECGEN generate --emit-ir tests/corpus/spec_widget.hpp -- \
-  -std=c++2c > widget.json
-$SPECGEN render --from-ir widget.json --backend latex -o widget.tex
+$SPECGEN generate tests/corpus/spec_widget.hpp --no-compile-commands \
+  --backend latex -o widget.tex
 ```
 
 The fuller [examples document](docs/examples.md) shows the corresponding headers, draft LaTeX,
