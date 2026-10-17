@@ -17,7 +17,20 @@ namespace ir       = beman::specgen::ir;
 namespace {
 const std::string kCorpusHeader       = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_expos_uses.hpp";
 const std::string kMemberCorpusHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_expos.hpp";
+const std::string kSharedLineHeader   = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_shared_line_omits.hpp";
 } // namespace
+
+TEST_CASE("build_document - omitted members whose removals share a line start leave no declarator behind") {
+    const auto built = frontend::build_document(kSharedLineHeader);
+    REQUIRE(built.has_value());
+
+    const auto* synopsis = std::get_if<ir::Synopsis>(&built->document.nodes.front());
+    REQUIRE(synopsis != nullptr);
+    CHECK(synopsis->code.text.contains("int value; // exposition only"));
+    CHECK_FALSE(synopsis->code.text.contains("empty_"));
+    CHECK_FALSE(synopsis->code.text.contains("s_;"));
+    CHECK_FALSE(synopsis->code.text.contains("b_"));
+}
 
 TEST_CASE("build_document - anonymous-union exposition members remain in the synopsis and roster") {
     const auto built = frontend::build_document(kMemberCorpusHeader);

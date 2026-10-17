@@ -1023,6 +1023,15 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos.hpp"
 )
 
+# Omitted private members whose whole-line removals share a begin offset — an
+# unnamed struct and its field, two declarators on one line — vanish whole,
+# whatever order the sort leaves them in (issue #147).
+specgen_add_golden(
+    shared_line_omits
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_shared_line_omits.hpp"
+)
+
 # `\seebelow` (design §4.3) — a deduced return type renders as a
 # `\seebelow` span in both the synopsis and the itemdecl, with a `\remarks`
 # stating the deduced type.

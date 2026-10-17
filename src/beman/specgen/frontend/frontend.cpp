@@ -1389,6 +1389,19 @@ struct SynopsisEdit {
     std::string replacement;
 };
 
+// Order edits for a back-to-front scatter under an overlap watermark:
+// descending begin and, among edits that share a begin, the longer first, so
+// an enclosing removal is applied and the watermark skips the edits it
+// subsumes. Begin alone leaves equal-begin edits in std::sort's unspecified
+// tie order, and an anonymous struct's whole-line removal applied before its
+// declarator's longer one left the field name behind (issue #147). Stable, so
+// edits equal in both offsets -- two insertions at one point -- keep push order.
+void sort_back_to_front(std::vector<SynopsisEdit>& edits) {
+    std::ranges::stable_sort(edits, [](const SynopsisEdit& a, const SynopsisEdit& b) {
+        return a.begin > b.begin || (a.begin == b.begin && a.end > b.end);
+    });
+}
+
 enum class SeeBelowTarget { ReturnType, Noexcept, Explicit };
 using SeeBelowMap = std::map<const clang::Decl*, SeeBelowTarget>;
 
@@ -2911,8 +2924,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // edits are skipped rather than applied: a whole-line removal (an omitted
     // member) subsumes any qualifier/expos edit inside it, and applying both
     // would corrupt the text.
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = class_end + 1; // lowest offset touched so far
     // substrate generic algorithm: a mutation whose correctness depends on
     // descending position is a scatter, not a fold in disguise. The
@@ -3139,8 +3151,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     add_declaration_masks(
         edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
 
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = decl_end + 1;
     // substrate generic algorithm: the same descending-offset scatter and
     // overlap watermark as class synopsis and itemdecl extraction.
@@ -3349,8 +3360,7 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     }
 
     // Back to front, skipping overlaps and anything past the trimmed end.
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = std::numeric_limits<unsigned>::max();
     // substrate generic algorithm: the same watermark discipline as
     // extract_synopsis's applier above, and for the same reason -- a
@@ -3430,8 +3440,7 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
         }
     }
 
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = std::numeric_limits<unsigned>::max();
     // substrate generic algorithm: descending edits share the synopsis watermark discipline.
     for (const SynopsisEdit& edit : edits) {
@@ -3576,8 +3585,7 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
         if (use.qualifier_end > use.qualifier_begin)
             edits.push_back(SynopsisEdit{use.qualifier_begin, use.qualifier_end, ""});
     }
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = std::numeric_limits<unsigned>::max();
     // substrate generic algorithm: descending offset mutation with an overlap
     // watermark, identical in kind to the synopsis/itemdecl edit applicators.
@@ -4140,9 +4148,7 @@ std::string apply_body_edits(std::string                                       t
     replacements.append_range(deletions | std::views::transform([](const auto& deletion) {
                                   return SynopsisEdit{deletion.first, deletion.second, ""};
                               }));
-    std::sort(replacements.begin(), replacements.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) {
-        return a.begin > b.begin || (a.begin == b.begin && a.end > b.end);
-    });
+    sort_back_to_front(replacements);
 
     unsigned applied_begin = text_begin + static_cast<unsigned>(text.size());
     // substrate generic algorithm: descending-offset string mutation with an
@@ -6886,8 +6892,7 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         }
     }
 
-    std::sort(
-        edits.begin(), edits.end(), [](const SynopsisEdit& a, const SynopsisEdit& b) { return a.begin > b.begin; });
+    sort_back_to_front(edits);
     unsigned applied_begin = decl_end + 1;
     // substrate generic algorithm: descending source-edit application with an
     // overlap watermark, the same operation as the established extractors.
