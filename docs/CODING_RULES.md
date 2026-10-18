@@ -219,8 +219,7 @@ The live check above is what enforces the doctrine.
 Run through this, in order, before calling an increment or PR done:
 
 - [ ] The build and test suite are green. `docs/building.md` has the
-      commands and the current expected test count, which moves whenever a
-      case lands, so don't hard-code it here.
+      commands.
 - [ ] `make goldens` produces an empty
       `git diff --stat tests/golden/`. A non-empty diff is a **finding to
       report**, never an edit to the golden.

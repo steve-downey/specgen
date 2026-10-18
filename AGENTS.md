@@ -13,7 +13,7 @@ targeting draft-LaTeX / mpark-wg21 / org backends. It is a tool, not a library
    and testing strategy; §11–§12 are the component inventory and cross-cutting
    rules.
 2. **`docs/building.md`** — build & verify: presets, the Makefile workflow, the
-   LLVM pin, lint, coverage, the examples pipeline, and the current test count.
+   LLVM pin, lint, coverage, and the examples pipeline.
 3. **`docs/decisions/`** — the settled architecture decision records. Source
    comments cite them as `(decision <slug>)`; `docs/decisions/README.md` is the
    index. Rationale lives there; `docs/CODING_RULES.md` decides whether a diff
@@ -21,7 +21,7 @@ targeting draft-LaTeX / mpark-wg21 / org backends. It is a tool, not a library
 
 ## Build & verify (details in docs/building.md)
 
-One preset, one configuration, 1006 tests:
+One preset, one configuration:
 
 `uv run cmake --preset gcc-release && uv run cmake --build --preset gcc-release && uv run ctest --preset gcc-release`
 
@@ -50,8 +50,6 @@ Gotchas that bite:
   over the compile database (~45 s), scope `src/`, `tools/`, `examples/`,
   and every `FILE_SET` header as its own TU. A new loop needs its marker
   before the suite is green.
-- The test count above goes stale the moment a ctest case is added; update it
-  here **and** in `docs/building.md` together.
 
 ## Invariants to check before touching wording behavior
 
