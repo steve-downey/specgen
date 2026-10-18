@@ -1,0 +1,5 @@
+spec_returns_expr_diagnostics.hpp:22: error: \returns-expr needs a body that is one `return E;` statement, whose `E` is the value returned; for any other body, use \effects-equiv
+spec_returns_expr_diagnostics.hpp:28: error: \returns-expr needs a body that is one `return E;` statement, whose `E` is the value returned; for any other body, use \effects-equiv
+spec_returns_expr_diagnostics.hpp:36: error: \returns-expr needs a body that is one `return E;` statement, whose `E` is the value returned; for any other body, use \effects-equiv
+spec_returns_expr_diagnostics.hpp:42: error: \returns-equiv is renamed \returns-expr, which renders the expression of a body that is one `return E;` as *Returns*: `E`; for an Equivalent to: block, use \effects-equiv
+spec_returns_expr_diagnostics.hpp:45: error: \returns and \returns-expr are mutually exclusive

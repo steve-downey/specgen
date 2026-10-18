@@ -17,7 +17,7 @@ class choice {
 
 // \rSec3[choice.ops]{Operations}
 
-//! \returns-equiv
+//! \returns-expr
 inline int choice::select() const {
 #if SPECGEN_ACTIVE_BRANCH
     return 1; // selected return

@@ -44,10 +44,11 @@ struct Markers {
     // Explicit itemdescr placement for in-class-defined members.
     std::optional<std::string> at_anchor; // \at <anchor>
 
-    // Bodies the front end must extract and substitute into the placeholder
-    // EquivalentTo left on the corresponding element.
+    // Bodies the front end must extract: \effects-equiv into the placeholder
+    // EquivalentTo left on an Effects element, \returns-expr into a Returns
+    // element the front end builds from a body that is one `return E;`.
     bool effects_equiv = false;
-    bool returns_equiv = false;
+    bool returns_expr  = false;
 };
 
 } // namespace beman::specgen::grammar

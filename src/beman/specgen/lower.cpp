@@ -91,12 +91,13 @@ Lowered lower(const grammar::Docblock& block) {
 
     out.descr.elements = block.elements | std::views::transform(lower_element) | std::ranges::to<std::vector>();
 
-    // The grammar rejects \effects with \effects-equiv (and the Returns pair),
-    // so these cannot collide with an authored element of the same kind.
+    // The grammar rejects \effects with \effects-equiv, so this cannot collide
+    // with an authored element of the same kind. \returns-expr leaves no
+    // placeholder: its element is a bare expression, not an Equivalent to:
+    // block, and only the front end can tell whether the body is one
+    // `return E;` (issue #143).
     if (block.markers.effects_equiv)
         append_extraction(out.descr, ir::ElementKind::Effects);
-    if (block.markers.returns_equiv)
-        append_extraction(out.descr, ir::ElementKind::Returns);
 
     // ItemDirectives is grammar::Markers (decision marker-registry): a plain
     // copy, not a field-by-field transcription that could drift from it.

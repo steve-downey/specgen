@@ -819,6 +819,16 @@ ParseResult parse_docblock(std::string_view raw) {
                 // reopen paragraph mode after a list. Only a new element can
                 // do that without moving prose ahead of the itemize in IR.
                 handle_marker(*info, after, lineno);
+            } else if (name == "returns-equiv") {
+                // The marker's old name, which said "equivalent to" about an
+                // element that is not one: *Returns* names a value and no
+                // effects, so its form is a bare expression (issue #143).
+                // Renamed before 1.0 rather than kept as an alias.
+                diags.push_back({Severity::Error,
+                                 lineno,
+                                 "\\returns-equiv is renamed \\returns-expr, which renders the expression of a "
+                                 "body that is one `return E;` as *Returns*: `E`; for an Equivalent to: block, "
+                                 "use \\effects-equiv"});
             } else {
                 diags.push_back({Severity::Error, lineno, "unknown tag \\" + std::string(name)});
             }
@@ -869,8 +879,8 @@ ParseResult parse_docblock(std::string_view raw) {
     };
     if (block.markers.effects_equiv && has_element(ir::ElementKind::Effects))
         diags.push_back({Severity::Error, 0, "\\effects and \\effects-equiv are mutually exclusive"});
-    if (block.markers.returns_equiv && has_element(ir::ElementKind::Returns))
-        diags.push_back({Severity::Error, 0, "\\returns and \\returns-equiv are mutually exclusive"});
+    if (block.markers.returns_expr && has_element(ir::ElementKind::Returns))
+        diags.push_back({Severity::Error, 0, "\\returns and \\returns-expr are mutually exclusive"});
     if (block.markers.also && !block.elements.empty())
         diags.push_back({Severity::Warning, 0, "\\also block should carry no elements; they are ignored by grouping"});
     if (block.markers.group_id && block.markers.also)

@@ -29,6 +29,18 @@ const ir::SpecItem* item_with(const ir::Document& document, std::string_view sig
     return nullptr;
 }
 
+// The code of a \returns-expr item's *Returns*: `E`, the paragraph's first
+// inline.
+const std::string& returns_code(const ir::SpecItem& item) {
+    REQUIRE(item.descr.elements.size() == 1);
+    REQUIRE(item.descr.elements[0].kind == ir::ElementKind::Returns);
+    REQUIRE_FALSE(item.descr.elements[0].equivalent.has_value());
+    REQUIRE(item.descr.elements[0].paragraphs.size() == 1);
+    const auto* code = std::get_if<ir::CodeInline>(&item.descr.elements[0].paragraphs[0].at(0));
+    REQUIRE(code != nullptr);
+    return code->code.text;
+}
+
 const std::string& equivalent_code(const ir::SpecItem& item) {
     REQUIRE(item.descr.elements.size() == 1);
     REQUIRE(item.descr.elements[0].equivalent.has_value());
@@ -42,10 +54,9 @@ TEST_CASE("build_document - equivalent bodies contain only the selected conditio
 
     const ir::SpecItem* select = item_with(built->document, "select()");
     REQUIRE(select != nullptr);
-    const std::string& selected_return = equivalent_code(*select);
-    CHECK(selected_return.contains("return 1; // selected return"));
-    CHECK_FALSE(selected_return.contains("return 99"));
-    CHECK_FALSE(selected_return.contains('#'));
+    // The returned expression comes from the one return statement the
+    // selected branch leaves in the AST.
+    CHECK(returns_code(*select) == "1");
 
     const ir::SpecItem* assign = item_with(built->document, "assign()");
     REQUIRE(assign != nullptr);

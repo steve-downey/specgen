@@ -63,7 +63,7 @@ TEST_CASE("lower - value_or shape: mandates prose + effects-equiv placeholder") 
     CHECK(effects.equivalent->code.spans.empty());
 
     CHECK(out.directives.effects_equiv);
-    CHECK(!out.directives.returns_equiv);
+    CHECK(!out.directives.returns_expr);
 }
 
 TEST_CASE("lower - emplace shape: several elements, canonical order enforced") {
@@ -161,13 +161,12 @@ TEST_CASE("lower - authored flat two-column tables become semantic IR") {
     CHECK(code_of(table->rows.front().cell2.at(1)) == "byte");
 }
 
-TEST_CASE("lower - returns-equiv produces a Returns placeholder") {
-    auto out = lower_text("//! \\returns-equiv\n");
-    REQUIRE(out.descr.elements.size() == 1);
-    CHECK(out.descr.elements[0].kind == ir::ElementKind::Returns);
-    REQUIRE(out.descr.elements[0].equivalent.has_value());
-    CHECK(out.descr.elements[0].equivalent->code.text.empty());
-    CHECK(out.directives.returns_equiv);
+TEST_CASE("lower - returns-expr leaves no placeholder element") {
+    // Its Returns is a bare expression, built by the front end from a body
+    // that is one `return E;`: there is no Equivalent to: block to fill.
+    auto out = lower_text("//! \\returns-expr\n");
+    CHECK(out.descr.elements.empty());
+    CHECK(out.directives.returns_expr);
 }
 
 TEST_CASE("lower - directives are carried out of band, not into the IR") {

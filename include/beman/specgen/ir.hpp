@@ -324,7 +324,7 @@ struct ForeignDeclaration {
 
 // A class member named by the body of a documented function whose body the
 // tool never renders (design §9): one with no `\effects-equiv` /
-// `\returns-equiv` marker, so nothing it does reaches the wording.
+// `\returns-expr` marker, so nothing it does reaches the wording.
 //
 // Design §9's leakage checker gives such a use its *note* severity — an
 // undocumented helper "appears only in non-extracted bodies" — and nothing

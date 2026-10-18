@@ -71,8 +71,11 @@ TEST_CASE("build_document - documented namespace free-function definitions becom
     CHECK_FALSE(contains(inspect->decl.signatures.front().text, "definition_value"));
     REQUIRE(inspect->descr.elements.size() == 1);
     CHECK(inspect->descr.elements.front().kind == ir::ElementKind::Returns);
-    REQUIRE(inspect->descr.elements.front().equivalent.has_value());
-    CHECK(contains(inspect->descr.elements.front().equivalent->code.text, "return definition_value;"));
+    CHECK_FALSE(inspect->descr.elements.front().equivalent.has_value());
+    REQUIRE(inspect->descr.elements.front().paragraphs.size() == 1);
+    const auto* returned = std::get_if<ir::CodeInline>(&inspect->descr.elements.front().paragraphs.front().at(0));
+    REQUIRE(returned != nullptr);
+    CHECK(returned->code.text == "definition_value");
     REQUIRE(inspect->decl.index.size() == 1);
     CHECK(inspect->decl.index.front().kind == ir::IndexKind::Global);
     CHECK(inspect->decl.index.front().name == "inspect");

@@ -35,8 +35,9 @@ struct Lowered {
 };
 
 // Lower one parsed markup block into canonical-order IR plus its directives.
-// An \effects-equiv or \returns-equiv marker produces the corresponding
-// element carrying an empty EquivalentTo, marking where extracted code goes.
+// An \effects-equiv marker produces an Effects element carrying an empty
+// EquivalentTo, marking where extracted code goes. \returns-expr produces no
+// element here; the front end builds its Returns from the definition body.
 Lowered lower(const grammar::Docblock&);
 
 // Exposition-only name derivation: strip trailing underscores, then map

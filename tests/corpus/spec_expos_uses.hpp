@@ -60,7 +60,7 @@ class counter {
 
 // \rSec3[counter.obs]{Observers}
 
-//! \returns-equiv
+//! \returns-expr
 int counter::get() const { return value_; }
 
 //! \effects-equiv

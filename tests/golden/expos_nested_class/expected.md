@@ -33,10 +33,6 @@ constexpr $iterator$ begin() const;
 constexpr int operator*() const;
 ```
 
-[#]{.pnum} *Returns*: Equivalent to:
-
-```cpp
-return $value$;
-```
+[#]{.pnum} *Returns*: `$value$`.
 
 :::
