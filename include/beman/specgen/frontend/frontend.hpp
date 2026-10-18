@@ -178,20 +178,6 @@ struct ResolvedArgs {
 // to reproduce the identical parse without a second filesystem probe.
 ResolvedArgs resolve_extra_args(std::string_view header_path, const ParseOptions& options);
 
-// Parse the header at `header_path` with the tool setup from design §3.1
-// (`-std=c++2c -fsyntax-only -fparse-all-comments`, with `options`'s resolved
-// arguments spliced in between the two per the precedence and ordering
-// documented on ParseOptions and resolve_extra_args), collect its main-file
-// top-level declarations and main-file raw comments, and interleave both by
-// source offset (design §3.2). Returns an empty `items` (and `had_parse_error`
-// false) if the file cannot be read or Clang fails to build any AST from it
-// at all; a non-empty `items` is not itself a guarantee the parse was clean —
-// see InterleaveResult. dump-decls (tools/specgen/main.cpp) is the one caller
-// that keeps running on `had_parse_error` rather than failing on it: its
-// whole point is showing exactly what the parse produced, partial or not,
-// which build_document's caller (generate) must not do — see BuildFailure.
-InterleaveResult collect_interleaved(std::string_view header_path, const ParseOptions& options = {});
-
 // A parsed `\rSec<depth>[<stable>]{<title>}` structure marker (design §3.2).
 struct SectionHeader {
     int         depth = 0;
@@ -259,9 +245,9 @@ beman::specgen::foundation::parse::parse_result<SectionHeader> parse_rsec(std::s
 //
 // build_document()'s hard-failure modes (decision expected-error-taxonomy: a
 // single fallible step -> std::expected + and_then), two of them,
-// deliberately worded apart. The first is the case collect_interleaved()
-// silently empties on instead: the header cannot be read, or Clang cannot
-// build any AST from it at all. The second is different in
+// deliberately worded apart. The first is the one collect_interleaved()
+// shares: the header cannot be read, or Clang cannot build any AST from it
+// at all. The second is different in
 // kind, not degree: Clang *did* build an AST, but its own DiagnosticsEngine
 // reports an error somewhere in the parse that produced it
 // (parse_header's ParsedHeader::had_error, frontend.cpp) — a header
@@ -278,6 +264,23 @@ beman::specgen::foundation::parse::parse_result<SectionHeader> parse_rsec(std::s
 struct BuildFailure {
     std::string message;
 };
+
+// Parse the header at `header_path` with the tool setup from design §3.1
+// (`-std=c++2c -fsyntax-only -fparse-all-comments`, with `options`'s resolved
+// arguments spliced in between the two per the precedence and ordering
+// documented on ParseOptions and resolve_extra_args), collect its main-file
+// top-level declarations and main-file raw comments, and interleave both by
+// source offset (design §3.2). Fails with build_document's own BuildFailure
+// if the file cannot be read or Clang fails to build any AST from it at all:
+// an empty header is a valid, empty interleave, so an empty `items` cannot
+// also mean "there was no header" (issue #144). A successful result is not
+// itself a guarantee the parse was clean — see InterleaveResult. dump-decls
+// (tools/specgen/main.cpp) is the one caller that keeps running on
+// `had_parse_error` rather than failing on it: its whole point is showing
+// exactly what the parse produced, partial or not, which build_document's
+// caller (generate) must not do — see BuildFailure.
+std::expected<InterleaveResult, BuildFailure> collect_interleaved(std::string_view    header_path,
+                                                                  const ParseOptions& options = {});
 
 // On success: the document, plus every Diagnostic classify() and build_tree()
 // collected along the way — docblock findings, malformed markers, boundary

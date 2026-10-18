@@ -35,20 +35,3 @@ out_dir() {
     mkdir -p -- "$_d"
     printf '%s\n' "$_d"
 }
-
-# Every specgen build has the Clang front end, so `generate` and
-# `dump-decls` are always available and there is no tier to check. What is
-# still worth catching is a stale installed binary built without the front
-# end, whose clang-free stubs ignore their arguments and print "this build has
-# no Clang front end" -- silently, as far as a capture is concerned, since the
-# message goes to stderr and the script would capture an empty file. This
-# check is cheap insurance against exactly that.
-require_tier_b() {
-    if "$SPECGEN" generate --emit-ir "$REPO_ROOT/tests/corpus/spec_widget.hpp" \
-        --no-compile-commands -o /dev/null 2>&1 |
-        grep -q 'no Clang front end'; then
-        printf '%s needs a specgen with the Clang front end; %s was built without one.\n' "$0" "$SPECGEN" >&2
-        printf 'Rebuild and re-install with `make install-release`.\n' >&2
-        exit 1
-    fi
-}

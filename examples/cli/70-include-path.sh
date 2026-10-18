@@ -11,7 +11,6 @@
 # rather than captured: its JSON bakes absolute paths, so it would differ on
 # every machine. Only the IR it produces is kept, which carries no paths at all.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 70-include-path)
 cd "$REPO_ROOT"

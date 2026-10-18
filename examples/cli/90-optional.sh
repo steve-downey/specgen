@@ -9,7 +9,6 @@
 # runs -- and both halves still match their goldens, which is what says the
 # generated IR and the checked-in IR are the same bytes.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 90-optional)
 cd "$REPO_ROOT"

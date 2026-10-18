@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.2.4
+    VERSION 0.2.5
 )
 
 # `specgen --version` identifies both the release and the exact source
@@ -392,6 +392,22 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
                 "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/spec_builtin_include.hpp"
                 "-DWORK_DIR=${PROJECT_BINARY_DIR}/tests/resource-dir" -P
                 "${PROJECT_SOURCE_DIR}/tests/run-resource-dir.cmake"
+        )
+        add_test(
+            NAME driver.dump-decls
+            COMMAND
+                ${CMAKE_COMMAND} "-DDRIVER=$<TARGET_FILE:specgen>"
+                "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/spec_widget.hpp"
+                "-DWORK_DIR=${PROJECT_BINARY_DIR}/tests/dump-decls" -P
+                "${PROJECT_SOURCE_DIR}/tests/run-dump-decls.cmake"
+        )
+        add_test(
+            NAME driver.standard-streams
+            COMMAND
+                ${CMAKE_COMMAND} "-DDRIVER=$<TARGET_FILE:specgen>"
+                "-DIR=${PROJECT_SOURCE_DIR}/tests/golden/widget_skeleton/expected.json"
+                "-DWORK_DIR=${PROJECT_BINARY_DIR}/tests/standard-streams" -P
+                "${PROJECT_SOURCE_DIR}/tests/run-standard-streams.cmake"
         )
         add_subdirectory(tests/golden)
     endif()

@@ -29,7 +29,7 @@ bool contains(const std::string& haystack, const char* needle) { return haystack
 } // namespace
 
 TEST_CASE("collect_interleaved - main-file declarations are the class then its out-of-line member") {
-    const auto items = frontend::collect_interleaved(kCorpusHeader).items;
+    const auto items = frontend::collect_interleaved(kCorpusHeader).value().items;
     REQUIRE_FALSE(items.empty());
 
     std::vector<frontend::SourceItem> decls;
@@ -46,7 +46,7 @@ TEST_CASE("collect_interleaved - main-file declarations are the class then its o
 }
 
 TEST_CASE("collect_interleaved - draft-form and section comments interleave with the decls in source order") {
-    const auto items = frontend::collect_interleaved(kCorpusHeader).items;
+    const auto items = frontend::collect_interleaved(kCorpusHeader).value().items;
 
     const auto find_containing = [&items](const char* needle) {
         return std::find_if(items.begin(), items.end(), [needle](const frontend::SourceItem& item) {
@@ -85,7 +85,7 @@ TEST_CASE("collect_interleaved - draft-form and section comments interleave with
 }
 
 TEST_CASE("collect_interleaved - the docblock merges its consecutive //! lines into one comment") {
-    const auto items    = frontend::collect_interleaved(kCorpusHeader).items;
+    const auto items    = frontend::collect_interleaved(kCorpusHeader).value().items;
     const auto docblock = std::find_if(items.begin(), items.end(), [](const frontend::SourceItem& item) {
         return item.kind == frontend::SourceItem::Kind::Comment && item.label.find("\\effects") != std::string::npos;
     });
@@ -93,10 +93,12 @@ TEST_CASE("collect_interleaved - the docblock merges its consecutive //! lines i
     CHECK(contains(docblock->label, "\\returns"));
 }
 
-TEST_CASE("collect_interleaved - an unreadable path yields an empty result") {
+TEST_CASE("collect_interleaved - an unreadable path is a failure, not an empty result") {
+    // An empty header is a valid, empty interleave, so a missing one has to be
+    // told apart from it rather than look the same (issue #144).
     const auto result = frontend::collect_interleaved("tests/corpus/does-not-exist.hpp");
-    CHECK(result.items.empty());
-    CHECK_FALSE(result.had_parse_error);
+    REQUIRE_FALSE(result.has_value());
+    CHECK(result.error().message.contains("cannot read 'tests/corpus/does-not-exist.hpp'"));
 }
 
 // --- a parse Clang could not finish still yields an interleave --------------
@@ -112,6 +114,7 @@ TEST_CASE("collect_interleaved - a header Clang could not fully parse still retu
     const std::string include_path_header =
         std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/include_path/consumer/spec_include.hpp";
     const auto result = frontend::collect_interleaved(include_path_header);
-    CHECK(result.had_parse_error);
-    CHECK_FALSE(result.items.empty());
+    REQUIRE(result.has_value());
+    CHECK(result->had_parse_error);
+    CHECK_FALSE(result->items.empty());
 }

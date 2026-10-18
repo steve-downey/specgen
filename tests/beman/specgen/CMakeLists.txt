@@ -38,5 +38,5 @@ add_subdirectory(backend)
 add_subdirectory(foundation)
 add_subdirectory(validate)
 
-# Tier B tests, only when the front end is built.
+# Tier B tests: the Clang front end's own.
 add_subdirectory(frontend)

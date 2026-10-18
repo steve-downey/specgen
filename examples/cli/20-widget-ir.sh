@@ -12,7 +12,6 @@
 # golden harness passes, which is what lets widget.json be compared against
 # golden.widget_skeleton's expected.json byte for byte.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 20-widget-ir)
 cd "$REPO_ROOT"

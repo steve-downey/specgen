@@ -15,7 +15,6 @@
 # example for -- headers under include/, wording written beside them.
 . "$(dirname -- "$0")/env.sh"
 
-require_tier_b
 
 OUT=$(out_dir 55-paper)
 CORPUS=$REPO_ROOT/tests/corpus

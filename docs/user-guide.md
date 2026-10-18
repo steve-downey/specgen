@@ -209,8 +209,8 @@ specgen generate <header>...
 
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
 the mpark/wg21 framework, and the `org` backend emits org for the wg21org
-exporter. `-o` and `--output` name the destination; without either, the wording
-is written to standard output. With no header at all, `generate` parses a stock
+exporter. `-o` and `--output` name the destination; without either, or with
+`-o -`, the wording is written to standard output. With no header at all, `generate` parses a stock
 snippet as a check that the front end is linked and working, reports the
 result on standard error, and produces no wording; rendering options are
 rejected in that form.
@@ -241,6 +241,8 @@ derived or must be overridden. `--root` is valid only with `--split`.
 the render: the fragments into the directory, and the whole (for a paper, every
 document joined in order) into the file. `--split` alone writes only the
 fragments, and standard output receives the manifest rather than the wording.
+`-o -` beside `--split` is a usage error, since the whole and the manifest
+would share standard output.
 
 Splitting does not delete files left by an earlier run. Consumers should
 reconcile the output directory against the manifest, in document order.
@@ -317,7 +319,9 @@ prerequisite so that a deleted header causes a rebuild rather than an error.
 For a paper, the prerequisites of all its documents are merged, sorted, and
 listed once. `--dep-target <name>` may be repeated, and replaces the target list; it serves
 a build whose real target is a stamp file or an installed copy rather than a
-path specgen was given. `--dep-target` is valid only with `--depfile`.
+path specgen was given. `--dep-target` is valid only with `--depfile`, and a
+run writing its wording to standard output, with no `-o` or with `-o -`, needs
+it: standard output is not a file a rule can name.
 
 ## Integrating generated fragments into a paper
 
@@ -825,7 +829,8 @@ specgen dump-decls header.hpp --compile-commands build
 It accepts the same compilation-database options and `--` tail as `generate`.
 Because it is a debugging command, it does not reject a header on which Clang
 reports a parse error: it warns and prints the possibly incomplete interleave.
-It reads one header; when several are named, it uses the last.
+It reads exactly one header: naming several is a usage error, and a header
+that cannot be read is an error.
 
 ### The JSON intermediate representation
 
@@ -879,7 +884,8 @@ per document of one paper, which `render` then treats as `generate` treats
 several headers: `--validate` runs across the union of the documents'
 documented names, and `--root`, when given at all, is repeated and pairs with
 each `--from-ir` in order. `render --depfile` names the IR files the render
-read as its prerequisites.
+read as its prerequisites; `--from-ir -` reads standard input, which is not a
+file, so it is left out.
 
 ## Exit behavior
 
@@ -901,10 +907,12 @@ read as its prerequisites.
   produced the wording. `--depfile` with nothing to name as a target, and
   `--dep-target` without `--depfile`, are usage errors and exit with status 2.
 - `dump-decls` is diagnostic by design: after a recoverable Clang parse error
-  it warns, prints the partial interleave, and exits with status 0.
+  it warns, prints the partial interleave, and exits with status 0. It exits
+  with status 1 when the header cannot be read or Clang cannot build an AST,
+  and with status 2 when more than one header is named.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.2.4 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.2.5 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

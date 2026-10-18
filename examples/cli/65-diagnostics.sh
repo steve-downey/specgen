@@ -9,7 +9,6 @@
 # That is exactly how the diagnose-mode golden runs, which is what lets this
 # be compared against golden.diagnostics' expected.diag.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 65-diagnostics)
 

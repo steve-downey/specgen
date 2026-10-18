@@ -17,10 +17,10 @@
 #                      render). Re-run the script with this build's driver into
 #                      a scratch directory and compare everything it wrote.
 #
-# The driver is built only where the front end is, so every rerun
-# case lives on the Tier B lanes. The parity cases do not: they compare two
-# checked-in files and need no driver at all, which is why a portable lane that
-# builds no CLI still checks even the *generated* captures.
+# Every rerun case needs the driver, so none registers with
+# BEMAN_SPECGEN_BUILD_TOOLS off. The parity cases do not: they compare two
+# checked-in files and need no driver at all, which is why a build without the
+# driver still checks even the *generated* captures.
 set(EXAMPLES_CLI "${PROJECT_SOURCE_DIR}/examples/cli")
 set(EXAMPLES_OUT "${EXAMPLES_CLI}/output")
 set(GOLDEN_DIR "${PROJECT_SOURCE_DIR}/tests/golden")
@@ -56,8 +56,8 @@ endfunction()
 # specgen_add_example_rerun(<section>)
 #
 # Re-run examples/cli/<section>.sh and compare everything it writes. Every such
-# case needs the driver, and the driver exists only where the front
-# end does -- so there is no per-case tier flag, just this one guard.
+# case needs the driver, which BEMAN_SPECGEN_BUILD_TOOLS can turn off -- so
+# there is no per-case flag, just this one guard.
 function(specgen_add_example_rerun section)
     if(NOT TARGET specgen)
         return()

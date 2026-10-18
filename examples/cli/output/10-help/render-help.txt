@@ -6,7 +6,7 @@ commands:
   dump-decls  print a header's decl/comment interleave (debug)
 
 dump-decls options:
-  <header>                  the header to parse
+  <header>                  the header to parse (exactly one)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
                              compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -53,9 +53,9 @@ generate options:
                              common stable-name prefix when omitted. With
                              several headers, repeats to name each document's
                              root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-                             alongside --split, write both the whole and the
-                             fragments
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
                              this run produced and every file its parse read,
                              with an empty rule per prerequisite so a deleted
@@ -111,12 +111,13 @@ render options:
                              common stable-name prefix when omitted. With
                              several --from-ir inputs, repeats to name each
                              document's root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-                             alongside --split, write both the whole and the
-                             fragments
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
                              this run produced and the IR files it read, with
-                             an empty rule per prerequisite
+                             an empty rule per prerequisite. Standard input is
+                             not a file, so it is left out
   --dep-target <name>       name this target in the dependency fragment
                              instead of the files actually written; repeats
                              (--depfile only)

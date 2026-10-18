@@ -1,8 +1,8 @@
 # tools/specgen/CMakeLists.txt                                     -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# The driver. Its render path is clang-free, which is what lets the backend
-# goldens run on every lane; the generate path arrives with the Clang tier.
+# The driver. Its render path runs no compiler, which is what lets the backend
+# goldens run on checked-in IR alone; generate parses through the front end.
 add_executable(specgen)
 target_sources(specgen PRIVATE main.cpp)
 target_link_libraries(specgen PRIVATE beman::specgen)
@@ -16,9 +16,8 @@ target_compile_definitions(
 
 # The front end is unconditional: find_package(Clang) is REQUIRED at the top
 # level, so there is no build without it — `generate` is the driver's reason
-# to exist. The compile definition names the tier the source is built against.
+# to exist.
 target_link_libraries(specgen PRIVATE beman::specgen.frontend)
-target_compile_definitions(specgen PRIVATE BEMAN_SPECGEN_ENABLE_CLANG)
 
 # Clang's builtin headers (<stddef.h>, <stdarg.h>, ...), which the front end
 # finds at `<driver dir>/../lib/clang/<major>` -- Clang's own rule, asked of the
