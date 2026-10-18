@@ -85,6 +85,12 @@ in `_cmake_args=`). It needs no `LD_LIBRARY_PATH` shim, because
 `cmake/gcc-flags.cmake` embeds an rpath to the compiler's own libstdc++, and it
 reports the same test count the preset lane does.
 
+The `gcc-multi-config` preset uses the same generator, and is what CI's *GCC 16
+Multi-Config* lane runs: a multi-config build puts the driver in a per-configuration
+directory, one level deeper than a preset build does, and anything placed relative
+to it has to follow. `cmake --workflow --preset gcc-multi-config` reproduces that
+lane locally.
+
 - `CONFIG` defaults to **`Asan`**, so a bare `make` or `make test` builds and tests
   under AddressSanitizer.
 - `make ctest` runs the tests without building, but it regenerates first

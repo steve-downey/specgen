@@ -36,23 +36,25 @@ if(NOT IS_DIRECTORY "${BEMAN_SPECGEN_RESOURCE_DIR}/include")
         "beman.specgen: no Clang resource directory at ${BEMAN_SPECGEN_RESOURCE_DIR}"
     )
 endif()
-set(specgen_resource_link
-    "${CMAKE_CURRENT_BINARY_DIR}/../lib/clang/${LLVM_VERSION_MAJOR}"
-)
-cmake_path(NORMAL_PATH specgen_resource_link)
+# The link goes beside the executable itself, wherever the generator put it:
+# a multi-config generator builds `specgen/<Config>/specgen`, so a fixed
+# `${CMAKE_CURRENT_BINARY_DIR}/..` missed by one directory there and Clang got
+# a relative `-resource-dir` that resolved against the user's working
+# directory (issue #139). An OUTPUT rule cannot name `$<TARGET_FILE_DIR>`, so
+# the link is made after each link of the driver; create_symlink replaces one
+# already there.
 add_custom_command(
-    OUTPUT "${specgen_resource_link}"
+    TARGET specgen
+    POST_BUILD
     COMMAND
         ${CMAKE_COMMAND} -E make_directory
-        "${CMAKE_CURRENT_BINARY_DIR}/../lib/clang"
+        "$<TARGET_FILE_DIR:specgen>/../lib/clang"
     COMMAND
         ${CMAKE_COMMAND} -E create_symlink "${BEMAN_SPECGEN_RESOURCE_DIR}"
-        "${specgen_resource_link}"
+        "$<TARGET_FILE_DIR:specgen>/../lib/clang/${LLVM_VERSION_MAJOR}"
     COMMENT "Linking the Clang resource directory beside the driver"
     VERBATIM
 )
-add_custom_target(specgen_resource_dir DEPENDS "${specgen_resource_link}")
-add_dependencies(specgen specgen_resource_dir)
 
 if(BEMAN_SPECGEN_USE_MODULES)
     set_target_properties(specgen PROPERTIES CXX_MODULE_STD ON)

@@ -49,6 +49,12 @@ jobs:
           - name: GCC 16 Debug
             preset: gcc-debug
             args: ""
+          # The Makefile's generator. A multi-config build puts the driver one
+          # directory deeper, which is where the Clang resource-dir link went
+          # missing without any preset lane noticing (issue #139).
+          - name: GCC 16 Multi-Config
+            preset: gcc-multi-config
+            args: ""
           - name: GCC 16 Release TSan
             preset: gcc-release
             args: "-DBEMAN_BUILDSYS_SANITIZER=TSan"
