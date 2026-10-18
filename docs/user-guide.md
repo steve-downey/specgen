@@ -540,8 +540,19 @@ the enumeration as written, enumerator list included, and its description
 states what the enumerators mean. A docblock on any other kind of entity, or on
 a namespace-scope function declaration rather than its definition, is reported
 as an error, because it would otherwise produce no wording and do so silently.
-A docblock on an in-class member declaration is not reported, and its markup
-is ignored; the docblock belongs on the member's definition.
+In a class body, a member's markup is read from its definition. A docblock on
+the declaration of a member defined out of line is reported as an error that
+names the definition, as is one on a member whose definition is not in the
+translation unit at all, such as one defined in a source file. Three kinds of
+member have no other place for their markup, so their declarations carry it: a
+pure virtual member with no definition, and `= default` and `= delete` members.
+Each gets an item declaration, `= 0` or its other tail included, when its
+docblock has a description element or `\describe`. A docblock on a data member
+is reported as an error, because a data member has no item of its own: its
+declaration is its specification, and its class's description says what it
+means. In every one of these places, a docblock holding only markers that act on
+the declaration (`\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`,
+`\freestanding`) is not an error.
 
 ## Description elements
 
@@ -918,6 +929,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.2.9 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.3.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

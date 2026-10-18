@@ -193,6 +193,12 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   carries `inline`, `optional<T>::` qualification, and stacked template heads the
   draft never shows).
 - **Markup attaches to the out-of-line definition**, which sits in clause order.
+  A docblock on the in-class declaration is reported as an Error naming the
+  definition, or saying there is none in the translation unit, unless it holds only
+  markers that act on the declaration (`\omit`, `\merge`, `\elsewhere`, `\expos`,
+  `\seebelow`, `\freestanding`). A pure virtual member with no definition is the
+  exception: like a `= default`/`= delete` member, its declaration is the only place
+  its markup can be, so it attaches there (issue #140).
 - In-class-defined members (hidden friends, compiler-bug workarounds): markup
   attaches to the in-class definition. Their itemdescr position is inferred from
   class-body order within their `\ref` section, relative to out-of-line siblings;
@@ -647,6 +653,9 @@ function un-`noexcept` even when it visibly never throws.
 | Public member, out-of-line def | yes | yes (markup at def) |
 | Documented namespace-scope fn, def out of line | yes, first decl's signature | yes (markup at def, which places it) |
 | `= default` / `= delete` | yes | no (unless `\describe`) |
+| Pure virtual, no definition | yes | when it has an element or `\describe`; markup on the decl, `= 0` kept |
+| Documented in-class decl of a fn defined elsewhere or nowhere | yes | Error naming the def; marker-only silent |
+| Documented data member | yes | Error: a data member has no itemdescr; marker-only silent |
 | Defaulted twin with `\merge` | dropped | merged into primary |
 | Hidden friend (`FOK_Undeclared`) | yes, `friend` kept | yes, markup in-class |
 | In-class def (compiler bug) | yes | yes, markup in-class, `\at` if needed |

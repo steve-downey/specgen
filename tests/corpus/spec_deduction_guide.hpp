@@ -24,10 +24,8 @@ class holder {
     I ptr_;
 
   public:
-    //! \effects Initializes the holder with `ptr`.
     constexpr explicit holder(I ptr);
 
-    //! \returns `ptr_`.
     constexpr I get() const;
 };
 

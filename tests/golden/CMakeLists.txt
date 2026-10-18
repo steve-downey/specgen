@@ -999,6 +999,24 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_inclass_markers.hpp"
 )
 
+# A pure virtual member needs no definition, so its declaration carries its
+# markup the way a `= default`/`= delete` member's does (issue #140).
+specgen_add_golden(
+    pure_virtual
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_pure_virtual.hpp"
+)
+
+# Class-body docblocks that produce no wording: the declaration of a member
+# defined elsewhere, or defined nowhere in the header, and a data member
+# (issues #125, #140). Each one asking for wording is an Error; marker-only
+# ones are silent, and grammar findings are reported either way.
+specgen_add_golden(
+    declaration_docblocks
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_declaration_docblocks.hpp"
+)
+
 # `\merge` on a deleted *function template* (issue #85) must remove the
 # whole declaration from the synopsis, not just the declarator: Clang leaves
 # a deleted/defaulted function template's own recorded end short of the
