@@ -687,8 +687,8 @@ wording follows [structure.specifications].
 - `\expos` marks an entity as exposition-only. The default spelling removes trailing
   underscores and changes the remaining underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
-  templates, variables, enumerations, aliases, alias templates, and class
-  templates may be marked, as may class members. The uses of an exposition-only
+  templates, variables, enumerations, aliases, alias templates, classes, and
+  class templates may be marked, as may class members. The uses of an exposition-only
   enumeration, both its type and a qualified enumerator, also render under the
   exposition name. A **nested class** may be marked as well; with a bare
   `\seebelow` it renders as a declaration, `class $iterator$; // exposition
@@ -704,10 +704,15 @@ wording follows [structure.specifications].
   into the public header. The marker does not bring that declaration into the
   document; only the uses that the document reaches are rewritten. On a
   namespace-scope `using` declaration, `\expos` marks the introduced name and
-  its target without emitting the `using` line itself; uses of a template
-  through the declaration render under the exposition name. Uses of a
-  non-template class through such a declaration are not rewritten, and
-  validation reports their implementation qualifier as leakage. A public component header
+  its target without emitting the `using` line itself; uses through the
+  declaration render under the exposition name, whatever kind of entity the
+  target is, and an enumerator of an exposition-only enumeration reached that
+  way is not reported as foreign.
+
+  A forward declaration of a marked class or class template is reproduced as
+  an exposition-only declaration, `struct $token$; // exposition only`, ahead
+  of the definition. Such a declaration is usually there because the synopsis
+  needs it to compile, which is what marking the class suggests. A public component header
   included inside a gathered `.syn` region differs: it is part of the
   document's extent, so its declarations contribute to that synopsis.
 - A bare `\seebelow` masks a function's return type: a leading return type
@@ -913,6 +918,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.2.6 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.2.7 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

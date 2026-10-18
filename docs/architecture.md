@@ -314,7 +314,8 @@ back to name match within the class's fragments only):
 - Expos renaming: referents in the expos set → an ExposId sentinel, rendered as
   `\exposidnc{kebab-name}` in code contexts and `\exposid{kebab-name}` in prose.
   Namespace-scope concepts, variable templates, ordinary variables, enumerations, aliases,
-  and alias templates can enter that set, and so can a **nested class and its own members**
+  alias templates, classes, and class templates can enter that set (a plain class's uses are
+  TagTypeLocs, issue #142), and so can a **nested class and its own members**
   (issue #80) -- a view's iterator is one, private and named by every signature its class
   publishes; with bare `\seebelow` the nested class renders as a declaration rather than a
   definition, which is [range.transform.view]'s shape; their resolved uses — expression and type uses alike — are
@@ -326,7 +327,10 @@ back to name match within the class's fragments only):
   shadow declaration and its underlying target. It produces no declaration of
   its own, but uses of the introduced name take the ordinary exposid rewrite,
   including from a sibling header that includes it (issue #113, decision
-  `paper-visible-names`).
+  `paper-visible-names`). A use of a non-template type written through it is a
+  `UsingTypeLoc` naming the shadow, which nothing beneath is traversed for; the
+  rewrite and the foreign-declaration collector both hook it (issue #142). A
+  template's use never needed to: its TemplateName looks through the shadow.
 - Extracted-body (`*-equiv`) exposition rewriting is **reference-resolved first**: a resolved
   use of a namespace-scope expos entity loses only its own qualifier and becomes an exposid
   span; a same-named local is untouched; uses inside inactive conditional branches, consumed
@@ -494,15 +498,18 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   in IR or JSON.
 - `\expos` / `\expos(name)` — exposition-only; name derived by stripping trailing
   underscores then `_` → `-` kebab conversion; `\expos(name)` overrides. Rendered
-  in synopsis with italic name + `// exposition only`. **On a defined class template
-  or specialization it changes the naming and nothing else**: the class is extracted
+  in synopsis with italic name + `// exposition only`. **On a defined class, class
+  template, or specialization it changes the naming and nothing else**: the class is extracted
   like any other (§3.4) — bodies spliced, `\omit`/`\merge` honored, docblock and Doxygen
   comments dropped, members' wording collected, the coverage rule applied — with its
   declared name as an exposid, no library index for it or its members, and the
   `// exposition only` tail. Blank lines directly before a class's closing brace are
   dropped before formatting, because clang-format keeps an empty last line in a block
   whose `};` carries a trailing comment. It used to be copied through as a
-  free-standing declaration, which kept all of that in the synopsis.
+  free-standing declaration, which kept all of that in the synopsis. A forward
+  declaration of a marked class is a declaration of the same entity, so it renders as a
+  standalone `struct $name$; // exposition only` ahead of the definition (issue #151): the
+  synopsis usually needs it to compile.
 - `\seebelow` — substitute *see below* for a return type: a leading one
   (deduced `auto` included) is replaced whole, and an explicit trailing
   return type keeps its SFINAE-friendly shape and renders
@@ -653,6 +660,7 @@ function un-`noexcept` even when it visibly never throws.
 | Documented record/class-template *definition* | yes | its own description, no itemdecl; `\at` moves it |
 | Namespace concept/variable/alias, `\expos` | standalone synopsis, exposid + `// exposition only` | as referenced |
 | Namespace class template, `\expos` | standalone synopsis, exposid + `// exposition only` | uses as exposid |
+| Namespace class, `\expos` | the same; a forward declaration renders as one too | uses as exposid |
 | Specialization of an `\expos` primary | the same, under the primary's name | its own markers do not apply |
 | Namespace record/class template, `\merge` or `\omit` | suppressed entirely | separately authored wording may remain |
 | Any declaration, `\elsewhere` | suppressed; name is paper-visible | declaration is supplied by hand elsewhere |

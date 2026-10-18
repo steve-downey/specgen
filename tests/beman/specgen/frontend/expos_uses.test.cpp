@@ -18,7 +18,33 @@ namespace {
 const std::string kCorpusHeader       = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_expos_uses.hpp";
 const std::string kMemberCorpusHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_expos.hpp";
 const std::string kSharedLineHeader   = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_shared_line_omits.hpp";
+const std::string kPlainClassHeader   = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_expos_plain_class.hpp";
 } // namespace
+
+TEST_CASE("build_document - plain classes and using-declared types take their exposids at every use") {
+    const auto built = frontend::build_document(kPlainClassHeader);
+    REQUIRE(built.has_value());
+
+    const auto widget = std::ranges::find_if(built->document.nodes, [](const ir::Node& node) {
+        const auto* synopsis = std::get_if<ir::Synopsis>(&node);
+        return synopsis != nullptr && synopsis->name == "widget";
+    });
+    REQUIRE(widget != built->document.nodes.end());
+    const auto& synopsis = std::get<ir::Synopsis>(*widget);
+    CHECK_FALSE(synopsis.code.text.contains("detail::"));
+    for (const std::string name : {"token", "helper-t", "count-t", "mode-t"}) {
+        CAPTURE(name);
+        CHECK(std::ranges::count(synopsis.code.spans, name, &ir::Span::payload) >= 1);
+    }
+
+    // The forward declaration of each marked class is a synopsis of its own,
+    // ahead of the definition's (issue #151).
+    const auto token_synopses = std::ranges::count_if(built->document.nodes, [](const ir::Node& node) {
+        const auto* synopsis = std::get_if<ir::Synopsis>(&node);
+        return synopsis != nullptr && synopsis->name == "token";
+    });
+    CHECK(token_synopses == 2);
+}
 
 TEST_CASE("build_document - omitted members whose removals share a line start leave no declarator behind") {
     const auto built = frontend::build_document(kSharedLineHeader);
