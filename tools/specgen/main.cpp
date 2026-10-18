@@ -3,19 +3,19 @@
 //
 // The specgen driver.
 //
-// Two subcommands, deliberately split along the build tiers:
+// Three subcommands, on either side of the IR boundary (decision ir-boundary):
 //
-//   render      IR JSON in, wording fragments out. Needs no compiler, so it is
-//               available in every build and is what the backend goldens run
-//               through on every CI lane.
+//   render      IR JSON in, wording fragments out. Runs no compiler, so the
+//               backend goldens exercise it on checked-in IR alone (decision
+//               clang-free-render-mode).
 //   generate    headers in, wording out, in one pass: the IR stays in memory
 //               and is never written anywhere unless `--emit-ir` asks for it,
-//               in which case emitting it is all the command does. Needs the
-//               Clang front end, and reports so plainly when the build did
-//               not include it.
+//               in which case emitting it is all the command does. Parses
+//               through the Clang front end, which every build has (decision
+//               llvm-toolchain-pin).
 //
 //   dump-decls  debug mode: prints the decl/comment interleave design
-//               §3.2 builds for a header. Needs the Clang front end too.
+//               §3.2 builds for a header.
 //
 // Either rendering command takes a whole paper, not just a document: several
 // headers or several `--from-ir` inputs render as one, validated against the
@@ -81,7 +81,7 @@ commands:
   dump-decls  print a header's decl/comment interleave (debug)
 
 dump-decls options:
-  <header>                  the header to parse
+  <header>                  the header to parse (exactly one)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
                              compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -128,9 +128,9 @@ generate options:
                              common stable-name prefix when omitted. With
                              several headers, repeats to name each document's
                              root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-                             alongside --split, write both the whole and the
-                             fragments
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
                              this run produced and every file its parse read,
                              with an empty rule per prerequisite so a deleted
@@ -186,12 +186,13 @@ render options:
                              common stable-name prefix when omitted. With
                              several --from-ir inputs, repeats to name each
                              document's root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-                             alongside --split, write both the whole and the
-                             fragments
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
                              this run produced and the IR files it read, with
-                             an empty rule per prerequisite
+                             an empty rule per prerequisite. Standard input is
+                             not a file, so it is left out
   --dep-target <name>       name this target in the dependency fragment
                              instead of the files actually written; repeats
                              (--depfile only)
@@ -439,16 +440,38 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // two of each.
     if (!options.root.empty() && options.split_dir.empty())
         return std::string("specgen: --root names a fragment, so it applies only with --split");
+    // `-o -` is standard output, spelled out. Beside --split it would put the
+    // whole and the manifest in one stream, and the manifest is the only record
+    // of where the pieces went.
+    if (options.output == "-" && !options.split_dir.empty())
+        return std::string("specgen: -o - and --split would both write to standard output; "
+                           "name a file for -o, or leave it off to get only the pieces");
     // A dependency fragment whose rule has no target is not a rule. specgen
     // knows the targets when it wrote the files itself; writing to standard
-    // output it does not, and guessing is worse than asking.
-    if (!options.depfile.empty() && options.output.empty() && options.split_dir.empty() && options.dep_targets.empty())
-        return std::string("specgen: --depfile names what this run produced, so it needs -o, --split, "
-                           "or --dep-target");
+    // output it does not, and guessing is worse than asking -- whether the
+    // output was left off or spelled `-o -`.
+    if (!options.depfile.empty() && options.split_dir.empty() && options.dep_targets.empty()) {
+        if (options.output == "-")
+            return std::string("specgen: -o - writes to standard output, which names no file, so --depfile "
+                               "needs --dep-target");
+        if (options.output.empty())
+            return std::string("specgen: --depfile names what this run produced, so it needs -o, --split, "
+                               "or --dep-target");
+    }
     if (!options.dep_targets.empty() && options.depfile.empty())
         return std::string("specgen: --dep-target names a target in a dependency fragment, so it applies "
                            "only with --depfile");
     return std::nullopt;
+}
+
+// `-o -` folded into the spelling every writer already treats as standard
+// output, once wording_option_error has read it. Without this a file named `-`
+// was written, which is a nuisance to remove from a shell and, under
+// --depfile, a target make would look for.
+WordingOptions output_dash_is_stdout(WordingOptions options) {
+    if (options.output == "-")
+        options.output.clear();
+    return options;
 }
 
 // `--validate`'s one inserted stage, between the document and the render. Off
@@ -894,6 +917,7 @@ int render_command(const std::vector<std::string>& args) {
         std::println(stderr, "{}", *error);
         return 2;
     }
+    wording = output_dash_is_stdout(std::move(wording));
 
     // Read and parse every input before anything validates or renders: a
     // paper is the unit (issue #109), and half its fragments on disk beside
@@ -925,6 +949,17 @@ int render_command(const std::vector<std::string>& args) {
         return 1;
     }
 
+    // The prerequisites of a render are the IR files it read. Modest on its
+    // own, and the point: a two-stage build whose `generate --emit-ir` step
+    // already wrote a fragment naming the headers now has both edges, and make
+    // chains them without either stage knowing about the other. Standard input
+    // is not a file: a rule naming `-` sends make looking for one, so it is
+    // left out, and a render that read only standard input depends on nothing
+    // (issue #145).
+    const std::vector<std::string> prerequisites =
+        inputs | std::views::filter([](const std::string& input) { return input != "-"; }) |
+        std::ranges::to<std::vector<std::string>>();
+
     // One document is exactly the pipeline this command has always been:
     // emit_wording validates and renders it, and the output is byte-identical
     // to what it was before --from-ir learned to repeat.
@@ -934,7 +969,7 @@ int render_command(const std::vector<std::string>& args) {
             std::println(stderr, "{}", result.error());
             return 1;
         }
-        if (const auto failed = write_depfile(wording, *result, inputs); !failed) {
+        if (const auto failed = write_depfile(wording, *result, prerequisites); !failed) {
             std::println(stderr, "{}", failed.error());
             return 1;
         }
@@ -946,11 +981,7 @@ int render_command(const std::vector<std::string>& args) {
         std::println(stderr, "{}", written.error());
         return 1;
     }
-    // The prerequisites of a render are the IR files it read. Modest on its
-    // own, and the point: a two-stage build whose `generate --emit-ir` step
-    // already wrote a fragment naming the headers now has both edges, and make
-    // chains them without either stage knowing about the other.
-    if (const auto failed = write_depfile(wording, *written, inputs); !failed) {
+    if (const auto failed = write_depfile(wording, *written, prerequisites); !failed) {
         std::println(stderr, "{}", failed.error());
         return 1;
     }
@@ -1152,13 +1183,14 @@ int generate_command(const std::vector<std::string>& args) {
             std::println(stderr, "specgen: the Clang front end could not parse the input");
             return 1;
         }
-        std::println(stderr, "specgen: Clang front-end tier OK; pass a header to generate wording");
+        std::println(stderr, "specgen: Clang front end OK; pass a header to generate wording");
         return 0;
     }
     if (const std::optional<std::string> error = wording_option_error(wording)) {
         std::println(stderr, "{}", *error);
         return 2;
     }
+    wording = output_dash_is_stdout(std::move(wording));
 
     // Probing defaults on for the driver -- it is what makes
     // the acid target (which has a root compile_commands.json) parseable
@@ -1316,9 +1348,11 @@ int dump_decls_command(const std::vector<std::string>& args) {
     const std::vector<std::string> head(args.begin(), dash_dash);
     const std::vector<std::string> tail(dash_dash == args.end() ? args.end() : dash_dash + 1, args.end());
 
-    std::string header;
-    std::string compile_commands_dir;
-    bool        no_compile_commands = false;
+    // Every header named, so a second one is reported rather than silently
+    // winning over the first (issue #144).
+    std::vector<std::string> headers;
+    std::string              compile_commands_dir;
+    bool                     no_compile_commands = false;
 
     // substrate generic algorithm: same index-load-bearing shape as
     // generate_command's identical loop above, and for the same reason --
@@ -1340,7 +1374,7 @@ int dump_decls_command(const std::vector<std::string>& args) {
             // sibling commands, rather than falling into the "requires a
             // header path" error below.
             // The empty-argument case is separate and unaffected:
-            // header stays empty and the check below reports it verbatim.
+            // headers stays empty and the check below reports it verbatim.
             return usage(stdout, 0);
         } else if (arg == "--compile-commands") {
             if (!next(compile_commands_dir))
@@ -1348,17 +1382,27 @@ int dump_decls_command(const std::vector<std::string>& args) {
         } else if (arg == "--no-compile-commands") {
             no_compile_commands = true;
         } else if (!arg.empty() && arg.front() != '-') {
-            header = arg;
+            headers.push_back(arg);
         } else {
             std::println(stderr, "specgen: unknown option '{}'", arg);
             return usage(stderr, 2);
         }
     }
 
-    if (header.empty()) {
+    if (headers.empty()) {
         std::println(stderr, "specgen: dump-decls requires a header path");
         return usage(stderr, 2);
     }
+    // One parse is one view; the interleave of several headers would be one
+    // list with nothing in it to say where each began.
+    if (headers.size() > 1) {
+        std::println(stderr,
+                     "specgen: dump-decls shows one header's parse, so it takes one header, not {}; "
+                     "run it once per header",
+                     headers.size());
+        return 2;
+    }
+    const std::string& header = headers.front();
 
     // Same resolve-once-and-reuse shape as generate_command's --emit-ir path.
     const frontend::ParseOptions raw_options{.extra_args             = tail,
@@ -1371,7 +1415,16 @@ int dump_decls_command(const std::vector<std::string>& args) {
     const frontend::ParseOptions options{
         .extra_args = resolved.args, .compile_commands_dir = {}, .probe_compile_commands = false};
 
-    const frontend::InterleaveResult interleaved = frontend::collect_interleaved(header, options);
+    const std::expected<frontend::InterleaveResult, frontend::BuildFailure> collected =
+        frontend::collect_interleaved(header, options);
+    // No header at all is not a partial parse: there is nothing to show, and
+    // exiting 0 with nothing printed reads as an empty header (issue #144).
+    // The same message and status as `generate` gives the same file.
+    if (!collected) {
+        std::println(stderr, "specgen: {}", collected.error().message);
+        return 1;
+    }
+    const frontend::InterleaveResult& interleaved = *collected;
     // dump-decls keeps running on a partial parse rather than failing
     // on it -- generate does the opposite (see build_document's BuildFailure)
     // because this command's whole point is a debugging view of exactly what

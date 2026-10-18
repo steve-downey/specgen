@@ -4,8 +4,8 @@
 #
 # One hand-written IR fixture through all three backends. The input is
 # identical in each case and only the serializer changes, which is what makes
-# the three outputs worth reading side by side. Needs no Clang: `render` is
-# clang-free, so this script runs on every lane.
+# the three outputs worth reading side by side. `render` runs no compiler, so
+# the IR fixture is the whole input.
 . "$(dirname -- "$0")/env.sh"
 
 OUT=$(out_dir 30-render-backends)

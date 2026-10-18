@@ -6,9 +6,8 @@
 #             ALSO_INPUTS adds further `--from-ir` occurrences, and several
 #             documents with no `--split` render as one joined output — the
 #             assembled clause, in document then section order.
-#   generate  INPUT is a header; run it through `specgen generate --emit-ir`
-#             (Clang-tier only — the case registering this mode must itself be
-#             registered only where the driver is built). Always passes
+#   generate  INPUT is a header; run it through `specgen generate --emit-ir`.
+#             Always passes
 #             `--no-compile-commands`: the repository keeps a
 #             gitignored `compile_commands.json` symlink at its root, and
 #             `specgen generate`'s own default is to probe for one, so a
@@ -23,8 +22,7 @@
 #             arguments reach the front end.
 #   diagnose  INPUT is a header; run the same `generate --emit-ir` but compare
 #             its *stderr* — the build-time findings — instead of the
-#             IR, which goes to a scratch file. Clang-tier only, like generate.
-#             Run from the header's own directory so the paths specgen prints
+#             IR, which goes to a scratch file. Run from the header's own directory so the paths specgen prints
 #             are the file name alone: an absolute build path would make the
 #             golden machine-specific. Also always passes
 #             `--no-compile-commands`, for the same reason `generate` does —
@@ -33,7 +31,7 @@
 #             machine that happens to have a build configured.
 #   depfile   INPUT is a header; run `specgen generate --depfile` and compare
 #             the *dependency fragment* — the wording goes to a scratch file.
-#             Clang-tier only, like generate. Run from the header's own
+#             Run from the header's own
 #             directory and with a fixed `--dep-target wording.tex`, because a
 #             fragment is nothing but paths: an absolute build path on either
 #             side of the rule would make the golden machine-specific.

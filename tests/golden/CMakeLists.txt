@@ -91,7 +91,7 @@ endif()
 # MODE diagnose: INPUT is a corpus header, run through the same
 # `generate --emit-ir` the generate mode uses, but with its *stderr* compared
 # against <case>/expected.diag and the IR discarded — the build-time findings
-# as golden text. Clang-tier only, like generate.
+# as golden text.
 #
 # MODE split: INPUT is checked-in IR JSON, run through
 # `specgen render --split` twice into one scratch directory; the fragments are
@@ -101,8 +101,7 @@ endif()
 # through as `--root`. Needs no Clang, like render.
 #
 # MODE depfile: INPUT is a header, run through `specgen generate` with
-# `--depfile`, and the *dependency fragment* is what gets compared. Clang-tier
-# only, like generate. Run from the header's own directory and with a fixed
+# `--depfile`, and the *dependency fragment* is what gets compared. Run from the header's own directory and with a fixed
 # `--dep-target`, so every path in the compared bytes is relative: a fragment
 # is nothing but paths, and an absolute build path in one would make the golden
 # machine-specific. ALSO_INPUT adds further headers, so a paper's fragment —

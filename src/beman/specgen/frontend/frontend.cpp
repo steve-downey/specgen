@@ -6991,14 +6991,21 @@ DocumentFiles DocumentFiles::discover(clang::ASTUnit& ast, const clang::SourceMa
     return doc;
 }
 
+// The one failure collect_interleaved and build_document share, worded once so
+// `dump-decls` and `generate` say the same thing about the same missing file.
+BuildFailure unparsed_header(std::string_view header_path) {
+    return BuildFailure{std::format("cannot read '{}', or Clang could not parse it", header_path)};
+}
+
 } // namespace
 
-InterleaveResult collect_interleaved(std::string_view header_path, const ParseOptions& options) {
+std::expected<InterleaveResult, BuildFailure> collect_interleaved(std::string_view    header_path,
+                                                                  const ParseOptions& options) {
     InterleaveResult result;
 
     ParsedHeader parsed = parse_header(header_path, options);
     if (!parsed.ast)
-        return result;
+        return std::unexpected(unparsed_header(header_path));
     // Carried through rather than acted on here — dump-decls, this
     // function's one caller, is the debugging view of exactly what the parse
     // produced, so seeing a partial collection when the parse is partial is
@@ -7070,8 +7077,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
 
     ParsedHeader parsed = parse_header(header_path, options);
     if (!parsed.ast)
-        return std::unexpected(
-            BuildFailure{std::format("cannot read '{}', or Clang could not parse it", header_path)});
+        return std::unexpected(unparsed_header(header_path));
     // Distinct from the message above, and deliberately so — Clang did
     // build an AST here, but its own DiagnosticsEngine says the parse that
     // produced it hit an error, which buildASTFromCodeWithArgs's recovery can

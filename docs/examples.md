@@ -85,7 +85,7 @@ commands:
   dump-decls  print a header's decl/comment interleave (debug)
 
 dump-decls options:
-  <header>                  the header to parse
+  <header>                  the header to parse (exactly one)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
 			     compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
@@ -132,9 +132,9 @@ generate options:
 			     common stable-name prefix when omitted. With
 			     several headers, repeats to name each document's
 			     root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-			     alongside --split, write both the whole and the
-			     fragments
+  -o, --output <file>       write the whole here instead of standard output
+			     ("-" is standard output); alongside --split, write
+			     both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
 			     this run produced and every file its parse read,
 			     with an empty rule per prerequisite so a deleted
@@ -190,12 +190,13 @@ render options:
 			     common stable-name prefix when omitted. With
 			     several --from-ir inputs, repeats to name each
 			     document's root fragment, pairing in order
-  -o, --output <file>       write the whole here instead of standard output;
-			     alongside --split, write both the whole and the
-			     fragments
+  -o, --output <file>       write the whole here instead of standard output
+			     ("-" is standard output); alongside --split, write
+			     both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
 			     this run produced and the IR files it read, with
-			     an empty rule per prerequisite
+			     an empty rule per prerequisite. Standard input is
+			     not a file, so it is left out
   --dep-target <name>       name this target in the dependency fragment
 			     instead of the files actually written; repeats
 			     (--depfile only)
@@ -279,7 +280,6 @@ bool widget::empty() const { return value_ == 0; }
 # golden harness passes, which is what lets widget.json be compared against
 # golden.widget_skeleton's expected.json byte for byte.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 20-widget-ir)
 cd "$REPO_ROOT"
@@ -484,8 +484,8 @@ These commands render the small hand-written `value_or` IR fixture through each 
 #
 # One hand-written IR fixture through all three backends. The input is
 # identical in each case and only the serializer changes, which is what makes
-# the three outputs worth reading side by side. Needs no Clang: `render` is
-# clang-free, so this script runs on every lane.
+# the three outputs worth reading side by side. `render` runs no compiler, so
+# the IR fixture is the whole input.
 . "$(dirname -- "$0")/env.sh"
 
 OUT=$(out_dir 30-render-backends)
@@ -649,8 +649,8 @@ The same input in org:
 
 \#+begin\_src org
 
-<div class="addedblock" id="org3355f7e">
-<div class="codeblock" id="orgc472338">
+<div class="addedblock" id="orge3a7409">
+<div class="codeblock" id="org6e52c32">
 <p>
 class gadget {
 public:
@@ -667,14 +667,14 @@ public:
 
 ## Observers [gadget.observe]
 
-<div class="itemdecl" id="org87b0070">
+<div class="itemdecl" id="orga6f4d82">
 <p>
 constexpr bool ready() const noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="orgde36621">
+<div class="pnum" id="org3a67bc0">
 <p>
 <i>Constraints</i>:
 </p>
@@ -686,21 +686,21 @@ constexpr bool ready() const noexcept;
 
 </div>
 
-<div class="pnum" id="orgf290eb2">
+<div class="pnum" id="org247a6f9">
 <p>
 <i>Returns</i>: <code>true</code> if and only if the gadget is ready.
 </p>
 
 </div>
 
-<div class="pnum" id="orgeed2290">
+<div class="pnum" id="orgf81c899">
 <p>
 A second paragraph, so the added numbering has to advance.
 </p>
 
 </div>
 
-<div class="pnum" id="org35067fe">
+<div class="pnum" id="orgb5b0e81">
 <p>
 A free paragraph closing the subclause.
 </p>
@@ -712,14 +712,14 @@ A free paragraph closing the subclause.
 
 ## Modifiers [gadget.mod]
 
-<div class="itemdecl" id="orga1c2c8c">
+<div class="itemdecl" id="orgf8662d7">
 <p>
 constexpr void reset() noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="orgf1cd96c">
+<div class="pnum" id="orge45719a">
 <p>
 <i>Effects</i>: Resets the gadget.
 </p>
@@ -1004,7 +1004,6 @@ A paper proposing several headers is several specgen documents and one invocatio
 # example for -- headers under include/, wording written beside them.
 . "$(dirname -- "$0")/env.sh"
 
-require_tier_b
 
 OUT=$(out_dir 55-paper)
 CORPUS=$REPO_ROOT/tests/corpus
@@ -1109,7 +1108,6 @@ specgen: widget/synopsis: error: the description of `shrink` is routed to no sec
 # That is exactly how the diagnose-mode golden runs, which is what lets this
 # be compared against golden.diagnostics' expected.diag.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 65-diagnostics)
 
@@ -1154,7 +1152,6 @@ A header that includes another requires an include directory, which may be suppl
 # rather than captured: its JSON bakes absolute paths, so it would differ on
 # every machine. Only the IR it produces is kept, which carries no paths at all.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 70-include-path)
 cd "$REPO_ROOT"
@@ -1197,7 +1194,6 @@ Both produce the same IR, byte for byte, and both are compared against the same 
 # `dump-decls` prints the declaration/comment event stream the front end builds
 # the document from. Useful when a section is empty and should not be.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 80-dump-decls)
 cd "$REPO_ROOT"
@@ -1483,7 +1479,6 @@ constexpr void optional<T>::reset() noexcept {
 # runs -- and both halves still match their goldens, which is what says the
 # generated IR and the checked-in IR are the same bytes.
 . "$(dirname -- "$0")/env.sh"
-require_tier_b
 
 OUT=$(out_dir 90-optional)
 cd "$REPO_ROOT"

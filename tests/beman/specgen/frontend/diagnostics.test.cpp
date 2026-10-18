@@ -156,7 +156,9 @@ TEST_CASE("build_document - a numbered section-like header is reported instead o
 }
 
 TEST_CASE("build_document - section markers retain physical lines inside a coalesced RawComment") {
-    const auto collected = frontend::collect_interleaved(kCoalescedHeader);
+    const auto interleaved = frontend::collect_interleaved(kCoalescedHeader);
+    REQUIRE(interleaved.has_value());
+    const frontend::InterleaveResult& collected = *interleaved;
     REQUIRE_FALSE(collected.had_parse_error);
     const auto merged = std::ranges::find_if(collected.items, [](const frontend::SourceItem& item) {
         return item.kind == frontend::SourceItem::Kind::Comment && item.label.contains("coalesced.first");
