@@ -53,6 +53,18 @@
       }
     },
     {
+      "name": "gcc-multi-config",
+      "displayName": "GCC multi-config build (the Makefile's generator)",
+      "inherits": [
+        "_root-config"
+      ],
+      "generator": "Ninja Multi-Config",
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/gnu-toolchain.cmake",
+        "CMAKE_CONFIGURATION_TYPES": "RelWithDebInfo;Debug"
+      }
+    },
+    {
       "name": "manylinux-release",
       "displayName": "manylinux_2_34 release binary (inside the specgen-toolchain image)",
       "inherits": [
@@ -191,6 +203,14 @@
       ]
     },
     {
+      "name": "gcc-multi-config",
+      "configurePreset": "gcc-multi-config",
+      "configuration": "RelWithDebInfo",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
       "name": "manylinux-release",
       "configurePreset": "manylinux-release",
       "inherits": [
@@ -263,6 +283,12 @@
       "configurePreset": "gcc-release"
     },
     {
+      "name": "gcc-multi-config",
+      "inherits": "_test_base",
+      "configurePreset": "gcc-multi-config",
+      "configuration": "RelWithDebInfo"
+    },
+    {
       "name": "manylinux-release",
       "inherits": "_test_base",
       "configurePreset": "manylinux-release"
@@ -330,6 +356,23 @@
         {
           "type": "test",
           "name": "gcc-release"
+        }
+      ]
+    },
+    {
+      "name": "gcc-multi-config",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-multi-config"
+        },
+        {
+          "type": "build",
+          "name": "gcc-multi-config"
+        },
+        {
+          "type": "test",
+          "name": "gcc-multi-config"
         }
       ]
     },
