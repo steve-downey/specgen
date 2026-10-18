@@ -21,7 +21,7 @@ constexpr T identity(T value) {
 
 constexpr int implementation_helper(int value) { return value + 1; }
 
-//! \returns-equiv
+//! \returns-expr
 constexpr int inspect(int definition_value) { return definition_value; }
 
 } // namespace demo

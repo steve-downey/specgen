@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // Hand-curated corpus header (design §4.2 / §5.2: `\effects-equiv` and
-// `\returns-equiv` body extraction). Two out-of-line member definitions under
+// `\returns-expr` body extraction). Two out-of-line member definitions under
 // one `\rSec3` section:
 //
-//   - `get()` carries `\returns-equiv`: its single-return body extracts into a
-//     Returns element's "Equivalent to:" block (`return value_;`).
+//   - `get()` carries `\returns-expr`: its single-return body's expression
+//     becomes the Returns element, `value_`, rendered as an exposid.
 //   - `reset()` carries `\effects-equiv`: a retained local alias precedes the
 //     maximal derivable static_assert run. Per design §5.2, that assertion is
 //     dropped from the extracted Effects body, while the alias and an assertion
@@ -50,7 +50,7 @@ class box {
 
 // \rSec3[box.observe]{Observers}
 
-//! \returns-equiv
+//! \returns-expr
 template <class T>
 constexpr const T& box<T>::get() const {
     return value_;

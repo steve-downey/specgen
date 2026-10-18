@@ -57,7 +57,7 @@ constexpr typename demo_view<R>::iterator demo_view<R>::begin() const {
 
 // \rSec3[demo.view.iterator]{Class `demo_view::iterator`}
 
-//! \returns-equiv
+//! \returns-expr
 template <class R>
 constexpr int demo_view<R>::iterator::operator*() const {
     return value_;

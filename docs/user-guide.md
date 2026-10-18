@@ -178,7 +178,7 @@ disagree:
    framing necessarily appear in different syntax.
 
 Derivation is most useful when the implementation already states exactly what
-the specification should state. In that case, prefer `\returns-equiv`,
+the specification should state. In that case, prefer `\returns-expr`,
 `\effects-equiv`, and derived constraints or mandates. Use authored prose when
 exposing the body would reveal an implementation strategy, when the
 specification is more abstract than the implementation, or when the derived
@@ -635,14 +635,17 @@ at least one row, and both end their element.
   branches, preprocessing directive lines, specgen comments, and Doxygen
   comments. Draft-form comments within the body remain; extraction begins at
   the first statement, so a comment before it is not included.
-- `\returns-equiv` extracts the function body in the same way, as a *Returns:
-  Equivalent to:* block. It is intended for a body consisting of a single
-  return statement.
+- `\returns-expr` renders *Returns*: `E` from a function body that is exactly one
+  `return E;`, after any consumed leading `static_assert`s, with `E` rewritten
+  like extracted code. A *Returns* names a value and no effects, so any other
+  body is an error: use `\effects-equiv` when the body does more than return one
+  expression. The marker's old name, `\returns-equiv`, is an error that names
+  `\returns-expr`.
 - `\constraints-in-decl` retains the requires-clause in the item declaration
   instead of deriving a separate *Constraints:* element.
 
 `\effects-equiv` and an authored `\effects` are mutually exclusive, as are
-`\returns-equiv` and an authored `\returns`.
+`\returns-expr` and an authored `\returns`.
 
 By default, associated constraints are removed from the item declaration and
 rendered as derived *Constraints*. A leading run of body-local type aliases
@@ -929,6 +932,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.3.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.4.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

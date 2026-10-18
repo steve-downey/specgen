@@ -57,11 +57,7 @@ int get() const;
 #+end_itemdecl
 
 #+begin_pnum
-/Returns/: Equivalent to:
-
-#+begin_codeblock
-return @\exposidnc{value}@;
-#+end_codeblock
+/Returns/: @@latex:\exposid{value}@@@@html:<code><var>value</var></code>@@.
 #+end_pnum
 
 #+begin_itemdecl

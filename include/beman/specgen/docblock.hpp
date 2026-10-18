@@ -142,7 +142,7 @@ inline constexpr MarkerInfo kMarkers[] = {
      .arity    = MarkerArity::RestRequired,
      .missing_arg_error = "\\group requires an id"},
     {.spelling = "effects-equiv",       .flag = &Markers::effects_equiv},
-    {.spelling = "returns-equiv",       .flag = &Markers::returns_equiv},
+    {.spelling = "returns-expr",        .flag = &Markers::returns_expr},
     {.spelling = "constraints-in-decl", .flag = &Markers::constraints_in_decl},
     {.spelling = "freestanding",         .flag = &Markers::freestanding},
     {.spelling = "freestanding-deleted", .flag = &Markers::freestanding_deleted},

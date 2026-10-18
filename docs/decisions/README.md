@@ -39,3 +39,4 @@ and cite the design document as `docs/architecture.md` §N.
 | [format-print-output](format-print-output.md) | `std::format`/`std::print`; streams move built bytes |
 | [construct-recognition](construct-recognition.md) | The AST says what a construct is; the lexer, how far it reaches |
 | [wording-base-level](wording-base-level.md) | Where a section starts is one option per unit |
+| [returns-extraction](returns-extraction.md) | `\returns-expr` renders *Returns*: `E` from one `return E;` |

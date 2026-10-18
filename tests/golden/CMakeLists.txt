@@ -1211,14 +1211,32 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_optional.hpp"
 )
 
-# `\effects-equiv` / `\returns-equiv` body extraction (design §4.2) —
-# a single-return body extracted into a Returns "Equivalent to:" block, and
-# a body whose maximal static_assert prefix derives into Mandates while the
+# `\effects-equiv` / `\returns-expr` body extraction (design §4.2) —
+# a single-return body whose expression becomes a bare Returns, and a body
+# whose maximal static_assert prefix derives into Mandates while the
 # remaining statements extract into an Effects "Equivalent to:" block.
 specgen_add_golden(
     equiv
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_equiv.hpp"
+)
+
+# `\returns-expr` (issue #143): *Returns*: `E` from a body that is one
+# `return E;`, past a static_assert run the Mandates derivation consumes, with
+# exposition-only members and dropped qualifiers rewritten as in any
+# extracted code.
+specgen_add_golden(
+    returns_expr
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_returns_expr.hpp"
+)
+
+# The bodies `\returns-expr` refuses, each an Error pointing at
+# `\effects-equiv`, and the marker's old name `\returns-equiv`.
+specgen_add_golden(
+    returns_expr_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_returns_expr_diagnostics.hpp"
 )
 
 # Preprocessing selects one branch before the AST is built. The

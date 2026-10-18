@@ -1376,10 +1376,11 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
         reject("\\verbatim-itemdecl applies to a declaration; a class definition takes \\verbatim-synopsis");
     // An extraction marker (design §4.2) reads a *function definition's* body.
     // A class has none, so lowering's placeholder EquivalentTo is never filled
+    // (`\returns-expr` leaves none, but is just as misplaced)
     // and its element would render as an "Equivalent to:" with an empty code
     // block under it -- design §9's blank box, one node over. Report it and
     // drop the placeholder, rather than print the box the Error is about.
-    if (parsed.block.markers.effects_equiv || parsed.block.markers.returns_equiv) {
+    if (parsed.block.markers.effects_equiv || parsed.block.markers.returns_expr) {
         reject("an extraction marker applies to a function definition, not to a class definition");
         std::erase_if(out.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
             return element.equivalent && element.equivalent->code.text.empty();
@@ -3576,12 +3577,18 @@ std::string fold_lines(std::string_view text) {
 // is a written template argument and not an expression of its own: walking
 // the whole ConceptSpecializationExpr reaches it, and the range keeps only its
 // text (issue #126). Whitespace at either end of the range is trimmed.
+//
+// `expos_names` is the class-local textual fallback (design §3.5) that an
+// extracted body gets too: the uses of an enclosing class's exposition-only
+// members, which a dependent member access can leave unresolved. Derived
+// conjuncts pass none, since a constraint names no class member.
 beman::specgen::ir::CodeText code_rewritten(const clang::Stmt*                               root,
                                             clang::CharSourceRange                           range,
                                             const clang::SourceManager&                      sm,
                                             const clang::LangOptions&                        lang_opts,
                                             const std::set<std::string>&                     ns_drop_set,
-                                            const std::map<const clang::Decl*, std::string>& expos_set) {
+                                            const std::map<const clang::Decl*, std::string>& expos_set,
+                                            const std::map<std::string, std::string>&        expos_names = {}) {
     static constexpr std::string_view whitespace = " \t\n\v\f\r";
     auto* const                       walked     = const_cast<clang::Stmt*>(root);
     std::string                       text       = clang::Lexer::getSourceText(range, sm, lang_opts).str();
@@ -3614,6 +3621,7 @@ beman::specgen::ir::CodeText code_rewritten(const clang::Stmt*                  
         text.replace(edit.begin - text_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
+    text = apply_expos_sentinels(std::move(text), expos_names, span_n, sentinels);
     return recover_sentinels(fold_lines(format_expr_fragment(text)), sentinels);
 }
 
@@ -3621,9 +3629,15 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
                                                  const clang::SourceManager&                      sm,
                                                  const clang::LangOptions&                        lang_opts,
                                                  const std::set<std::string>&                     ns_drop_set,
-                                                 const std::map<const clang::Decl*, std::string>& expos_set) {
-    return code_rewritten(
-        e, clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts, ns_drop_set, expos_set);
+                                                 const std::map<const clang::Decl*, std::string>& expos_set,
+                                                 const std::map<std::string, std::string>&        expos_names = {}) {
+    return code_rewritten(e,
+                          clang::CharSourceRange::getTokenRange(e->getSourceRange()),
+                          sm,
+                          lang_opts,
+                          ns_drop_set,
+                          expos_set,
+                          expos_names);
 }
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:
@@ -4009,8 +4023,8 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
     }
 }
 
-// --- \effects-equiv / \returns-equiv body extraction (design §4.2) ----------
-// An extraction marker lowers to a description element carrying an *empty*
+// --- \effects-equiv / \returns-expr body extraction (design §4.2) -----------
+// `\effects-equiv` lowers to a description element carrying an *empty*
 // EquivalentTo (lowering::append_extraction); the front end fills its code from
 // the out-of-line definition body here. Per design §5.2 ("Consumed asserts are
 // excluded from `\effects-equiv` extraction"), the prologue assertion run that
@@ -4270,11 +4284,9 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
 }
 
 // Fill every description element that carries an empty EquivalentTo (an
-// `\effects-equiv` / `\returns-equiv` slot left by lowering) from `fn`'s
-// definition body. Both markers extract the same body-after-prefix text —
-// `\returns-equiv` is authored for a single-return body, so that text is a lone
-// `return E;`. Elements whose EquivalentTo already has text (e.g. from
-// round-tripped IR) are untouched.
+// `\effects-equiv` slot left by lowering) from `fn`'s definition body.
+// Elements whose EquivalentTo already has text (e.g. from round-tripped IR)
+// are untouched.
 void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
                        beman::specgen::ir::ItemDescr&                   descr,
                        const clang::SourceManager&                      sm,
@@ -4313,6 +4325,44 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     // or caching an iterator across the assignment -- loses that guarantee.
     for (ir::DescriptionElement& el : descr.elements | std::views::filter(is_empty_slot))
         el.equivalent->code = code;
+}
+
+// The Returns element `\returns-expr` asks for (design §4.2, issue #143):
+// *Returns*: `E`, from a definition body that is one `return E;`. A Returns
+// names the value and nothing else -- whatever else the function does is an
+// effect, which *Returns*: `E` cannot say -- so any other body is an Error
+// pointing at `\effects-equiv`, whose Equivalent to: block carries all of it.
+// The static_assert run the Mandates derivation consumes (design §5.2) is
+// not part of that body: it is already a Mandates element, not an effect. A
+// local alias ahead of it stays retained source, as it does for
+// `\effects-equiv`, and so is "any other body".
+//
+// Engaged with the element, or with the Error's message.
+std::expected<beman::specgen::ir::DescriptionElement, std::string>
+derive_returns_expr(const clang::FunctionDecl*                       fn,
+                    const clang::SourceManager&                      sm,
+                    const clang::LangOptions&                        lang_opts,
+                    const std::set<std::string>&                     ns_drop_set,
+                    const std::map<const clang::Decl*, std::string>& expos_set,
+                    const std::map<std::string, std::string>&        expos_names) {
+    namespace ir     = beman::specgen::ir;
+    const auto* body = llvm::dyn_cast_or_null<clang::CompoundStmt>(fn->getBody());
+    if (body == nullptr)
+        return std::unexpected(std::string("\\returns-expr reads a definition's body, and this declaration has none"));
+
+    const MandatesPrologue prologue = mandates_prologue(body);
+    const auto*            only     = llvm::dyn_cast_or_null<clang::ReturnStmt>(prologue.extraction_first);
+    const bool             last     = body->size() != 0 && body->body_back() == prologue.extraction_first;
+    if (only == nullptr || !last || only->getRetValue() == nullptr)
+        return std::unexpected(std::string("\\returns-expr needs a body that is one `return E;` statement, whose "
+                                           "`E` is the value returned; for any other body, use \\effects-equiv"));
+
+    ir::DescriptionElement element;
+    element.kind = ir::ElementKind::Returns;
+    element.paragraphs.push_back(ir::Paragraph{
+        ir::CodeInline{expr_code_rewritten(only->getRetValue(), sm, lang_opts, ns_drop_set, expos_set, expos_names)},
+        ir::TextInline{"."}});
+    return element;
 }
 
 // Result of build_spec_item: the SpecItem it built (possibly empty), the
@@ -4563,16 +4613,29 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     // into canonical [structure.specifications] order.
     attach_derivation(derive_mandates(def, sm, lang_opts, ns_drop_set, expos_set));
 
-    // \effects-equiv / \returns-equiv (design §4.2): fill the empty
-    // EquivalentTo lowering left on the marker's element from the definition
-    // body, excluding the static_assert prefix the Mandates derivation above
-    // consumed (design §5.2). A no-op when the docblock carried no extraction
-    // marker.
+    // \effects-equiv (design §4.2): fill the empty EquivalentTo lowering left
+    // on the marker's element from the definition body, excluding the
+    // static_assert prefix the Mandates derivation above consumed (design
+    // §5.2). A no-op when the docblock carried no extraction marker.
     // Expos uses (design §3.5/§4.1): within this class's own fragments,
     // uses of its exposition-only members render as \exposid — in the extracted
     // equiv body, and in backticked prose.
     const std::map<std::string, std::string> expos_names = expos_spellings(enclosing_record(def), expos_set);
     fill_equiv_bodies(def, attached.item.descr, sm, lang_opts, expos_names, expos_set, ns_drop_set, skipped);
+    // \returns-expr builds its Returns element from the same body, with the
+    // same expos rewriting.
+    if (attached.directives.returns_expr) {
+        if (auto returns = derive_returns_expr(def, sm, lang_opts, ns_drop_set, expos_set, expos_names)) {
+            attached.item.descr.elements.push_back(std::move(*returns));
+            ir::canonicalize(attached.item.descr);
+        } else {
+            attached.diagnostics.push_back(beman::specgen::document_build::Diagnostic{
+                beman::specgen::Severity::Error,
+                attached.grouping_line,
+                std::move(returns.error()),
+                diagnostic_file_name(sm, sm.getFileID(def->getBeginLoc()))});
+        }
+    }
     rewrite_prose_expos(attached.item.descr, expos_names);
 
     return attached;
@@ -4901,7 +4964,7 @@ declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManage
     const bool asks_for_wording = !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl ||
                                   markers.verbatim_synopsis || markers.describe || markers.also || markers.group_id ||
                                   markers.constraints_in_decl || markers.impdef || markers.at_anchor ||
-                                  markers.effects_equiv || markers.returns_equiv;
+                                  markers.effects_equiv || markers.returns_expr;
 
     std::vector<beman::specgen::document_build::Diagnostic> out = docblock_diagnostics(rc, *start, parsed.diags, sm);
     if (asks_for_wording)
@@ -5895,7 +5958,7 @@ collect_foreign_declarations(const std::vector<clang::Decl*>&                 de
 // in non-extracted bodies". Every other validation rule reads something the IR
 // already carries or something the front end can add beside it; this one
 // cannot, and not by omission — a body with no `\effects-equiv` /
-// `\returns-equiv` marker is *by construction* the code that never becomes
+// `\returns-expr` marker is *by construction* the code that never becomes
 // wording, so no node holds it and no amount of Tier-A reading finds it. What
 // the front end records here is exactly that absence: the class members such a
 // body names, for a validator that then asks the roster whether the reader

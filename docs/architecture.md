@@ -454,10 +454,13 @@ All three backends render authored itemizations, prose references, and tables.
   the remaining conditional-directive lines are omitted, leaving only the branch Clang
   selected and no orphan `#elif`, `#else`, or `#endif`, while ordinary active comments and
   statements remain source-authored.
-- `\returns-equiv` — *Returns:* from a single-return body's expression.
+- `\returns-expr` — *Returns*: `E` from a body that is exactly one `return E;` after the
+  consumed static_assert run, `E` rewritten like extracted code. Any other body is an Error
+  pointing at `\effects-equiv`, and the old spelling `\returns-equiv` is an Error naming this
+  one (decision [returns-extraction](decisions/returns-extraction.md)).
 
 Extracted bodies use the same three-way comment vocabulary as everything else (§1): specgen
-markup and Doxygen comments are removed from `*-equiv` code; plain draft-form comments
+markup and Doxygen comments are removed from `\effects-equiv` code; plain draft-form comments
 survive. A standalone removed comment takes its newline so it leaves no blank artifact, while
 a trailing removed comment keeps the statement and its newline. Comment-like bytes inside
 string and raw-string literals are not comments and remain verbatim.
