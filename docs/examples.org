@@ -11,11 +11,11 @@
 #+end_export
 
 Every command below is a script in [[file:../examples/cli][=examples/cli/=]], and every output below is what that script printed.
-Both are transcluded from the repository, so neither is retyped here and neither can drift from the other without a test noticing.
+Both are transcluded from the repository, so neither is retyped here, and neither can drift from the other without a test detecting it.
 
-To run them you need the binary.
-=make install-release= puts it at =.install/bin/specgen=, which is where the scripts look; set =SPECGEN= to point them somewhere else, such as a build tree.
-There is no build of specgen without the Clang front end — the executable is only produced when =BEMAN_SPECGEN_ENABLE_CLANG= is on — so every command here works on any binary you have.
+Running the scripts requires the binary.
+=make install-release= installs it at =.install/bin/specgen=, which is where the scripts look for it; =SPECGEN= names another location, such as a build tree.
+Every build of specgen includes the Clang front end, so every command here works with any binary.
 
 #+begin_src sh
 make install-release          # or: export SPECGEN=<build tree>/tools/specgen/specgen
@@ -23,8 +23,12 @@ examples/cli/run-all.sh       # re-capture everything shown below
 #+end_src
 
 =run-all.sh= rewrites the checked-in output, and =ctest -R examples.= checks it.
-Most of those checks compare a captured file against the golden suite, which already pins that golden to what specgen printed; the rest re-run a script and compare what comes out.
-So the output here is not an illustration of what specgen does. It is what specgen did.
+Most of those checks compare a captured file against the golden suite; the remainder re-run a script and compare its output.
+The output shown here is therefore not an illustration of what specgen does, but a record of what it did.
+
+The ordinary way to use specgen is a single =generate= command, which parses a header and renders its wording in one process.
+Several examples instead use =generate --emit-ir= and =render --from-ir=, which write and read specgen's JSON intermediate representation.
+That route is a debugging aid rather than an authoring workflow, but it lets an example render a fixed, checked-in IR fixture from the golden suite, so that only the option under demonstration varies.
 
 * CLI Coverage
 :PROPERTIES:
@@ -34,18 +38,18 @@ So the output here is not an illustration of what specgen does. It is what specg
 | Command or option | Example section |
 |-------------------+-----------------|
 | =--help= | General command information |
-| =generate <header>= (single pass) | Minimal header to IR |
-| =generate --emit-ir= | Minimal header to IR |
-| =--no-compile-commands= | Minimal header to IR |
-| =-o=, =--output= | Minimal header to IR, Larger header example |
+| =generate <header>= | Minimal header |
+| =generate --emit-ir= | Minimal header |
+| =--no-compile-commands= | Minimal header |
+| =-o=, =--output= | Minimal header, Larger header example |
 | =-- <clang args>...= | Explicit include path |
 | =--compile-commands <dir>= | Explicit include path |
 | =dump-decls= | Declaration interleave |
-| =render --from-ir <file>= | Render-only IR examples |
-| =render --from-ir -= | Minimal header to IR |
-| =--backend latex=, =mpark=, =org= | Render-only IR examples |
+| =render --from-ir <file>= | The three backends |
+| =render --from-ir -= | Minimal header |
+| =--backend latex=, =mpark=, =org= | The three backends |
 | =--validate= | Validation |
-| =--paper= | Mpark paper mode |
+| =--paper= | Paper mode |
 | =--split=, =--root= | Fragment output |
 | =generate <header>...= (a paper) | A paper of several headers |
 | =-o= with =--split= | A paper of several headers |
@@ -58,42 +62,41 @@ So the output here is not an illustration of what specgen does. It is what specg
 
 #+transclude: [[file:../examples/cli/10-help.sh]] :src sh
 
-Every command takes =--help=, and all four print the same usage text, so one of them is shown here.
+Every command accepts =--help=, and all four invocations print the same usage text, so only one is shown here.
 
 #+transclude: [[file:../examples/cli/output/10-help/specgen-help.txt]] :src text
 
-* Minimal Header To IR
+* Minimal Header
 :PROPERTIES:
-:CUSTOM_ID: minimal-header-to-ir
+:CUSTOM_ID: minimal-header
 :END:
 
-The smallest useful header example is =spec_widget.hpp=.
+The smallest useful header is =spec_widget.hpp=.
 It has class synopsis groups, two sections, attached out-of-line definitions, and ordinary description elements.
-Small, but enough.
 
 #+transclude: [[file:../tests/corpus/spec_widget.hpp]] :src cpp
 
 #+transclude: [[file:../examples/cli/20-widget-ir.sh]] :src sh
 
-The IR lands in =widget.json=; it is the same document the golden suite pins, so it is checked rather than shown.
+The first command writes the IR to =widget.json=. It is the same document the golden suite pins, so it is checked rather than shown.
 
-The second command is the whole pipeline in one process.
-=generate= without =--emit-ir= runs the front end and a backend in a single pass: the IR is built, validated if asked, rendered, and never written down.
+The second command is the ordinary use of specgen.
+=generate= without =--emit-ir= runs the front end and a backend in a single process: the document is built, validated if requested, and rendered, and the IR is never written.
 
 #+transclude: [[file:../examples/cli/output/20-widget-ir/widget.tex]] :src latex
 
-The third command is the same wording reached the long way, as two processes with the IR passed between them on a pipe.
-It is byte for byte the file above — =render= and =generate= share the half of the driver that turns a document into wording, so there is nowhere for the two routes to differ:
+The third command produces the same wording by the debugging route, as two processes with the IR passed between them on a pipe.
+The result is identical to the file above, byte for byte, because =render= and =generate= share the part of the driver that turns a document into wording:
 
 #+transclude: [[file:../examples/cli/output/20-widget-ir/widget-piped.tex]] :src latex
 
-* Render-Only IR Examples
+* The Three Backends
 :PROPERTIES:
-:CUSTOM_ID: render-only-ir-examples
+:CUSTOM_ID: the-three-backends
 :END:
 
-These render the small hand-written =value_or= IR fixture.
-It is useful for backend comparison because the input is identical and only the serializer changes.
+These commands render the small hand-written =value_or= IR fixture through each backend.
+Because the input is identical, the outputs differ only in the syntax each backend writes.
 
 #+transclude: [[file:../tests/golden/value_or/input.json]] :src json
 
@@ -125,7 +128,7 @@ for complete clause subtrees.
 
 #+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.md]] :src markdown
 
-The same IR in org:
+The same input in org:
 
 #+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.org]] :src org
 
@@ -135,16 +138,16 @@ The same IR in org:
 :END:
 
 =--split= writes one file per top-level stable-name section and prints a manifest in document order.
-The same IR goes through all three backends; only the extension and the rendered syntax differ.
-Consumers should use the manifest, in document order.
+The same input goes through all three backends; only the extensions and the rendered syntax differ.
+Consumers should rely on the manifest, which lists the fragments in document order.
 
 #+transclude: [[file:../examples/cli/50-fragments.sh]] :src sh
 
-The org run names its root fragment explicitly, which is why its manifest opens with =optional.syn.org= where the other two derive =optional= from the sections' common prefix:
+The org run names its root fragment explicitly, which is why its manifest begins with =optional.syn.org=, whereas the other two derive =optional= from the sections' common prefix:
 
 #+transclude: [[file:../examples/cli/output/50-fragments/org/manifest]] :src text
 
-One fragment from each backend, the same section three ways:
+One fragment from each backend, showing the same section three ways:
 
 #+transclude: [[file:../examples/cli/output/50-fragments/latex/wording/optional.ctor.tex]] :src latex
 
@@ -158,7 +161,8 @@ One fragment from each backend, the same section three ways:
 :END:
 
 A paper proposing several headers is several specgen documents and one invocation.
-=generate= takes one header per document, validates across the union of their documented names — so a name specified by a sibling document is not foreign — and writes the assembled clause, the per-clause fragments, or both.
+=generate= takes one header per document and validates across the union of their documented names, so a name specified by a sibling document is not foreign.
+It writes the assembled clause, the per-clause fragments, or both.
 
 #+transclude: [[file:../examples/cli/55-paper.sh]] :src sh
 
@@ -166,12 +170,13 @@ A paper proposing several headers is several specgen documents and one invocatio
 
 #+transclude: [[file:../examples/cli/output/55-paper/manifest]] :src text
 
-=-o= names the whole, which is those same pieces in that same order with the fragment boundaries left out.
-That is not a coincidence to be relied on quietly: =golden.paper_whole.is_fragments= pins it, because a paper that assembles its clause from fragments and one that renders it whole have to agree.
+=-o= names the whole, which consists of the same pieces in the same order without the fragment boundaries.
+=golden.paper_whole.is_fragments= verifies this, because a paper that assembles its clause from fragments and one that renders it whole must agree.
 
 =--depfile= writes what make needs to know to rebuild any of it.
-The prerequisites are every file the parses read — including =include/support/spec_paper_traits.hpp=, which neither header names on the command line and which no rendered wording mentions, and which is exactly the edge that matters: a docblock in it changes the generated clause, so a paper that did not depend on it would go stale in silence.
-The empty rule per prerequisite is =-MP=: delete or rename a header and the next build regenerates rather than failing on a prerequisite the stale fragment still remembers.
+The prerequisites are every file the parses read.
+They include =include/support/spec_paper_traits.hpp=, which neither header names on the command line and no rendered wording mentions; it is nevertheless the dependency that matters most, because a docblock in it changes the generated clause, and a paper that did not depend on it would become stale without notice.
+The empty rule per prerequisite corresponds to =-MP=: when a header is deleted or renamed, the next build regenerates the wording rather than failing on a prerequisite that no longer exists.
 
 #+transclude: [[file:../examples/cli/output/55-paper/wording.d]] :src makefile
 
@@ -180,16 +185,16 @@ The empty rule per prerequisite is =-MP=: delete or rename a header and the next
 :CUSTOM_ID: validation
 :END:
 
-Validators run in the normal render path.
+=--validate= runs the validators before rendering. These commands render IR fixtures; =generate --validate= behaves identically.
 
 #+transclude: [[file:../examples/cli/60-validate.sh]] :src sh
 
-A clean document renders as usual and says nothing.
-A finding at error severity is reported on standard error, the render is skipped, and the exit status is 1 — which is why the script has to catch it rather than let it abort:
+A clean document renders as usual and prints nothing further.
+A finding at error severity is reported on standard error, the render is skipped, and the exit status is 1, which is why the script must catch the failure rather than let it abort:
 
 #+transclude: [[file:../examples/cli/output/60-validate/coverage.diag]] :src text
 
-=generate= reports its own findings while still emitting IR for the header it parsed:
+=generate= reports findings about the docblock markup itself while still producing output for the header it parsed:
 
 #+transclude: [[file:../examples/cli/65-diagnostics.sh]] :src sh
 
@@ -200,20 +205,19 @@ A finding at error severity is reported on standard error, the render is skipped
 :CUSTOM_ID: explicit-include-path
 :END:
 
-A header that includes another needs an include directory, and there are two ways to say so: after a bare =--=, or in a compilation database.
+A header that includes another requires an include directory, which may be supplied in two ways: after a bare =--=, or in a compilation database.
 
 #+transclude: [[file:../examples/cli/70-include-path.sh]] :src sh
 
-Both produce the same IR, byte for byte, and both are compared against the same golden.
-A difference between them would be a real difference rather than two files that merely happen to agree.
+Both produce the same IR, byte for byte, and both are compared against the same golden file, so any difference between them is a genuine one.
 
 * Declaration Interleave
 :PROPERTIES:
 :CUSTOM_ID: declaration-interleave
 :END:
 
-=dump-decls= prints the declaration/comment event stream the front end builds the document from.
-Useful when a section is empty and should not be.
+=dump-decls= prints the sequence of declarations and comments from which the front end builds the document.
+It is the first tool to consult when a section is unexpectedly empty.
 
 #+transclude: [[file:../examples/cli/80-dump-decls.sh]] :src sh
 
@@ -226,13 +230,13 @@ Useful when a section is empty and should not be.
 
 =spec_optional.hpp= is the acid-test-shaped corpus header.
 It exercises the realistic document path: sections, overload grouping, derived constraints and mandates, extracted equivalent-to bodies, exposition-only state, hidden friends, =\seebelow=, and backend differences.
-Most bugs show up here first.
+Most defects appear here first.
 
 #+transclude: [[file:../tests/corpus/spec_optional.hpp]] :src cpp
 
 #+transclude: [[file:../examples/cli/90-optional.sh]] :src sh
 
-The markdown below is rendered from the IR the command above generated, not from a checked-in fixture — and both halves match their goldens, which is what says the generated IR and the checked-in IR are the same bytes.
+The markdown below is rendered from the IR that the command above generated, not from a checked-in fixture. Both the IR and the markdown match their golden files, which establishes that the generated IR and the checked-in IR are identical.
 
 #+transclude: [[file:../examples/cli/output/90-optional/optional.md]] :src markdown
 

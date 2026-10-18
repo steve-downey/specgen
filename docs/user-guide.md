@@ -3,23 +3,23 @@
 # specgen user guide
 
 `beman.specgen` generates C++ standard-library specification wording from a
-structured header. `generate` reads declarations with Clang and lowers them to
-the tool's JSON intermediate representation (IR); `render` translates that IR
-to draft LaTeX, mpark/wg21 markdown, or wg21org org. The executable always
-builds with the Clang front end, but rendering saved IR invokes no compiler at
-run time.
+structured header. Its `generate` command parses the header with Clang, reads
+the specgen markup attached to the declarations, and renders the wording as
+draft LaTeX, mpark/wg21 markdown, or wg21org org.
 
-This guide starts with one small header, then covers the authoring and paper
-integration workflows that have proved useful in `beman.transcode` and
-`beman.transpose`. The remaining sections are the command and markup reference.
+This guide begins with one small header and then describes the authoring and
+paper-integration workflows that have proved useful in `beman.transcode` and
+`beman.transpose`. The remaining sections are the reference for the markup and
+the commands. The final sections describe the tool's debugging aids, including
+its JSON intermediate representation.
 
 ## Requirements and build
 
-The quickest way to run `specgen` is the prebuilt binary that every push to
-`main` publishes as a GitHub Release. It needs glibc 2.34 or newer (Ubuntu
+The quickest way to obtain `specgen` is the prebuilt binary that every push to
+`main` publishes as a GitHub Release. It requires glibc 2.34 or newer (Ubuntu
 22.04, Debian 12, Fedora 35, RHEL 9 and their derivatives, or later), an
-x86-64-v2 processor, and the host's `g++` for headers that include the
-standard library, and nothing else:
+x86-64-v2 processor, and, for headers that include the standard library, the
+host's `g++`. It requires nothing else:
 
 ```sh
 curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz | tar -xz
@@ -27,11 +27,12 @@ export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
 specgen --version
 ```
 
-The rest of this section is about building from source. The project requires GCC 16 with C++26 libstdc++, CMake 3.30 or later, `uv`,
-and the LLVM/Clang 23.1 development packages. The LLVM version is exact, not a
-minimum: the Clang C++ API is not stable between releases.
+The remainder of this section concerns building from source. A source build
+requires GCC 16 with its C++26 libstdc++, CMake 3.30 or later, `uv`, and the
+LLVM/Clang 23.1 development packages. The LLVM version is exact rather than a
+minimum, because the Clang C++ API is not stable between releases.
 
-The normal build includes the front end, IR, and all renderers:
+The standard build is:
 
 ```sh
 uv run cmake --preset gcc-release
@@ -39,61 +40,61 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-`find_package` asks for the version named by `BEMAN_SPECGEN_LLVM_VERSION`
-(`23.1` by default), even when a newer LLVM is installed. Pass
-`-DClang_DIR=<prefix>/lib/cmake/clang` for an installation outside the normal
-search path. Moving the pin with
-`-DBEMAN_SPECGEN_LLVM_VERSION=<major>.<minor>` is a deliberate source-porting
+`find_package` requests the version named by `BEMAN_SPECGEN_LLVM_VERSION`
+(`23.1` by default), even when a newer LLVM is installed. An installation
+outside the normal search path is named with
+`-DClang_DIR=<prefix>/lib/cmake/clang`. Moving the pin with
+`-DBEMAN_SPECGEN_LLVM_VERSION=<major>.<minor>` is a deliberate porting
 operation, not a compatibility promise. There is no build of specgen without
-the front end. The repository also supports its day-to-day Makefile build with
-`make TOOLCHAIN=gcc-16 test`.
+the Clang front end. The repository also provides a Makefile build for daily
+work: `make TOOLCHAIN=gcc-16 test`.
 
 The preset build writes the executable to
 `build/gcc-release/tools/specgen/specgen`; the Makefile build writes a
 configuration-specific executable below `.build/build-gcc-16/tools/specgen/`.
-Add the selected directory to `PATH` or invoke the executable there.
+Either may be invoked in place or placed on `PATH`.
 
-`make install` installs the executable as `.install/bin/specgen` (with the
-library, headers and CMake package beside it), and that path is the one the
-examples assume. `PREFIX` selects a different prefix. Installing from
-the preset build tree needs an explicit `--prefix`, because that tree is
-configured with `/usr/local`.
+`make install` installs the executable as `.install/bin/specgen`, together with
+the library, headers, and CMake package, and that is the path the examples
+assume. `PREFIX` selects a different prefix. Installing from the preset build
+tree requires an explicit `--prefix`, because that tree is configured with
+`/usr/local`.
 
 ### What `specgen` needs when it runs
 
 `specgen` carries Clang's builtin headers (`<stddef.h>`, `<stdarg.h>`, and the
-rest of Clang's resource directory) beside itself, in `lib/clang/23/include`
-next to the `bin/` that holds the executable, and finds them from its own
-location. The build tree and every install lay that directory out; moving the
-executable away from it loses them.
+rest of Clang's resource directory) in `lib/clang/23/include`, beside the
+`bin/` directory that holds the executable, and locates them relative to its
+own path. The preset build tree and every installation provide that layout;
+an executable moved away from it loses those headers.
 
-It does **not** carry a C++ standard library. A header that includes nothing,
-or only Clang's builtin headers, needs nothing else on the machine. A header
-that includes a standard library header such as `<optional>` is parsed against
-the host's own libstdc++, found the way `clang++` finds it: the newest GCC
-installation on the machine. That is deliberate, since a paper's wording should
-come from the same standard library its implementation builds and tests with.
-On a machine with several GCC installations, pick one in the `--` tail:
+`specgen` does **not** carry a C++ standard library. A header that includes
+nothing, or only Clang's builtin headers, needs nothing further. A header that
+includes a standard library header such as `<optional>` is parsed against the
+host's libstdc++, located as `clang++` would locate it: in the newest GCC
+installation on the machine. This is deliberate. A paper's wording should be
+generated against the same standard library that its implementation is built
+and tested with. On a machine with several GCC installations, select one in the
+`--` argument tail:
 
 ```sh
 specgen generate header.hpp -- --gcc-install-dir=/usr/lib/gcc/x86_64-linux-gnu/16
 specgen generate header.hpp -- --gcc-toolchain=/opt/gcc-16
 ```
 
-Clang's search covers the distribution's own GCC (under `/usr/lib/gcc`) but
-not Red Hat's GCC Toolsets under `/opt/rh`. On a RHEL-family machine whose C++
-compiler is a `gcc-toolset-<N>`, name it, using the toolset's own `g++` to find
-the directory:
+Clang's search covers the distribution's own GCC (under `/usr/lib/gcc`) but not
+Red Hat's GCC Toolsets under `/opt/rh`. On a RHEL-family machine whose C++
+compiler is a `gcc-toolset-<N>`, name the toolset explicitly, using its own
+`g++` to find the directory:
 
 ```sh
 specgen generate header.hpp -- \
   --gcc-install-dir="$(dirname "$(/opt/rh/gcc-toolset-16/root/usr/bin/g++ -print-libgcc-file-name)")"
 ```
 
-A release binary is stripped, so its crash report shows offsets rather than
-function names. The same release's `specgen.debug.xz` asset turns them back
-into names: decompress it and run `llvm-symbolizer --obj=specgen.debug
-<offset>`.
+A release binary is stripped, so a crash report from it shows offsets rather
+than function names. The same release's `specgen.debug.xz` asset restores the
+names: decompress it and run `llvm-symbolizer --obj=specgen.debug <offset>`.
 
 ## Start with one header
 
@@ -133,292 +134,247 @@ bool widget::empty() const { return value_ == 0; }
 } // namespace demo
 ```
 
-The class body supplies the synopsis. Its `\ref` comments say which clause
-describes each member. The definitions supply both clause order and the
-wording attached to each declaration. specgen takes code spelling from the
-source tokens; it does not pretty-print the AST back into a guessed interface.
-The header's own namespace is dropped, and each synopsis is enclosed in
+The class body supplies the synopsis, and its `\ref` comments state which
+clause describes each member. The definitions supply both the clause order and
+the wording attached to each declaration. specgen takes code spelling from the
+source tokens; it does not reconstruct an interface by printing the AST. The
+header's own namespace is dropped, and each synopsis is enclosed in
 `namespace std { … }`, as the draft writes it.
 
 Render the complete document while editing:
 
 ```sh
-specgen generate widget.hpp --backend mpark --validate \
-  --no-compile-commands -- -std=c++2c
+specgen generate widget.hpp --backend mpark --validate --no-compile-commands
 ```
 
 The complete checked example is
 [`tests/corpus/spec_widget.hpp`](../tests/corpus/spec_widget.hpp). For a real
-library, replace the explicit arguments with the library's compilation
-database or a deterministic argument list containing its include and generated
-header directories.
+library, omit `--no-compile-commands` so that specgen uses the library's
+compilation database, or supply a fixed argument list after `--` that names its
+include and generated-header directories.
 
 ## The authoring loop
 
-Start with document structure, then fill in entities. This avoids discovering
-late that clause boundaries and fragment boundaries disagree:
+Establish the document structure first and the entities second. This order
+prevents the late discovery that clause boundaries and fragment boundaries
+disagree:
 
 1. Choose the document root. A single implementation header can be one
-   document. An umbrella header can gather the public headers included inside
-   its `.syn` region; includes outside that region remain implementation.
+   document. An umbrella header can gather the public headers it includes
+   inside its `.syn` region; includes outside that region remain
+   implementation.
 2. Write the `\rSec` outline in paper order. The shallowest sections become
    separate files under `--split`; deeper sections remain nested in their
    parent's fragment.
-3. Put `\ref` group headers in class synopses, or use `\at` where source order
+3. Place `\ref` group headers in class synopses, or use `\at` where source order
    does not express the intended clause.
-4. Add docblocks to definitions and mark every declaration that is deliberately
+4. Add docblocks to definitions, and mark every declaration that is deliberately
    not an ordinary specification entity with `\expos`, `\omit`, or `\merge`.
-5. Run `generate --validate` frequently. Read standard error as well as the
-   exit status: docblock errors are findings on usable input and do not by
-   themselves stop IR emission.
-6. Inspect all three backends before settling taste-sensitive phrasing. They
-   share semantics, but tables, code spans, headings, and paragraph framing are
-   necessarily visible in different syntax.
+5. Run `generate --validate` frequently. Read standard error as well as the exit
+   status: docblock errors are findings about usable input and do not by
+   themselves stop the output.
+6. Inspect all three backends before settling taste-sensitive phrasing. The
+   backends share semantics, but tables, code spans, headings, and paragraph
+   framing necessarily appear in different syntax.
 
-Derivation is most useful when the implementation already says exactly what
-the specification should say. Prefer `\returns-equiv`, `\effects-equiv`, and
-derived constraints or mandates in that case. Use authored prose when exposing
-the body would leak implementation strategy, when the specification is more
-abstract than the implementation, or when the derived phrasing is simply the
-wrong contract.
+Derivation is most useful when the implementation already states exactly what
+the specification should state. In that case, prefer `\returns-equiv`,
+`\effects-equiv`, and derived constraints or mandates. Use authored prose when
+exposing the body would reveal an implementation strategy, when the
+specification is more abstract than the implementation, or when the derived
+phrasing expresses the wrong contract.
 
-## Generate and render
+## Generating wording
 
-The shortest end-to-end invocation is one command. `generate` parses the
-header, builds the document, validates it, and renders it in a single pass; the
-IR stays in memory and is never written anywhere:
+`generate` parses the header, builds the document, optionally validates it, and
+renders it, all in one process:
 
 ```sh
 specgen generate header.hpp --validate --backend latex -o wording.tex -- -Iinclude
 ```
 
-The same work splits into two commands when the IR itself is wanted — to store
-it, to inspect it, or to render it later on a machine with no Clang:
-
-```sh
-specgen generate --emit-ir header.hpp -o wording.json -- -Iinclude
-specgen render --from-ir wording.json --validate --backend latex -o wording.tex
-```
-
-Standard input can connect those two without a temporary file:
-
-```sh
-specgen generate --emit-ir header.hpp -- -Iinclude |
-  specgen render --from-ir - --validate --backend latex
-```
-
-All three produce the same wording, byte for byte; the golden suite's
-`.singlepass` cases pin that for every corpus header.
-
-Its supported generation path is:
+Its options are:
 
 ```text
-specgen generate <header>... [--emit-ir]
+specgen generate <header>...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
                  [--split <dir>] [--root <name>]
-                 [-o <file>]
+                 [-o|--output <file>]
                  [--depfile <file>] [--dep-target <name>]
                  [--compile-commands <dir> | --no-compile-commands]
                  [-- <clang arguments>...]
 ```
 
-Without `--emit-ir`, `generate` renders wording, and every option above that
-steers a backend means exactly what it means for `render`. `--emit-ir` emits
-the complete JSON document instead and stops before the backends, so it rejects
-those options rather than ignoring them. `-o` and
-`--output` name the destination either way; otherwise output goes to standard
-output. With no header at all, `generate` parses a stock snippet as a
-front-end link probe and produces no wording.
-
-Several headers are one paper, one document each — see
-[A paper proposing several headers](#a-paper-proposing-several-headers) below.
-`--root` then repeats, pairing with them in order, and `-o` alongside `--split`
-writes both the assembled whole and the per-clause fragments. `--emit-ir` is
-the exception: the IR format holds one document per file, so it takes one
-header.
-
-`--depfile <file>` writes a Makefile dependency fragment naming what the run
-produced and every non-system file its parses read, with an empty rule per
-prerequisite so a deleted header rebuilds rather than erroring.
-`--dep-target <name>` repeats and replaces the target list, for a build whose
-real target is a stamp file or an installed copy rather than a path specgen was
-handed.
-
-Compilation arguments have this precedence:
-
-1. Everything after the first bare `--` is passed to Clang verbatim.
-2. `--compile-commands <dir>` reads the entry for the header from that
-   directory's `compile_commands.json`.
-3. By default, specgen searches above the header for a compilation database.
-4. If none of those supplies arguments, the front end uses its fixed defaults.
-
-`--no-compile-commands` disables only the default search. It has no effect when
-an explicit directory or a `--` argument tail already takes precedence. When a
-database supplies flags, specgen reports the selected entry's working directory
-on standard error.
-
-Use `dump-decls` to inspect the main-file declaration/comment interleave used by
-the front end:
-
-```sh
-specgen dump-decls header.hpp -- -Iinclude
-specgen dump-decls header.hpp --compile-commands build
-```
-
-It accepts the same compilation-database options and `--` tail as `generate`.
-This is a debugging command: when Clang reports a parse error, it warns and
-prints the possibly incomplete interleave instead of rejecting it.
-
-## JSON IR and rendering
-
-The JSON file is the boundary between parsing and presentation. It can be
-stored, inspected, read back, and rendered repeatedly without Clang. A basic
-round trip is:
-
-```sh
-specgen generate --emit-ir header.hpp -o wording.json -- -Iinclude
-specgen render --from-ir wording.json --backend latex -o wording.tex
-specgen render --from-ir wording.json --backend mpark -o wording.md
-specgen render --from-ir wording.json --backend org -o wording.org
-```
-
-`render` accepts these options:
-
-```text
-specgen render --from-ir <file|-> [--from-ir <file>...]
-               [--backend latex|mpark|org]
-               [--validate]
-               [--paper] [--new-root <name>]
-               [--base-heading-level <n>] [--base-section-depth <n>]
-               [-o|--output <file>]
-               [--split <dir>] [--root <name>...]
-               [--depfile <file>] [--dep-target <name>]
-```
-
-`--from-ir` may repeat, once per document of one paper (see
-[the multi-header section](#a-paper-proposing-several-headers) below):
-`--validate` then runs across the union of the documents' documented names,
-and `--root`, when given at all, repeats too, pairing with each `--from-ir` in
-order. Several inputs render as one paper — joined in order into a single
-output, split into per-clause fragments, or both.
-
-`--depfile` here names the IR files the render read, which is the second edge
-of a two-stage build whose `generate --emit-ir` step wrote the first.
-
 The default backend is `latex`. The `mpark` backend emits pandoc markdown for
 the mpark/wg21 framework, and the `org` backend emits org for the wg21org
-exporter. With either paper backend, `--paper` marks the complete fragment as
-added and numbers its paragraphs `x`, `x+1`, and so on. Mpark uses an
-editing-instruction `::: add` div; org uses `addedblock` around rootless
-material and `WG21_CHANGE=add` on generated clause roots.
+exporter. `-o` and `--output` name the destination; without either, the wording
+is written to standard output. With no header at all, `generate` parses a stock
+snippet as a check that the front end is linked and working, reports the
+result on standard error, and produces no wording; rendering options are
+rejected in that form.
+
+With either paper backend, `--paper` marks the complete fragment as added
+wording and numbers its paragraphs `x`, `x+1`, and so on. The mpark backend
+uses an editing-instruction `::: add` div; the org backend uses `addedblock`
+around material outside any clause and `WG21_CHANGE=add` on generated clause
+roots. The `latex` backend rejects `--paper`. Under `--split`, each fragment
+is a document in its own right, so each carries its own framing and numbers
+its paragraphs from `x`. Use `--paper` when the whole fragment is an addition;
+omit it when the surrounding paper supplies that framing or when ordinary
+wording blocks are wanted.
+
+Several headers form one paper, with one document per header; see
+[A paper proposing several headers](#a-paper-proposing-several-headers) below.
+
+### Fragments
 
 `--split <dir>` writes one file per top-level section and prints an ordered
-manifest of written paths to standard output. File stems are stable names and
-extensions follow the backend: `.tex`, `.md`, or `.org`. Nodes outside every
+manifest of the written paths to standard output. File stems are stable names,
+and extensions follow the backend: `.tex`, `.md`, or `.org`. Nodes outside every
 section go into a root fragment. Its name is normally the longest common dotted
-prefix of the section names; use `--root <name>` when it cannot be derived or
-must be overridden. `--root` is valid only with `--split`.
+prefix of the section names; `--root <name>` supplies it when it cannot be
+derived or must be overridden. `--root` is valid only with `--split`.
 
-`--split` may be combined with `--output`, and then writes both views of the
-render: the fragments into the directory, and the whole — for a paper, every
-document joined in order — to the file. `--split` on its own writes only the
-fragments; the manifest, not the wording, is what goes to standard output.
+`--split` may be combined with `--output`, and the run then writes both views of
+the render: the fragments into the directory, and the whole (for a paper, every
+document joined in order) into the file. `--split` alone writes only the
+fragments, and standard output receives the manifest rather than the wording.
 
-Splitting does not delete files left by an earlier run. Consumers should use
-the manifest, in document order, to reconcile the output directory.
+Splitting does not delete files left by an earlier run. Consumers should
+reconcile the output directory against the manifest, in document order.
 
 ### Where a top-level section starts
 
-A fragment's sections have to sit under the heading in your paper that
-introduces them, and where that is depends on how your paper is written. Two
-options say so, one per unit, because the backends do not measure the same
+A fragment's sections must sit beneath the heading in the paper that introduces
+them, and the correct level depends on how the paper is written. Two options
+specify it, one per unit, because the backends do not measure the same
 quantity:
 
 - `--base-heading-level <n>` is the markdown or org heading level of a
-  top-level section, for the `mpark` and `org` backends. It is `2` by default,
-  which is the level the mpark/wg21 examples write their own sections at. A
-  paper that writes its sections at `##` and introduces the wording with a
-  `##` heading wants `3` here, so the generated clauses become children of that
-  heading rather than siblings of it.
+  top-level section, for the `mpark` and `org` backends. Its default is `2`, the
+  level at which the mpark/wg21 examples write their own sections. A paper that
+  writes its sections at `##` and introduces the wording with a `##` heading
+  requires `3`, so that the generated clauses become children of that heading
+  rather than its siblings.
 - `--base-section-depth <n>` is the `\rSec` depth of a top-level section, for
-  the `latex` backend. It is `3` by default, the draft's own library split
-  granularity.
+  the `latex` backend. Its default is `3`, the library granularity at which the
+  draft itself is split.
 
-Each is rejected on the backends that do not measure in its unit, rather than
-ignored. Both take a whole number of at least 1; under `mpark` the level may
-not exceed 6, markdown's deepest heading. The base moves only where the
-outermost section sits: nested sections still descend one step at a time from
-it, and `--split` starts every fragment at the same base a whole render would.
+Each option is rejected, rather than ignored, by the backend that does not
+measure in its unit. Both take a whole number of at least 1; under `mpark` the
+level may not exceed 6, the deepest markdown heading. The base moves only the
+outermost section: nested sections still descend one step at a time from it,
+and `--split` starts every fragment at the same base as a whole render.
 
 ### Proposed stable names in mpark and wg21org papers
 
 The mpark/wg21 framework's `.sref` class looks stable names up in the current
-working draft. A paper's newly proposed clauses are not there yet, so leaving
+working draft. A paper's newly proposed clauses are not yet there, so leaving
 `.sref` on them produces warnings and links to pages that do not exist. Name
 each proposed stable-name subtree with `--new-root`:
 
 ```sh
-specgen render --from-ir wording.json --backend mpark \
-  --new-root transcode --new-root null.term
+specgen generate include/beman/transcode/transcode.hpp --backend mpark \
+  --new-root transcode --new-root null.term -- -Iinclude
 ```
 
-The option applies to the `mpark` and `org` backends and is repeatable. For
-mpark it removes `.sref` from an exact root and every stable name below it,
-whether the name occurs on a heading or in a cross-reference. For org it makes
-references beneath those roots internal `CUSTOM_ID` links; references to all
-other stable names link to the current working draft at `eel.is/c++draft`.
-This is deliberately narrower than treating every stable name in a paper as
-new wording.
+The option applies to the `mpark` and `org` backends, is rejected by `latex`,
+and may be repeated. For mpark, it removes `.sref` from each named root and from every stable name
+beneath it, whether the name occurs on a heading or in a cross-reference. For
+org, it makes references beneath those roots internal `CUSTOM_ID` links;
+references to every other stable name link to the current working draft at
+`eel.is/c++draft`. This is deliberately narrower than treating every stable
+name in a paper as new wording.
 
-### Integrating generated fragments into a paper
+### Compilation arguments
+
+Compilation arguments come from one of these sources, in order of precedence:
+
+1. Everything after the first bare `--` is passed to Clang verbatim. An empty
+   tail supplies nothing, and the next source applies.
+2. `--compile-commands <dir>` reads the header's entry from that directory's
+   `compile_commands.json`. When the directory has no database, or the database
+   has no entry for the header, no arguments are supplied; the search in the
+   next item is not attempted.
+3. Otherwise, specgen searches the directories above the header for a
+   compilation database.
+4. If no source supplies arguments, Clang receives only specgen's own.
+
+specgen always passes `-std=c++2c` ahead of the supplied arguments, so a `-std`
+from a database entry or the `--` tail overrides it. `--no-compile-commands` disables only the
+search in the third item; it has no effect when an explicit directory or a
+nonempty `--` tail already takes precedence. When a database supplies the
+flags, specgen reports the selected entry's working directory on standard
+error.
+
+### Dependency files
+
+`--depfile <file>` writes a Makefile dependency fragment that names what the
+run produced and every non-system file its parse read, with an empty rule per
+prerequisite so that a deleted header causes a rebuild rather than an error.
+For a paper, the prerequisites of all its documents are merged, sorted, and
+listed once. `--dep-target <name>` may be repeated, and replaces the target list; it serves
+a build whose real target is a stamp file or an installed copy rather than a
+path specgen was given. `--dep-target` is valid only with `--depfile`.
+
+## Integrating generated fragments into a paper
 
 Both `beman.transcode` and `beman.transpose` treat rendered fragments as build
-artifacts with reviewable source history. Their durable pattern is:
+artifacts with a reviewable source history. The pattern they share is:
 
 1. Keep one script as the only place that invokes specgen. Give it an explicit
    list of document roots, root-fragment names, compiler arguments, backend
    options, and proposed stable-name roots.
-2. Generate through IR when more than one render or a separate validation pass
-   is useful. Otherwise the single-pass `generate` command is equivalent.
-3. Render with `--split` and preserve the printed manifest. Directory order is
-   not document order, and stale files are not pruned by specgen.
-4. Generate into a scratch or staging directory for checks, then diff against
-   the committed fragments. Reconcile deleted files from the manifest rather
-   than trusting what an earlier run left in the output directory.
-5. Transclude fragments into the paper in manifest order. Edit header markup,
-   never the rendered files.
-6. Record the specgen revision used while the tool is under development. A
-   wording diff should say whether the header changed, the generator changed,
-   or both.
+2. Render with `--split` and keep the printed manifest. Directory order is not
+   document order, and specgen does not remove stale files.
+3. Generate into a scratch or staging directory for checks, then compare the
+   result against the committed fragments. Reconcile deleted files from the
+   manifest rather than from whatever an earlier run left in the output
+   directory.
+4. Transclude the fragments into the paper in manifest order. Edit the header
+   markup, never the rendered files.
+5. While the tool is under development, record the specgen revision used. A
+   wording difference should be attributable to a changed header, a changed
+   generator, or both.
 
-A minimal generation core looks like this:
+A minimal generation step is:
 
 ```sh
-specgen generate --emit-ir include/beman/example/example.hpp \
-  --no-compile-commands -o example.json -- \
-  -std=c++2c -Iinclude -I.build/generated/include
-
-specgen render --from-ir example.json --backend mpark --validate \
-  --paper --new-root example \
+specgen generate include/beman/example/example.hpp \
+  --backend mpark --validate --paper --new-root example \
   --split papers/wording --root example.syn \
+  -- -std=c++2c -Iinclude -I.build/generated/include \
   > papers/wording/example.manifest
 ```
 
-Use `--paper` when the whole fragment is an addition and should receive
-editing-instruction framing and `x`, `x+1`, ... paragraph numbers. Omit it when
-the surrounding paper supplies that framing or when ordinary wording blocks
-are wanted.
+Committed fragments allow a paper to build without the pinned LLVM toolchain
+and make wording changes visible in review. `--depfile` keeps them current: it
+names every non-system file the parse read, including headers reached only
+through an `#include`, which are precisely the ones a hand-maintained
+prerequisite list omits. With the paper's wording declared as a real file
+target and the fragment `-include`d, editing a docblock rebuilds the paper, and
+editing nothing rebuilds nothing:
+
+```make
+papers/wording/transpose.md: $(WORDING_HEADERS)
+	specgen generate $(WORDING_HEADERS) ... --depfile papers/.deps/wording.d
+
+-include papers/.deps/*.d
+```
+
+A dependency edge establishes only that the output is current, not that it is
+correct; regeneration with `--validate` establishes the latter.
 
 ### A paper proposing several headers
 
 One header is one specgen document, so a paper proposing several headers is
-several documents — and a name specified by one of them is routinely used in
-another's wording. Rendered one run per header, `--validate` would report such
-a name as foreign: the run that uses it never documents it. The paper is the
-unit that has to be internally consistent, so render it as one. Name every
-header on one `generate`:
+several documents, and a name specified by one of them is routinely used in the
+wording of another. Rendered one header per run, `--validate` would report such
+a name as foreign, because the run that uses it does not document it. The paper
+is the unit that must be internally consistent, so it is rendered as one. Name
+every header on a single `generate`:
 
 ```sh
 specgen generate include/transpose/apply.hpp include/transpose/grade.hpp \
@@ -430,59 +386,32 @@ specgen generate include/transpose/apply.hpp include/transpose/grade.hpp \
 ```
 
 Validation runs across the union of the documents' documented names, every
-fragment lands in one `--split` directory, and one manifest carries the whole
-paper in order. `--root`, when given at all, repeats too, pairing with the
-headers in order — and a paper's headers usually need it, since documents
-sharing a stable-name prefix would otherwise derive the same root fragment
-name, which specgen reports as a collision rather than letting one overwrite
-the other.
+fragment is written to one `--split` directory, and one manifest lists the
+whole paper in order. `--root`, when given at all, is repeated and pairs with
+the headers in order. A paper's headers usually require it: documents that
+share a stable-name prefix would otherwise derive the same root fragment name,
+which specgen reports as a collision rather than allowing one to overwrite the
+other.
 
-`-o` beside `--split` asks for both views of the render: the pieces to
-`\input`, and the whole — every document joined in order — to diff against the
-working draft. They come from one parse, and the whole is the pieces in
-manifest order, so the two cannot disagree.
+`-o` beside `--split` requests both views of the render: the pieces, for
+`\input`, and the whole, with every document joined in order, for comparison
+against the working draft. Both come from one parse, and the whole contains
+the pieces in manifest order, so their wording cannot disagree; only the
+per-fragment framing described under `--paper` differs. With several headers,
+`generate` parses all of them before writing anything and stops at the first
+that fails, so a paper is never left half written.
 
-`render` takes a paper the same way, one `--from-ir` per document, for a build
-that keeps the IR:
+Two document layouts are common:
 
-```sh
-specgen render --from-ir apply.json --root transpose.applicative.syn \
-  --from-ir grade.json --root transpose.grade.syn \
-  --backend mpark --validate --paper --split papers/wording \
-  > papers/wording/manifest
-```
-
-`--emit-ir` is the one thing that stays one header at a time: the IR format
-holds one document per file.
-
-There are two common document layouts:
-
-- A library with one specification-facing header per proposed header can put
+- A library with one specification-facing header per proposed header can place
   each header's `.syn` fence and clauses in that file, then name every header on
-  one specgen run. Give each an explicit `--root` so their loose synopsis nodes
-  cannot collide.
-- An umbrella header can put its public component includes inside one gathered
-  `.syn` region and its clause outline after the fence. specgen follows those
-  includes as part of one document. This lets implementation stay split across
-  normal component headers without merging source files for the generator.
-
-Committing fragments lets a paper build without the pinned LLVM toolchain and
-makes wording changes visible in review. `--depfile` is what keeps them honest:
-it writes a Makefile fragment naming what the run produced and every non-system
-file its parses read — including headers reached only through an `#include`,
-which are exactly the ones a hand-maintained prerequisite list forgets. Make a
-paper's wording a real file target with that fragment `-include`d, and editing
-a docblock rebuilds the paper while editing nothing rebuilds nothing.
-
-```make
-papers/wording/transpose.md: $(WORDING_HEADERS)
-	specgen generate $(WORDING_HEADERS) ... --depfile papers/.deps/wording.d
-
--include papers/.deps/*.d
-```
-
-A dependency edge cannot say whether the output is *right*, only whether it is
-current; regeneration plus `--validate` is what answers that.
+  one specgen run. Give each an explicit `--root` so that their loose synopsis
+  nodes cannot collide.
+- An umbrella header can place its public component includes inside one
+  gathered `.syn` region and its clause outline after the fence. specgen follows
+  those includes as part of one document. The implementation can then remain
+  divided across ordinary component headers without merging source files for
+  the generator.
 
 ## Comment forms and document structure
 
@@ -491,13 +420,19 @@ Comment spelling is significant:
 - `//!` and `/*! ... */` are specgen docblocks. Their contents are parsed as
   elements and structural markers.
 - `///` and `/** ... */` are Doxygen. They are removed from synopses and
-  extracted bodies but never promoted into specification wording.
-- Plain `//` and `/* ... */` comments are draft-form comments. They survive
-  where the corresponding source is rendered.
+  extracted bodies, and are never promoted into specification wording.
+- Plain `//` and `/* ... */` comments are draft-form comments. They are retained
+  wherever the corresponding source is rendered.
 
-A Doxygen-only header is valid input and can produce empty wording. Validation
-then reports its public declarations as undocumented. Those coverage errors are
-intentional: successful parsing must not silently reinterpret Doxygen prose.
+Clang treats an unbroken run of comment lines as one comment, so a draft-form
+line in the same run as a Doxygen line is removed with it. A blank line between
+the two keeps the draft-form comment.
+
+A header documented only with Doxygen is valid input and can produce empty
+wording. Validation then reports the declarations in its synopses as
+undocumented. Those
+coverage errors are intentional: successful parsing must not silently
+reinterpret Doxygen prose as specification.
 
 Draft-form section markers build the document tree:
 
@@ -505,14 +440,14 @@ Draft-form section markers build the document tree:
 // \rSec3[optional.ctor]{Constructors}
 ```
 
-The depth controls nesting, the bracketed value is the stable name, and the
-braced value is the title. A numbered draft-style heading ending in a stable
-name, such as `// 22.5.3.3 Destructor[optional.dtor]`, is not enough because it
-has no depth; specgen warns and suggests the `\rSec<depth>[stable]{title}` form.
-A title too long for one line may continue on the immediately following plain
-`//` lines — the shape `clang-format` produces when it wraps a long marker —
-and the wrapped lines join back into one title with single spaces. A `{title}`
-that never closes is still reported as a malformed marker.
+The depth determines nesting, the bracketed value is the stable name, and the
+braced value is the title. A numbered draft-style heading that ends in a stable
+name, such as `// 22.5.3.3 Destructor[optional.dtor]`, is insufficient because
+it states no depth; specgen warns and suggests the `\rSec<depth>[stable]{title}`
+form. A title too long for one line may continue on the immediately following
+plain `//` lines, which is the shape `clang-format` produces when it wraps a
+long marker; the continuation lines are joined into one title with single
+spaces. A `{title}` that never closes is reported as a malformed marker.
 
 An exact Doxygen fence closes an ordinary section explicitly:
 
@@ -524,16 +459,16 @@ An exact Doxygen fence closes an ordinary section explicitly:
 // declarations here return to the document root
 ```
 
-This is useful for exposition-only helpers written between clauses: under
+The fence is useful for exposition-only helpers written between clauses: under
 `--split`, they enter the root fragment instead of the preceding clause's
 fragment. The stable name must match the currently open section. A mismatch,
 or an END fence when no section is open, is a warning and does not change
 placement. Closing a nested section resumes its parent; closing a top-level
 section resumes the document root. The same spelling bounds a gathered `.syn`
-region as described below; that fence is consumed by the gatherer.
+region, as described below; that fence is consumed by the gatherer.
 
-Inside a class, a draft-form group header routes following documented in-class
-members to the section with the matching stable name:
+Inside a class, a draft-form group header routes the documented in-class
+members that follow it to the section with the matching stable name:
 
 ```cpp
 // \ref{optional.ctor}, constructors
@@ -542,9 +477,9 @@ members to the section with the matching stable name:
 An explicit `\at stable.name` marker on a member overrides this inferred route.
 
 A gathered header synopsis can span files. The declarations of every header
-`#include`d **inside** the region are part of the document, in the order their
-includes appear, so a header that is an umbrella of includes specifies the
-whole of what it includes there:
+`#include`d **inside** the region are part of the document, in the order in
+which their includes appear, so an umbrella header specifies the whole of what
+it includes there:
 
 ```cpp
 // \rSec2[transcode.syn]{Header `<transcode>` synopsis}
@@ -557,55 +492,57 @@ whole of what it includes there:
 // \rSec2[transcode.errors]{Error types}
 ```
 
-An include outside the region is invisible, as everything reached by an
-include was before. A followed header carries no `\rSec` markers of its own —
-its clauses are the umbrella's, after the fence — and its declarations reach
-them by routing.
+An include outside the region remains invisible to the document. A followed
+header carries no `\rSec` markers of its own; its clauses are the umbrella's,
+after the fence, and its declarations reach them by routing.
 
-A gathered header synopsis routes the same way. A documented declaration folded
-into the region contributes its declaration to the synopsis, and its
-description goes to the section `\at` names, or to the one named by the `\ref`
-group header standing over it. With neither, the description is rendered beside
-the synopsis, in the section the region itself is in — which is how a range
-adaptor object gets a clause of its own without leaving the header synopsis it
-belongs in. A route that names no section is a validation error, the
-same as one written on a class member.
+Routing within a gathered header synopsis works the same way. A documented
+declaration folded into the region contributes its declaration to the synopsis,
+and its description goes to the section that `\at` names, or to the section
+named by the `\ref` group header above it. With neither, the description is
+rendered beside the synopsis, in the section that contains the region; this is
+how a range adaptor object receives a clause of its own without leaving the
+header synopsis to which it belongs. A route that names no existing section is
+a validation error, as it is on a class member.
 
-An in-class member definition is reduced to a declaration in the synopsis — a
-body is never synopsis content — and the member is described in its own
-subclause like any other. Declaring in class and defining out of line remains
-the recommended style (the definition's lexical position is what places its
-wording), but it is not required for a clean synopsis.
+An in-class member definition is reduced to a declaration in the synopsis,
+since a body is never synopsis content, and the member is described in its own
+subclause like any other. Declaring members in the class and defining them out
+of line remains the recommended style, because the definition's lexical
+position determines where its wording is placed, but it is not required for a
+clean synopsis.
 
-A class or class-template definition's own docblock describes the *type*. Its
+The docblock of a class or class-template definition describes the *type*. Its
 description elements are rendered immediately after the class synopsis, with no
-item declaration of their own — the shape the draft uses for a class's general
-subclause. An authored `\mandates` there replaces the paragraph derived from the
-class's direct `static_assert`s. A `\at stable.name` on the class definition
-routes both that derived paragraph and the class's own description to the named
-section, in that order. This is particularly useful for a class gathered from
-a component header whose `\rSec` outline lives in an umbrella header. A route
-to a section that does not exist is a validation error. `\verbatim-itemdecl`
-and the `*-equiv` extraction markers are errors on a class definition: the
-first has `\verbatim-synopsis` as its class-level counterpart, and the second
-needs a function body to extract.
+item declaration of their own, which is the shape the draft uses for a class's
+general subclause. An authored `\mandates` there replaces the paragraph derived
+from the class's direct `static_assert`s. A `\at stable.name` on the class
+definition routes both that derived paragraph and the class's own description
+to the named section, in that order; this is particularly useful for a class
+gathered from a component header whose `\rSec` outline is in an umbrella header.
+A route to a section that does not exist is a validation error.
+`\verbatim-itemdecl` and the `*-equiv` extraction markers are errors on a class
+definition: the former has `\verbatim-synopsis` as its class-level
+counterpart, and the latter require a function body to extract.
 
 A docblock documents the declaration that follows it. Wording comes from class
 and class-template definitions (a synopsis, the class's own description, and
-routed members), documented
-function *definitions*, documented in-class type aliases, and — at namespace
-scope — documented aliases, alias templates, variables, variable templates,
-concepts, enumerations, and record declarations the header never defines (an
-undefined class-template primary renders as its own declaration). A documented
-enumeration's item declaration is the enumeration as written, enumerator list
-included, and its description is what the enumerators mean. A docblock on any
-other entity kind, or on a function declaration rather than its definition,
-is reported as an error: it would otherwise produce no wording, silently.
+routed members), from documented function *definitions*, from documented
+in-class type aliases, and, at namespace scope, from documented aliases, alias
+templates, variables, variable templates, concepts, enumerations, and record
+declarations that the header never defines (an undefined class-template primary
+renders as its own declaration). A documented enumeration's item declaration is
+the enumeration as written, enumerator list included, and its description
+states what the enumerators mean. A docblock on any other kind of entity, or on
+a namespace-scope function declaration rather than its definition, is reported
+as an error, because it would otherwise produce no wording and do so silently.
+A docblock on an in-class member declaration is not reported, and its markup
+is ignored; the docblock belongs on the member's definition.
 
 ## Description elements
 
 A specgen docblock contains only the elements that apply. The complete element
-tag vocabulary, in canonical output order, is:
+vocabulary, in canonical output order, is:
 
 ```text
 \constraints  \mandates  \expects  \hardexpects  \effects  \sync
@@ -615,16 +552,17 @@ tag vocabulary, in canonical output order, is:
 
 The display labels include *Preconditions* for `\expects`, *Hardened
 preconditions* for `\hardexpects`, *Postconditions* for `\ensures`, and *Error
-conditions* for `\errors`. Authored order does not control output order; an
-out-of-order element produces a note and output is canonicalized. Duplicate
-elements produce a warning and are retained. Unknown tags are errors.
+conditions* for `\errors`. Authored order does not determine output order: an
+element out of order produces a note, and the output is put in canonical order.
+A duplicated element produces a warning and is retained. An unknown tag is an
+error.
 
-Text after a tag begins its first paragraph. A blank decorated line separates
-paragraphs, and the next tag ends the current element. Backticks mark code.
-Use `\iref{stable.name}` outside backticks for a prose reference; it may point
-to a standard subclause outside the generated document.
+Text after a tag begins the element's first paragraph. A blank decorated line
+separates paragraphs, and the next tag ends the current element. Backticks mark
+code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
+may name a standard subclause outside the generated document.
 
-An element can end in one authored itemization:
+An element may end in one authored itemization:
 
 ```cpp
 //! \constraints All of the following are true:
@@ -632,11 +570,11 @@ An element can end in one authored itemization:
 //! \item `T` meets the requirements in \iref{some.requirements}.
 ```
 
-An item's following nonblank lines continue that item. After the first
-`\item`, use another `\item` or begin a new element; the IR cannot place more
-prose after the list.
+Each nonblank line that follows an item continues that item. After the first
+`\item`, only another `\item` or a new element may follow; no further prose can
+be placed after the list within the same element.
 
-An element can instead end in one two-column table:
+An element may instead end in one two-column table:
 
 ```cpp
 //! \effects See the following table.
@@ -650,13 +588,13 @@ An element can instead end in one two-column table:
 ```
 
 The table requires exactly two `\column` entries, one or more `\row` entries,
-and exactly two `\cell` entries per row. Non-tag lines continue the active
-caption, column heading, row heading, or cell. `\endlib2dtab2` is required, and
-the table is terminal within its element.
+and exactly two `\cell` entries per row. Lines without a tag continue the
+active caption, column heading, row heading, or cell. `\endlib2dtab2` is
+required, and the table ends its element.
 
-Use `\libtab2` for a flat two-column table such as an enumeration's meanings.
-Here the text on `\row` is the first column and the row has one `\cell` for the
-second:
+`\libtab2` produces a flat two-column table, such as an enumeration's meanings.
+Here the text on `\row` is the first column, and each row has one `\cell` for
+the second:
 
 ```cpp
 //! \remarks The constants have the meanings shown in the following table.
@@ -672,205 +610,301 @@ second:
 
 `\lib2dtab2` is a cross-product table: each `\row` is a row heading followed by
 two data cells. `\libtab2` is the ordinary two-column form: each `\row` is its
-first data cell followed by one `\cell`. Both require two column headings and
-at least one row, and both are terminal within their element.
+first data cell, followed by one `\cell`. Both require two column headings and
+at least one row, and both end their element.
 
 ## Extraction markers
 
 - `\effects-equiv` extracts a function body as an *Effects: Equivalent to:*
   block. It removes consumed leading `static_assert`s, inactive conditional
   branches, preprocessing directive lines, specgen comments, and Doxygen
-  comments. Draft-form comments remain.
-- `\returns-equiv` extracts the expression from a single-return body as the
-  *Returns:* wording.
+  comments. Draft-form comments within the body remain; extraction begins at
+  the first statement, so a comment before it is not included.
+- `\returns-equiv` extracts the function body in the same way, as a *Returns:
+  Equivalent to:* block. It is intended for a body consisting of a single
+  return statement.
 - `\constraints-in-decl` retains the requires-clause in the item declaration
   instead of deriving a separate *Constraints:* element.
 
-`\effects-equiv` and authored `\effects` are mutually exclusive, as are
-`\returns-equiv` and authored `\returns`.
+`\effects-equiv` and an authored `\effects` are mutually exclusive, as are
+`\returns-equiv` and an authored `\returns`.
 
 By default, associated constraints are removed from the item declaration and
 rendered as derived *Constraints*. A leading run of body-local type aliases
 followed by `static_assert`s produces derived *Mandates*; the aliases remain in
-an extracted equivalent-to body and the consumed assertions do not. Authored
-`\constraints` or `\mandates` replaces its derived wording while retaining the
-derivation as validation evidence for drift checks.
+an extracted equivalent-to body, and the consumed assertions do not. An
+authored `\constraints` or `\mandates` replaces the corresponding derived
+wording, and the derivation is retained as evidence for the drift checks.
 
 ## Placement and grouping markers
 
-- `\omit` excludes a declaration completely.
-- `\elsewhere` excludes a declaration from generated wording while promising
-  that the paper declares the name by hand elsewhere. When several headers are
-  rendered together, the name is visible to validation in sibling documents.
-  Use this instead of `\omit` when generated wording legitimately names such a
-  hand-authored declaration. It is mutually exclusive with `\omit`, `\merge`,
-  and `\expos`.
-- `\merge` suppresses a declaration that is represented by another
-  specification entity. It removes the marked declaration from synopsis and
-  wording; on a namespace-scope record definition it suppresses the whole
-  record contribution.
-  The usual case is a conditionally trivial special member: a defaulted twin
-  marked `\merge`, constrained to where `T`'s member is trivial, and a
-  user-provided survivor that carries the wording. The survivor's
-  `requires`-clause conjunct that only distinguishes it from the twin -- its
-  `!X` against the twin's `X` -- is dropped from the synopsis, the item
-  declaration, and the derived *Constraints*, since the pair is one entity:
-  `requires copy_constructible<T> && (!is_trivially_copy_constructible_v<T>)`
-  renders as `requires copy_constructible<T>`. This applies to a trailing
-  clause written as a flat `&&` chain; any other shape is left whole.
+- `\omit` excludes a declaration entirely.
+- `\elsewhere` excludes a declaration from generated wording and records that
+  the paper declares the name by hand elsewhere. When several headers are
+  rendered together, the name is visible to validation in the sibling
+  documents. Use it instead of `\omit` when generated wording legitimately
+  names such a hand-authored declaration. It is mutually exclusive with
+  `\omit`, `\merge`, and `\expos`.
+- `\merge` suppresses a declaration that another specification entity
+  represents. It removes the marked declaration from the synopsis and the
+  wording; on a namespace-scope record definition, it suppresses the record's
+  entire contribution. The usual case is a conditionally trivial special
+  member: a defaulted twin marked `\merge`, constrained to the cases in which
+  `T`'s member is trivial, and a user-provided survivor that carries the
+  wording. The conjunct of the survivor's `requires`-clause that serves only to
+  distinguish it from the twin (its `!X` against the twin's `X`) is dropped from
+  the synopsis, the item declaration, and the derived *Constraints*, since the
+  pair is one entity: `requires copy_constructible<T> &&
+  (!is_trivially_copy_constructible_v<T>)` renders as `requires
+  copy_constructible<T>`. This applies to a trailing clause written as a flat
+  `&&` chain; any other shape is left whole.
 - `\describe` forces an item declaration for a documented `= default` or
   `= delete` entity.
-- Bare `\also`, or an empty docblock, joins an overload's signature to the
+- A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in
-  the same section when the declarations are not adjacent. Targets are
-  resolved left to right, so forward and cross-section targets are invalid.
-- `\at stable.name` routes an in-class documented member, a folded-in
-  namespace entity, or a class's own wording to that section, overriding the
-  inferred placement. On a class it carries both the class-scope mandates
+  the same section when the declarations are not adjacent. Targets are resolved
+  from left to right, so forward and cross-section targets are invalid.
+- `\at stable.name` routes an in-class documented member, a folded-in namespace
+  entity, or a class's own wording to the named section, overriding the
+  inferred placement. On a class, it carries both the class-scope mandates
   paragraph and the class description.
 
-An `\also` block should contain no description elements. `\group` and
-`\also` are mutually exclusive in the same docblock.
+An `\also` block should contain no description elements. `\group` and `\also`
+are mutually exclusive in the same docblock.
 
 ## Synopsis and spelling markers
 
-specgen normalizes the spellings the draft is strict about, so a header may use
-its own house style. `T const&` and `const T&` both render `const T&`, and
-`T *p` renders `T* p`; whichever the library writes, the wording says what
-[structure.specifications] says.
+specgen normalizes the spellings about which the draft is strict, so a header
+may follow its own house style. `T const&` and `const T&` both render as
+`const T&`, and `T *p` renders as `T* p`; whichever the library writes, the
+wording follows [structure.specifications].
 
-- `\expos` marks an entity exposition-only. The default spelling removes a
-  trailing underscore and changes underscores to hyphens; `\expos(name)`
+- `\expos` marks an entity as exposition-only. The default spelling removes trailing
+  underscores and changes the remaining underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
   templates, variables, enumerations, aliases, alias templates, and class
-  templates, as
-  well as class members, can be exposed. An exposition-only enumeration's uses
-  — its type, and a qualified enumerator — render under the exposition name
-  too. A **nested class** can be exposed as well, and with bare `\seebelow`
-  it renders as a declaration — `class $iterator$; // exposition only` — which
-  is how the draft writes a view's iterator; its own members are exposition
-  with it, so an extracted body that names one says the exposition name. A partial or explicit specialization
-  follows its primary and needs no marker of its own: it is the same entity,
-  and renders under the same exposition name. The marked declaration may live in an
-  included implementation header outside the document extent: uses in the
-  specified document still render as `\exposid`, so moving machinery into a
-  `detail/` header does not force it back into the public header. The marker
-  does not pull that declaration into the document; only its reached uses are
-  rewritten. On a namespace `using` declaration, `\expos` marks the introduced
-  name and its target without emitting the `using` line itself; uses through
-  the declaration render under the exposition name. A public component header
-  included inside a gathered `.syn` region is different: it is part of the
-  document extent, so its declarations contribute to that synopsis.
-- Bare `\seebelow` masks a function return type — a leading one whole, an
-  explicit trailing one as `auto f(...) -> see below;`, keeping the trailing
-  shape. `\seebelow noexcept` and
-  `\seebelow explicit` mask only the condition inside that specifier. On a
-  documented in-class type alias, bare `\seebelow` masks the complete RHS.
-  On a documented namespace-scope variable or variable template, bare
-  `\seebelow` masks the declared type as *unspecified* and drops the
-  initializer — the customization-point-object shape,
-  `inline constexpr unspecified name;`. Marked `\expos` as well, the two
-  compose: `inline constexpr unspecified $name$; // exposition only`. The
-  targeted forms do not apply to a variable either way, and saying one is an
-  Error. On a documented namespace-scope concept, bare `\seebelow` masks the
-  constraint-expression, as it does an alias's right-hand side; both compose
-  with `\expos` the same way, rendering
-  `using $name$ = see below; // exposition only`. An enumeration accepts no
-  `\seebelow` in any form: the draft spells neither an enum-base nor an
-  enumerator list *see below*, and a marker that silently did nothing left a
-  description contradicting the synopsis beside it.
-- `\impdef` masks a documented in-class type alias RHS as
-  *implementation-defined*. It applies only to aliases and is mutually
-  exclusive with `\seebelow`.
+  templates may be marked, as may class members. The uses of an exposition-only
+  enumeration, both its type and a qualified enumerator, also render under the
+  exposition name. A **nested class** may be marked as well; with a bare
+  `\seebelow` it renders as a declaration, `class $iterator$; // exposition
+  only`, which is how the draft writes a view's iterator. Its own members are
+  exposition-only with it, so an extracted body that names one uses the
+  exposition name.
+
+  A partial or explicit specialization follows its primary and needs no marker
+  of its own: it is the same entity and renders under the same exposition name.
+  The marked declaration may reside in an included implementation header
+  outside the document's extent; uses in the specified document still render as
+  `\exposid`, so moving machinery into a `detail/` header does not force it back
+  into the public header. The marker does not bring that declaration into the
+  document; only the uses that the document reaches are rewritten. On a
+  namespace-scope `using` declaration, `\expos` marks the introduced name and
+  its target without emitting the `using` line itself; uses of a template
+  through the declaration render under the exposition name. Uses of a
+  non-template class through such a declaration are not rewritten, and
+  validation reports their implementation qualifier as leakage. A public component header
+  included inside a gathered `.syn` region differs: it is part of the
+  document's extent, so its declarations contribute to that synopsis.
+- A bare `\seebelow` masks a function's return type: a leading return type
+  entirely, and an explicit trailing return type as `auto f(...) -> see below;`,
+  preserving the trailing form. `\seebelow noexcept` and `\seebelow explicit`
+  mask only the condition inside that specifier. On a documented in-class type
+  alias, or a documented namespace-scope alias, a bare `\seebelow` masks the
+  complete right-hand side.
+
+  On a documented namespace-scope variable or variable template, a bare
+  `\seebelow` renders the declared type as *unspecified* and drops the
+  initializer, which is the customization-point-object form,
+  `inline constexpr unspecified name;`. Combined with `\expos`, the two compose:
+  `inline constexpr unspecified $name$; // exposition only`. The targeted forms
+  do not apply to a variable, and using one is an error. On a documented
+  namespace-scope concept, a bare `\seebelow` masks the constraint-expression,
+  as it masks an alias's right-hand side. Both compose with `\expos`: an alias
+  renders as `using $name$ = see below; // exposition only`, and a concept as
+  `template<class T> concept $name$ = see below; // exposition only`.
+
+  An enumeration accepts no form of `\seebelow`: the draft spells neither an
+  enum-base nor an enumerator list as *see below*, and a marker that silently
+  had no effect would leave a description that contradicts the synopsis beside
+  it.
+- `\impdef` masks the right-hand side of a documented type alias, in a class or
+  at namespace scope, as *implementation-defined*. It applies only to aliases and is mutually exclusive
+  with `\seebelow`.
 - `\freestanding` and `\freestanding-deleted` add the corresponding literal
   draft comment to a function declaration in the class synopsis.
 - `\verbatim-synopsis` is terminal. All following decorated lines form one
-  exact, span-free synopsis without C++ parsing or formatting. Written as a
-  class definition's own docblock (no blank line before the class), the
-  authored text *replaces* the extracted synopsis while the class's members,
-  roster, and routing are processed as usual, including the `namespace std {`
-  enclosure every synopsis gets; detached, the block stands alone as an
-  anonymous synopsis and is left exactly as written, so it writes its own
-  namespace.
-- `\verbatim-itemdecl` is terminal. Authored elements before it remain the
-  item description; all following decorated lines form one exact, span-free
-  item declaration. Multiple declaration lines are not split, parsed,
-  formatted, indexed, or interpreted as draft markup. Written as a
-  declaration's own docblock, the authored text *replaces* that
-  declaration's extracted item declaration — the item appears once; a
-  detached block stands alone, and pairs with `\omit`/`\merge` on the real
-  declaration when one exists (as the hash-specialization pattern does).
+  exact synopsis, free of spans, without C++ parsing or formatting. Written as a
+  class definition's own docblock (with no blank line before the class), the
+  authored text *replaces* the extracted synopsis, while the class's members,
+  roster, and routing are processed as usual, including the
+  `namespace std {` enclosure that every synopsis receives. Detached, the block
+  stands alone as an anonymous synopsis and is left exactly as written, so it
+  must supply its own namespace.
+- `\verbatim-itemdecl` is terminal. Authored elements before it remain the item
+  description; all following decorated lines form one exact item declaration,
+  free of spans. Multiple declaration lines are not split, parsed, formatted,
+  indexed, or interpreted as draft markup. Written as a declaration's own
+  docblock, the authored text *replaces* that declaration's extracted item
+  declaration, so the item appears once. A detached block stands alone, and is
+  paired with `\omit` or `\merge` on the real declaration when one exists, as
+  in the hash-specialization pattern.
+
+`\verbatim-synopsis` written as the docblock of anything other than a class or
+class-template definition is an error.
 
 ## Validation and diagnostics
 
-Run `render --validate` in the normal authoring loop. Validation checks:
+Run `generate --validate` as part of the normal authoring loop. Validation
+checks:
 
-- IR span and authored table structure.
-- Coverage: each declaration must be described, exposition-only, defaulted or
-  deleted, explicitly omitted, or represented by a merged declaration; routed
-  wording must name a section that exists. A *public data member* needs none of
-  those: its declaration is its specification, the way the draft writes
-  `from_chars_result`, and a class's own description may name it.
+- Span and authored table structure.
+- Coverage: each declaration in a synopsis (a class member, or a declaration
+  folded into a gathered header synopsis) must be described, exposition-only, defaulted or
+  deleted, explicitly omitted, or represented by a merged declaration, and
+  routed wording must name a section that exists. A *public data member*
+  requires none of these: its declaration is its specification, as in the
+  draft's `from_chars_result`, and the class's own description may name it.
 - Leakage: wording, item declarations, equivalent-to bodies, tables, and
   synopses must not name invisible members, surviving implementation namespace
-  qualifiers, or bare names resolved to declarations outside this document.
-  A marked `\expos` declaration may live in an included implementation header;
-  otherwise rewrite the contract in documented terms or use authored prose.
-  A foreign helper and a declaration in the document may legitimately share a
-  spelling, such as an enumerator and a generated lookup table; the document's
-  declaration wins, so that collision alone is not reported as leakage.
-  Across several `--from-ir` inputs, names generated by a sibling or explicitly
-  promised by its `\elsewhere` and exposition-only `using` declarations join
-  the same paper-wide visibility set.
-- Local references in synopsis code must name generated sections. Prose
-  `\iref` references may deliberately name external standard subclauses.
-- Authored *Constraints* and *Mandates* must not duplicate or contradict their
-  suppressed derived conjuncts.
+  qualifiers, or bare names that resolve to declarations outside the document.
+  A declaration marked `\expos` may reside in an included implementation
+  header; otherwise, restate the contract in documented terms or use authored
+  prose. A foreign helper and a declaration in the document may legitimately
+  share a spelling, such as an enumerator and a generated lookup table; the
+  document's declaration prevails, so that collision alone is not reported as
+  leakage. Across the several documents of one paper, the names a sibling
+  generates, and those it explicitly promises through `\elsewhere` and
+  exposition-only `using` declarations, join the same paper-wide visibility
+  set.
+- Local references in synopsis code must name generated sections. Prose `\iref`
+  references may deliberately name external standard subclauses.
+- Authored *Constraints* and *Mandates* must neither duplicate nor contradict
+  the derived conjuncts they suppress, and a derived conjunct with no authored
+  counterpart anywhere in the description is reported as a warning.
 - An authored *Throws:* paragraph must not contradict an unconditionally
-  `noexcept` signature. There is deliberately no reverse check.
-- In a class that already exposes members, unmarked private data is noted as a
-  possible missing `\expos` marker.
-- A hidden helper function used only by an unextracted body is noted unless a
-  rendered fragment already leaks the same name, in which case leakage reports
-  the error.
+  `noexcept` signature, and *Throws:* Nothing on such a signature is reported
+  as redundant. There is deliberately no check in the reverse direction.
+- A synopsis must contain code, and an item must have a declaration or a
+  description.
+- In a class that already marks members exposition-only, unmarked private data
+  is noted as a possibly missing `\expos` marker.
+- A hidden helper function used only by an unextracted body is noted, unless a
+  rendered fragment already exposes the same name, in which case the leakage
+  check reports the error.
 
 Docblock and source-structure diagnostics are printed by `generate` as
-`<header>:<line>: <severity>: <message>`. Examples include element-order notes,
+`<header>:<line>: <severity>: <message>`. They include element-order notes,
 duplicate-element warnings, unknown-tag errors, malformed `\rSec` markers,
-unrecognized draft-style headings, and errors for a docblock on an entity kind
+unrecognized draft-style headings, gathered `.syn` regions that are not closed
+before the next section, and errors for a docblock on an entity kind
 that produces no wording (a namespace alias, or a function declaration whose
-markup belongs at the definition). These diagnostics describe markup on a
-successfully parsed header, so even an error does not prevent IR emission or
-change `generate`'s successful exit status. Always inspect standard error.
+markup belongs on the definition). These diagnostics describe markup on a header
+that parsed successfully, so even an error does not prevent output or change
+`generate`'s exit status. Always inspect standard error.
 
-`--validate` prints findings as `specgen: <context>: <severity>:
-<message>`. Notes and warnings are printed and rendering continues. If any
-finding has error severity, every finding is printed, rendering is skipped,
-and the command exits 1.
+`--validate` prints findings as `specgen: <context>: <severity>: <message>`.
+After notes and warnings, rendering continues. If any finding has error
+severity, every finding is printed, rendering is skipped, and the command exits
+with status 1.
+
+## Debugging aids
+
+### The declaration interleave
+
+`dump-decls` prints the sequence of declarations and comments in the main file
+from which the front end builds the document. It is the first tool to consult
+when a section is unexpectedly empty or a docblock attaches to the wrong
+declaration:
+
+```sh
+specgen dump-decls header.hpp -- -Iinclude
+specgen dump-decls header.hpp --compile-commands build
+```
+
+It accepts the same compilation-database options and `--` tail as `generate`.
+Because it is a debugging command, it does not reject a header on which Clang
+reports a parse error: it warns and prints the possibly incomplete interleave.
+It reads one header; when several are named, it uses the last.
+
+### The JSON intermediate representation
+
+Internally, `generate` lowers the parsed header to a JSON intermediate
+representation (IR) and renders that. The IR is the boundary between parsing
+and presentation, and the test suite relies on it heavily; for authoring a
+paper it is seldom needed. It is useful for examining exactly what the front
+end extracted, and for rendering on a machine that has no Clang headers to
+parse against, since rendering IR invokes no compiler.
+
+`generate --emit-ir` writes the document as IR instead of rendering it, and
+`render --from-ir` renders IR:
+
+```sh
+specgen generate --emit-ir header.hpp -o wording.json -- -Iinclude
+specgen render --from-ir wording.json --validate --backend latex -o wording.tex
+```
+
+Standard input connects the two without a temporary file:
+
+```sh
+specgen generate --emit-ir header.hpp -- -Iinclude |
+  specgen render --from-ir - --validate --backend latex
+```
+
+Both routes produce the same wording as the single `generate` command, byte for
+byte. The golden suite's `.singlepass` cases verify this with the `latex`
+backend for every golden case generated from a corpus header.
+
+`--emit-ir` stops before validation and the backends, so it rejects
+`--validate` and every option that steers a backend, including an explicit
+`--backend`, rather than ignoring them. It accepts `-o`, `--depfile`,
+`--dep-target`, and the compilation-database options. The IR format holds one document per file,
+so `--emit-ir` takes exactly one header.
+
+`render` accepts these options:
+
+```text
+specgen render --from-ir <file|-> [--from-ir <file>...]
+               [--backend latex|mpark|org]
+               [--validate]
+               [--paper] [--new-root <name>]
+               [--base-heading-level <n>] [--base-section-depth <n>]
+               [-o|--output <file>]
+               [--split <dir>] [--root <name>...]
+               [--depfile <file>] [--dep-target <name>]
+```
+
+Each has the meaning it has for `generate`. `--from-ir` may be repeated, once
+per document of one paper, which `render` then treats as `generate` treats
+several headers: `--validate` runs across the union of the documents'
+documented names, and `--root`, when given at all, is repeated and pairs with
+each `--from-ir` in order. `render --depfile` names the IR files the render
+read as its prerequisites.
 
 ## Exit behavior
 
-- Successful `generate`, `render`, and `dump-decls` invocations exit 0.
-- Command-line usage errors and unavailable Clang-only commands exit 2.
-- `generate` exits 1 when a header cannot be read, Clang cannot build an AST,
-  Clang reports a parse error, or output cannot be written. It never emits
-  plausible partial wording after a C++ parse failure. Rendering without
-  `--emit-ir` adds `render`'s own failures: fragment errors and, under
-  `--validate`, error-severity findings. With several headers it parses them
-  all before writing anything and stops at the first that fails, so a paper is
-  never half on disk.
-- `render` exits 1 on unreadable or invalid JSON, output failures, fragment
-  errors, or error-severity validation findings.
-- A `--depfile` that cannot be written exits 1. It is written after every
-  output it names, so a run that got that far has already produced the wording.
-  `--depfile` with nothing to name as a target, and `--dep-target` without
-  `--depfile`, are usage errors and exit 2.
+- Successful `generate`, `render`, and `dump-decls` invocations exit with
+  status 0.
+- Command-line usage errors exit with status 2, as do an unknown command and a
+  missing one; both print the usage summary on standard error. `--help` prints
+  it on standard output and exits with status 0.
+- `generate` exits with status 1 when a header cannot be read, Clang cannot
+  build an AST, Clang reports a parse error, or the output cannot be written.
+  It never emits plausible partial wording after a C++ parse failure. When it
+  renders, it also exits with status 1 on a fragment error or, under
+  `--validate`, on an error-severity finding. With several headers, it parses
+  all of them before writing anything and stops at the first that fails.
+- `render` exits with status 1 on unreadable or invalid JSON, an output
+  failure, a fragment error, or an error-severity validation finding.
+- A `--depfile` that cannot be written causes exit status 1. It is written
+  after every output it names, so a run that reaches that point has already
+  produced the wording. `--depfile` with nothing to name as a target, and
+  `--dep-target` without `--depfile`, are usage errors and exit with status 2.
 - `dump-decls` is diagnostic by design: after a recoverable Clang parse error
-  it warns, prints the partial interleave, and exits 0.
+  it warns, prints the partial interleave, and exits with status 0.
 
-Use `specgen --help` for the current command-line summary and
-`specgen --version` for the installed version and source revision, printed as
-`specgen 0.2.2 (git <commit>)`. A source archive without Git metadata can set
-`BEMAN_SPECGEN_GIT_COMMIT` explicitly when configuring; otherwise the revision
-is reported as `unknown`.
+`specgen --help` prints the current command-line summary, and
+`specgen --version` prints the installed version and source revision as
+`specgen 0.2.3 (git <commit>)`. A source archive without Git metadata can set
+`BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
+revision is reported as `unknown`.

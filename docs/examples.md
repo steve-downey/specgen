@@ -1,7 +1,7 @@
 - [CLI Coverage](#cli-coverage)
 - [General Command Information](#general-command-information)
-- [Minimal Header To IR](#minimal-header-to-ir)
-- [Render-Only IR Examples](#render-only-ir-examples)
+- [Minimal Header](#minimal-header)
+- [The Three Backends](#the-three-backends)
 - [Paper Mode](#paper-mode)
   - [Observers [gadget.observe]](#gadget.observe)
   - [Modifiers [gadget.mod]](#gadget.mod)
@@ -14,41 +14,43 @@
 
 <!-- markdownlint-disable -->
 
-Every command below is a script in [`examples/cli/`](../examples/cli), and every output below is what that script printed. Both are transcluded from the repository, so neither is retyped here and neither can drift from the other without a test noticing.
+Every command below is a script in [`examples/cli/`](../examples/cli), and every output below is what that script printed. Both are transcluded from the repository, so neither is retyped here, and neither can drift from the other without a test detecting it.
 
-To run them you need the binary. `make install-release` puts it at `.install/bin/specgen`, which is where the scripts look; set `SPECGEN` to point them somewhere else, such as a build tree. There is no build of specgen without the Clang front end — the executable is only produced when `BEMAN_SPECGEN_ENABLE_CLANG` is on — so every command here works on any binary you have.
+Running the scripts requires the binary. `make install-release` installs it at `.install/bin/specgen`, which is where the scripts look for it; `SPECGEN` names another location, such as a build tree. Every build of specgen includes the Clang front end, so every command here works with any binary.
 
 ```sh
 make install-release          # or: export SPECGEN=<build tree>/tools/specgen/specgen
 examples/cli/run-all.sh       # re-capture everything shown below
 ```
 
-`run-all.sh` rewrites the checked-in output, and `ctest -R examples.` checks it. Most of those checks compare a captured file against the golden suite, which already pins that golden to what specgen printed; the rest re-run a script and compare what comes out. So the output here is not an illustration of what specgen does. It is what specgen did.
+`run-all.sh` rewrites the checked-in output, and `ctest -R examples.` checks it. Most of those checks compare a captured file against the golden suite; the remainder re-run a script and compare its output. The output shown here is therefore not an illustration of what specgen does, but a record of what it did.
+
+The ordinary way to use specgen is a single `generate` command, which parses a header and renders its wording in one process. Several examples instead use `generate --emit-ir` and `render --from-ir`, which write and read specgen's JSON intermediate representation. That route is a debugging aid rather than an authoring workflow, but it lets an example render a fixed, checked-in IR fixture from the golden suite, so that only the option under demonstration varies.
 
 
 <a id="cli-coverage"></a>
 
 # CLI Coverage
 
-| Command or option                 | Example section                             |
-|--------------------------------- |------------------------------------------- |
-| `--help`                          | General command information                 |
-| `generate <header>` (single pass) | Minimal header to IR                        |
-| `generate --emit-ir`              | Minimal header to IR                        |
-| `--no-compile-commands`           | Minimal header to IR                        |
-| `-o`, `--output`                  | Minimal header to IR, Larger header example |
-| `-- <clang args>...`              | Explicit include path                       |
-| `--compile-commands <dir>`        | Explicit include path                       |
-| `dump-decls`                      | Declaration interleave                      |
-| `render --from-ir <file>`         | Render-only IR examples                     |
-| `render --from-ir -`              | Minimal header to IR                        |
-| `--backend latex`, `mpark`, `org` | Render-only IR examples                     |
-| `--validate`                      | Validation                                  |
-| `--paper`                         | Mpark paper mode                            |
-| `--split`, `--root`               | Fragment output                             |
-| `generate <header>...` (a paper)  | A paper of several headers                  |
-| `-o` with `--split`               | A paper of several headers                  |
-| `--depfile`, `--dep-target`       | A paper of several headers                  |
+| Command or option                 | Example section                       |
+|--------------------------------- |------------------------------------- |
+| `--help`                          | General command information           |
+| `generate <header>`               | Minimal header                        |
+| `generate --emit-ir`              | Minimal header                        |
+| `--no-compile-commands`           | Minimal header                        |
+| `-o`, `--output`                  | Minimal header, Larger header example |
+| `-- <clang args>...`              | Explicit include path                 |
+| `--compile-commands <dir>`        | Explicit include path                 |
+| `dump-decls`                      | Declaration interleave                |
+| `render --from-ir <file>`         | The three backends                    |
+| `render --from-ir -`              | Minimal header                        |
+| `--backend latex`, `mpark`, `org` | The three backends                    |
+| `--validate`                      | Validation                            |
+| `--paper`                         | Paper mode                            |
+| `--split`, `--root`               | Fragment output                       |
+| `generate <header>...` (a paper)  | A paper of several headers            |
+| `-o` with `--split`               | A paper of several headers            |
+| `--depfile`, `--dep-target`       | A paper of several headers            |
 
 
 <a id="general-command-information"></a>
@@ -72,7 +74,7 @@ cd "$REPO_ROOT"
 "$SPECGEN" dump-decls --help > "$OUT/dump-decls-help.txt"
 ```
 
-Every command takes `--help`, and all four print the same usage text, so one of them is shown here.
+Every command accepts `--help`, and all four invocations print the same usage text, so only one is shown here.
 
 ```text
 usage: specgen <command> [options]
@@ -204,11 +206,11 @@ general:
 ```
 
 
-<a id="minimal-header-to-ir"></a>
+<a id="minimal-header"></a>
 
-# Minimal Header To IR
+# Minimal Header
 
-The smallest useful header example is `spec_widget.hpp`. It has class synopsis groups, two sections, attached out-of-line definitions, and ordinary description elements. Small, but enough.
+The smallest useful header is `spec_widget.hpp`. It has class synopsis groups, two sections, attached out-of-line definitions, and ordinary description elements.
 
 ```cpp
 // tests/corpus/spec_widget.hpp                                    -*-C++-*-
@@ -300,68 +302,9 @@ cd "$REPO_ROOT"
 	-o "$OUT/widget-piped.tex"
 ```
 
-The IR lands in `widget.json`; it is the same document the golden suite pins, so it is checked rather than shown.
+The first command writes the IR to `widget.json`. It is the same document the golden suite pins, so it is checked rather than shown.
 
-The second command is the whole pipeline in one process. `generate` without `--emit-ir` runs the front end and a backend in a single pass: the IR is built, validated if asked, rendered, and never written down.
-
-```latex
-\begin{codeblock}
-namespace std {
-  class @\libglobal{widget}@ {
-  public:
-    // \ref{widget.cons}, constructors
-    widget();
-    explicit widget(int value);
-
-    // \ref{widget.observers}, observers
-    bool empty() const;
-  };
-}
-\end{codeblock}
-
-\rSec3[widget.cons]{Constructors}
-
-\indexlibraryctor{widget}%
-\begin{itemdecl}
-widget();
-\end{itemdecl}
-
-\begin{itemdescr}
-\pnum
-\effects
-Constructs a \tcode{widget} holding no value.
-\end{itemdescr}
-
-\indexlibraryctor{widget}%
-\begin{itemdecl}
-explicit widget(int value);
-\end{itemdecl}
-
-\begin{itemdescr}
-\pnum
-\effects
-Constructs a \tcode{widget} holding \tcode{value}.
-\end{itemdescr}
-
-\rSec3[widget.observers]{Observers}
-
-\indexlibrarymember{empty}{widget}%
-\begin{itemdecl}
-bool empty() const;
-\end{itemdecl}
-
-\begin{itemdescr}
-\pnum
-\effects
-None.
-
-\pnum
-\returns
-\tcode{true} if the widget holds no value, \tcode{false} otherwise.
-\end{itemdescr}
-```
-
-The third command is the same wording reached the long way, as two processes with the IR passed between them on a pipe. It is byte for byte the file above — `render` and `generate` share the half of the driver that turns a document into wording, so there is nowhere for the two routes to differ:
+The second command is the ordinary use of specgen. `generate` without `--emit-ir` runs the front end and a backend in a single process: the document is built, validated if requested, and rendered, and the IR is never written.
 
 ```latex
 \begin{codeblock}
@@ -420,12 +363,71 @@ None.
 \end{itemdescr}
 ```
 
+The third command produces the same wording by the debugging route, as two processes with the IR passed between them on a pipe. The result is identical to the file above, byte for byte, because `render` and `generate` share the part of the driver that turns a document into wording:
 
-<a id="render-only-ir-examples"></a>
+```latex
+\begin{codeblock}
+namespace std {
+  class @\libglobal{widget}@ {
+  public:
+    // \ref{widget.cons}, constructors
+    widget();
+    explicit widget(int value);
 
-# Render-Only IR Examples
+    // \ref{widget.observers}, observers
+    bool empty() const;
+  };
+}
+\end{codeblock}
 
-These render the small hand-written `value_or` IR fixture. It is useful for backend comparison because the input is identical and only the serializer changes.
+\rSec3[widget.cons]{Constructors}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+widget();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding no value.
+\end{itemdescr}
+
+\indexlibraryctor{widget}%
+\begin{itemdecl}
+explicit widget(int value);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a \tcode{widget} holding \tcode{value}.
+\end{itemdescr}
+
+\rSec3[widget.observers]{Observers}
+
+\indexlibrarymember{empty}{widget}%
+\begin{itemdecl}
+bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+None.
+
+\pnum
+\returns
+\tcode{true} if the widget holds no value, \tcode{false} otherwise.
+\end{itemdescr}
+```
+
+
+<a id="the-three-backends"></a>
+
+# The Three Backends
+
+These commands render the small hand-written `value_or` IR fixture through each backend. Because the input is identical, the outputs differ only in the syntax each backend writes.
 
 ```json
 {
@@ -643,12 +645,12 @@ constexpr void reset() noexcept;
 :::
 ````
 
-The same IR in org:
+The same input in org:
 
 \#+begin\_src org
 
-<div class="addedblock" id="org3eba420">
-<div class="codeblock" id="orgacad652">
+<div class="addedblock" id="org3355f7e">
+<div class="codeblock" id="orgc472338">
 <p>
 class gadget {
 public:
@@ -665,14 +667,14 @@ public:
 
 ## Observers [gadget.observe]
 
-<div class="itemdecl" id="org6357e7e">
+<div class="itemdecl" id="org87b0070">
 <p>
 constexpr bool ready() const noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="org50dd7f6">
+<div class="pnum" id="orgde36621">
 <p>
 <i>Constraints</i>:
 </p>
@@ -684,21 +686,21 @@ constexpr bool ready() const noexcept;
 
 </div>
 
-<div class="pnum" id="orga10f22e">
+<div class="pnum" id="orgf290eb2">
 <p>
 <i>Returns</i>: <code>true</code> if and only if the gadget is ready.
 </p>
 
 </div>
 
-<div class="pnum" id="org0633b3c">
+<div class="pnum" id="orgeed2290">
 <p>
 A second paragraph, so the added numbering has to advance.
 </p>
 
 </div>
 
-<div class="pnum" id="org497beec">
+<div class="pnum" id="org35067fe">
 <p>
 A free paragraph closing the subclause.
 </p>
@@ -710,14 +712,14 @@ A free paragraph closing the subclause.
 
 ## Modifiers [gadget.mod]
 
-<div class="itemdecl" id="org43e4fbe">
+<div class="itemdecl" id="orga1c2c8c">
 <p>
 constexpr void reset() noexcept;
 </p>
 
 </div>
 
-<div class="pnum" id="org03d869e">
+<div class="pnum" id="orgf1cd96c">
 <p>
 <i>Effects</i>: Resets the gadget.
 </p>
@@ -731,7 +733,7 @@ constexpr void reset() noexcept;
 
 # Fragment Output
 
-`--split` writes one file per top-level stable-name section and prints a manifest in document order. The same IR goes through all three backends; only the extension and the rendered syntax differ. Consumers should use the manifest, in document order.
+`--split` writes one file per top-level stable-name section and prints a manifest in document order. The same input goes through all three backends; only the extensions and the rendered syntax differ. Consumers should rely on the manifest, which lists the fragments in document order.
 
 ```sh
 #!/bin/sh
@@ -771,7 +773,7 @@ mkdir -p "$OUT/org"
 )
 ```
 
-The org run names its root fragment explicitly, which is why its manifest opens with `optional.syn.org` where the other two derive `optional` from the sections' common prefix:
+The org run names its root fragment explicitly, which is why its manifest begins with `optional.syn.org`, whereas the other two derive `optional` from the sections' common prefix:
 
 ```text
 wording/optional.syn.org
@@ -782,7 +784,7 @@ wording/optional.monadic.org
 wording/optional.mod.org
 ```
 
-One fragment from each backend, the same section three ways:
+One fragment from each backend, showing the same section three ways:
 
 ```latex
 \rSec3[optional.ctor]{Constructors}
@@ -982,7 +984,7 @@ namespace std {
 
 # A Paper Of Several Headers
 
-A paper proposing several headers is several specgen documents and one invocation. `generate` takes one header per document, validates across the union of their documented names — so a name specified by a sibling document is not foreign — and writes the assembled clause, the per-clause fragments, or both.
+A paper proposing several headers is several specgen documents and one invocation. `generate` takes one header per document and validates across the union of their documented names, so a name specified by a sibling document is not foreign. It writes the assembled clause, the per-clause fragments, or both.
 
 ```sh
 #!/bin/sh
@@ -1033,9 +1035,9 @@ wording/paper.blend.syn.tex
 wording/paper.blend.tex
 ```
 
-`-o` names the whole, which is those same pieces in that same order with the fragment boundaries left out. That is not a coincidence to be relied on quietly: `golden.paper_whole.is_fragments` pins it, because a paper that assembles its clause from fragments and one that renders it whole have to agree.
+`-o` names the whole, which consists of the same pieces in the same order without the fragment boundaries. `golden.paper_whole.is_fragments` verifies this, because a paper that assembles its clause from fragments and one that renders it whole must agree.
 
-`--depfile` writes what make needs to know to rebuild any of it. The prerequisites are every file the parses read — including `include/support/spec_paper_traits.hpp`, which neither header names on the command line and which no rendered wording mentions, and which is exactly the edge that matters: a docblock in it changes the generated clause, so a paper that did not depend on it would go stale in silence. The empty rule per prerequisite is `-MP`: delete or rename a header and the next build regenerates rather than failing on a prerequisite the stale fragment still remembers.
+`--depfile` writes what make needs to know to rebuild any of it. The prerequisites are every file the parses read. They include `include/support/spec_paper_traits.hpp`, which neither header names on the command line and no rendered wording mentions; it is nevertheless the dependency that matters most, because a docblock in it changes the generated clause, and a paper that did not depend on it would become stale without notice. The empty rule per prerequisite corresponds to `-MP`: when a header is deleted or renamed, the next build regenerates the wording rather than failing on a prerequisite that no longer exists.
 
 ```makefile
 expected.tex wording/paper.mix.syn.tex wording/paper.mix.tex wording/paper.blend.syn.tex wording/paper.blend.tex: \
@@ -1053,7 +1055,7 @@ include/support/spec_paper_traits.hpp:
 
 # Validation
 
-Validators run in the normal render path.
+`--validate` runs the validators before rendering. These commands render IR fixtures; `generate --validate` behaves identically.
 
 ```sh
 #!/bin/sh
@@ -1085,7 +1087,7 @@ if "$SPECGEN" render --from-ir tests/golden/validate_coverage/input.json \
 fi
 ```
 
-A clean document renders as usual and says nothing. A finding at error severity is reported on standard error, the render is skipped, and the exit status is 1 — which is why the script has to catch it rather than let it abort:
+A clean document renders as usual and prints nothing further. A finding at error severity is reported on standard error, the render is skipped, and the exit status is 1, which is why the script must catch the failure rather than let it abort:
 
 ```text
 specgen: widget/synopsis: error: `resize` is declared in the synopsis but is not described, `\omit`ted, `\merge`d, or defaulted
@@ -1093,7 +1095,7 @@ specgen: widget/synopsis: error: the description of `reserve` is routed to [widg
 specgen: widget/synopsis: error: the description of `shrink` is routed to no section: it is written in the class body under no `\ref` group and carries no `\at`
 ```
 
-`generate` reports its own findings while still emitting IR for the header it parsed:
+`generate` reports findings about the docblock markup itself while still producing output for the header it parsed:
 
 ```sh
 #!/bin/sh
@@ -1136,7 +1138,7 @@ spec_diagnostics.hpp:108: warning: unrecognized section header [gadget.mod]; use
 
 # Explicit Include Path
 
-A header that includes another needs an include directory, and there are two ways to say so: after a bare `--`, or in a compilation database.
+A header that includes another requires an include directory, which may be supplied in two ways: after a bare `--`, or in a compilation database.
 
 ```sh
 #!/bin/sh
@@ -1178,14 +1180,14 @@ printf '[{"directory":"%s","file":"%s","arguments":["c++","-I","%s","-c","-o","s
     -o "$OUT/include-path-from-db.json"
 ```
 
-Both produce the same IR, byte for byte, and both are compared against the same golden. A difference between them would be a real difference rather than two files that merely happen to agree.
+Both produce the same IR, byte for byte, and both are compared against the same golden file, so any difference between them is a genuine one.
 
 
 <a id="declaration-interleave"></a>
 
 # Declaration Interleave
 
-`dump-decls` prints the declaration/comment event stream the front end builds the document from. Useful when a section is empty and should not be.
+`dump-decls` prints the sequence of declarations and comments from which the front end builds the document. It is the first tool to consult when a section is unexpectedly empty.
 
 ```sh
 #!/bin/sh
@@ -1227,7 +1229,7 @@ cd "$REPO_ROOT"
 
 # Larger Header Example
 
-`spec_optional.hpp` is the acid-test-shaped corpus header. It exercises the realistic document path: sections, overload grouping, derived constraints and mandates, extracted equivalent-to bodies, exposition-only state, hidden friends, `\seebelow`, and backend differences. Most bugs show up here first.
+`spec_optional.hpp` is the acid-test-shaped corpus header. It exercises the realistic document path: sections, overload grouping, derived constraints and mandates, extracted equivalent-to bodies, exposition-only state, hidden friends, `\seebelow`, and backend differences. Most defects appear here first.
 
 ```cpp
 // tests/corpus/spec_optional.hpp                                   -*-C++-*-
@@ -1495,7 +1497,7 @@ cd "$REPO_ROOT"
     -o "$OUT/optional.md"
 ```
 
-The markdown below is rendered from the IR the command above generated, not from a checked-in fixture — and both halves match their goldens, which is what says the generated IR and the checked-in IR are the same bytes.
+The markdown below is rendered from the IR that the command above generated, not from a checked-in fixture. Both the IR and the markdown match their golden files, which establishes that the generated IR and the checked-in IR are identical.
 
 ````markdown
 ```cpp
