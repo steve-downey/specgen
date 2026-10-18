@@ -1011,14 +1011,24 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
-    // An exposition-only enumeration is written as a TagTypeLoc -- the type of
-    // a member, a parameter, or a variable (issue #68). Without this hook its
-    // own declaration rendered under its exposid name while every use kept the
-    // real one, which is the wording naming an entity the reader cannot see.
-    // A record reaches this hook too and is harmless: a plain class is not an
-    // exposition candidate, and a class template's uses are template-ids,
-    // handled above.
+    // An exposition-only enumeration or plain class is written as a
+    // TagTypeLoc -- the type of a member, a parameter, or a variable (issues
+    // #68, #142). Without this hook its own declaration rendered under its
+    // exposid name while every use kept the real one, which is the wording
+    // naming an entity the reader cannot see. A class template's uses are
+    // template-ids, handled above.
     bool VisitTagTypeLoc(clang::TagTypeLoc tl) {
+        add(tl.getDecl(), clang::SourceRange(tl.getNameLoc()), tl.getQualifierLoc());
+        return true;
+    }
+
+    // A type named through a using-declaration -- `detail::helper_t` after
+    // `namespace detail { using impl::helper_t; }` -- is a UsingTypeLoc whose
+    // decl is the shadow, and nothing beneath it is traversed. An `\expos`
+    // using-declaration puts its shadows in the set beside their targets, so
+    // the shadow is what this looks up. Templates never needed it: their
+    // TemplateName looks through the shadow to the template (issue #142).
+    bool VisitUsingTypeLoc(clang::UsingTypeLoc tl) {
         add(tl.getDecl(), clang::SourceRange(tl.getNameLoc()), tl.getQualifierLoc());
         return true;
     }
@@ -5208,7 +5218,8 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
 // Class templates belong here too (issue #23): the draft's exposition-only
 // helpers are spelled as class templates as well as alias templates, and
 // their template-id uses resolve through the same TemplateName hook the
-// alias-template uses take.
+// alias-template uses take. Plain classes too (issue #142), whose uses are
+// TagTypeLocs.
 bool is_namespace_expos_candidate(const clang::Decl* decl) {
     if (llvm::isa<clang::ConceptDecl>(decl) || llvm::isa<clang::VarTemplateDecl>(decl) ||
         llvm::isa<clang::TypeAliasTemplateDecl>(decl) || llvm::isa<clang::ClassTemplateDecl>(decl))
@@ -5227,6 +5238,16 @@ bool is_namespace_expos_candidate(const clang::Decl* decl) {
     // a CXXRecordDecl and would otherwise be routed as an ordinary class.
     if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl))
         return true;
+    // A plain class, for the reason a class template is one (issue #142): the
+    // draft's exposition-only helpers include non-template classes. A defined
+    // one takes the ordinary class arms, like a defined class template; a
+    // forward declaration of a marked class is reproduced as an exposition-only
+    // declaration, since the synopsis needs it to compile (issue #151). The
+    // templated record of a class template is that template's, and an
+    // unnamed class has no name to rewrite.
+    if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(decl))
+        return record->getIdentifier() != nullptr && record->getDescribedClassTemplate() == nullptr &&
+               record->getDeclContext()->isFileContext();
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(decl))
         return alias->getDeclContext()->isFileContext();
     const auto* variable = llvm::dyn_cast<clang::VarDecl>(decl);
@@ -5634,6 +5655,15 @@ class ForeignDeclCollector : public clang::RecursiveASTVisitor<ForeignDeclCollec
         return true;
     }
 
+    // The shadow, as ExposUseFinder looks it up: one that is not exposition-
+    // only still names its target, and the target is what may be foreign.
+    bool VisitUsingTypeLoc(clang::UsingTypeLoc tl) {
+        const clang::UsingShadowDecl* shadow = tl.getDecl();
+        if (shadow != nullptr && !expos_.contains(shadow->getCanonicalDecl()))
+            record(shadow->getTargetDecl());
+        return true;
+    }
+
   private:
     void record(const clang::NamedDecl* decl) {
         if (decl == nullptr)
@@ -5642,6 +5672,13 @@ class ForeignDeclCollector : public clang::RecursiveASTVisitor<ForeignDeclCollec
         if (const auto* specialization = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl))
             canonical = specialization->getSpecializedTemplate()->getCanonicalDecl();
         if (expos_.contains(canonical))
+            return;
+        // An enumerator is named through its enumeration: one of an
+        // exposition-only enumeration is as visible as the enumeration is,
+        // wherever that enumeration happens to be declared.
+        if (const auto* enumerator = llvm::dyn_cast<clang::EnumConstantDecl>(decl);
+            enumerator != nullptr &&
+            expos_.contains(llvm::cast<clang::Decl>(enumerator->getDeclContext())->getCanonicalDecl()))
             return;
         const clang::SourceLocation loc = decl->getLocation();
         if (!loc.isValid() || sm_.isInSystemHeader(loc) || doc_.contains(sm_.getDecomposedLoc(loc).first))

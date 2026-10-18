@@ -893,6 +893,22 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_class_template"
 )
 
+# `\expos` on a plain class, and on using-declarations of non-template types
+# (issue #142): every use takes the exposid, with no `detail::` leakage, and a
+# forward declaration of a marked class is reproduced (issue #151). The
+# mpark rendering shows the names the way a reader sees them.
+specgen_add_golden(
+    expos_plain_class_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_plain_class.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_plain_class"
+)
+specgen_add_golden(
+    expos_plain_class
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_plain_class/expected.json"
+)
+
 # Bare `\seebelow` on a namespace-scope variable (template) masks the
 # declared type as the draft's *unspecified* placeholder and drops the
 # initializer — the customization-point-object shape (issue #24) — list-init
