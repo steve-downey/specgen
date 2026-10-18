@@ -22,7 +22,6 @@ class holder {
 
   public:
     // \ref{demo.holder}, construction
-    //! \effects Initializes the holder with `ptr`.
     constexpr explicit holder(I ptr);
 };
 

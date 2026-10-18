@@ -4817,11 +4817,12 @@ AttachedItem build_spec_item(clang::Decl*                                     de
 // section closes, ordered against out-of-line siblings by class-body offset.
 //
 // Skipped: members with no docblock; the bodyless in-class *declaration* of an
-// out-of-line member (attached from its out-of-line definition instead); and
-// `= default`/`= delete` members *unless* their docblock carries `\describe`
-// (design §4.3, §6 — defaulted/deleted entities get an itemdecl only when asked
-// for). An `\omit`/`\merge` member is dropped here (no itemdescr; its synopsis
-// line is removed by the omit-set pre-pass). Placement is the nearest preceding
+// out-of-line member (attached from its out-of-line definition instead, and
+// reported when its own docblock asks for wording); data members (reported the
+// same way); and `= default`/`= delete` and definition-less pure virtual
+// members *unless* their docblock carries a description element or `\describe`
+// (design §4.3, §6 — such entities get an itemdecl only when asked for). An `\omit`/`\merge` member is dropped here
+// (no itemdescr; its synopsis line is removed by the omit-set pre-pass). Placement is the nearest preceding
 // `\ref{...}` group, or `\at <stable>` when the docblock overrides it; a
 // member routed to a stable name that names no `\rSec` section is stashed under
 // a key no frame will close on and is silently dropped (a coverage
@@ -4873,6 +4874,66 @@ class ClassRefGroups {
   private:
     std::vector<std::pair<unsigned, std::string>> groups_;
 };
+
+// The findings for a class-body docblock that can produce no wording of its
+// own: the bodyless declaration of a member defined elsewhere, or a data
+// member. Markers that act on the declaration -- `\omit`, `\merge`,
+// `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are what such a
+// docblock is for, and stay silent. A description element, or a marker only a
+// definition's wording can carry out, asks for wording this docblock cannot
+// produce, and dropping it silently is how a header validates clean while its
+// descriptions vanish (issues #125, #140): that is an Error saying `problem`.
+// The block's grammar findings are reported either way, since nothing else
+// reads this docblock.
+std::vector<beman::specgen::document_build::Diagnostic>
+declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManager& sm, std::string problem) {
+    const clang::RawComment* rc = attached_raw_comment(decl);
+    if (rc == nullptr)
+        return {};
+    const llvm::StringRef            raw   = rc->getRawText(sm);
+    const std::optional<std::size_t> start = docblock_start(raw);
+    if (!start)
+        return {};
+
+    const grammar::ParseResult parsed  = grammar::parse_docblock(raw.substr(*start).str());
+    const lowering::Lowered    lowered = lowering::lower(parsed.block);
+    const grammar::Markers&    markers = lowered.directives;
+    const bool asks_for_wording = !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl ||
+                                  markers.verbatim_synopsis || markers.describe || markers.also || markers.group_id ||
+                                  markers.constraints_in_decl || markers.impdef || markers.at_anchor ||
+                                  markers.effects_equiv || markers.returns_equiv;
+
+    std::vector<beman::specgen::document_build::Diagnostic> out = docblock_diagnostics(rc, *start, parsed.diags, sm);
+    if (asks_for_wording)
+        out.push_back(
+            beman::specgen::document_build::Diagnostic{beman::specgen::Severity::Error,
+                                                       sm.getSpellingLineNumber(decl->getBeginLoc()),
+                                                       std::move(problem),
+                                                       diagnostic_file_name(sm, sm.getFileID(decl->getBeginLoc()))});
+    return out;
+}
+
+// What the docblock on the bodyless in-class declaration of `fn` should have
+// been written on instead. The definition places a member's wording (design
+// §3.3); one in another file of the translation unit is named by that file.
+// One outside it is a definition in a source file, which no translation unit
+// specgen reads can reach yet (issue #149).
+std::string misplaced_declaration_markup(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
+    const std::string          name       = fn->getNameAsString();
+    const clang::FunctionDecl* definition = fn->getDefinition();
+    if (definition == nullptr)
+        return std::format("the documented declaration of `{}` produces no wording: markup is read from a member's "
+                           "definition (design §3.3), and this translation unit has none",
+                           name);
+    const clang::SourceLocation at   = definition->getBeginLoc();
+    const std::string           file = diagnostic_file_name(sm, sm.getFileID(at));
+    return std::format("the documented declaration of `{}` produces no wording: markup belongs at its definition, "
+                       "{}{}{}, which places a member's wording (design §3.3)",
+                       name,
+                       file.empty() ? "line " : file,
+                       file.empty() ? "" : ":",
+                       sm.getSpellingLineNumber(at));
+}
 
 void collect_inclass_items(const clang::CXXRecordDecl*                               record,
                            const clang::SourceManager&                               sm,
@@ -4932,20 +4993,40 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             if (const auto* friend_decl = llvm::dyn_cast<clang::FriendDecl>(member))
                 friend_begin = friend_decl->getBeginLoc();
         }
-        if (fn == nullptr)
+        if (fn == nullptr) {
+            // A data member's specification is its declaration and its
+            // class's description (design §6), so a docblock on one has no
+            // itemdescr to become (issue #125; a static data member's own
+            // item is issue #148).
+            if (llvm::isa<clang::FieldDecl, clang::VarDecl, clang::VarTemplateDecl>(member) &&
+                has_docblock(member, sm))
+                diagnostics.append_range(declaration_docblock_findings(
+                    member,
+                    sm,
+                    std::format("a documented data member produces no wording: describe `{}` in its class's "
+                                "description",
+                                llvm::cast<clang::NamedDecl>(member)->getNameAsString())));
             continue;
+        }
         // An in-class member is collected if it has a real (compound) body — a
         // hidden friend or a compiler-bug member — or is `= default`/`= delete`
-        // (a candidate for `\describe`, checked after lowering). A bodyless
-        // plain declaration belongs to an out-of-line definition, attached from
-        // the top-level stream instead. (isOutOfLine() is deliberately *not*
-        // checked — a hidden friend is lexically in the class but semantically
-        // in the enclosing namespace, so it reports out-of-line yet is exactly
-        // what this pass must collect.)
+        // or pure virtual with no definition (a candidate for `\describe`,
+        // checked after lowering): those three are declarations with nothing
+        // else to carry their markup. Any other bodyless declaration belongs
+        // to a definition elsewhere, attached from the top-level stream
+        // instead, and a docblock on it produces nothing (issue #140).
+        // (isOutOfLine() is deliberately *not* checked — a hidden friend is
+        // lexically in the class but semantically in the enclosing namespace,
+        // so it reports out-of-line yet is exactly what this pass must
+        // collect.)
         const bool is_defaulted_or_deleted = fn->isDefaulted() || fn->isDeleted();
+        const bool is_bare_pure_virtual    = fn->isPureVirtual() && fn->getDefinition() == nullptr;
         const bool has_compound_body       = fn->doesThisDeclarationHaveABody() && !is_defaulted_or_deleted;
-        if (!has_compound_body && !is_defaulted_or_deleted)
+        if (!has_compound_body && !is_defaulted_or_deleted && !is_bare_pure_virtual) {
+            if (has_docblock(fn, sm))
+                diagnostics.append_range(declaration_docblock_findings(fn, sm, misplaced_declaration_markup(fn, sm)));
             continue;
+        }
         if (!has_docblock(fn, sm))
             continue;
 
@@ -4955,19 +5036,21 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // a separate question from whether its markup parsed cleanly, and
         // three of the four ways out of this loop are `continue`.
         diagnostics.append_range(std::move(attached.diagnostics));
-        // A `= default`/`= delete` member earns an itemdecl only when there is
+        // A `= default`/`= delete` member, or a pure virtual one with no
+        // definition, earns an itemdecl only when there is
         // something to specify about it — an authored description element
         // (design §6, cf. tuple's defaulted copy constructor, whose itemdecl
         // exists because a Mandates and an Effects apply to it) — or an explicit
         // `\describe`. Otherwise it stays a synopsis-only declaration. The
-        // `= default`/`= delete` tail is kept verbatim in the itemdecl. A
+        // `= default`/`= delete`/`= 0` tail is kept verbatim in the itemdecl. A
         // derive_constraints/derive_mandates element doesn't count: it restates
         // the declaration's own constraint rather than adding something to
         // specify, and on a deleted overload a standalone item for it is
         // actively misleading (issue #121).
         const bool has_authored_element =
             std::ranges::any_of(attached.item.descr.elements, [](const auto& element) { return !element.derived; });
-        if (is_defaulted_or_deleted && !has_authored_element && !attached.directives.describe)
+        if ((is_defaulted_or_deleted || is_bare_pure_virtual) && !has_authored_element &&
+            !attached.directives.describe)
             continue;
         // `\omit`/`\merge`: no itemdescr (the synopsis line is dropped by the
         // omit-set pre-pass).
