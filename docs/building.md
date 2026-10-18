@@ -64,8 +64,8 @@ uv run cmake --build --preset gcc-release
 uv run ctest --preset gcc-release
 ```
 
-That run reports **1006 tests**. The count goes stale the moment a ctest case is
-added; whoever adds one updates this number here in the same change.
+ctest reports how many tests it ran. No document records that number, so adding
+a case needs no edit outside the test suite.
 
 The full preset list is `{gcc, llvm, appleclang, msvc}` × `{debug, release}`;
 `gcc-release` is the one used day to day and the one CI reproduces. A box whose
@@ -83,7 +83,7 @@ types `RelWithDebInfo;Debug;Tsan;Asan;Gcov`) into `.build/build-system` (or
 `.build/build-<toolchain>` under `make TOOLCHAIN=<name>`; extra cache variables go
 in `_cmake_args=`). It needs no `LD_LIBRARY_PATH` shim, because
 `cmake/gcc-flags.cmake` embeds an rpath to the compiler's own libstdc++, and it
-reports the same test count the preset lane does.
+runs the same tests the preset lane does.
 
 The `gcc-multi-config` preset uses the same generator, and is what CI's *GCC 16
 Multi-Config* lane runs: a multi-config build puts the driver in a per-configuration
