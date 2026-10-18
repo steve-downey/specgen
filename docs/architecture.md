@@ -589,7 +589,10 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - Phrasing rewriter over top-level `&&` conjuncts:
   - bool trait/variable → "`X` is `true`"
   - negation → "`X` is `false`"
-  - concept-id → "`X` is satisfied"
+  - concept-id with one template argument → "`X` models `C`", the draft's spelling; `X` is
+    the written argument, rewritten like any other code (qualifiers dropped, exposition-only
+    uses as exposids, the draft's qualifier order), issue #126
+  - concept-id with no argument or several → "`C<...>` is satisfied"
   - unrecognized → verbatim "`expr` is `true`"
   - **no flattening through disjunctions**: `A && (B || C)` yields two conjuncts,
     the second verbatim.
