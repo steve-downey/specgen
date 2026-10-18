@@ -939,7 +939,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    `\rSec`. The check reads the synopsis roster (§7), and a gathered header synopsis (§3.4)
    is checked like any other: it carries the folded-in classes' rosters, each entry naming
    its declaring class, so a finding says which class it is about even though the node
-   itself names none (issue #45).
+   itself names none (issue #45). Namespace-scope declarations are outside the invariant,
+   including those folded into a gathered synopsis. A documented one produces wording and an
+   undocumented one is an implementation helper (§3.3), so neither has a roster entry
+   (issue #141).
 2. **Leakage checker**: every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
    body. Four clauses at two severities:
