@@ -3546,11 +3546,6 @@ std::string format_expr_fragment(const std::string& text) {
     return formatted;
 }
 
-// Source text of an expression's written form.
-llvm::StringRef expr_text(const clang::Expr* e, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
-    return clang::Lexer::getSourceText(clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts);
-}
-
 // Fold a formatted fragment onto one line. A conjunct is inline code inside a
 // sentence, so it has to be one: org's `~…~` does not span two newlines, and a
 // markdown span that does is one blank line from breaking. clang-format keeps
@@ -3573,22 +3568,36 @@ std::string fold_lines(std::string_view text) {
            std::views::join | std::ranges::to<std::string>();
 }
 
-beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*                               e,
-                                                 const clang::SourceManager&                      sm,
-                                                 const clang::LangOptions&                        lang_opts,
-                                                 const std::set<std::string>&                     ns_drop_set,
-                                                 const std::map<const clang::Decl*, std::string>& expos_set) {
-    const unsigned            text_begin = sm.getDecomposedLoc(e->getSourceRange().getBegin()).second;
-    std::string               text       = expr_text(e, sm, lang_opts).str();
+// The written text of `range`, rewritten the way every code fragment is: the
+// drop set's qualifiers removed, exposition-only uses replaced by their exposid
+// spans, the draft's qualifier order applied, and the lines folded. The edits
+// are found by walking `root`, which must contain `range`; an edit outside the
+// range is discarded. The two differ for a concept-id's sole argument, which
+// is a written template argument and not an expression of its own: walking
+// the whole ConceptSpecializationExpr reaches it, and the range keeps only its
+// text (issue #126). Whitespace at either end of the range is trimmed.
+beman::specgen::ir::CodeText code_rewritten(const clang::Stmt*                               root,
+                                            clang::CharSourceRange                           range,
+                                            const clang::SourceManager&                      sm,
+                                            const clang::LangOptions&                        lang_opts,
+                                            const std::set<std::string>&                     ns_drop_set,
+                                            const std::map<const clang::Decl*, std::string>& expos_set) {
+    static constexpr std::string_view whitespace = " \t\n\v\f\r";
+    auto* const                       walked     = const_cast<clang::Stmt*>(root);
+    std::string                       text       = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+    const std::size_t                 lead       = std::min(text.find_first_not_of(whitespace), text.size());
+    text.erase(0, lead);
+    text.erase(text.find_last_not_of(whitespace) + 1);
+    const unsigned            text_begin = sm.getDecomposedLoc(range.getBegin()).second + static_cast<unsigned>(lead);
     std::vector<SynopsisEdit> edits =
-        namespace_qualifier_edits(const_cast<clang::Expr*>(e), ns_drop_set, sm, lang_opts, expos_set) |
+        namespace_qualifier_edits(walked, ns_drop_set, sm, lang_opts, expos_set) |
         std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }) |
         std::ranges::to<std::vector<SynopsisEdit>>();
     std::map<std::string, SpanInfo> sentinels;
     unsigned                        span_n = 0;
     // substrate generic algorithm: build a sentinel table and one-or-two edits
     // per resolved use; the shared counter couples both output collections.
-    for (const ExposUse& use : expos_uses(const_cast<clang::Expr*>(e), expos_set, sm, lang_opts)) {
+    for (const ExposUse& use : expos_uses(walked, expos_set, sm, lang_opts)) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, use.display, use.display};
         edits.push_back(SynopsisEdit{use.name_begin, use.name_end, sentinel});
@@ -3606,6 +3615,15 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
         applied_begin = edit.begin;
     }
     return recover_sentinels(fold_lines(format_expr_fragment(text)), sentinels);
+}
+
+beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*                               e,
+                                                 const clang::SourceManager&                      sm,
+                                                 const clang::LangOptions&                        lang_opts,
+                                                 const std::set<std::string>&                     ns_drop_set,
+                                                 const std::map<const clang::Decl*, std::string>& expos_set) {
+    return code_rewritten(
+        e, clang::CharSourceRange::getTokenRange(e->getSourceRange()), sm, lang_opts, ns_drop_set, expos_set);
 }
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:
@@ -3633,11 +3651,16 @@ beman::specgen::ir::Paragraph phrase_conjunct(const clang::Expr*                
         ir::Paragraph                             out;
         if (args != nullptr && args->getNumTemplateArgs() == 1) {
             // "`arg` models \libconcept{name}". The sole argument is usually a
-            // type (`copyable<U>`), so take its written source range directly
-            // rather than assuming an expression argument.
-            const llvm::StringRef subject = clang::Lexer::getSourceText(
-                clang::CharSourceRange::getTokenRange(args->arguments()[0].getSourceRange()), sm, lang_opts);
-            out.push_back(ir::CodeInline{ir::CodeText{subject.str(), {}}});
+            // type (`copyable<U>`), so its text is everything between the
+            // angle brackets: a qualified type's own source range starts after
+            // a leading `const`, which `small<const T&>` lost as `T&`. The text
+            // is rewritten as the value form's code is, or a `std::` qualifier
+            // and an exposition-only name survived into the subject (issue
+            // #126).
+            const clang::CharSourceRange subject = clang::CharSourceRange::getCharRange(
+                clang::Lexer::getLocForEndOfToken(args->getLAngleLoc(), 0, sm, lang_opts), args->getRAngleLoc());
+            out.push_back(
+                ir::CodeInline{code_rewritten(concept_expr, subject, sm, lang_opts, ns_drop_set, expos_set)});
             out.push_back(ir::TextInline{" models "});
             if (const auto found = expos_set.find(concept_decl->getCanonicalDecl()); found != expos_set.end()) {
                 out.push_back(ir::CodeInline{

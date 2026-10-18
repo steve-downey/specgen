@@ -764,6 +764,22 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_constraints.hpp"
 )
 
+# The subject of a derived "`X` models `C`" conjunct, in Constraints and in
+# Mandates, rewritten like any other code: `std::` dropped, an exposition-only
+# alias as its exposid, `T const&` as `const T&` (issue #126). The mpark
+# rendering shows the subjects as a reader sees them.
+specgen_add_golden(
+    concept_subject_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_concept_subject.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/concept_subject"
+)
+specgen_add_golden(
+    concept_subject
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/concept_subject/expected.json"
+)
+
 # Authored `\item` entries lower into the same Itemize IR as
 # derived conjuncts, while an authored `\iref{...}` becomes RefInline.
 # The distinct case name leaves `authored_itemize` free for the default
