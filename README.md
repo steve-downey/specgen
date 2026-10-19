@@ -34,9 +34,12 @@ prebuilt `specgen` for x86_64 Linux. It runs on glibc 2.34 or newer (Ubuntu 22.0
 RHEL 9 and their derivatives, or later) on an x86-64-v2 processor, and needs neither GCC 16 nor LLVM:
 
 ```bash
-curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz | tar -xz
+curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.xz | tar -xJ
 specgen-*-manylinux_2_34_x86_64/bin/specgen --version
 ```
+
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu); the same tree is also published as
+`specgen-manylinux_2_34_x86_64.tar.gz` for `tar -xz`.
 
 Keep the unpacked directory together; `lib/clang/` beside `bin/` holds Clang's builtin headers.
 `specgen` does not carry a C++ standard library: a header that includes one is parsed against the host's,

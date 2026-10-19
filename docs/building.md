@@ -167,7 +167,8 @@ publishes the report as an artifact; nothing uploads to an external service.
 ## Release binary
 
 Every push to `main` publishes a GitHub Release carrying a portable driver,
-`specgen-manylinux_2_34_x86_64.tar.gz`, built by
+`specgen-manylinux_2_34_x86_64.tar.xz`, and the same tree as a `.tar.gz` for
+links made before the `.tar.xz` existed, built by
 `.github/workflows/release-binary.yml`
 ([decisions/portable-release-binary.md](decisions/portable-release-binary.md);
 the plan and its measurements are

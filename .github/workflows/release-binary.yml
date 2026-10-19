@@ -155,6 +155,8 @@ jobs:
           name: specgen-manylinux_2_34_x86_64
           if-no-files-found: error
           path: |
+            dist/specgen-manylinux_2_34_x86_64.tar.xz
+            dist/specgen-manylinux_2_34_x86_64.tar.xz.sha256
             dist/specgen-manylinux_2_34_x86_64.tar.gz
             dist/specgen-manylinux_2_34_x86_64.tar.gz.sha256
             dist/specgen.debug.xz
@@ -178,13 +180,15 @@ jobs:
     container:
       image: ${{ matrix.image }}
     steps:
-      - name: Install g++
+      # xz explicitly, on every image: a stock image's tar cannot read the
+      # .tar.xz without it, and a user's machine may lack it just as well.
+      - name: Install g++ and xz
         run: |
           if command -v apt-get >/dev/null; then
               apt-get update -q
-              DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends g++
+              DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends g++ xz-utils
           else
-              dnf install -y -q --setopt=install_weak_deps=False gcc-c++ diffutils tar gzip
+              dnf install -y -q --setopt=install_weak_deps=False gcc-c++ diffutils tar gzip xz
           fi
 
       - name: Checkout
@@ -198,11 +202,18 @@ jobs:
           name: specgen-manylinux_2_34_x86_64
           path: dist
 
+      # Both archives, checked and unpacked; the .tar.gz into its own
+      # directory, and required to hold the same tree as the .tar.xz the
+      # smoke test then runs.
       - name: Unpack
         working-directory: dist
         run: |
+          sha256sum -c specgen-manylinux_2_34_x86_64.tar.xz.sha256
           sha256sum -c specgen-manylinux_2_34_x86_64.tar.gz.sha256
-          tar -xzf specgen-manylinux_2_34_x86_64.tar.gz
+          tar -xJf specgen-manylinux_2_34_x86_64.tar.xz
+          mkdir gz
+          tar -C gz -xzf specgen-manylinux_2_34_x86_64.tar.gz
+          diff -r specgen-*-manylinux_2_34_x86_64 gz/specgen-*-manylinux_2_34_x86_64
 
       - name: Smoke
         run: tools/release/smoke.sh dist/specgen-*/bin/specgen "$GITHUB_SHA"
@@ -224,7 +235,7 @@ jobs:
           path: dist
 
       # The asset names carry no version, so
-      # releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz always
+      # releases/latest/download/specgen-manylinux_2_34_x86_64.tar.xz always
       # serves head; the version is in the tag, the archive's directory, and
       # `specgen --version`.
       - name: Create the release
@@ -237,9 +248,10 @@ jobs:
           {
               echo "specgen $VERSION, built from $GITHUB_SHA."
               echo
-              echo "\`specgen-manylinux_2_34_x86_64.tar.gz\` runs on x86_64 Linux with glibc 2.34 or newer"
+              echo "\`specgen-manylinux_2_34_x86_64.tar.xz\` runs on x86_64 Linux with glibc 2.34 or newer"
               echo "(Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9, or later) and needs the host's g++ for"
-              echo "the C++ standard library headers. \`specgen.debug.xz\` resolves a crash report's offsets."
+              echo "the C++ standard library headers. The \`.tar.gz\` holds the same tree, for links made"
+              echo "before the \`.tar.xz\` existed. \`specgen.debug.xz\` resolves a crash report's offsets."
           } > notes.md
           gh release create "$tag" dist/* \
               --repo "$GITHUB_REPOSITORY" \
