@@ -1,3 +1,4 @@
-spec_variable_mask_diagnostics.hpp:25: error: a variable accepts only bare \seebelow
 spec_variable_mask_diagnostics.hpp:28: error: a variable accepts only bare \seebelow
-spec_variable_mask_diagnostics.hpp:32: error: an enumeration accepts no \seebelow
+spec_variable_mask_diagnostics.hpp:31: error: a variable accepts only bare \seebelow
+spec_variable_mask_diagnostics.hpp:35: error: an enumeration accepts no \seebelow
+spec_variable_mask_diagnostics.hpp:40: error: a static data member accepts only bare \seebelow

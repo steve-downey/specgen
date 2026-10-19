@@ -658,7 +658,8 @@ function un-`noexcept` even when it visibly never throws.
 | `= default` / `= delete` | yes | no (unless `\describe`) |
 | Pure virtual, no definition | yes | when it has an element or `\describe`; markup on the decl, `= 0` kept |
 | Documented in-class decl of a fn defined elsewhere or nowhere | yes | Error naming the def; marker-only silent |
-| Documented data member | yes | Error: a data member has no itemdescr; marker-only silent |
+| Documented static data member | yes | yes, routed like an alias; bare `\seebelow` drops the initializer |
+| Documented non-static or `\expos` data member | yes | Error: no itemdescr; marker-only silent |
 | Defaulted twin with `\merge` | dropped | merged into primary |
 | Hidden friend (`FOK_Undeclared`) | yes, `friend` kept | yes, markup in-class |
 | In-class def (compiler bug) | yes | yes, markup in-class, `\at` if needed |

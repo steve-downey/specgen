@@ -10,8 +10,9 @@
 //   markup: the declaration's copy is lost, so the Error names the definition.
 // - `erase` is declared with a Returns and defined nowhere in this header, as
 //   a member defined in a source file is: there is nothing to attach it to.
-// - `count` and `stride` are data members, static and not, whose Remarks have
-//   no itemdescr to become.
+// - `stride` is a non-static data member and `capacity_` an exposition-only
+//   static one, whose Remarks have no itemdescr to become. A documented static
+//   data member that is not `\expos` is an item of its own (issue #148).
 // - `reserve` and `limit_` carry markers only, and stay silent.
 // - `clear` misspells its element, so the docblock asks for nothing, but its
 //   grammar finding is still reported: nothing else reads this docblock.
@@ -36,15 +37,16 @@ class table {
     //! \effect Removes every element.
     void clear();
 
-    //! \remarks True when the table keeps insertion order.
-    static constexpr bool ordered = true;
-
     //! \remarks The distance between rows.
     int stride = 0;
 
   private:
     //! \expos
     int limit_ = 0;
+
+    //! \expos
+    //! \remarks The most rows a table holds.
+    static constexpr int capacity_ = 8;
 };
 
 // \rSec3[table.modifiers]{Modifiers}
