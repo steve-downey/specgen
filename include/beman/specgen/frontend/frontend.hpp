@@ -319,8 +319,21 @@ struct DocumentBuild {
     std::vector<std::string>                    sources;
 };
 
-std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view    header_path,
-                                                                       const ParseOptions& options = {});
+// A source file whose out-of-line member definitions carry the markup for
+// members the header declares (issue #149), and the options it is parsed with:
+// its own compile command's, since it is a translation unit of its own. Named
+// with `generate --source`, after the header whose document it belongs to.
+struct SourceFile {
+    std::string  path;
+    ParseOptions options;
+};
+
+// `source_files` are parsed after the header, each on its own, and a
+// documented member definition in one becomes the item of the declaration it
+// defines, placed as a definition in the header would be. Their reads join
+// `sources`.
+std::expected<DocumentBuild, BuildFailure> build_document_with_sources(
+    std::string_view header_path, const ParseOptions& options = {}, const std::vector<SourceFile>& source_files = {});
 
 } // namespace beman::specgen::frontend
 

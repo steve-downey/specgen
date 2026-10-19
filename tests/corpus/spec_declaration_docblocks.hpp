@@ -9,7 +9,8 @@
 // - `insert` is declared with an Effects and defined out of line with its own
 //   markup: the declaration's copy is lost, so the Error names the definition.
 // - `erase` is declared with a Returns and defined nowhere in this header, as
-//   a member defined in a source file is: there is nothing to attach it to.
+//   a member defined in a source file not named with `--source` is: there is
+//   nothing to attach it to.
 // - `stride` is a non-static data member and `capacity_` an exposition-only
 //   static one, whose Remarks have no itemdescr to become. A documented static
 //   data member that is not `\expos` is an item of its own (issue #148).

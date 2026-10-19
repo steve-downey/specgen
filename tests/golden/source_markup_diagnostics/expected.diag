@@ -1,0 +1,5 @@
+spec_source_markup_diagnostics.cc:24: error: the documented definition of `demo::audit` produces no wording: a source file supplies markup only for a member declared in a class body
+spec_source_markup_diagnostics.cc:27: error: the documented definition of `demo::helper` produces no wording: a source file supplies markup only for a member declared in a class body
+spec_source_markup_diagnostics.cc:30: error: a documented declaration in a source file produces no wording: a source file supplies markup only on the definition of a member declared in a class body
+spec_source_markup_diagnostics.hpp:18: error: the documented declaration of `post` produces no wording: markup belongs at its definition, spec_source_markup_diagnostics.cc:18, which places a member's wording (design §3.3)
+spec_source_markup_diagnostics.cc:20: error: unknown tag \effect

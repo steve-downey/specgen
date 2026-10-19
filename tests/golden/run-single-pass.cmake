@@ -65,6 +65,12 @@ set(generate_args
     "${ACTUAL}.one-pass"
     --no-compile-commands
 )
+if(SOURCES)
+    string(REPLACE "|" ";" _sources "${SOURCES}")
+    foreach(_source IN LISTS _sources)
+        list(APPEND generate_args --source "${_source}")
+    endforeach()
+endif()
 if(COMPILE_COMMANDS_DIR)
     list(APPEND generate_args --compile-commands "${COMPILE_COMMANDS_DIR}")
 endif()
