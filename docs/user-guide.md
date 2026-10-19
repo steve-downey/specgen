@@ -433,10 +433,10 @@ line in the same run as a Doxygen line is removed with it. A blank line between
 the two keeps the draft-form comment.
 
 A header documented only with Doxygen is valid input and can produce empty
-wording. Validation then reports the declarations in its synopses as
-undocumented. Those
+wording. Validation then reports its class members as undocumented. Those
 coverage errors are intentional: successful parsing must not silently
-reinterpret Doxygen prose as specification.
+reinterpret Doxygen prose as specification. Coverage reads class bodies only,
+so a Doxygen-only header with no class validates clean, with empty output.
 
 Draft-form section markers build the document tree:
 
@@ -782,12 +782,17 @@ Run `generate --validate` as part of the normal authoring loop. Validation
 checks:
 
 - Span and authored table structure.
-- Coverage: each declaration in a synopsis (a class member, or a declaration
-  folded into a gathered header synopsis) must be described, exposition-only, defaulted or
-  deleted, explicitly omitted, or represented by a merged declaration, and
-  routed wording must name a section that exists. A *public data member*
-  requires none of these: its declaration is its specification, as in the
-  draft's `from_chars_result`, and the class's own description may name it.
+- Coverage: each declaration in a class body must be described,
+  exposition-only, defaulted or deleted, explicitly omitted, or represented by
+  a merged declaration, and routed wording must name a section that exists.
+  This holds for a class whose synopsis is folded into a gathered header
+  synopsis too. A *public data member* requires none of these: its
+  declaration is its specification, as in the draft's `from_chars_result`, and
+  the class's own description may name it. Namespace-scope declarations are
+  outside coverage, including those in a gathered header synopsis. A
+  namespace-scope function, variable or alias produces wording only when it is
+  documented, and an undocumented one is treated as an implementation helper,
+  with no finding.
 - Leakage: wording, item declarations, equivalent-to bodies, tables, and
   synopses must not name invisible members, surviving implementation namespace
   qualifiers, or bare names that resolve to declarations outside the document.
@@ -932,6 +937,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.4.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.4.1 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
