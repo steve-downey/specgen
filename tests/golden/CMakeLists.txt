@@ -75,6 +75,12 @@ endif()
 # `file(GENERATE ...)`/`configure_file()` before registering the case that
 # names it.
 #
+# SOURCE (multi-valued; generate and diagnose modes): source files passed as
+# `--source` after the header, whose documented member definitions supply the
+# header's wording (issue #149). The `.eastconst` sibling is skipped for such a
+# case: the flipped header is written to the build tree, and the source file
+# goes on including the original.
+#
 # EXPECTED_DIR (generate mode only): read `expected.json` from this
 # directory instead of `<case>/`, so a second way of reaching one parse (e.g.
 # EXTRA_ARGS vs. COMPILE_COMMANDS_DIR) can be pinned against the *same*
@@ -135,7 +141,7 @@ function(specgen_add_golden case)
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_INPUT"
+        "ROOT;ALSO_INPUT;SOURCE"
         ${ARGN}
     )
 
@@ -206,6 +212,10 @@ function(specgen_add_golden case)
         list(APPEND case_args "-DALSO_INPUTS=${_also_joined}")
         unset(_also_joined)
     endif()
+    if(ARG_SOURCE)
+        string(REPLACE ";" "|" _sources_joined "${ARG_SOURCE}")
+        list(APPEND case_args "-DSOURCES=${_sources_joined}")
+    endif()
     if(ARG_VALIDATE)
         list(APPEND case_args "-DVALIDATE=ON")
     endif()
@@ -274,6 +284,9 @@ function(specgen_add_golden case)
         if(ARG_EXTRA_ARGS)
             list(APPEND single_pass_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
         endif()
+        if(ARG_SOURCE)
+            list(APPEND single_pass_args "-DSOURCES=${_sources_joined}")
+        endif()
         if(ARG_COMPILE_COMMANDS_DIR)
             list(
                 APPEND single_pass_args
@@ -316,6 +329,9 @@ function(specgen_add_golden case)
             if(ARG_EXTRA_ARGS)
                 list(APPEND quiet_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
             endif()
+            if(ARG_SOURCE)
+                list(APPEND quiet_args "-DSOURCES=${_sources_joined}")
+            endif()
             add_test(
                 NAME golden.${case}.quiet
                 COMMAND
@@ -335,7 +351,11 @@ function(specgen_add_golden case)
         # corpus path, and the flipped header is in the build tree. Nothing is
         # lost -- those cases exist in pairs reaching one parse two ways, and
         # the EXTRA_ARGS half of the pair carries the flip.
-        if(SPECGEN_CLANG_FORMAT AND NOT ARG_COMPILE_COMMANDS_DIR)
+        if(
+            SPECGEN_CLANG_FORMAT
+            AND NOT ARG_COMPILE_COMMANDS_DIR
+            AND NOT ARG_SOURCE
+        )
             set(flip_args
                 "-DCLANG_FORMAT=${SPECGEN_CLANG_FORMAT}"
                 "-DSPECGEN=$<TARGET_FILE:specgen>"
@@ -1058,6 +1078,31 @@ specgen_add_golden(
     expos_static_members
     BACKEND mpark
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_members/expected.json"
+)
+
+# Members declared in a header and defined in a source file named with
+# `--source` take their wording from those definitions (issue #149), body
+# derivations and synopsis markers included.
+specgen_add_golden(
+    source_markup_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup.hpp"
+    SOURCE "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup.cc"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/source_markup"
+)
+specgen_add_golden(
+    source_markup
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/source_markup/expected.json"
+)
+
+# Source-file markup that produces no wording, each reported against the
+# source file, and a declaration's lost copy naming its source definition.
+specgen_add_golden(
+    source_markup_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup_diagnostics.hpp"
+    SOURCE "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup_diagnostics.cc"
 )
 
 # Class-body docblocks that produce no wording: the declaration of a member

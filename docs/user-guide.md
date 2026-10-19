@@ -199,7 +199,7 @@ specgen generate header.hpp --validate --backend latex -o wording.tex -- -Iinclu
 Its options are:
 
 ```text
-specgen generate <header>...
+specgen generate <header> [--source <file>...]...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
@@ -230,6 +230,35 @@ wording blocks are wanted.
 
 Several headers form one paper, with one document per header; see
 [A paper proposing several headers](#a-paper-proposing-several-headers) below.
+
+### Members defined in a source file
+
+A member declared in the header and defined in a `.cpp` carries its markup on
+that definition, as one defined in the header does. `--source <file>` names
+such a source file, and pairs with the header named before it; it may be
+repeated:
+
+```sh
+specgen generate widget.hpp --source widget.cpp --source widget_io.cpp -o wording.tex
+```
+
+Each source file is parsed as a translation unit of its own, with its own
+compile flags: its compilation-database entry, or the `--` tail when one is
+given. A documented definition in it of a member of a class the header
+declares becomes that member's item, placed by the class's `\ref` groups or an
+`\at` like any other. Everything a definition in the header supplies is read
+from it: its description elements, what its body derives (*Mandates*,
+`\effects-equiv`, `\returns-expr`), and its markers, so `\omit` and `\seebelow`
+act on the header's synopsis too. The item declaration is still the in-class
+declaration's.
+
+A documented definition of anything else in a source file produces no wording
+and is reported as an error: a namespace-scope function, a function declared
+only in the source file, a class, or a member of a class this document does not
+describe. A definition whose signature matches no declaration is already an
+error in C++, so the source file fails to parse, and `generate` stops there
+with no output. The dependency fragment `--depfile` writes includes every file
+the source files' parses read.
 
 ### Fragments
 
@@ -546,7 +575,8 @@ as an error, because it would otherwise produce no wording and do so silently.
 In a class body, a member's markup is read from its definition. A docblock on
 the declaration of a member defined out of line is reported as an error that
 names the definition, as is one on a member whose definition is not in the
-translation unit at all, such as one defined in a source file. Three kinds of
+translation unit at all, such as one defined in a source file not named with
+[`--source`](#members-defined-in-a-source-file). Three kinds of
 member have no other place for their markup, so their declarations carry it: a
 pure virtual member with no definition, and `= default` and `= delete` members.
 Each gets an item declaration, `= 0` or its other tail included, when its
@@ -949,6 +979,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.4.6 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.5.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

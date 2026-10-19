@@ -199,6 +199,15 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   `\seebelow`, `\freestanding`). A pure virtual member with no definition is the
   exception: like a `= default`/`= delete` member, its declaration is the only place
   its markup can be, so it attaches there (issue #140).
+- **A definition in a source file** named with `--source` is attached in that
+  source file's own parse, which includes the header and so holds the in-class
+  declaration: `attach_function` builds the whole item there, body derivations
+  included. The item crosses to the header's parse keyed by the in-class
+  declaration's file and byte offset, which both parses read identically, and
+  is placed there as a hidden friend's is. Its markers join the header's
+  `\omit`, `\seebelow` and `\freestanding` pre-pass sets, and the roster reads
+  its directives. A documented definition of anything but such a member is an
+  Error against the source file (issue #149).
 - In-class-defined members (hidden friends, compiler-bug workarounds): markup
   attaches to the in-class definition. Their itemdescr position is inferred from
   class-body order within their `\ref` section, relative to out-of-line siblings;

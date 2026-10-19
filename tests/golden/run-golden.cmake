@@ -89,6 +89,12 @@ if(MODE STREQUAL "generate")
         "${ACTUAL}"
         --no-compile-commands
     )
+    if(SOURCES)
+        string(REPLACE "|" ";" _sources "${SOURCES}")
+        foreach(_source IN LISTS _sources)
+            list(APPEND generate_args --source "${_source}")
+        endforeach()
+    endif()
     if(COMPILE_COMMANDS_DIR)
         list(APPEND generate_args --compile-commands "${COMPILE_COMMANDS_DIR}")
     endif()
@@ -107,10 +113,24 @@ elseif(MODE STREQUAL "diagnose")
     # the mode's note at the top of this file for why that matters.
     cmake_path(GET INPUT PARENT_PATH input_dir)
     cmake_path(GET INPUT FILENAME input_name)
+    # Source files are named relative to the header's directory too, so the
+    # findings positioned in them are as well.
+    set(source_args "")
+    if(SOURCES)
+        string(REPLACE "|" ";" _sources "${SOURCES}")
+        foreach(_source IN LISTS _sources)
+            cmake_path(
+                RELATIVE_PATH _source
+                BASE_DIRECTORY "${input_dir}"
+                OUTPUT_VARIABLE _relative
+            )
+            list(APPEND source_args --source "${_relative}")
+        endforeach()
+    endif()
     execute_process(
         COMMAND
-            "${SPECGEN}" generate --emit-ir "${input_name}" -o "${ACTUAL}.json"
-            --no-compile-commands
+            "${SPECGEN}" generate --emit-ir "${input_name}" ${source_args} -o
+            "${ACTUAL}.json" --no-compile-commands
         WORKING_DIRECTORY "${input_dir}"
         RESULT_VARIABLE render_result
         ERROR_FILE "${ACTUAL}"
