@@ -780,6 +780,21 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/concept_subject/expected.json"
 )
 
+# A derived conjunct broken across lines folds onto one, and a break just
+# inside a bracket folds to nothing rather than a space (issue #167). The
+# mpark rendering shows the folded text.
+specgen_add_golden(
+    conjunct_fold_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_conjunct_fold.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/conjunct_fold"
+)
+specgen_add_golden(
+    conjunct_fold
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/conjunct_fold/expected.json"
+)
+
 # Authored `\item` entries lower into the same Itemize IR as
 # derived conjuncts, while an authored `\iref{...}` becomes RefInline.
 # The distinct case name leaves `authored_itemize` free for the default

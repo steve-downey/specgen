@@ -3556,17 +3556,54 @@ std::string format_expr_fragment(const std::string& text) {
 // inside a string literal as written. This runs before recover_sentinels,
 // whose span offsets must be the folded text's; a sentinel is an identifier
 // with no whitespace in it, so folding cannot reach inside one.
+//
+// A folded run becomes one space, except where a bracket hugs it: after an
+// opening `(`, `[` or template `<`, and before a closing `)`, `]` or template
+// `>`, it goes entirely, or `convertible_to<\n T, int>` read
+// `convertible_to< T, int>` (issue #167). clang-format spaces a binary `<`
+// and `>`, and writes a template's brackets against the name and the argument,
+// so a `<` straight after a name and a `>` with no space after it are the
+// template's. Braces are not brackets here: a requires-expression's body is
+// written spaced, `{ { t == 0 }; }`.
 std::string fold_lines(std::string_view text) {
     // The whitespace set the trims elsewhere in this file use.
     static constexpr std::string_view whitespace = " \t\n\v\f\r";
-    return text |
-           std::views::chunk_by([](char a, char b) { return whitespace.contains(a) && whitespace.contains(b); }) |
-           std::views::transform([](auto run) {
-               return std::ranges::any_of(run, [](char c) { return c == '\n' || c == '\r'; })
-                          ? std::string(" ")
-                          : run | std::ranges::to<std::string>();
-           }) |
-           std::views::join | std::ranges::to<std::string>();
+    const auto                        opens      = [](std::string_view before) {
+        if (before.empty())
+            return false;
+        const char last = before.back();
+        if (last == '(' || last == '[')
+            return true;
+        return last == '<' && before.size() > 1 && is_ident_char(before[before.size() - 2]);
+    };
+    const auto closes = [](std::string_view after) {
+        if (after.empty())
+            return false;
+        const char first = after.front();
+        if (first == ')' || first == ']')
+            return true;
+        const std::size_t past = after.find_first_not_of('>');
+        return first == '>' && (past == std::string_view::npos || (after[past] != ' ' && after[past] != '='));
+    };
+    std::string out;
+    out.reserve(text.size());
+    std::size_t pos = 0;
+    // substrate generic algorithm: what a run folds to depends on the text
+    // either side of it, which a run-at-a-time transform cannot see.
+    while (pos < text.size()) {
+        const std::size_t end = std::min(text.find_first_not_of(whitespace, pos), text.size());
+        if (end == pos) {
+            out.push_back(text[pos++]);
+            continue;
+        }
+        const std::string_view run = text.substr(pos, end - pos);
+        if (!run.contains('\n') && !run.contains('\r'))
+            out.append(run);
+        else if (!opens(text.substr(0, pos)) && !closes(text.substr(end)))
+            out.push_back(' ');
+        pos = end;
+    }
+    return out;
 }
 
 // The written text of `range`, rewritten the way every code fragment is: the
