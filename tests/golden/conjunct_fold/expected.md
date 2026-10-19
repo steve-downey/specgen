@@ -20,4 +20,13 @@ void h(FIRST_ARGUMENT_TYPE, SECOND_ARGUMENT_TYPE);
 
 [#]{.pnum} *Effects*: Does nothing.
 
+```cpp
+template<class FUNCTION_TYPE, class FIRST_ARGUMENT_TYPE, class SECOND_ARGUMENT_TYPE>
+void k(FUNCTION_TYPE, FIRST_ARGUMENT_TYPE, SECOND_ARGUMENT_TYPE);
+```
+
+[#]{.pnum} *Constraints*: `FUNCTION_TYPE` models `holdable` and `call_result_t<FUNCTION_TYPE&, wrapped_reference_to_an_argument_with_a_rather_long_descriptive_name_t<FIRST_ARGUMENT_TYPE>, wrapped_reference_to_an_argument_with_a_rather_long_descriptive_name_t<SECOND_ARGUMENT_TYPE>>` models `holdable`.
+
+[#]{.pnum} *Effects*: Does nothing.
+
 :::
