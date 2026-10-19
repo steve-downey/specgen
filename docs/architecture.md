@@ -199,6 +199,15 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   `\seebelow`, `\freestanding`). A pure virtual member with no definition is the
   exception: like a `= default`/`= delete` member, its declaration is the only place
   its markup can be, so it attaches there (issue #140).
+- **A definition in a source file** named with `--source` is attached in that
+  source file's own parse, which includes the header and so holds the in-class
+  declaration: `attach_function` builds the whole item there, body derivations
+  included. The item crosses to the header's parse keyed by the in-class
+  declaration's file and byte offset, which both parses read identically, and
+  is placed there as a hidden friend's is. Its markers join the header's
+  `\omit`, `\seebelow` and `\freestanding` pre-pass sets, and the roster reads
+  its directives. A documented definition of anything but such a member is an
+  Error against the source file (issue #149).
 - In-class-defined members (hidden friends, compiler-bug workarounds): markup
   attaches to the in-class definition. Their itemdescr position is inferred from
   class-body order within their `\ref` section, relative to out-of-line siblings;
@@ -664,7 +673,8 @@ function un-`noexcept` even when it visibly never throws.
 | `= default` / `= delete` | yes | no (unless `\describe`) |
 | Pure virtual, no definition | yes | when it has an element or `\describe`; markup on the decl, `= 0` kept |
 | Documented in-class decl of a fn defined elsewhere or nowhere | yes | Error naming the def; marker-only silent |
-| Documented data member | yes | Error: a data member has no itemdescr; marker-only silent |
+| Documented static data member | yes | yes, routed like an alias; bare `\seebelow` drops the initializer |
+| Documented non-static or `\expos` data member | yes | Error: no itemdescr; marker-only silent |
 | Defaulted twin with `\merge` | dropped | merged into primary |
 | Hidden friend (`FOK_Undeclared`) | yes, `friend` kept | yes, markup in-class |
 | In-class def (compiler bug) | yes | yes, markup in-class, `\at` if needed |

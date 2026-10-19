@@ -98,6 +98,11 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --source <file>           a source file defining members the preceding
+                             header declares: a documented definition in it
+                             supplies that member's wording, as one in the
+                             header would. Parsed as its own translation unit,
+                             with its own compile flags; may be repeated
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
                              rendering wording here. One document per file is
@@ -1009,6 +1014,10 @@ int generate_command(const std::vector<std::string>& args) {
     // them one paper. The order is the paper's clause order, which is why they
     // accumulate rather than the last one winning.
     std::vector<std::string> headers;
+    // --source, each pairing with the header named before it (issue #149):
+    // the source files whose member definitions carry that header's markup.
+    // One list per header, parallel to `headers`.
+    std::vector<std::vector<std::string>> sources;
     // --root, accumulated and pairing with `headers` in order, exactly as
     // `render`'s pairs with --from-ir: with several documents each needs its
     // own root fragment name.
@@ -1115,8 +1124,18 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
         } else if (arg == "--no-compile-commands") {
             no_compile_commands = true;
+        } else if (arg == "--source") {
+            std::string source;
+            if (!next(source))
+                return 2;
+            if (headers.empty()) {
+                std::println(stderr, "specgen: --source follows the header whose members '{}' defines", source);
+                return 2;
+            }
+            sources.back().push_back(std::move(source));
         } else if (!arg.empty() && arg.front() != '-') {
             headers.push_back(arg);
+            sources.emplace_back();
         } else {
             std::println(stderr, "specgen: unknown option '{}'", arg);
             return usage(stderr, 2);
@@ -1234,13 +1253,22 @@ int generate_command(const std::vector<std::string>& args) {
     // and half its wording on disk beside a header that would not parse is the
     // state this ordering exists to prevent. fold_left_short, so the scan stops
     // at the first header that fails and parses no later one.
+    // A source file is a translation unit of its own, so it is resolved by its
+    // own name: its database entry, not the header's, is what compiles it.
+    const auto source_files_for = [&](std::size_t index) {
+        return sources[index] | std::views::transform([&](const std::string& source) {
+                   return frontend::SourceFile{source, resolve_for(source)};
+               }) |
+               std::ranges::to<std::vector<frontend::SourceFile>>();
+    };
     auto result =
         beman::specgen::foundation::fold_left_short(
-            headers,
+            std::views::iota(std::size_t{0}, headers.size()),
             std::vector<frontend::DocumentBuild>{},
             [&](std::vector<frontend::DocumentBuild> built,
-                const std::string& header) -> std::expected<std::vector<frontend::DocumentBuild>, std::string> {
-                return frontend::build_document_with_sources(header, resolve_for(header))
+                std::size_t index) -> std::expected<std::vector<frontend::DocumentBuild>, std::string> {
+                const std::string& header = headers[index];
+                return frontend::build_document_with_sources(header, resolve_for(header), source_files_for(index))
                     .transform_error([](const frontend::BuildFailure& failure) {
                         return std::format("specgen: {}", failure.message);
                     })

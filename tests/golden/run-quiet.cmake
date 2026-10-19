@@ -25,6 +25,14 @@ if(NOT SPECGEN OR NOT INPUT OR NOT ACTUAL)
     )
 endif()
 
+set(source_args "")
+if(SOURCES)
+    string(REPLACE "|" ";" _sources "${SOURCES}")
+    foreach(_source IN LISTS _sources)
+        list(APPEND source_args --source "${_source}")
+    endforeach()
+endif()
+
 set(tail_args "")
 if(EXTRA_ARGS)
     separate_arguments(tail_args NATIVE_COMMAND "${EXTRA_ARGS}")
@@ -32,8 +40,8 @@ endif()
 
 execute_process(
     COMMAND
-        "${SPECGEN}" generate --emit-ir "${INPUT}" --no-compile-commands -o
-        "${ACTUAL}" -- ${tail_args}
+        "${SPECGEN}" generate --emit-ir "${INPUT}" ${source_args}
+        --no-compile-commands -o "${ACTUAL}" -- ${tail_args}
     RESULT_VARIABLE result
     ERROR_VARIABLE findings
 )

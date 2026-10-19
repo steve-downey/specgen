@@ -1787,6 +1787,12 @@ void append_real_record_members(const clang::CXXRecordDecl*    record,
     for (const clang::Decl* member : record->decls()) {
         if (member->isImplicit() || llvm::isa<clang::IndirectFieldDecl>(member))
             continue;
+        // A static data member template's implicit instantiation, `spare_<int>`
+        // for a use of it, is a member of the class too, though nothing in the
+        // class body declares it (issue #172).
+        if (const auto* instance = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(member);
+            instance != nullptr && instance->getSpecializationKind() == clang::TSK_ImplicitInstantiation)
+            continue;
 
         const bool effectively_private = enclosed_private || member->getAccess() == clang::AS_private;
         if (const auto* nested = llvm::dyn_cast<clang::CXXRecordDecl>(member);
@@ -2757,6 +2763,20 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             continue;
         }
 
+        // An `\expos` static data member, or static data member template,
+        // renders like exposition-only data (issue #172). A template's name
+        // and `;` are its templated declaration's.
+        if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member)) {
+            if (const auto it = expos_set.find(member->getCanonicalDecl()); it != expos_set.end()) {
+                const clang::NamedDecl* named = llvm::cast<clang::NamedDecl>(member);
+                if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(member))
+                    named = var_tmpl->getTemplatedDecl();
+                add_exposid(named, it->second);
+                mark_survivor();
+                continue;
+            }
+        }
+
         if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(member)) {
             // A documented alias gets a standalone member index on its
             // itemdecl. An unmarked alias is synopsis-only, so index its name
@@ -3047,6 +3067,31 @@ unsigned cv_run_begin(llvm::StringRef buffer, unsigned begin, unsigned floor) {
     }
 }
 
+// Drop `variable`'s initializer from one extraction, a copy-init's `=` with
+// it. A dominant edit, so a qualifier drop or expos-use rewrite inside the
+// initializer loses to it. Both the declared-type mask below and a static data
+// member's bare `\seebelow` (issue #148) drop the initializer; only the former
+// masks the type as well.
+void add_initializer_drop(std::vector<SynopsisEdit>&  edits,
+                          const clang::VarDecl*       variable,
+                          llvm::StringRef             buffer,
+                          unsigned                    decl_begin,
+                          const clang::SourceManager& sm,
+                          const clang::LangOptions&   lang_opts) {
+    const clang::Expr* init = variable->getInit();
+    if (init == nullptr || !init->getSourceRange().isValid())
+        return;
+    unsigned       init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
+    const unsigned init_end =
+        sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(init->getSourceRange().getEnd(), 0, sm, lang_opts))
+            .second;
+    const std::size_t equal = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
+    if (equal != llvm::StringRef::npos && buffer[equal] == '=')
+        init_begin = static_cast<unsigned>(equal);
+    if (init_begin >= decl_begin && init_end > init_begin)
+        add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+}
+
 // The masks a marked declaration's own spelling takes, applied to one
 // extraction's edit list. Two of them, and they are the same idea told about
 // different halves of a declaration: `unspecified` is the variable whose
@@ -3097,20 +3142,10 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
             }
         }
         // The initializer is implementation all the way down; the draft
-        // writes the declaration alone. A copy-init's `=` goes with it.
-        // (see_below below is the same idea for the kinds whose definition,
-        // rather than whose declared type, is the implementation.)
-        if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
-            unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
-            const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
-                                                                   init->getSourceRange().getEnd(), 0, sm, lang_opts))
-                                               .second;
-            const std::size_t equal      = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
-            if (equal != llvm::StringRef::npos && buffer[equal] == '=')
-                init_begin = static_cast<unsigned>(equal);
-            if (init_begin >= decl_begin && init_end > init_begin)
-                add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
-        }
+        // writes the declaration alone. (see_below below is the same idea for
+        // the kinds whose definition, rather than whose declared type, is the
+        // implementation.)
+        add_initializer_drop(edits, unspecified, buffer, decl_begin, sm, lang_opts);
     }
 
     // The definition, masked whole: an alias's RHS or a concept's
@@ -3133,7 +3168,8 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
 // One free-standing namespace-scope declaration, extracted whole: the
 // template head and initializer/constraint through the trailing semicolon,
 // with the same qualifier drops and expos-use sentinels as class synopses.
-// Two callers share it. The `\expos` standalone synopsis
+// A documented namespace entity's itemdecl and a documented static data
+// member's (attach_static_member) take it as written. The `\expos` standalone synopsis
 // (extract_namespace_expos_synopsis below) passes `exposition` to rewrite the
 // declared name as an `\exposid` span and append the draft's exposition-only
 // comment. A documented record declaration the header never defines (an
@@ -3145,6 +3181,9 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
 // `\seebelow` masks as the draft's *unspecified* placeholder, with the
 // initializer dropped — the customization-point-object shape,
 // `inline constexpr unspecified name;`. Null for every other caller.
+// `uninitialized` is the static data member whose bare `\seebelow` drops its
+// initializer and nothing else (issue #148), as [numeric.limits.members]
+// writes `static constexpr bool is_specialized;`.
 beman::specgen::ir::CodeText
 extract_freestanding_declaration(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
@@ -3152,9 +3191,10 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
-                                 std::optional<std::string_view>                  record_tag  = std::nullopt,
-                                 const clang::VarDecl*                            unspecified = nullptr,
-                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
+                                 std::optional<std::string_view>                  record_tag    = std::nullopt,
+                                 const clang::VarDecl*                            unspecified   = nullptr,
+                                 std::optional<clang::SourceRange>                see_below     = std::nullopt,
+                                 const clang::VarDecl*                            uninitialized = nullptr) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -3209,6 +3249,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
 
     add_declaration_masks(
         edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
+    if (uninitialized != nullptr)
+        add_initializer_drop(edits, uninitialized, buffer, decl_begin, sm, lang_opts);
 
     sort_back_to_front(edits);
     unsigned applied_begin = decl_end + 1;
@@ -4488,6 +4530,26 @@ struct AttachedItem {
     std::optional<std::string> verbatim_itemdecl = {};
 };
 
+// A documented out-of-line member definition in a source file (issue #149),
+// built into its item in the source file's own parse: markup, the body's
+// derivations and the itemdecl, exactly as a definition in the header is. The
+// header's parse places it, by the in-class declaration it defines, with
+// whatever `\ref` group or `\at` routes that declaration. Only the parts of
+// `attached` that hold no Clang state cross between the two parses; the header
+// side replaces `file` and `inclass_offset` with its own.
+struct SourceMarkup {
+    AttachedItem attached;
+    // The definition's position, for messages naming it.
+    std::string file;
+    unsigned    line = 0;
+
+    std::string where() const { return std::format("{}:{}", file, line); }
+};
+
+// The source files' items, by the canonical in-class declaration each defines
+// in the header's parse.
+using SourceMarkupMap = std::map<const clang::Decl*, const SourceMarkup*>;
+
 // What bare `\seebelow` on a namespace-scope variable (template) asks for: the
 // declared type masked as the draft's *unspecified* placeholder and the
 // initializer dropped — the customization-point-object shape (issue #24). The
@@ -4850,6 +4912,56 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     return attached;
 }
 
+// Build the AttachedItem for a documented static data member (issue #148): an
+// itemdecl of its own and the elements its docblock carries, routed by its
+// class's `\ref` group or an `\at`, the way an in-class alias is. The draft
+// gives `atomic<T>::is_always_lock_free` and the `numeric_limits` members
+// exactly this. `decl` is the VarDecl, or the VarTemplateDecl of a static data
+// member template, whose extraction then starts at `template`. The initializer
+// stays in the itemdecl unless bare `\seebelow` drops it; unlike a namespace
+// variable's, the mask leaves the declared type alone, since a static data
+// member's type is part of its interface. The class synopsis keeps the
+// initializer either way, as [numeric.limits.general]'s does.
+AttachedItem attach_static_member(const clang::NamedDecl*                          decl,
+                                  const clang::CXXRecordDecl*                      record,
+                                  const clang::SourceManager&                      sm,
+                                  const clang::LangOptions&                        lang_opts,
+                                  const std::set<std::string>&                     ns_drop_set,
+                                  const std::map<const clang::Decl*, std::string>& expos_set) {
+    AttachedItem attached;
+    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attached.file           = sm.getFileID(decl->getBeginLoc());
+    attach_docblock(attached, decl, sm);
+
+    if (attached.directives.seebelow_target && attached.grouping_line > 0)
+        attached.diagnostics.push_back({beman::specgen::Severity::Error,
+                                        attached.grouping_line,
+                                        "a static data member accepts only bare \\seebelow"});
+    const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
+    if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
+        variable = var_tmpl->getTemplatedDecl();
+    const bool drops_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
+
+    if (attached.verbatim_itemdecl)
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    else
+        attached.item.decl.signatures.push_back(
+            extract_freestanding_declaration(decl,
+                                             sm,
+                                             lang_opts,
+                                             ns_drop_set,
+                                             expos_set,
+                                             /*exposition=*/false,
+                                             std::nullopt,
+                                             nullptr,
+                                             std::nullopt,
+                                             drops_initializer ? variable : nullptr));
+    attached.item.decl.entities.push_back(decl->getNameAsString());
+    attached.item.decl.index.push_back({ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
+    rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set));
+    return attached;
+}
+
 // --- Shared unwrapping projections ------------------------------------------
 //
 // collect_inclass_items below and the build_omit_set/build_expos_set/
@@ -5026,10 +5138,10 @@ class ClassRefGroups {
 };
 
 // The findings for a class-body docblock that can produce no wording of its
-// own: the bodyless declaration of a member defined elsewhere, or a data
-// member. Markers that act on the declaration -- `\omit`, `\merge`,
-// `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are what such a
-// docblock is for, and stay silent. A description element, or a marker only a
+// own: the bodyless declaration of a member defined elsewhere, or a non-static
+// or exposition-only data member. Markers that act on the declaration --
+// `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are
+// what such a docblock is for, and stay silent. A description element, or a marker only a
 // definition's wording can carry out, asks for wording this docblock cannot
 // produce, and dropping it silently is how a header validates clean while its
 // descriptions vanish (issues #125, #140): that is an Error saying `problem`.
@@ -5065,15 +5177,24 @@ declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManage
 
 // What the docblock on the bodyless in-class declaration of `fn` should have
 // been written on instead. The definition places a member's wording (design
-// §3.3); one in another file of the translation unit is named by that file.
-// One outside it is a definition in a source file, which no translation unit
-// specgen reads can reach yet (issue #149).
-std::string misplaced_declaration_markup(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
+// §3.3); one in another file of the translation unit is named by that file,
+// and one in a source file named with --source by `source_definition`, its
+// `file:line` (issue #149). With neither, the definition is somewhere no
+// parse specgen makes can reach, such as a source file not named.
+std::string misplaced_declaration_markup(const clang::FunctionDecl*  fn,
+                                         const clang::SourceManager& sm,
+                                         std::string_view            source_definition = {}) {
     const std::string          name       = fn->getNameAsString();
     const clang::FunctionDecl* definition = fn->getDefinition();
+    if (!source_definition.empty())
+        return std::format("the documented declaration of `{}` produces no wording: markup belongs at its definition, "
+                           "{}, which places a member's wording (design §3.3)",
+                           name,
+                           source_definition);
     if (definition == nullptr)
         return std::format("the documented declaration of `{}` produces no wording: markup is read from a member's "
-                           "definition (design §3.3), and this translation unit has none",
+                           "definition (design §3.3), and this translation unit has none; name the source file that "
+                           "defines it with --source",
                            name);
     const clang::SourceLocation at   = definition->getBeginLoc();
     const std::string           file = diagnostic_file_name(sm, sm.getFileID(at));
@@ -5091,6 +5212,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                            const std::set<std::string>&                              ns_drop_set,
                            const std::map<const clang::Decl*, std::string>&          expos_set,
                            const SkippedRanges&                                      skipped,
+                           const SourceMarkupMap&                                    source_markup,
                            std::vector<beman::specgen::document_build::PendingItem>& pending,
                            std::vector<beman::specgen::document_build::Diagnostic>&  diagnostics) {
     const ClassRefGroups ref_groups(record, sm, lang_opts);
@@ -5144,10 +5266,25 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 friend_begin = friend_decl->getBeginLoc();
         }
         if (fn == nullptr) {
-            // A data member's specification is its declaration and its
-            // class's description (design §6), so a docblock on one has no
-            // itemdescr to become (issue #125; a static data member's own
-            // item is issue #148).
+            // A documented static data member is an item of its own, routed
+            // like an alias (issue #148), unless it is `\expos`: exposition
+            // renders in the synopsis alone.
+            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm) &&
+                !expos_set.contains(member->getCanonicalDecl())) {
+                AttachedItem attached = attach_static_member(
+                    llvm::cast<clang::NamedDecl>(member), record, sm, lang_opts, ns_drop_set, expos_set);
+                diagnostics.append_range(std::move(attached.diagnostics));
+                if (suppresses_generated_entity(attached.directives))
+                    continue;
+                const std::string section =
+                    attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
+                pending.push_back(beman::specgen::document_build::PendingItem{
+                    section, attached.inclass_offset, std::move(attached.item)});
+                continue;
+            }
+            // Any other data member's specification is its declaration and
+            // its class's description (design §6), so a docblock on one has
+            // no itemdescr to become (issue #125).
             if (llvm::isa<clang::FieldDecl, clang::VarDecl, clang::VarTemplateDecl>(member) &&
                 has_docblock(member, sm))
                 diagnostics.append_range(declaration_docblock_findings(
@@ -5164,7 +5301,9 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // checked after lowering): those three are declarations with nothing
         // else to carry their markup. Any other bodyless declaration belongs
         // to a definition elsewhere, attached from the top-level stream
-        // instead, and a docblock on it produces nothing (issue #140).
+        // instead, and a docblock on it produces nothing (issue #140) --
+        // unless that definition is in a source file, whose item was built in
+        // the source file's parse and is placed here (issue #149).
         // (isOutOfLine() is deliberately *not* checked — a hidden friend is
         // lexically in the class but semantically in the enclosing namespace,
         // so it reports out-of-line yet is exactly what this pass must
@@ -5173,8 +5312,23 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         const bool is_bare_pure_virtual    = fn->isPureVirtual() && fn->getDefinition() == nullptr;
         const bool has_compound_body       = fn->doesThisDeclarationHaveABody() && !is_defaulted_or_deleted;
         if (!has_compound_body && !is_defaulted_or_deleted && !is_bare_pure_virtual) {
+            const auto        sourced    = source_markup.find(fn->getCanonicalDecl());
+            const std::string definition = sourced != source_markup.end() ? sourced->second->where() : std::string{};
             if (has_docblock(fn, sm))
-                diagnostics.append_range(declaration_docblock_findings(fn, sm, misplaced_declaration_markup(fn, sm)));
+                diagnostics.append_range(
+                    declaration_docblock_findings(fn, sm, misplaced_declaration_markup(fn, sm, definition)));
+            if (sourced == source_markup.end())
+                continue;
+            AttachedItem                attached   = sourced->second->attached;
+            const clang::SourceLocation anchor_loc = friend_begin.isValid() ? friend_begin : fn->getBeginLoc();
+            attached.inclass_offset                = sm.getDecomposedLoc(anchor_loc).second;
+            attached.file                          = sm.getFileID(anchor_loc);
+            diagnostics.append_range(std::move(attached.diagnostics));
+            if (suppresses_generated_entity(attached.directives))
+                continue;
+            const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
+            pending.push_back(beman::specgen::document_build::PendingItem{
+                section, attached.inclass_offset, std::move(attached.item)});
             continue;
         }
         if (!has_docblock(fn, sm))
@@ -5273,6 +5427,7 @@ std::vector<beman::specgen::ir::SynopsisEntry>
 build_roster(const clang::CXXRecordDecl*                                     record,
              const clang::SourceManager&                                     sm,
              const std::map<const clang::Decl*, std::string>&                expos_set,
+             const SourceMarkupMap&                                          source_markup,
              const std::vector<beman::specgen::document_build::PendingItem>& pending) {
     namespace ir = beman::specgen::ir;
 
@@ -5325,6 +5480,8 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         if (named == nullptr)
             named = llvm::dyn_cast<clang::VarDecl>(member); // static data member
         if (named == nullptr)
+            named = llvm::dyn_cast<clang::VarTemplateDecl>(member); // static data member template
+        if (named == nullptr)
             continue; // unmarked nested type or static_assert: no wording of its own
 
         // The placement key collect_inclass_items keyed its pending items on
@@ -5335,9 +5492,13 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         const auto         routed_to = routed.find(sm.getDecomposedLoc(key_decl->getBeginLoc()).second);
 
         // Markup is read from the definition when there is one (a marker is
-        // written where the wording is), else from the declaration itself.
+        // written where the wording is), else from the declaration itself. A
+        // definition in a source file is in another parse, which read its
+        // markers already (issue #149).
+        const auto sourced = fn != nullptr ? source_markup.find(fn->getCanonicalDecl()) : source_markup.end();
         const beman::specgen::lowering::ItemDirectives directives =
-            docblock_directives(fn != nullptr ? markup_decl(fn) : named, sm);
+            sourced != source_markup.end() ? sourced->second->attached.directives
+                                           : docblock_directives(fn != nullptr ? markup_decl(fn) : named, sm);
         const clang::FunctionDecl* definition = fn != nullptr ? fn->getDefinition() : nullptr;
 
         ir::SynopsisEntry entry;
@@ -5347,8 +5508,8 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         // names none of them, so this is what tells them apart (issue #45).
         entry.parent = record->getNameAsString();
         // `fn` is the FunctionDecl this member resolved to, so its absence is
-        // exactly "this is a data member" -- a FieldDecl or a static VarDecl,
-        // the only two other things reaching here (a nested type, alias or
+        // exactly "this is a data member" -- a FieldDecl or a static VarDecl
+        // or VarTemplateDecl, the only other things reaching here (a nested type, alias or
         // static_assert was skipped above). Design §6 treats unmarked private
         // data differently from an unmarked private *function*: the function
         // is silently omitted, the data earns a nudge, and this field is what
@@ -5387,8 +5548,9 @@ build_roster(const clang::CXXRecordDecl*                                     rec
             // which is how the draft specifies `from_chars_result`,
             // `ranges::in_out_result` and every other such struct: a data
             // member's specification is its declaration.  There is no itemdescr
-            // to ask for -- a docblock on one produces no wording -- so
-            // demanding a description asks for something that cannot exist.
+            // to ask for, so demanding a description asks for something the
+            // draft does not write. A static data member can have one, but
+            // only by asking (issue #148), and then it is Routed above.
             entry.disposition = ir::Disposition::Declared;
         } else if (fn != nullptr && (fn->isDefaulted() || fn->isDeleted())) {
             entry.disposition = ir::Disposition::Defaulted;
@@ -5445,13 +5607,18 @@ std::set<const clang::Decl*> build_omit_set(const std::vector<clang::Decl*>& dec
     return omit;
 }
 
-// A member's exposition-only name candidate: a data member, a type alias, or
-// a method, including the underlying method of a FunctionTemplateDecl.
+// A member's exposition-only name candidate: a data member, static or not, a
+// type alias, or a method, including the underlying method of a
+// FunctionTemplateDecl. A static data member and a static data member template
+// used to be missing, so an `\expos` one never reached the expos set and its
+// synopsis line was dropped as unmarked private data (issue #172).
 // Hidden friends
 // remain namespace functions rather than class exposition members.
 const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
     if (const auto* fd = llvm::dyn_cast<clang::FieldDecl>(member))
         return fd;
+    if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member))
+        return llvm::cast<clang::NamedDecl>(member);
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(member))
         return alias;
     if (const auto* md = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(member_function_or_template(member)))
@@ -6420,7 +6587,8 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const FreestandingMap&                           freestanding_map,
                       const std::set<std::string>&                     ns_drop_set,
                       const SkippedRanges&                             skipped,
-                      const AttachedCommentRanges&                     attached_comments) {
+                      const AttachedCommentRanges&                     attached_comments,
+                      const SourceMarkupMap&                           source_markup) {
     namespace ir = beman::specgen::ir;
 
     if (ev.decl == nullptr) {
@@ -6617,12 +6785,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                 ? ir::CodeText{std::move(*block.synopsis), {}}
                 : extract_synopsis(
                       record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
-        collect_inclass_items(record, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
+        collect_inclass_items(
+            record, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // After collection: the roster reads the routed sections
         // collect_inclass_items just decided.
         // Build the roster before grouping so every alias offset still
         // identifies its own routed declaration, including an \also follower.
-        out.synopsis.roster = build_roster(record, sm, expos_set, out.pending);
+        out.synopsis.roster = build_roster(record, sm, expos_set, source_markup, out.pending);
         group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), record, sm, lang_opts, ns_drop_set, expos_set);
         // After the description exists, and after grouping, which has no
@@ -6656,10 +6825,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                               freestanding_map,
                                                               ns_drop_set,
                                                               tmpl);
-        collect_inclass_items(templated, sm, lang_opts, ns_drop_set, expos_set, skipped, out.pending, out.diagnostics);
+        collect_inclass_items(
+            templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // Build the roster before grouping so every alias offset still
         // identifies its own routed declaration, including an \also follower.
-        out.synopsis.roster = build_roster(templated, sm, expos_set, out.pending);
+        out.synopsis.roster = build_roster(templated, sm, expos_set, source_markup, out.pending);
         group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), templated, sm, lang_opts, ns_drop_set, expos_set);
         // Same `\at` routing as the plain-record arm above, read from the
@@ -7290,6 +7460,233 @@ BuildFailure unparsed_header(std::string_view header_path) {
     return BuildFailure{std::format("cannot read '{}', or Clang could not parse it", header_path)};
 }
 
+// --- source files (issue #149) ---------------------------------------------
+//
+// A member declared in the header and defined in a source file carries its
+// markup on that definition, which the header's own parse never sees. Each
+// source file named with --source is parsed on its own, with its own compile
+// flags, and every documented out-of-line member definition in it is built
+// into its item there, as attach_function builds one for a definition in the
+// header. The source file includes the header, so the in-class declaration it
+// defines is in that parse too, and the item is keyed by where that
+// declaration is: its file and byte offset, which the header's parse reads
+// identically. A definition that matches no declaration is a compile error in
+// the source file, so a mistyped signature fails the parse rather than leaving
+// a stray item.
+
+// Where a declaration is, the same in any parse that reads its file: the
+// file's canonical path, and the byte offset in it. `main_path` names the main
+// file, which the parse holds as an in-memory buffer rather than a file it
+// opened.
+using DeclPosition = std::pair<std::string, unsigned>;
+
+std::string canonical_file_path(const clang::SourceManager& sm, clang::FileID file, std::string_view main_path) {
+    std::string path;
+    if (file == sm.getMainFileID())
+        path = std::string(main_path);
+    else if (const clang::OptionalFileEntryRef entry = sm.getFileEntryRefForID(file))
+        path = entry->getName().str();
+    else
+        return {};
+    std::error_code ec;
+    return std::filesystem::weakly_canonical(path, ec).generic_string();
+}
+
+DeclPosition decl_position(const clang::Decl* decl, const clang::SourceManager& sm, std::string_view main_path) {
+    const auto [file, offset] = sm.getDecomposedLoc(decl->getBeginLoc());
+    return {canonical_file_path(sm, file, main_path), offset};
+}
+
+// The FriendDecl that declares `fn` in its class, whose `friend` keyword the
+// itemdecl keeps, as collect_inclass_items keeps it for a hidden friend.
+clang::SourceLocation friend_keyword(const clang::FunctionDecl* fn) {
+    const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(fn->getLexicalDeclContext());
+    if (record == nullptr || fn->getFriendObjectKind() == clang::Decl::FOK_None)
+        return {};
+    const clang::Decl* declared = fn->getDescribedFunctionTemplate() != nullptr
+                                      ? static_cast<const clang::Decl*>(fn->getDescribedFunctionTemplate())
+                                      : fn;
+    const auto         friends  = record->friends();
+    const auto         found    = std::ranges::find_if(friends, [declared](const clang::FriendDecl* friend_decl) {
+        return friend_decl->getFriendDecl() == declared;
+    });
+    return found != friends.end() ? (*found)->getBeginLoc() : clang::SourceLocation{};
+}
+
+// The declarations a parse holds in the files `wanted` accepts, descending
+// through namespaces and linkage specifications.
+template <class Wanted>
+void collect_file_decls(clang::Decl*                decl,
+                        const clang::SourceManager& sm,
+                        const Wanted&               wanted,
+                        std::vector<clang::Decl*>&  out) {
+    if (llvm::isa<clang::NamespaceDecl, clang::LinkageSpecDecl>(decl)) {
+        // substrate generic algorithm: recursive descent over a decl tree, the
+        // same shape as collect_top_level_decl's.
+        for (clang::Decl* child : llvm::cast<clang::DeclContext>(decl)->decls())
+            collect_file_decls(child, sm, wanted, out);
+        return;
+    }
+    if (decl->isImplicit() || !decl->getBeginLoc().isValid())
+        return;
+    if (wanted(sm.getFileID(sm.getExpansionLoc(decl->getBeginLoc()))))
+        out.push_back(decl);
+}
+
+struct SourceHarvest {
+    std::map<DeclPosition, SourceMarkup>                    items;
+    std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
+    std::vector<std::string>                                sources;
+};
+
+// Build the items for one source file's documented member definitions.
+// `document_paths` are the canonical paths of the files the header's document
+// is made of. Any other documented declaration in the source file produces no
+// wording, and says so, rather than being dropped.
+std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&            source,
+                                                               const std::set<std::string>& document_paths) {
+    namespace db = beman::specgen::document_build;
+
+    ParsedHeader parsed = parse_header(source.path, source.options);
+    if (!parsed.ast)
+        return std::unexpected(unparsed_header(source.path));
+    if (parsed.had_error)
+        return std::unexpected(BuildFailure{std::format(
+            "Clang reported an error parsing '{}'; the parse is incomplete, so the wording generated from it "
+            "would be unreliable",
+            source.path)});
+
+    const clang::SourceManager& sm        = parsed.ast->getSourceManager();
+    const clang::LangOptions&   lang_opts = parsed.ast->getLangOpts();
+    const clang::FileID         main_file = sm.getMainFileID();
+
+    std::map<clang::FileID, bool> in_document;
+    const auto                    is_document_file = [&](clang::FileID file) {
+        const auto [it, inserted] = in_document.try_emplace(file, false);
+        if (inserted)
+            it->second = document_paths.contains(canonical_file_path(sm, file, source.path));
+        return it->second;
+    };
+
+    // The header's declarations as this parse sees them, for the same
+    // pre-passes the header's parse makes, so an item built here spells its
+    // itemdecl and rewrites its body as it would there.
+    std::vector<clang::Decl*> header_decls;
+    std::vector<clang::Decl*> source_decls;
+    std::vector<clang::Decl*> expos_decls;
+    // substrate generic algorithm: the same iterator-pair-turned-subrange,
+    // for_each-shaped side effect as build_document_with_sources' walks.
+    for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end())) {
+        collect_file_decls(decl, sm, is_document_file, header_decls);
+        collect_file_decls(decl, sm, [main_file](clang::FileID file) { return file == main_file; }, source_decls);
+        collect_expos_scope_decl(decl, sm, main_file, expos_decls);
+    }
+    expos_decls.append_range(header_decls);
+
+    const std::map<const clang::Decl*, std::string> expos_set   = build_expos_set(expos_decls, sm);
+    const std::set<std::string>                     ns_drop_set = build_namespace_drop_set(header_decls);
+    const SkippedRanges                             skipped     = collect_skipped_ranges(*parsed.ast);
+
+    SourceHarvest harvest;
+    harvest.sources    = parse_sources(source.path, *parsed.ast);
+    const auto line_of = [&](const clang::Decl* decl) { return sm.getSpellingLineNumber(decl->getBeginLoc()); };
+    const auto report  = [&](const clang::Decl* decl, std::string message) {
+        harvest.diagnostics.push_back(
+            db::Diagnostic{beman::specgen::Severity::Error, line_of(decl), std::move(message), source.path});
+    };
+
+    // substrate generic algorithm: a filter-map with three distinct
+    // rejections, each a finding, over the source file's declarations.
+    for (const clang::Decl* decl : source_decls) {
+        if (!has_docblock(decl, sm))
+            continue;
+        const clang::FunctionDecl* fn    = as_out_of_line_function(decl);
+        const std::string          named = llvm::isa<clang::NamedDecl>(decl)
+                                               ? llvm::cast<clang::NamedDecl>(decl)->getQualifiedNameAsString()
+                                               : std::string{"this declaration"};
+        if (fn == nullptr || !fn->isThisDeclarationADefinition()) {
+            report(decl,
+                   "a documented declaration in a source file produces no wording: a source file supplies markup "
+                   "only on the definition of a member declared in a class body");
+            continue;
+        }
+        const clang::FunctionDecl* first = fn->getFirstDecl();
+        if (first == fn || !llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext())) {
+            report(decl,
+                   std::format("the documented definition of `{}` produces no wording: a source file supplies "
+                               "markup only for a member declared in a class body",
+                               named));
+            continue;
+        }
+        if (!is_document_file(sm.getFileID(first->getBeginLoc()))) {
+            report(decl,
+                   std::format("the documented definition of `{}` produces no wording: its class is declared in "
+                               "'{}', which is not part of this document",
+                               named,
+                               canonical_file_path(sm, sm.getFileID(first->getBeginLoc()), source.path)));
+            continue;
+        }
+
+        AttachedItem attached =
+            attach_function(fn, first, friend_keyword(first), sm, lang_opts, ns_drop_set, expos_set, skipped);
+        // A finding positioned in this parse's main file names no file, which
+        // the driver reads as the header; name the source file instead.
+        std::ranges::for_each(attached.diagnostics, [&](db::Diagnostic& diagnostic) {
+            if (diagnostic.file.empty())
+                diagnostic.file = source.path;
+        });
+        harvest.items.emplace(decl_position(first, sm, source.path),
+                              SourceMarkup{std::move(attached), source.path, line_of(fn)});
+    }
+    return harvest;
+}
+
+// The source files' items, matched to the in-class declarations of the
+// header's parse. Each class definition the document describes is walked,
+// nested ones included, and an item that matches none of their members is
+// reported: its class is in the document's files, but no class the document
+// describes holds it.
+SourceMarkupMap match_source_markup(const std::vector<clang::Decl*>&                         decls,
+                                    const clang::SourceManager&                              sm,
+                                    std::string_view                                         header_path,
+                                    const std::map<DeclPosition, SourceMarkup>&              items,
+                                    std::vector<beman::specgen::document_build::Diagnostic>& diagnostics) {
+    SourceMarkupMap        matched;
+    std::set<DeclPosition> used;
+    const auto             match_members = [&](this const auto& self, const clang::CXXRecordDecl* record) -> void {
+        // substrate generic algorithm: a recursive walk over class bodies that
+        // fills two lookups at once.
+        for (const clang::Decl* member : record->decls()) {
+            if (const clang::CXXRecordDecl* nested = as_record_decl(member);
+                nested != nullptr && nested->isThisDeclarationADefinition())
+                self(nested);
+            const clang::FunctionDecl* fn = member_function_or_template(member);
+            if (fn == nullptr)
+                continue;
+            const DeclPosition position = decl_position(fn, sm, header_path);
+            if (const auto found = items.find(position); found != items.end()) {
+                matched.emplace(fn->getCanonicalDecl(), &found->second);
+                used.insert(position);
+            }
+        }
+    };
+    std::ranges::for_each(decls | std::views::transform(as_record_decl) |
+                              std::views::filter([](const clang::CXXRecordDecl* record) {
+                                  return record != nullptr && record->isThisDeclarationADefinition();
+                              }),
+                          match_members);
+    std::ranges::for_each(items | std::views::filter([&](const auto& item) { return !used.contains(item.first); }),
+                          [&](const auto& item) {
+                              diagnostics.push_back(beman::specgen::document_build::Diagnostic{
+                                  beman::specgen::Severity::Error,
+                                  item.second.line,
+                                  "this documented definition produces no wording: it defines a member of no class "
+                                  "this document describes",
+                                  item.second.file});
+                          });
+    return matched;
+}
+
 } // namespace
 
 std::expected<InterleaveResult, BuildFailure> collect_interleaved(std::string_view    header_path,
@@ -7364,8 +7761,9 @@ std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    
     });
 }
 
-std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view    header_path,
-                                                                       const ParseOptions& options) {
+std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view               header_path,
+                                                                       const ParseOptions&            options,
+                                                                       const std::vector<SourceFile>& source_files) {
     namespace ir = beman::specgen::ir;
 
     ParsedHeader parsed = parse_header(header_path, options);
@@ -7417,13 +7815,48 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
         collect_expos_scope_decl(decl, sm, main_file, expos_decls);
 
-    const std::set<const clang::Decl*>              omit_set         = build_omit_set(decls, sm);
+    std::set<const clang::Decl*>                    omit_set         = build_omit_set(decls, sm);
     const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(expos_decls, sm);
     const std::optional<std::vector<std::string>>   paper_entities   = collect_paper_entities(decls, sm);
-    const SeeBelowMap                               seebelow_map     = build_seebelow_map(decls, sm);
-    const FreestandingMap                           freestanding_map = build_freestanding_map(decls, sm);
+    SeeBelowMap                                     seebelow_map     = build_seebelow_map(decls, sm);
+    FreestandingMap                                 freestanding_map = build_freestanding_map(decls, sm);
     const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
     const SkippedRanges                             skipped          = collect_skipped_ranges(*parsed.ast);
+
+    // The source files' items (issue #149), each built in its own parse and
+    // matched here to the declaration it defines. Their markers act on the
+    // header's synopsis just as a definition's in the header do, so they join
+    // the same pre-pass sets.
+    std::set<std::string> document_paths{canonical_file_path(sm, doc.main(), header_path)};
+    document_paths.insert_range(doc.parts() | std::views::transform([&](const DocumentFiles::Part& part) {
+                                    return canonical_file_path(sm, part.file, header_path);
+                                }));
+    std::map<DeclPosition, SourceMarkup>                    source_items;
+    std::vector<beman::specgen::document_build::Diagnostic> source_diagnostics;
+    std::vector<std::string>                                source_reads;
+    // substrate generic algorithm: a short-circuiting fold over the source
+    // files, each of which may fail the build, merging three results.
+    for (const SourceFile& source : source_files) {
+        std::expected<SourceHarvest, BuildFailure> harvest = harvest_source_file(source, document_paths);
+        if (!harvest)
+            return std::unexpected(std::move(harvest.error()));
+        source_items.merge(harvest->items);
+        source_diagnostics.append_range(std::move(harvest->diagnostics));
+        source_reads.append_range(std::move(harvest->sources));
+    }
+    const SourceMarkupMap source_markup =
+        match_source_markup(decls, sm, header_path, source_items, source_diagnostics);
+    std::ranges::for_each(source_markup, [&](const auto& entry) {
+        const auto& [decl, markup] = entry;
+        if (suppresses_generated_entity(markup->attached.directives))
+            omit_set.insert(decl);
+        if (const std::optional<SeeBelowTarget> target = seebelow_target(markup->attached.directives))
+            seebelow_map.emplace(decl, *target);
+        if (markup->attached.directives.freestanding_deleted)
+            freestanding_map.emplace(decl, FreestandingKind::Deleted);
+        else if (markup->attached.directives.freestanding)
+            freestanding_map.emplace(decl, FreestandingKind::Freestanding);
+    });
 
     // The docblock ranges some declaration consumed — top-level decls and
     // class members alike, since every comment in the file becomes a RawItem
@@ -7509,7 +7942,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         freestanding_map,
                         ns_drop_set,
                         skipped,
-                        attached_comments);
+                        attached_comments,
+                        source_markup);
     };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
         const auto [file, local] = doc.locate(opener.offset);
@@ -7794,7 +8228,10 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     built.document.foreign_namespaces   = foreign;
     built.document.foreign_declarations = foreign_decls;
     built.document.unextracted_uses     = body_uses;
-    return DocumentBuild{std::move(built), parse_sources(header_path, *parsed.ast)};
+    built.diagnostics.insert(built.diagnostics.begin(), source_diagnostics.begin(), source_diagnostics.end());
+    std::vector<std::string> sources = parse_sources(header_path, *parsed.ast);
+    sources.append_range(std::move(source_reads));
+    return DocumentBuild{std::move(built), std::move(sources)};
 }
 
 } // namespace beman::specgen::frontend

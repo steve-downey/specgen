@@ -199,7 +199,7 @@ specgen generate header.hpp --validate --backend latex -o wording.tex -- -Iinclu
 Its options are:
 
 ```text
-specgen generate <header>...
+specgen generate <header> [--source <file>...]...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
@@ -230,6 +230,35 @@ wording blocks are wanted.
 
 Several headers form one paper, with one document per header; see
 [A paper proposing several headers](#a-paper-proposing-several-headers) below.
+
+### Members defined in a source file
+
+A member declared in the header and defined in a `.cpp` carries its markup on
+that definition, as one defined in the header does. `--source <file>` names
+such a source file, and pairs with the header named before it; it may be
+repeated:
+
+```sh
+specgen generate widget.hpp --source widget.cpp --source widget_io.cpp -o wording.tex
+```
+
+Each source file is parsed as a translation unit of its own, with its own
+compile flags: its compilation-database entry, or the `--` tail when one is
+given. A documented definition in it of a member of a class the header
+declares becomes that member's item, placed by the class's `\ref` groups or an
+`\at` like any other. Everything a definition in the header supplies is read
+from it: its description elements, what its body derives (*Mandates*,
+`\effects-equiv`, `\returns-expr`), and its markers, so `\omit` and `\seebelow`
+act on the header's synopsis too. The item declaration is still the in-class
+declaration's.
+
+A documented definition of anything else in a source file produces no wording
+and is reported as an error: a namespace-scope function, a function declared
+only in the source file, a class, or a member of a class this document does not
+describe. A definition whose signature matches no declaration is already an
+error in C++, so the source file fails to parse, and `generate` stops there
+with no output. The dependency fragment `--depfile` writes includes every file
+the source files' parses read.
 
 ### Fragments
 
@@ -535,7 +564,7 @@ counterpart, and the latter require a function body to extract.
 A docblock documents the declaration that follows it. Wording comes from class
 and class-template definitions (a synopsis, the class's own description, and
 routed members), from documented function *definitions*, from documented
-in-class type aliases, and, at namespace scope, from documented aliases, alias
+in-class type aliases and static data members, and, at namespace scope, from documented aliases, alias
 templates, variables, variable templates, concepts, enumerations, and record
 declarations that the header never defines (an undefined class-template primary
 renders as its own declaration). A documented enumeration's item declaration is
@@ -546,14 +575,19 @@ as an error, because it would otherwise produce no wording and do so silently.
 In a class body, a member's markup is read from its definition. A docblock on
 the declaration of a member defined out of line is reported as an error that
 names the definition, as is one on a member whose definition is not in the
-translation unit at all, such as one defined in a source file. Three kinds of
+translation unit at all, such as one defined in a source file not named with
+[`--source`](#members-defined-in-a-source-file). Three kinds of
 member have no other place for their markup, so their declarations carry it: a
 pure virtual member with no definition, and `= default` and `= delete` members.
 Each gets an item declaration, `= 0` or its other tail included, when its
-docblock has a description element or `\describe`. A docblock on a data member
-is reported as an error, because a data member has no item of its own: its
-declaration is its specification, and its class's description says what it
-means. In every one of these places, a docblock holding only markers that act on
+docblock has a description element or `\describe`. A documented static data
+member gets an item of its own, as the draft gives
+`atomic<T>::is_always_lock_free` one: its declaration, initializer included,
+followed by its elements, placed by its class's `\ref` group or an `\at` the
+way an in-class alias is. A docblock on a non-static data member, or on an
+exposition-only static one, is reported as an error, because such a member has
+no item of its own: its declaration is its specification, and its class's
+description says what it means. In every one of these places, a docblock holding only markers that act on
 the declaration (`\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`,
 `\freestanding`) is not an error.
 
@@ -742,9 +776,14 @@ wording follows [structure.specifications].
   On a documented namespace-scope variable or variable template, a bare
   `\seebelow` renders the declared type as *unspecified* and drops the
   initializer, which is the customization-point-object form,
-  `inline constexpr unspecified name;`. Combined with `\expos`, the two compose:
+  `inline constexpr unspecified name;`. On a documented static data member, a
+  bare `\seebelow` drops only the initializer, and only from the item
+  declaration, as the draft writes `static constexpr bool is_specialized;` for
+  a member whose synopsis declares it `= false`. Combined with `\expos`, a
+  namespace variable's two masks compose:
   `inline constexpr unspecified $name$; // exposition only`. The targeted forms
-  do not apply to a variable, and using one is an error. On a documented
+  do not apply to a variable or a static data member, and using one is an
+  error. On a documented
   namespace-scope concept, a bare `\seebelow` masks the constraint-expression,
   as it masks an alias's right-hand side. Both compose with `\expos`: an alias
   renders as `using $name$ = see below; // exposition only`, and a concept as
@@ -940,6 +979,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.4.6 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.5.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

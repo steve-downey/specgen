@@ -23,6 +23,11 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --source <file>           a source file defining members the preceding
+                             header declares: a documented definition in it
+                             supplies that member's wording, as one in the
+                             header would. Parsed as its own translation unit,
+                             with its own compile flags; may be repeated
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
                              rendering wording here. One document per file is

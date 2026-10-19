@@ -12,6 +12,9 @@
 // spells an enum-base or an enumerator list *see below*. Silently ignoring the
 // marker left a description claiming the synopsis beside it does not say what
 // it plainly does.
+//
+// A static data member's bare `\seebelow` drops its initializer from its
+// itemdecl (issue #148); a targeted form means nothing there either.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_VARIABLE_MASK_DIAGNOSTICS_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_VARIABLE_MASK_DIAGNOSTICS_HPP
@@ -32,6 +35,12 @@ inline constexpr detail::adaptor wrong_expos{};
 //! \seebelow
 //! \remarks The underlying type is unspecified.
 enum class wrong_kind : unsigned char { a, b };
+
+struct holder {
+    //! \seebelow noexcept
+    //! \remarks The member's initial value.
+    static constexpr int wrong_member = 0;
+};
 
 } // namespace demo
 
