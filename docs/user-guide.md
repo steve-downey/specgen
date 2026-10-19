@@ -22,10 +22,13 @@ x86-64-v2 processor, and, for headers that include the standard library, the
 host's `g++`. It requires nothing else:
 
 ```sh
-curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.gz | tar -xz
+curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.xz | tar -xJ
 export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
 specgen --version
 ```
+
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu). The same tree is also
+published as `specgen-manylinux_2_34_x86_64.tar.gz`, for `tar -xz`.
 
 The remainder of this section concerns building from source. A source build
 requires GCC 16 with its C++26 libstdc++, CMake 3.30 or later, `uv`, and the
@@ -937,6 +940,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.4.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.4.2 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
