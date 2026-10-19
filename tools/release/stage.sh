@@ -29,6 +29,12 @@
 # never in the archive (debug-info-shipping); the build-id and a debuglink
 # naming specgen.debug let gdb and llvm-symbolizer pair them.
 #
+# Every member's modification time is the commit's, or SOURCE_DATE_EPOCH's
+# when that is set, so the archive's bytes depend on its contents alone and two
+# runs over one build agree. All members get it, not only newer ones
+# (--clamp-mtime): Clang's builtin headers keep the times of the LLVM install
+# they were copied from, which would make the archive depend on that install.
+#
 # Under GitHub Actions, the version and the staged tree's path are also
 # written to $GITHUB_OUTPUT as `version` and `stage`.
 set -eu
@@ -40,6 +46,11 @@ source_dir=$(cd "$(dirname "$0")/../.." && pwd)
 version=$(sed -n 's/^CMAKE_PROJECT_VERSION:[A-Z]*=//p' "$build/CMakeCache.txt")
 [ -n "$version" ] || {
     echo "stage: no CMAKE_PROJECT_VERSION in $build/CMakeCache.txt" >&2
+    exit 1
+}
+epoch=${SOURCE_DATE_EPOCH:-$(git -C "$source_dir" log -1 --format=%ct 2>/dev/null || :)}
+[ -n "$epoch" ] || {
+    echo "stage: no commit time from git in $source_dir; set SOURCE_DATE_EPOCH" >&2
     exit 1
 }
 name=specgen-$version-manylinux_2_34_x86_64
@@ -57,8 +68,8 @@ objcopy --only-keep-debug "$stage/bin/specgen" "$out/specgen.debug"
 objcopy --strip-all --add-gnu-debuglink="$out/specgen.debug" "$stage/bin/specgen"
 xz -T4 "$out/specgen.debug"
 
-# Owner and order fixed, so the archive's bytes depend on its contents alone.
-tar -C "$out" --sort=name --owner=0 --group=0 --numeric-owner -cf "$out/$archive" "$name"
+# Owner, order and times fixed, so the archive's bytes depend on its contents alone.
+tar -C "$out" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$epoch" -cf "$out/$archive" "$name"
 xz -T4 -k "$out/$archive"
 gzip -9n "$out/$archive"
 (cd "$out" && sha256sum "$archive.xz" >"$archive.xz.sha256" && sha256sum "$archive.gz" >"$archive.gz.sha256")

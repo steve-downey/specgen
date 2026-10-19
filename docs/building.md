@@ -202,7 +202,9 @@ workflow runs them the same way a local build does:
 - `stage.sh <build> <out>` installs the `specgen_Runtime` component, adds
   `LICENSE` and the archive's README (`packaging/release/README.md`), splits
   out and compresses the debug information, strips the driver, and writes the
-  archive and its checksum.
+  archives and their checksums. Every file in an archive carries the
+  commit's time, or `SOURCE_DATE_EPOCH` when that is set, so staging one build
+  twice gives the same bytes.
 - `check-portable.sh <staged dir> [<commit> [<clang argument>...]]` fails
   unless the driver needs only libraries `manylinux_2_34` allows, references no
   symbol version newer than `GLIBC_2.34`, `GLIBCXX_3.4.29` and `CXXABI_1.3.13`,
@@ -224,7 +226,8 @@ the build and the virtual environment out of it:
 
 ```sh
 image=$(sed -n 's/^SPECGEN_TOOLCHAIN_IMAGE=//p' packaging/release/images.env)
-docker run --rm -v "$PWD":/src:ro -e UV_PROJECT_ENVIRONMENT=/tmp/venv -w /src "$image" sh -c '
+docker run --rm -v "$PWD":/src:ro -e UV_PROJECT_ENVIRONMENT=/tmp/venv \
+  -e SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)" -w /src "$image" sh -c '
   uv run cmake --preset manylinux-release -B /tmp/build &&
   uv run cmake --build /tmp/build &&
   uv run ctest --test-dir /tmp/build -E "^style\." &&
@@ -239,7 +242,9 @@ C++ standard library is gcc-toolset's, under `/opt/rh`, where Clang's GCC
 detection does not look. Mounting a git worktree rather than a clone also needs
 its git directory mounted at the path the worktree's `.git` file names, or
 `--version` reports `git unknown` and the commit check fails, which is why the
-command above passes an empty commit.
+command above passes an empty commit. For the same reason it reads the
+commit's time on the host and passes it as `SOURCE_DATE_EPOCH`, since
+`stage.sh` could not read it from such a worktree either.
 
 auditwheel's instruction-set check is the one part of the policy
 `build-wheel.sh` turns off. Everything linked on EL9 needs x86-64-v2 (its
