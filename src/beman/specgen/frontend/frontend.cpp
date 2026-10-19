@@ -740,6 +740,12 @@ SkippedRanges collect_skipped_ranges(clang::ASTUnit& ast) {
 // concepts break before their body. The column limit and return-type penalty
 // favor the tighter, name-and-type-together shape draft synopses use. Per
 // design §3.6, tuned via golden-file diff rather than derived a priori.
+// The draft's line width, which a synopsis's final text has to respect too:
+// enclose_in_namespace_std indents a synopsis's body this far *after* it is
+// formatted, so a synopsis formats that much narrower (issue #157).
+constexpr unsigned kDraftColumnLimit = 88;
+constexpr unsigned kNamespaceIndent  = 2;
+
 clang::format::FormatStyle draft_format_style() {
     clang::format::FormatStyle style     = clang::format::getLLVMStyle();
     style.BreakTemplateDeclarations      = clang::format::FormatStyle::BTDS_MultiLine;
@@ -747,7 +753,7 @@ clang::format::FormatStyle draft_format_style() {
     style.RequiresClausePosition         = clang::format::FormatStyle::RCPS_OwnLine;
     style.IndentRequiresClause           = true;
     style.BreakBeforeConceptDeclarations = clang::format::FormatStyle::BBCDS_Always;
-    style.ColumnLimit                    = 88;
+    style.ColumnLimit                    = kDraftColumnLimit;
     style.PenaltyReturnTypeOnItsOwnLine  = 1000; // keep return type and name together
     // WG21 draft wording attaches references/pointers to the type (`const T&`,
     // `T*`), not the declarator; getLLVMStyle() defaults to the opposite.
@@ -1686,11 +1692,52 @@ resize_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentin
     return {std::move(text), std::move(resized)};
 }
 
+// Whether some line of `text` holds nothing but a `;`.
+bool has_lone_semicolon(std::string_view text) {
+    return std::ranges::any_of(std::views::split(text, '\n'), [](auto line) {
+        const std::string_view view(line.begin(), line.end());
+        const std::size_t      first = view.find_first_not_of(" \t");
+        return first != std::string_view::npos && view.substr(first) == ";";
+    });
+}
+
+// `code` in the draft style, `indent` columns narrower than the draft's width
+// for text that is indented that far afterwards.
+//
+// When the last line of a declaration lands exactly on the column limit,
+// clang-format ends it there and puts the `;` on a line of its own rather than
+// break the line earlier -- a requires-clause ending in a nested
+// template-argument list, in practice (issue #157). A column narrower moves the
+// break back inside the line, so the formatting is retried narrower until the
+// lone `;` is gone. One that survives every retry is not that artifact but an
+// empty statement, `while (f())` over an indented `;`, and the first
+// formatting stands.
+std::string format_draft(std::string_view code, unsigned indent) {
+    clang::format::FormatStyle style = draft_format_style();
+    style.ColumnLimit -= indent;
+    const std::string formatted = format_code(code, style);
+    if (!has_lone_semicolon(formatted))
+        return formatted;
+    const unsigned limit = style.ColumnLimit;
+    // substrate generic algorithm: a bounded retry whose every attempt is a
+    // full reformat; the first acceptable one ends it.
+    for (unsigned narrower = 1; narrower <= 8; ++narrower) {
+        style.ColumnLimit = limit - narrower;
+        std::string again = format_code(code, style);
+        if (!has_lone_semicolon(again))
+            return again;
+    }
+    return formatted;
+}
+
+// `indent` is how far the result is indented once formatted: a synopsis's
+// kNamespaceIndent, else 0.
 beman::specgen::ir::CodeText format_and_recover(std::string                            text,
                                                 const std::map<std::string, SpanInfo>& sentinels,
-                                                std::optional<std::string_view>        record_tag = std::nullopt) {
+                                                std::optional<std::string_view>        record_tag = std::nullopt,
+                                                unsigned                               indent     = 0) {
     auto [sized_text, sized] = resize_sentinels(std::move(text), sentinels);
-    std::string formatted    = format_code(sized_text, draft_format_style());
+    std::string formatted    = format_draft(sized_text, indent);
 
     // BTDS_MultiLine matches the draft for function templates, but considers a
     // record head short even when its body is not and joins `template<...>` to
@@ -2967,7 +3014,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     const llvm::StringRef record_tag = record->getKindName();
     return format_and_recover(drop_blank_lines_before_close(std::move(text)),
                               sentinels,
-                              std::string_view(record_tag.data(), record_tag.size()));
+                              std::string_view(record_tag.data(), record_tag.size()),
+                              kNamespaceIndent);
 }
 
 // The first offset of the run of cv-qualifier keywords written immediately
@@ -3172,7 +3220,9 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         text.replace(edit.begin - decl_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels, record_tag);
+    // An exposition-only declaration is a standalone synopsis, indented inside
+    // `namespace std {` once formatted; every other caller's is an itemdecl.
+    return format_and_recover(std::move(text), sentinels, record_tag, exposition ? kNamespaceIndent : 0);
 }
 
 // A free-standing exposition-only entity is already a complete
@@ -6966,7 +7016,7 @@ void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
     for (std::size_t k = 0; k < code.text.size(); ++k) {
         const char c = code.text[k];
         if (line_start && c != '\n')
-            text.append("  ");
+            text.append(kNamespaceIndent, ' ');
         moved[k] = text.size();
         text.push_back(c);
         line_start = c == '\n';
@@ -7108,7 +7158,7 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         text.replace(edit.begin - decl_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels);
+    return format_and_recover(std::move(text), sentinels, std::nullopt, kNamespaceIndent);
 }
 
 beman::specgen::ir::CodeText header_comment_code(std::string text) {
