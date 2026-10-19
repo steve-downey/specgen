@@ -369,6 +369,12 @@ back to name match within the class's fragments only):
    Expression text — a derived conjunct, an *Equivalent to:* body — is taken from source
    verbatim and never reflowed, so it goes through the same style with `ColumnLimit: 0`:
    the qualifier fixer runs, the layout does not move.
+   The column limit is 88 for the *final* text. A synopsis is indented two columns inside
+   `namespace std {` after it is formatted, so it formats at 86. When the last line of a
+   declaration lands exactly on the limit, clang-format puts the `;` on a line of its own
+   instead of breaking the line earlier, so such a fragment is reformatted a column narrower
+   until the `;` ends the line again. A lone `;` that survives every retry is an empty
+   statement, and keeps the first layout (issue #157).
 3. Parse sentinels into a **span table** (byte range → semantic kind); store
    `{text, spans}` in the IR. Backends substitute escapes per target.
 

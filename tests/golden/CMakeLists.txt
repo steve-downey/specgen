@@ -764,6 +764,15 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_constraints.hpp"
 )
 
+# A requires-clause whose last line lands exactly on the column limit kept its
+# `;` on a line of its own, and a synopsis's lines ran two columns past the
+# limit once indented inside `namespace std {` (issue #157).
+specgen_add_golden(
+    requires_terminator
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_requires_terminator.hpp"
+)
+
 # The subject of a derived "`X` models `C`" conjunct, in Constraints and in
 # Mandates, rewritten like any other code: `std::` dropped, an exposition-only
 # alias as its exposid, `T const&` as `const T&` (issue #126). The mpark
