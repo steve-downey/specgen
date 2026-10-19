@@ -1787,6 +1787,12 @@ void append_real_record_members(const clang::CXXRecordDecl*    record,
     for (const clang::Decl* member : record->decls()) {
         if (member->isImplicit() || llvm::isa<clang::IndirectFieldDecl>(member))
             continue;
+        // A static data member template's implicit instantiation, `spare_<int>`
+        // for a use of it, is a member of the class too, though nothing in the
+        // class body declares it (issue #172).
+        if (const auto* instance = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(member);
+            instance != nullptr && instance->getSpecializationKind() == clang::TSK_ImplicitInstantiation)
+            continue;
 
         const bool effectively_private = enclosed_private || member->getAccess() == clang::AS_private;
         if (const auto* nested = llvm::dyn_cast<clang::CXXRecordDecl>(member);
@@ -2755,6 +2761,20 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                 add_exposid(field, it->second);
             mark_survivor(); // a shown (public or expos) data member
             continue;
+        }
+
+        // An `\expos` static data member, or static data member template,
+        // renders like exposition-only data (issue #172). A template's name
+        // and `;` are its templated declaration's.
+        if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member)) {
+            if (const auto it = expos_set.find(member->getCanonicalDecl()); it != expos_set.end()) {
+                const clang::NamedDecl* named = llvm::cast<clang::NamedDecl>(member);
+                if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(member))
+                    named = var_tmpl->getTemplatedDecl();
+                add_exposid(named, it->second);
+                mark_survivor();
+                continue;
+            }
         }
 
         if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(member)) {
@@ -5218,11 +5238,9 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         if (fn == nullptr) {
             // A documented static data member is an item of its own, routed
             // like an alias (issue #148), unless it is `\expos`: exposition
-            // renders in the synopsis alone. The marker is read here rather
-            // than from expos_set, which holds no static data members (issue
-            // #172).
+            // renders in the synopsis alone.
             if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm) &&
-                !docblock_directives(member, sm).expos) {
+                !expos_set.contains(member->getCanonicalDecl())) {
                 AttachedItem attached = attach_static_member(
                     llvm::cast<clang::NamedDecl>(member), record, sm, lang_opts, ns_drop_set, expos_set);
                 diagnostics.append_range(std::move(attached.diagnostics));
@@ -5537,13 +5555,18 @@ std::set<const clang::Decl*> build_omit_set(const std::vector<clang::Decl*>& dec
     return omit;
 }
 
-// A member's exposition-only name candidate: a data member, a type alias, or
-// a method, including the underlying method of a FunctionTemplateDecl.
+// A member's exposition-only name candidate: a data member, static or not, a
+// type alias, or a method, including the underlying method of a
+// FunctionTemplateDecl. A static data member and a static data member template
+// used to be missing, so an `\expos` one never reached the expos set and its
+// synopsis line was dropped as unmarked private data (issue #172).
 // Hidden friends
 // remain namespace functions rather than class exposition members.
 const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
     if (const auto* fd = llvm::dyn_cast<clang::FieldDecl>(member))
         return fd;
+    if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member))
+        return llvm::cast<clang::NamedDecl>(member);
     if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(member))
         return alias;
     if (const auto* md = llvm::dyn_cast_or_null<clang::CXXMethodDecl>(member_function_or_template(member)))

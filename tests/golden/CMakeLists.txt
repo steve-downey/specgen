@@ -1046,6 +1046,20 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/static_members/expected.json"
 )
 
+# An `\expos` static data member, or static data member template, renders as
+# exposition-only data in the synopsis and in an extracted body (issue #172).
+specgen_add_golden(
+    expos_static_members_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_members.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_members"
+)
+specgen_add_golden(
+    expos_static_members
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_members/expected.json"
+)
+
 # Class-body docblocks that produce no wording: the declaration of a member
 # defined elsewhere, or defined nowhere in the header, and a non-static or
 # exposition-only data member (issues #125, #140, #148). Each one asking for wording is an Error; marker-only
