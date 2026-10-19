@@ -1031,9 +1031,24 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_pure_virtual.hpp"
 )
 
+# A documented static data member is an item of its own, routed by its
+# class's `\ref` group or an `\at` (issue #148); bare `\seebelow` drops its
+# initializer from the itemdecl, not from the synopsis.
+specgen_add_golden(
+    static_members_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_static_members.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/static_members"
+)
+specgen_add_golden(
+    static_members
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/static_members/expected.json"
+)
+
 # Class-body docblocks that produce no wording: the declaration of a member
-# defined elsewhere, or defined nowhere in the header, and a data member
-# (issues #125, #140). Each one asking for wording is an Error; marker-only
+# defined elsewhere, or defined nowhere in the header, and a non-static or
+# exposition-only data member (issues #125, #140, #148). Each one asking for wording is an Error; marker-only
 # ones are silent, and grammar findings are reported either way.
 specgen_add_golden(
     declaration_docblocks

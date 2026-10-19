@@ -3047,6 +3047,31 @@ unsigned cv_run_begin(llvm::StringRef buffer, unsigned begin, unsigned floor) {
     }
 }
 
+// Drop `variable`'s initializer from one extraction, a copy-init's `=` with
+// it. A dominant edit, so a qualifier drop or expos-use rewrite inside the
+// initializer loses to it. Both the declared-type mask below and a static data
+// member's bare `\seebelow` (issue #148) drop the initializer; only the former
+// masks the type as well.
+void add_initializer_drop(std::vector<SynopsisEdit>&  edits,
+                          const clang::VarDecl*       variable,
+                          llvm::StringRef             buffer,
+                          unsigned                    decl_begin,
+                          const clang::SourceManager& sm,
+                          const clang::LangOptions&   lang_opts) {
+    const clang::Expr* init = variable->getInit();
+    if (init == nullptr || !init->getSourceRange().isValid())
+        return;
+    unsigned       init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
+    const unsigned init_end =
+        sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(init->getSourceRange().getEnd(), 0, sm, lang_opts))
+            .second;
+    const std::size_t equal = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
+    if (equal != llvm::StringRef::npos && buffer[equal] == '=')
+        init_begin = static_cast<unsigned>(equal);
+    if (init_begin >= decl_begin && init_end > init_begin)
+        add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+}
+
 // The masks a marked declaration's own spelling takes, applied to one
 // extraction's edit list. Two of them, and they are the same idea told about
 // different halves of a declaration: `unspecified` is the variable whose
@@ -3097,20 +3122,10 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
             }
         }
         // The initializer is implementation all the way down; the draft
-        // writes the declaration alone. A copy-init's `=` goes with it.
-        // (see_below below is the same idea for the kinds whose definition,
-        // rather than whose declared type, is the implementation.)
-        if (const clang::Expr* init = unspecified->getInit(); init != nullptr && init->getSourceRange().isValid()) {
-            unsigned          init_begin = sm.getDecomposedLoc(init->getSourceRange().getBegin()).second;
-            const unsigned    init_end   = sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(
-                                                                   init->getSourceRange().getEnd(), 0, sm, lang_opts))
-                                               .second;
-            const std::size_t equal      = llvm::StringRef(buffer.data(), init_begin).find_last_not_of(" \t\n\v\f\r");
-            if (equal != llvm::StringRef::npos && buffer[equal] == '=')
-                init_begin = static_cast<unsigned>(equal);
-            if (init_begin >= decl_begin && init_end > init_begin)
-                add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
-        }
+        // writes the declaration alone. (see_below below is the same idea for
+        // the kinds whose definition, rather than whose declared type, is the
+        // implementation.)
+        add_initializer_drop(edits, unspecified, buffer, decl_begin, sm, lang_opts);
     }
 
     // The definition, masked whole: an alias's RHS or a concept's
@@ -3133,7 +3148,8 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
 // One free-standing namespace-scope declaration, extracted whole: the
 // template head and initializer/constraint through the trailing semicolon,
 // with the same qualifier drops and expos-use sentinels as class synopses.
-// Two callers share it. The `\expos` standalone synopsis
+// A documented namespace entity's itemdecl and a documented static data
+// member's (attach_static_member) take it as written. The `\expos` standalone synopsis
 // (extract_namespace_expos_synopsis below) passes `exposition` to rewrite the
 // declared name as an `\exposid` span and append the draft's exposition-only
 // comment. A documented record declaration the header never defines (an
@@ -3145,6 +3161,9 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
 // `\seebelow` masks as the draft's *unspecified* placeholder, with the
 // initializer dropped — the customization-point-object shape,
 // `inline constexpr unspecified name;`. Null for every other caller.
+// `uninitialized` is the static data member whose bare `\seebelow` drops its
+// initializer and nothing else (issue #148), as [numeric.limits.members]
+// writes `static constexpr bool is_specialized;`.
 beman::specgen::ir::CodeText
 extract_freestanding_declaration(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
@@ -3152,9 +3171,10 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
-                                 std::optional<std::string_view>                  record_tag  = std::nullopt,
-                                 const clang::VarDecl*                            unspecified = nullptr,
-                                 std::optional<clang::SourceRange>                see_below   = std::nullopt) {
+                                 std::optional<std::string_view>                  record_tag    = std::nullopt,
+                                 const clang::VarDecl*                            unspecified   = nullptr,
+                                 std::optional<clang::SourceRange>                see_below     = std::nullopt,
+                                 const clang::VarDecl*                            uninitialized = nullptr) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -3209,6 +3229,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
 
     add_declaration_masks(
         edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
+    if (uninitialized != nullptr)
+        add_initializer_drop(edits, uninitialized, buffer, decl_begin, sm, lang_opts);
 
     sort_back_to_front(edits);
     unsigned applied_begin = decl_end + 1;
@@ -4850,6 +4872,56 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
     return attached;
 }
 
+// Build the AttachedItem for a documented static data member (issue #148): an
+// itemdecl of its own and the elements its docblock carries, routed by its
+// class's `\ref` group or an `\at`, the way an in-class alias is. The draft
+// gives `atomic<T>::is_always_lock_free` and the `numeric_limits` members
+// exactly this. `decl` is the VarDecl, or the VarTemplateDecl of a static data
+// member template, whose extraction then starts at `template`. The initializer
+// stays in the itemdecl unless bare `\seebelow` drops it; unlike a namespace
+// variable's, the mask leaves the declared type alone, since a static data
+// member's type is part of its interface. The class synopsis keeps the
+// initializer either way, as [numeric.limits.general]'s does.
+AttachedItem attach_static_member(const clang::NamedDecl*                          decl,
+                                  const clang::CXXRecordDecl*                      record,
+                                  const clang::SourceManager&                      sm,
+                                  const clang::LangOptions&                        lang_opts,
+                                  const std::set<std::string>&                     ns_drop_set,
+                                  const std::map<const clang::Decl*, std::string>& expos_set) {
+    AttachedItem attached;
+    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    attached.file           = sm.getFileID(decl->getBeginLoc());
+    attach_docblock(attached, decl, sm);
+
+    if (attached.directives.seebelow_target && attached.grouping_line > 0)
+        attached.diagnostics.push_back({beman::specgen::Severity::Error,
+                                        attached.grouping_line,
+                                        "a static data member accepts only bare \\seebelow"});
+    const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
+    if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
+        variable = var_tmpl->getTemplatedDecl();
+    const bool drops_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
+
+    if (attached.verbatim_itemdecl)
+        attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
+    else
+        attached.item.decl.signatures.push_back(
+            extract_freestanding_declaration(decl,
+                                             sm,
+                                             lang_opts,
+                                             ns_drop_set,
+                                             expos_set,
+                                             /*exposition=*/false,
+                                             std::nullopt,
+                                             nullptr,
+                                             std::nullopt,
+                                             drops_initializer ? variable : nullptr));
+    attached.item.decl.entities.push_back(decl->getNameAsString());
+    attached.item.decl.index.push_back({ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
+    rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set));
+    return attached;
+}
+
 // --- Shared unwrapping projections ------------------------------------------
 //
 // collect_inclass_items below and the build_omit_set/build_expos_set/
@@ -5026,10 +5098,10 @@ class ClassRefGroups {
 };
 
 // The findings for a class-body docblock that can produce no wording of its
-// own: the bodyless declaration of a member defined elsewhere, or a data
-// member. Markers that act on the declaration -- `\omit`, `\merge`,
-// `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are what such a
-// docblock is for, and stay silent. A description element, or a marker only a
+// own: the bodyless declaration of a member defined elsewhere, or a non-static
+// or exposition-only data member. Markers that act on the declaration --
+// `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are
+// what such a docblock is for, and stay silent. A description element, or a marker only a
 // definition's wording can carry out, asks for wording this docblock cannot
 // produce, and dropping it silently is how a header validates clean while its
 // descriptions vanish (issues #125, #140): that is an Error saying `problem`.
@@ -5144,10 +5216,27 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 friend_begin = friend_decl->getBeginLoc();
         }
         if (fn == nullptr) {
-            // A data member's specification is its declaration and its
-            // class's description (design §6), so a docblock on one has no
-            // itemdescr to become (issue #125; a static data member's own
-            // item is issue #148).
+            // A documented static data member is an item of its own, routed
+            // like an alias (issue #148), unless it is `\expos`: exposition
+            // renders in the synopsis alone. The marker is read here rather
+            // than from expos_set, which holds no static data members (issue
+            // #172).
+            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm) &&
+                !docblock_directives(member, sm).expos) {
+                AttachedItem attached = attach_static_member(
+                    llvm::cast<clang::NamedDecl>(member), record, sm, lang_opts, ns_drop_set, expos_set);
+                diagnostics.append_range(std::move(attached.diagnostics));
+                if (suppresses_generated_entity(attached.directives))
+                    continue;
+                const std::string section =
+                    attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
+                pending.push_back(beman::specgen::document_build::PendingItem{
+                    section, attached.inclass_offset, std::move(attached.item)});
+                continue;
+            }
+            // Any other data member's specification is its declaration and
+            // its class's description (design §6), so a docblock on one has
+            // no itemdescr to become (issue #125).
             if (llvm::isa<clang::FieldDecl, clang::VarDecl, clang::VarTemplateDecl>(member) &&
                 has_docblock(member, sm))
                 diagnostics.append_range(declaration_docblock_findings(
@@ -5325,6 +5414,8 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         if (named == nullptr)
             named = llvm::dyn_cast<clang::VarDecl>(member); // static data member
         if (named == nullptr)
+            named = llvm::dyn_cast<clang::VarTemplateDecl>(member); // static data member template
+        if (named == nullptr)
             continue; // unmarked nested type or static_assert: no wording of its own
 
         // The placement key collect_inclass_items keyed its pending items on
@@ -5347,8 +5438,8 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         // names none of them, so this is what tells them apart (issue #45).
         entry.parent = record->getNameAsString();
         // `fn` is the FunctionDecl this member resolved to, so its absence is
-        // exactly "this is a data member" -- a FieldDecl or a static VarDecl,
-        // the only two other things reaching here (a nested type, alias or
+        // exactly "this is a data member" -- a FieldDecl or a static VarDecl
+        // or VarTemplateDecl, the only other things reaching here (a nested type, alias or
         // static_assert was skipped above). Design §6 treats unmarked private
         // data differently from an unmarked private *function*: the function
         // is silently omitted, the data earns a nudge, and this field is what
@@ -5387,8 +5478,9 @@ build_roster(const clang::CXXRecordDecl*                                     rec
             // which is how the draft specifies `from_chars_result`,
             // `ranges::in_out_result` and every other such struct: a data
             // member's specification is its declaration.  There is no itemdescr
-            // to ask for -- a docblock on one produces no wording -- so
-            // demanding a description asks for something that cannot exist.
+            // to ask for, so demanding a description asks for something the
+            // draft does not write. A static data member can have one, but
+            // only by asking (issue #148), and then it is Routed above.
             entry.disposition = ir::Disposition::Declared;
         } else if (fn != nullptr && (fn->isDefaulted() || fn->isDeleted())) {
             entry.disposition = ir::Disposition::Defaulted;
