@@ -1067,7 +1067,8 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
                 qual_end   = offset_after(range.getEnd());
             }
         }
-        out_.push_back(ExposUse{name_begin, name_end, qual_begin, qual_end, found->second, llvm::isa<clang::ParmVarDecl>(marked_decl)});
+        out_.push_back(ExposUse{
+            name_begin, name_end, qual_begin, qual_end, found->second, llvm::isa<clang::ParmVarDecl>(marked_decl)});
     }
 
     const std::map<const clang::Decl*, std::string>& expos_;
@@ -4653,7 +4654,8 @@ with_parameter_renames(const clang::FunctionDecl*                       def,
         return out;
     // substrate generic algorithm: a pairwise walk that inserts into a map
     // keyed by the definition's parameter, not a transform of either range.
-    for (const auto& [definition_param, declared_param] : std::views::zip(def->parameters(), decl_form->parameters())) {
+    for (const auto& [definition_param, declared_param] :
+         std::views::zip(def->parameters(), decl_form->parameters())) {
         const std::string declared = declared_param->getNameAsString();
         if (!declared.empty() && declared != definition_param->getNameAsString())
             out.emplace(definition_param, declared);
