@@ -16,6 +16,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -169,4 +171,42 @@ TEST_CASE("build_document - spec_optional.hpp records the members its unrendered
     // the AST walk reached things.
     CHECK(
         std::ranges::is_sorted(uses, {}, [](const ir::BodyUse& use) { return std::pair{use.function, use.member}; }));
+}
+
+TEST_CASE("build_document - a --source body's unrendered member uses are recorded") {
+    // Issue #176: a definition in a source file has its body in another parse,
+    // so the names it uses reach the leakage checker only if that parse's
+    // collection is merged into the document's.
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "specgen-source-body-uses";
+    std::filesystem::create_directories(dir);
+    {
+        std::ofstream header(dir / "gauge.hpp");
+        header << "namespace demo {\n"
+                  "class gauge {\n"
+                  "  public:\n"
+                  "    // \\ref{gauge.ops}, operations\n"
+                  "    void bump();\n"
+                  "  private:\n"
+                  "    void note();\n"
+                  "};\n"
+                  "// \\rSec2[gauge]{Class gauge}\n"
+                  "// \\rSec3[gauge.ops]{Operations}\n"
+                  "}\n";
+        std::ofstream source(dir / "gauge.cpp");
+        source << "#include \"gauge.hpp\"\n"
+                  "namespace demo {\n"
+                  "void gauge::note() {}\n"
+                  "//! \\effects Bumps the gauge.\n"
+                  "void gauge::bump() { note(); }\n"
+                  "}\n";
+    }
+    const auto built = frontend::build_document_with_sources(
+        (dir / "gauge.hpp").string(), {}, {frontend::SourceFile{(dir / "gauge.cpp").string(), {}}});
+    REQUIRE(built.has_value());
+    const auto& uses = built->result.document.unextracted_uses;
+    CHECK(std::ranges::any_of(
+        uses, [](const ir::BodyUse& use) { return use.function == "gauge::bump" && use.member == "note"; }));
+    CHECK(
+        std::ranges::is_sorted(uses, {}, [](const ir::BodyUse& use) { return std::pair{use.function, use.member}; }));
+    std::filesystem::remove_all(dir);
 }
