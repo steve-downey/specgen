@@ -45,6 +45,22 @@ foreach(probe IN LISTS probes)
     )
 endforeach()
 
+# The no-raw-switch check's probes: the rule's edges, one source each.
+set(switch_probes enum_switch marked_switch scalar_switch)
+foreach(probe IN LISTS switch_probes)
+    add_test(
+        NAME tidy.no-raw-switch.${probe}
+        COMMAND
+            ${CMAKE_COMMAND} "-DCHECK=specgen-no-raw-switch"
+            "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
+            "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
+            "-DSOURCE=${CMAKE_CURRENT_SOURCE_DIR}/probes/${probe}.hpp"
+            "-DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/probes/${probe}.expected"
+            "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/${probe}.out" -P
+            "${CMAKE_CURRENT_SOURCE_DIR}/run-check.cmake"
+    )
+endforeach()
+
 # The ;-list must not split the test's command line; run-strip.cmake splits
 # it back on the |.
 string(

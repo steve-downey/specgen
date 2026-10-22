@@ -1,7 +1,16 @@
 # tests/beman/specgen/CMakeLists.txt                               -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+# Catch2 is built as a subdirectory of this one, so it would inherit the
+# project's switch errors; they are for our code.
+get_directory_property(_specgen_compile_options COMPILE_OPTIONS)
+set_directory_properties(PROPERTIES COMPILE_OPTIONS "")
 find_package(Catch2 3 REQUIRED)
+set_directory_properties(
+    PROPERTIES
+        COMPILE_OPTIONS "${_specgen_compile_options}"
+)
+unset(_specgen_compile_options)
 list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
 include(Catch)
 

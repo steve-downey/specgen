@@ -73,7 +73,7 @@ foreach(_idx RANGE 0 ${_last})
         string(JSON _entry GET "${_db}" ${_idx})
         string(REGEX REPLACE " -f(no-)?sanitize[^ \"]*" "" _entry "${_entry}")
         string(
-            REGEX REPLACE " --coverage| -fprofile[^ \"]*| -Werror"
+            REGEX REPLACE " --coverage| -fprofile[^ \"]*| -Werror[^ \"]*"
             ""
             _entry
             "${_entry}"

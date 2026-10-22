@@ -101,6 +101,50 @@ The decision record is [visitation-rules](decisions/visitation-rules.md).
   member state instead of captures. Every backend visitor and the JSON
   descriptor walker are named structs by this rule.
 
+## No raw switch over an enumeration
+
+A `switch` over an **enumeration** is a defect; a `switch` over a scalar
+(`char`, `int`) is not. An enumeration is a sum type, and `-Wswitch` is a
+warning that a `default:` or a fallback `return` after the `switch` silences:
+that is how a missing `Declared` case went unnoticed in `invisibility_reason`,
+with `return "visible"` answering in its place.
+
+`beman::specgen::foundation` (`foundation/enumeration.hpp`) is the eliminator:
+
+- state an enumeration's enumerators once, as data, beside the enumeration
+  (`foundation::enumerators<E>`);
+- `foundation::table<E>(is<E::A>(x), ...)` is a total lookup from enumerator to
+  value. This is the form for an enumeration-to-constant function, and there
+  is no code path that could fall back;
+- `foundation::match(e, when<E::A>(f), ...)` runs the case for `e`.
+
+A case missing from either, or written twice, fails to compile, and the
+diagnostic names the enumerator. A case that must leave the enclosing function
+returns a value that says so and acts on it after the `match`.
+
+The gate is `style.no-raw-switch`: the `specgen-no-raw-switch` clang-tidy check,
+same scope as `style.no-raw-loops`. The line it draws is the type of the
+`switch` condition, so the `char` switches in `foundation/json_*.hpp` and
+`depfile.cpp` are outside it with no marker. A `switch` over an enumeration
+that cannot be a table or a `match` carries `// enumeration eliminator:
+<reason>` on its line or in the comment block directly above it. `-Wswitch-default`
+is not adopted: it asks for the `default:` that makes such a `switch` unfalsifiable.
+
+CI compiles with `-Wall -Wextra -Werror=switch -Werror=switch-enum` (the
+`_gnu-warnings` preset), so an enumeration `switch` that does slip through a
+marker still cannot miss an enumerator.
+
+## Compiler warnings
+
+The build has no `-Werror`, but that is not license to let warnings
+accumulate: a compiler warning in a file you touched is a defect to fix in the
+same change, not noise to build around. "Touched" is the whole file, not only
+the lines edited, so warnings cannot pile up between changes; the steady state
+is none under `-Wall -Wextra`, and review, not `-Werror`, keeps it. When the
+warning is about an aggregate initialised with a trailing member left
+unnamed (`-Wmissing-field-initializers`), name the member; do not reorder the
+struct or suppress the warning.
+
 ## Error taxonomy
 
 The decision record is
@@ -235,6 +279,9 @@ Run through this, in order, before calling an increment or PR done:
       `// substrate generic algorithm` plus its one-line reason. The marker's
       *presence* is machine-checked (`style.no-raw-loops`); this item is about
       the *reason* being honest, not the marker existing.
+- [ ] No `switch` over an enumeration: a `foundation::table` or
+      `foundation::match` instead (`style.no-raw-switch`).
+- [ ] No compiler warning is left in a file you touched.
 - [ ] Every `std::visit` you added goes through `overloaded` and dispatches
       only its own node's alternatives — no recursion inside the visitor.
 - [ ] Every fallible step you added is assigned to exactly one row of the

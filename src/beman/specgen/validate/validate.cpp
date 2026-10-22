@@ -10,6 +10,7 @@
 
 #include <beman/specgen/validate/validate.hpp>
 
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir_fold.hpp>
@@ -37,6 +38,8 @@ namespace beman::specgen::validate {
 namespace foundation = beman::specgen::foundation;
 
 namespace {
+
+using namespace std::string_view_literals;
 
 using beman::specgen::foundation::overloaded;
 
@@ -317,46 +320,41 @@ const auto visibility_monoid = foundation::monoid{
 };
 
 // Can a reader of the generated wording see a declaration with this
-// disposition? A switch over every enumerator rather than a set of the four
-// (decision visitation-rules): a disposition added to ir.hpp should stop
+// disposition? A total table over every enumerator rather than a set of the
+// four (decision visitation-rules): a disposition added to ir.hpp stops
 // compiling here, because "is it visible" is not a question a new one can be
 // assumed to answer either way.
 bool names_a_visible_entity(ir::Disposition disposition) {
-    switch (disposition) {
-    case ir::Disposition::Described:
-    case ir::Disposition::Routed:
-    case ir::Disposition::Declared:  // a public data member, in the synopsis
-    case ir::Disposition::Defaulted: // in the synopsis, just without wording
-    case ir::Disposition::Expos:     // §9's own escape hatch
-        return true;
-    case ir::Disposition::Merged:
-    case ir::Disposition::Omitted:
-    case ir::Disposition::Private:
-    case ir::Disposition::Undocumented:
-        return false;
-    }
-    std::unreachable(); // Disposition is exhaustively handled above
+    using ir::Disposition;
+    static constexpr auto visible = foundation::table<Disposition>(
+        foundation::is<Disposition::Described>(true),
+        foundation::is<Disposition::Routed>(true),
+        foundation::is<Disposition::Declared>(true),  // a public data member, in the synopsis
+        foundation::is<Disposition::Defaulted>(true), // in the synopsis, just without wording
+        foundation::is<Disposition::Expos>(true),     // §9's own escape hatch
+        foundation::is<Disposition::Merged>(false),
+        foundation::is<Disposition::Omitted>(false),
+        foundation::is<Disposition::Private>(false),
+        foundation::is<Disposition::Undocumented>(false));
+    return visible[disposition];
 }
 
 // Why a name the reader cannot see is not visible, as the diagnostic says it.
+// A visible disposition is never asked (names_a_visible_entity gates this),
+// and says so rather than naming a reason it does not have.
 std::string_view invisibility_reason(ir::Disposition disposition) {
-    switch (disposition) {
-    case ir::Disposition::Merged:
-        return "a `\\merge`d twin";
-    case ir::Disposition::Omitted:
-        return "`\\omit`ted";
-    case ir::Disposition::Private:
-        return "an unmarked private member";
-    case ir::Disposition::Undocumented:
-        return "declared but never described";
-    case ir::Disposition::Described:
-    case ir::Disposition::Routed:
-    case ir::Disposition::Declared:
-    case ir::Disposition::Defaulted:
-    case ir::Disposition::Expos:
-        return "visible"; // unreachable: names_a_visible_entity gates this
-    }
-    std::unreachable(); // Disposition is exhaustively handled above
+    using ir::Disposition;
+    static constexpr auto reason =
+        foundation::table<Disposition>(foundation::is<Disposition::Merged>("a `\\merge`d twin"sv),
+                                       foundation::is<Disposition::Omitted>("`\\omit`ted"sv),
+                                       foundation::is<Disposition::Private>("an unmarked private member"sv),
+                                       foundation::is<Disposition::Undocumented>("declared but never described"sv),
+                                       foundation::is<Disposition::Described>("visible"sv),
+                                       foundation::is<Disposition::Routed>("visible"sv),
+                                       foundation::is<Disposition::Declared>("visible"sv),
+                                       foundation::is<Disposition::Defaulted>("visible"sv),
+                                       foundation::is<Disposition::Expos>("visible"sv));
+    return reason[disposition];
 }
 
 // What one synopsis's own roster says about the names in it. The document-wide

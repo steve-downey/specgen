@@ -6,6 +6,7 @@
 #include <beman/specgen/conjuncts.hpp>
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>
 #include <beman/specgen/foundation/parse/parser.hpp>
 #include <beman/specgen/lower.hpp>
@@ -79,7 +80,24 @@ namespace beman::specgen::frontend {
 
 // Short alias for the combinator library (decision parser-combinators) used
 // by parse_rsec, below.
-namespace parse = beman::specgen::foundation::parse;
+namespace parse      = beman::specgen::foundation::parse;
+namespace foundation = beman::specgen::foundation;
+
+// Outside the anonymous namespace below because `foundation::enumerators`
+// can only be specialized for an enumeration that has a name to specialize
+// it by.
+enum class SeeBelowTarget { ReturnType, Noexcept, Explicit };
+
+} // namespace beman::specgen::frontend
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::frontend::SeeBelowTarget> = std::array{
+    beman::specgen::frontend::SeeBelowTarget::ReturnType,
+    beman::specgen::frontend::SeeBelowTarget::Noexcept,
+    beman::specgen::frontend::SeeBelowTarget::Explicit,
+};
+
+namespace beman::specgen::frontend {
 
 SmokeResult smoke_check(std::string_view source) {
     SmokeResult result;
@@ -1423,7 +1441,6 @@ void sort_back_to_front(std::vector<SynopsisEdit>& edits) {
     });
 }
 
-enum class SeeBelowTarget { ReturnType, Noexcept, Explicit };
 using SeeBelowMap = std::map<const clang::Decl*, SeeBelowTarget>;
 
 enum class FreestandingKind { Freestanding, Deleted };
@@ -1523,9 +1540,9 @@ std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers) {
 }
 
 std::optional<clang::SourceRange> seebelow_source_range(const clang::FunctionDecl* fn, SeeBelowTarget target) {
-    const clang::SourceRange valid = [&]() -> clang::SourceRange {
-        switch (target) {
-        case SeeBelowTarget::ReturnType: {
+    const clang::SourceRange valid = foundation::match(
+        target,
+        foundation::when<SeeBelowTarget::ReturnType>([&]() -> clang::SourceRange {
             const clang::SourceRange leading = fn->getReturnTypeSourceRange();
             if (leading.isValid())
                 return leading;
@@ -1542,19 +1559,18 @@ std::optional<clang::SourceRange> seebelow_source_range(const clang::FunctionDec
                     if (const auto ftl = tsi->getTypeLoc().IgnoreParens().getAs<clang::FunctionTypeLoc>())
                         return ftl.getReturnLoc().getSourceRange();
             return {};
-        }
-        case SeeBelowTarget::Noexcept:
+        }),
+        foundation::when<SeeBelowTarget::Noexcept>([&]() -> clang::SourceRange {
             if (const auto* type = fn->getType()->getAs<clang::FunctionProtoType>())
                 if (const clang::Expr* expr = type->getNoexceptExpr())
                     return expr->getSourceRange();
             return {};
-        case SeeBelowTarget::Explicit:
+        }),
+        foundation::when<SeeBelowTarget::Explicit>([&]() -> clang::SourceRange {
             if (const clang::Expr* expr = clang::ExplicitSpecifier::getFromDecl(fn).getExpr())
                 return expr->getSourceRange();
             return {};
-        }
-        std::unreachable();
-    }();
+        }));
     return valid.isValid() ? std::optional{valid} : std::nullopt;
 }
 

@@ -35,8 +35,7 @@ std::string escape(std::string_view path);
 
 // The fragment: every target, then every prerequisite, then the `-MP` block.
 //
-//     wording/a.tex wording/b.tex: include/a.hpp \
-//       include/detail/b.hpp
+//     wording/a.tex wording/b.tex: include/a.hpp include/detail/b.hpp
 //
 //     include/a.hpp:
 //     include/detail/b.hpp:

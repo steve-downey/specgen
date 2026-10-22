@@ -14,6 +14,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     diagnostic.hpp
                     docblock.hpp
                     document_build.hpp
+                    foundation/enumeration.hpp
                     foundation/fold_left_short.hpp
                     foundation/json_descriptor.hpp
                     foundation/json_writer.hpp
@@ -40,6 +41,7 @@ else()
                     diagnostic.hpp
                     docblock.hpp
                     document_build.hpp
+                    foundation/enumeration.hpp
                     foundation/fold_left_short.hpp
                     foundation/json_descriptor.hpp
                     foundation/json_writer.hpp

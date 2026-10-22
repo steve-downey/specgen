@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.5.3
+    VERSION 0.5.4
 )
 
 # `specgen --version` identifies both the release and the exact source
@@ -197,6 +197,15 @@ set_target_properties(
     PROPERTIES VERIFY_INTERFACE_HEADER_SETS ${PROJECT_IS_TOP_LEVEL}
 )
 
+# An enumerator a `switch` leaves out is an error, not a warning that a
+# fallback silences (docs/CODING_RULES.md, "No raw switch over an
+# enumeration"). Put here, where every build reads it, and not in a
+# toolchain file only the Makefile lane reaches. Directory scope: the tests
+# directory clears it before it fetches Catch2, which is not ours to police.
+add_compile_options(
+    "$<$<COMPILE_LANG_AND_ID:CXX,GNU,Clang,AppleClang>:-Werror=switch;-Werror=switch-enum>"
+)
+
 add_subdirectory(include/beman/specgen)
 add_subdirectory(src/beman/specgen)
 
@@ -341,10 +350,27 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
                 "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
                 "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
         )
+        add_test(
+            NAME style.no-raw-switch
+            COMMAND
+                ${CMAKE_COMMAND} "-DCHECK=specgen-no-raw-switch"
+                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
+                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
+                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
+                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
+        )
         unset(_specgen_gate_implicit_dirs)
     else()
         add_test(
             NAME style.no-raw-loops
+            COMMAND
+                ${CMAKE_COMMAND} -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
+        )
+        add_test(
+            NAME style.no-raw-switch
             COMMAND
                 ${CMAKE_COMMAND} -P
                 "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
