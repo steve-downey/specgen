@@ -29,6 +29,19 @@ draft LaTeX, mpark/wg21 markdown, or org.
 
 ## Install a prebuilt binary
 
+From PyPI, with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv tool install beman-specgen   # puts `specgen` on your PATH
+uvx --from beman-specgen specgen --version   # or run it once, installing nothing
+```
+
+The wheel is the same binary as the release archive below (`manylinux_2_34_x86_64`, so the same glibc and
+processor requirements), and a project can pin a version of it as a tool or a development dependency so its
+wording regenerates against a known specgen.
+
+The archive:
+
 Every push to `main` publishes a [GitHub Release](https://github.com/steve-downey/specgen/releases) with a
 prebuilt `specgen` for x86_64 Linux. It runs on glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35,
 RHEL 9 and their derivatives, or later) on an x86-64-v2 processor, and needs neither GCC 16 nor LLVM:
