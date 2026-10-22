@@ -65,4 +65,10 @@ friend bool operator==(const tally& x, const tally& y);
 
 [#]{.pnum} *Returns*: `x.size() == y.size()`.
 
+```cpp
+void swap(tally& x, tally& y);
+```
+
+[#]{.pnum} *Effects*: Exchanges the counts of `x` and `y`.
+
 :::

@@ -6613,6 +6613,21 @@ bool is_attached_comment(unsigned offset, const AttachedCommentRanges& ranges) {
         ranges, [offset](const auto& range) { return offset >= range.first && offset <= range.second; });
 }
 
+// The function `decl` declares at namespace scope, when it is a declaration
+// without a body: the shape whose definition may be in a source file (issue
+// #175). A member, a hidden friend and a definition are none of them it.
+const clang::FunctionDecl* declared_free_function(const clang::Decl* decl) {
+    const clang::FunctionDecl* fn = llvm::dyn_cast_or_null<clang::FunctionDecl>(decl);
+    if (fn == nullptr) {
+        if (const auto* tmpl = llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(decl))
+            fn = tmpl->getTemplatedDecl();
+    }
+    if (fn == nullptr || llvm::isa<clang::CXXMethodDecl>(fn) || fn->isThisDeclarationADefinition() ||
+        !fn->getDeclContext()->isFileContext() || !fn->getLexicalDeclContext()->isFileContext())
+        return nullptr;
+    return fn;
+}
+
 db::DocEvent classify(const RawItem&                                   ev,
                       const clang::SourceManager&                      sm,
                       const DocumentFiles&                             doc,
@@ -6881,6 +6896,20 @@ db::DocEvent classify(const RawItem&                                   ev,
     // function-definition items participate — a non-function decl (empty
     // SpecItem, is_function_def == false) can neither join nor act as a group
     // primary.
+    // A namespace-scope function whose definition is in a source file (issue
+    // #175): its item was built in that file's parse and sits here, at the
+    // position of its declaration in this document, as if defined here.
+    if (const clang::FunctionDecl* declared = declared_free_function(ev.decl)) {
+        if (const auto sourced = source_markup.find(declared->getCanonicalDecl()); sourced != source_markup.end()) {
+            AttachedItem attached   = sourced->second->attached;
+            attached.inclass_offset = sm.getDecomposedLoc(ev.decl->getBeginLoc()).second;
+            attached.file           = sm.getFileID(ev.decl->getBeginLoc());
+            if (suppresses_generated_entity(attached.directives))
+                return db::Ignored{std::move(attached.diagnostics)};
+            return item_decl_event(std::move(attached), doc);
+        }
+    }
+
     AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped);
     if (!attached.is_function_def) {
         // A top-level decl no arm above turned into a node. Undocumented,
@@ -7643,14 +7672,17 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
         if (fn == nullptr || !fn->isThisDeclarationADefinition()) {
             report(decl,
                    "a documented declaration in a source file produces no wording: a source file supplies markup "
-                   "only on the definition of a member declared in a class body");
+                   "only on the definition of a function declared in the header");
             continue;
         }
-        const clang::FunctionDecl* first = fn->getFirstDecl();
-        if (first == fn || !llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext())) {
+        const clang::FunctionDecl* first             = fn->getFirstDecl();
+        const bool                 declared_in_class = llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext());
+        const bool                 declared_free     = !declared_in_class && declared_free_function(first) != nullptr;
+        if (first == fn || (!declared_in_class && !declared_free)) {
             report(decl,
                    std::format("the documented definition of `{}` produces no wording: a source file supplies "
-                               "markup only for a member declared in a class body",
+                               "markup only for a function declared in the header, in a class body or at "
+                               "namespace scope",
                                named));
             continue;
         }
@@ -7711,13 +7743,24 @@ SourceMarkupMap match_source_markup(const std::vector<clang::Decl*>&            
                                   return record != nullptr && record->isThisDeclarationADefinition();
                               }),
                           match_members);
+    // A namespace-scope function declared in the document is matched by the
+    // position of that declaration (issue #175).
+    std::ranges::for_each(decls | std::views::transform(declared_free_function) |
+                              std::views::filter([](const clang::FunctionDecl* fn) { return fn != nullptr; }),
+                          [&](const clang::FunctionDecl* fn) {
+                              const DeclPosition position = decl_position(fn, sm, header_path);
+                              if (const auto found = items.find(position); found != items.end()) {
+                                  matched.emplace(fn->getCanonicalDecl(), &found->second);
+                                  used.insert(position);
+                              }
+                          });
     std::ranges::for_each(items | std::views::filter([&](const auto& item) { return !used.contains(item.first); }),
                           [&](const auto& item) {
                               diagnostics.push_back(beman::specgen::document_build::Diagnostic{
                                   beman::specgen::Severity::Error,
                                   item.second.line,
-                                  "this documented definition produces no wording: it defines a member of no class "
-                                  "this document describes",
+                                  "this documented definition produces no wording: it defines no member or function "
+                                  "this document declares",
                                   item.second.file});
                           });
     return matched;

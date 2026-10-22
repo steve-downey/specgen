@@ -233,8 +233,8 @@ Several headers form one paper, with one document per header; see
 
 ### Members defined in a source file
 
-A member declared in the header and defined in a `.cpp` carries its markup on
-that definition, as one defined in the header does. `--source <file>` names
+A member or namespace-scope function declared in the header and defined in a
+`.cpp` carries its markup on that definition, as one defined in the header does. `--source <file>` names
 such a source file, and pairs with the header named before it; it may be
 repeated:
 
@@ -252,10 +252,13 @@ from it: its description elements, what its body derives (*Mandates*,
 act on the header's synopsis too. The item declaration is still the in-class
 declaration's.
 
+A namespace-scope function the header declares works the same way: its item sits
+at the position of the declaration in the header, in whatever `\rSec` section
+that falls, as if the definition were there.
+
 A documented definition of anything else in a source file produces no wording
-and is reported as an error: a namespace-scope function, a function declared
-only in the source file, a class, or a member of a class this document does not
-describe. A definition whose signature matches no declaration is already an
+and is reported as an error: a function declared only in the source file, a
+class, or a member of a class this document does not describe. A definition whose signature matches no declaration is already an
 error in C++, so the source file fails to parse, and `generate` stops there
 with no output. The dependency fragment `--depfile` writes includes every file
 the source files' parses read.
@@ -979,6 +982,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.5.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.5.2 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
