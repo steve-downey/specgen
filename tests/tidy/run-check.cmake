@@ -19,8 +19,8 @@ endif()
 
 execute_process(
     COMMAND
-        ${CLANG_TIDY} --load ${PLUGIN} --checks=-*,${CHECK}
-        ${SOURCE} -- -std=c++2c
+        ${CLANG_TIDY} --load ${PLUGIN} --checks=-*,${CHECK} ${SOURCE} --
+        -std=c++2c
     OUTPUT_VARIABLE raw_out
     ERROR_VARIABLE raw_err
     RESULT_VARIABLE status

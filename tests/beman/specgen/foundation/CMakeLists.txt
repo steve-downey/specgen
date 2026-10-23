@@ -44,12 +44,15 @@ add_executable(
     EXCLUDE_FROM_ALL
     enumeration_missing.probe.cpp
 )
-target_link_libraries(beman.specgen.probe.enumeration_missing PRIVATE beman::specgen)
+target_link_libraries(
+    beman.specgen.probe.enumeration_missing
+    PRIVATE beman::specgen
+)
 add_test(
     NAME foundation.enumeration.missing-case
     COMMAND
-        ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --config $<CONFIG>
-        --target beman.specgen.probe.enumeration_missing
+        ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --config $<CONFIG> --target
+        beman.specgen.probe.enumeration_missing
 )
 set_tests_properties(
     foundation.enumeration.missing-case

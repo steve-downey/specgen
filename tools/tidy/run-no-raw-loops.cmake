@@ -110,7 +110,4 @@ if(NOT _status EQUAL 0)
         "\n${_out}\n${_err}"
     )
 endif()
-message(
-    STATUS
-    "${CHECK}: ${_file_count} TUs clean"
-)
+message(STATUS "${CHECK}: ${_file_count} TUs clean")

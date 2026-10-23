@@ -7,8 +7,7 @@ get_directory_property(_specgen_compile_options COMPILE_OPTIONS)
 set_directory_properties(PROPERTIES COMPILE_OPTIONS "")
 find_package(Catch2 3 REQUIRED)
 set_directory_properties(
-    PROPERTIES
-        COMPILE_OPTIONS "${_specgen_compile_options}"
+    PROPERTIES COMPILE_OPTIONS "${_specgen_compile_options}"
 )
 unset(_specgen_compile_options)
 list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
