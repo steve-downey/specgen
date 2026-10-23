@@ -6266,7 +6266,12 @@ collect_foreign_declarations(const std::vector<clang::Decl*>&                 de
 // leakage rule errs in (a miss costs a finding, never invents one).
 class BodyMemberCollector : public clang::RecursiveASTVisitor<BodyMemberCollector> {
   public:
-    BodyMemberCollector(const clang::SourceManager& sm, std::set<std::string>& out) : sm_(sm), out_(out) {}
+    // `in_document` says which class a member must belong to for its name to
+    // count: a class of the header's parse is in its main file, while a
+    // source file's parse holds the classes in the files it includes (issue
+    // #176).
+    BodyMemberCollector(std::function<bool(const clang::CXXRecordDecl*)> in_document, std::set<std::string>& out)
+        : in_document_(std::move(in_document)), out_(out) {}
 
     bool VisitMemberExpr(clang::MemberExpr* expr) {
         record(expr->getMemberDecl());
@@ -6287,15 +6292,15 @@ class BodyMemberCollector : public clang::RecursiveASTVisitor<BodyMemberCollecto
         if (decl == nullptr)
             return;
         const auto* parent = llvm::dyn_cast_or_null<clang::CXXRecordDecl>(decl->getDeclContext());
-        if (parent == nullptr || !sm_.isInMainFile(parent->getLocation()))
+        if (parent == nullptr || !in_document_(parent))
             return;
         const std::string name = decl->getNameAsString();
         if (!name.empty())
             out_.insert(name);
     }
 
-    const clang::SourceManager& sm_;
-    std::set<std::string>&      out_;
+    std::function<bool(const clang::CXXRecordDecl*)> in_document_;
+    std::set<std::string>&                           out_;
 };
 
 // Does `fn` carry wording whose body the tool leaves unrendered? Three
@@ -6353,18 +6358,24 @@ std::string body_owner_label(const clang::FunctionDecl* fn) {
 // makes — out-of-line definitions from `decls`, in-class definitions and
 // hidden friends from each record's members — since a body is a body wherever
 // it is written.
+// The members one function's body names, paired with the label that names the
+// body. Pairs rather than BodyUses so a set can order them without a
+// comparator; the two are the same two strings.
+std::vector<std::pair<std::string, std::string>>
+body_member_uses(const clang::FunctionDecl* fn, std::function<bool(const clang::CXXRecordDecl*)> in_document) {
+    std::set<std::string> names;
+    BodyMemberCollector   collector(std::move(in_document), names);
+    collector.TraverseStmt(fn->getBody());
+    const std::string owner = body_owner_label(fn);
+    return names | std::views::transform([owner](const std::string& member) { return std::pair{owner, member}; }) |
+           std::ranges::to<std::vector>();
+}
+
 std::vector<beman::specgen::ir::BodyUse> collect_unextracted_uses(const std::vector<clang::Decl*>& decls,
                                                                   const clang::SourceManager&      sm) {
-    // One body's members, already paired with the label that names it. Pairs
-    // rather than BodyUses so the set below can order them without a
-    // comparator; the two are the same two strings.
     const auto uses_of = [&sm](const clang::FunctionDecl* fn) {
-        std::set<std::string> names;
-        BodyMemberCollector   collector(sm, names);
-        collector.TraverseStmt(fn->getBody());
-        const std::string owner = body_owner_label(fn);
-        return names | std::views::transform([owner](const std::string& member) { return std::pair{owner, member}; }) |
-               std::ranges::to<std::vector>();
+        return body_member_uses(
+            fn, [&sm](const clang::CXXRecordDecl* parent) { return sm.isInMainFile(parent->getLocation()); });
     };
 
     const auto bodies = [&sm](const clang::FunctionDecl* fn) { return has_unextracted_body(fn, sm); };
@@ -6611,6 +6622,21 @@ using AttachedCommentRanges = std::vector<std::pair<unsigned, unsigned>>;
 bool is_attached_comment(unsigned offset, const AttachedCommentRanges& ranges) {
     return std::ranges::any_of(
         ranges, [offset](const auto& range) { return offset >= range.first && offset <= range.second; });
+}
+
+// The function `decl` declares at namespace scope, when it is a declaration
+// without a body: the shape whose definition may be in a source file (issue
+// #175). A member, a hidden friend and a definition are none of them it.
+const clang::FunctionDecl* declared_free_function(const clang::Decl* decl) {
+    const clang::FunctionDecl* fn = llvm::dyn_cast_or_null<clang::FunctionDecl>(decl);
+    if (fn == nullptr) {
+        if (const auto* tmpl = llvm::dyn_cast_or_null<clang::FunctionTemplateDecl>(decl))
+            fn = tmpl->getTemplatedDecl();
+    }
+    if (fn == nullptr || llvm::isa<clang::CXXMethodDecl>(fn) || fn->isThisDeclarationADefinition() ||
+        !fn->getDeclContext()->isFileContext() || !fn->getLexicalDeclContext()->isFileContext())
+        return nullptr;
+    return fn;
 }
 
 db::DocEvent classify(const RawItem&                                   ev,
@@ -6881,6 +6907,20 @@ db::DocEvent classify(const RawItem&                                   ev,
     // function-definition items participate — a non-function decl (empty
     // SpecItem, is_function_def == false) can neither join nor act as a group
     // primary.
+    // A namespace-scope function whose definition is in a source file (issue
+    // #175): its item was built in that file's parse and sits here, at the
+    // position of its declaration in this document, as if defined here.
+    if (const clang::FunctionDecl* declared = declared_free_function(ev.decl)) {
+        if (const auto sourced = source_markup.find(declared->getCanonicalDecl()); sourced != source_markup.end()) {
+            AttachedItem attached   = sourced->second->attached;
+            attached.inclass_offset = sm.getDecomposedLoc(ev.decl->getBeginLoc()).second;
+            attached.file           = sm.getFileID(ev.decl->getBeginLoc());
+            if (suppresses_generated_entity(attached.directives))
+                return db::Ignored{std::move(attached.diagnostics)};
+            return item_decl_event(std::move(attached), doc);
+        }
+    }
+
     AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped);
     if (!attached.is_function_def) {
         // A top-level decl no arm above turned into a node. Undocumented,
@@ -7573,6 +7613,10 @@ struct SourceHarvest {
     std::map<DeclPosition, SourceMarkup>                    items;
     std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
     std::vector<std::string>                                sources;
+    // The members named by the bodies of the definitions that became items
+    // but render none of them (issue #176), as the header's own parse
+    // collects them for a definition there.
+    std::vector<std::pair<std::string, std::string>> unextracted_uses;
 };
 
 // Build the items for one source file's documented member definitions.
@@ -7643,14 +7687,17 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
         if (fn == nullptr || !fn->isThisDeclarationADefinition()) {
             report(decl,
                    "a documented declaration in a source file produces no wording: a source file supplies markup "
-                   "only on the definition of a member declared in a class body");
+                   "only on the definition of a function declared in the header");
             continue;
         }
-        const clang::FunctionDecl* first = fn->getFirstDecl();
-        if (first == fn || !llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext())) {
+        const clang::FunctionDecl* first             = fn->getFirstDecl();
+        const bool                 declared_in_class = llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext());
+        const bool                 declared_free     = !declared_in_class && declared_free_function(first) != nullptr;
+        if (first == fn || (!declared_in_class && !declared_free)) {
             report(decl,
                    std::format("the documented definition of `{}` produces no wording: a source file supplies "
-                               "markup only for a member declared in a class body",
+                               "markup only for a function declared in the header, in a class body or at "
+                               "namespace scope",
                                named));
             continue;
         }
@@ -7671,6 +7718,10 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
             if (diagnostic.file.empty())
                 diagnostic.file = source.path;
         });
+        if (has_unextracted_body(fn, sm))
+            harvest.unextracted_uses.append_range(body_member_uses(fn, [&](const clang::CXXRecordDecl* parent) {
+                return is_document_file(sm.getFileID(parent->getLocation()));
+            }));
         harvest.items.emplace(decl_position(first, sm, source.path),
                               SourceMarkup{std::move(attached), source.path, line_of(fn)});
     }
@@ -7711,13 +7762,24 @@ SourceMarkupMap match_source_markup(const std::vector<clang::Decl*>&            
                                   return record != nullptr && record->isThisDeclarationADefinition();
                               }),
                           match_members);
+    // A namespace-scope function declared in the document is matched by the
+    // position of that declaration (issue #175).
+    std::ranges::for_each(decls | std::views::transform(declared_free_function) |
+                              std::views::filter([](const clang::FunctionDecl* fn) { return fn != nullptr; }),
+                          [&](const clang::FunctionDecl* fn) {
+                              const DeclPosition position = decl_position(fn, sm, header_path);
+                              if (const auto found = items.find(position); found != items.end()) {
+                                  matched.emplace(fn->getCanonicalDecl(), &found->second);
+                                  used.insert(position);
+                              }
+                          });
     std::ranges::for_each(items | std::views::filter([&](const auto& item) { return !used.contains(item.first); }),
                           [&](const auto& item) {
                               diagnostics.push_back(beman::specgen::document_build::Diagnostic{
                                   beman::specgen::Severity::Error,
                                   item.second.line,
-                                  "this documented definition produces no wording: it defines a member of no class "
-                                  "this document describes",
+                                  "this documented definition produces no wording: it defines no member or function "
+                                  "this document declares",
                                   item.second.file});
                           });
     return matched;
@@ -7870,6 +7932,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     std::map<DeclPosition, SourceMarkup>                    source_items;
     std::vector<beman::specgen::document_build::Diagnostic> source_diagnostics;
     std::vector<std::string>                                source_reads;
+    std::vector<std::pair<std::string, std::string>>        source_uses;
     // substrate generic algorithm: a short-circuiting fold over the source
     // files, each of which may fail the build, merging three results.
     for (const SourceFile& source : source_files) {
@@ -7877,6 +7940,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         if (!harvest)
             return std::unexpected(std::move(harvest.error()));
         source_items.merge(harvest->items);
+        source_uses.append_range(std::move(harvest->unextracted_uses));
         source_diagnostics.append_range(std::move(harvest->diagnostics));
         source_reads.append_range(std::move(harvest->sources));
     }
@@ -8264,6 +8328,18 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     built.document.foreign_namespaces   = foreign;
     built.document.foreign_declarations = foreign_decls;
     built.document.unextracted_uses     = body_uses;
+    // A source file's bodies join the header's, sorted and deduplicated as
+    // the header's own are (issue #176).
+    built.document.unextracted_uses.append_range(
+        source_uses | std::views::transform([](const auto& use) { return ir::BodyUse{use.first, use.second}; }));
+    std::ranges::sort(built.document.unextracted_uses, [](const ir::BodyUse& a, const ir::BodyUse& b) {
+        return std::tie(a.function, a.member) < std::tie(b.function, b.member);
+    });
+    const auto duplicates =
+        std::ranges::unique(built.document.unextracted_uses, [](const ir::BodyUse& a, const ir::BodyUse& b) {
+            return a.function == b.function && a.member == b.member;
+        });
+    built.document.unextracted_uses.erase(duplicates.begin(), duplicates.end());
     built.diagnostics.insert(built.diagnostics.begin(), source_diagnostics.begin(), source_diagnostics.end());
     std::vector<std::string> sources = parse_sources(header_path, *parsed.ast);
     sources.append_range(std::move(source_reads));
