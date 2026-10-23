@@ -15,11 +15,13 @@ its JSON intermediate representation.
 
 ## Requirements and build
 
-The quickest way to obtain `specgen` is the prebuilt binary that every push to
-`main` publishes as a GitHub Release. It requires glibc 2.34 or newer (Ubuntu
+The quickest way to obtain `specgen` is `uv tool install beman-specgen`, which
+installs the prebuilt wheel from PyPI, or `uvx --from beman-specgen specgen ...`
+to run it without installing. Every push to `main` also publishes the same
+binary as a GitHub Release. Either requires glibc 2.34 or newer (Ubuntu
 22.04, Debian 12, Fedora 35, RHEL 9 and their derivatives, or later), an
 x86-64-v2 processor, and, for headers that include the standard library, the
-host's `g++`. It requires nothing else:
+host's `g++`. It requires nothing else. From the release archive:
 
 ```sh
 curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.xz | tar -xJ
@@ -982,6 +984,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.5.4 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.5.5 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

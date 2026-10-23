@@ -257,6 +257,13 @@ anything ever needs more than v2.
 
 ### Publishing the wheel
 
+The wheel is published to [PyPI](https://pypi.org/project/beman-specgen/) as
+`beman-specgen`: `uv tool install beman-specgen` gives the `specgen` command.
+The `pypi` GitHub environment and the pypi.org trusted publisher both name
+repository `steve-downey/specgen` and workflow `release-binary.yml`, and the
+repository variable `PYPI_PUBLISH` is `pypi`. The steps below are how an index
+is turned on; `testpypi` works the same way for a rehearsal.
+
 The release workflow builds and checks the wheel on every run and uploads it
 as the `beman-specgen-wheel` artifact. It publishes only when the repository
 variable `PYPI_PUBLISH` is `testpypi` or `pypi`, from a push to `main`, and
