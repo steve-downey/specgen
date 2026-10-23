@@ -19,6 +19,14 @@ add_library(beman.specgen.tidy MODULE specgen_tidy_module.cpp)
 
 target_compile_features(beman.specgen.tidy PRIVATE cxx_std_26)
 
+# GCC reports a null `this` inside clang's own ExternalASTSource.h once a
+# check is inlined into it, the same finding frontend.cpp's pragma scopes
+# away. It is in LLVM's header, and a warnings-as-errors lane must not fail
+# on it.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    target_compile_options(beman.specgen.tidy PRIVATE -Wno-nonnull)
+endif()
+
 # Match the LLVM build's RTTI setting, exactly as the front end does
 # (decision llvm-toolchain-pin): the official release binaries build LLVM
 # without RTTI, and our own emitted typeinfo would reference base-class

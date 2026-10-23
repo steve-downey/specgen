@@ -27,6 +27,7 @@
 #include <beman/specgen/backend/latex.hpp>
 
 #include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
@@ -143,25 +144,24 @@ std::string render_flat_table(const ir::Table1D& table) {
 // --- items --------------------------------------------------------------
 
 std::string render_index(const ir::IndexEntry& entry) {
-    switch (entry.kind) {
-    case ir::IndexKind::Global:
-        return std::format("\\indexlibraryglobal{{{}}}%\n", entry.name);
-    case ir::IndexKind::Constructor:
-        return std::format("\\indexlibraryctor{{{}}}%\n", entry.name);
-    case ir::IndexKind::Destructor:
-        return std::format("\\indexlibrarydtor{{{}}}%\n", entry.name);
-    case ir::IndexKind::Member:
-        return std::format("\\indexlibrarymember{{{}}}{{{}}}%\n", entry.name, entry.parent);
-    case ir::IndexKind::MemberX:
-        return std::format("\\indexlibrarymemberx{{{}}}{{{}}}%\n", entry.name, entry.parent);
-    case ir::IndexKind::MemberExpos:
-        return std::format("\\indexlibrarymemberexpos{{{}}}{{{}}}%\n", entry.name, entry.parent);
-    case ir::IndexKind::Zombie:
-        return std::format("\\indexlibraryzombie{{{}}}%\n", entry.name);
-    case ir::IndexKind::Misc:
-        return std::format("\\indexlibrarymisc{{{}}}{{{}}}%\n", entry.name, entry.parent);
-    }
-    std::unreachable(); // IndexKind is exhaustively handled above
+    return foundation::match(
+        entry.kind,
+        foundation::when<ir::IndexKind::Global>(
+            [&] { return std::format("\\indexlibraryglobal{{{}}}%\n", entry.name); }),
+        foundation::when<ir::IndexKind::Constructor>(
+            [&] { return std::format("\\indexlibraryctor{{{}}}%\n", entry.name); }),
+        foundation::when<ir::IndexKind::Destructor>(
+            [&] { return std::format("\\indexlibrarydtor{{{}}}%\n", entry.name); }),
+        foundation::when<ir::IndexKind::Member>(
+            [&] { return std::format("\\indexlibrarymember{{{}}}{{{}}}%\n", entry.name, entry.parent); }),
+        foundation::when<ir::IndexKind::MemberX>(
+            [&] { return std::format("\\indexlibrarymemberx{{{}}}{{{}}}%\n", entry.name, entry.parent); }),
+        foundation::when<ir::IndexKind::MemberExpos>(
+            [&] { return std::format("\\indexlibrarymemberexpos{{{}}}{{{}}}%\n", entry.name, entry.parent); }),
+        foundation::when<ir::IndexKind::Zombie>(
+            [&] { return std::format("\\indexlibraryzombie{{{}}}%\n", entry.name); }),
+        foundation::when<ir::IndexKind::Misc>(
+            [&] { return std::format("\\indexlibrarymisc{{{}}}{{{}}}%\n", entry.name, entry.parent); }));
 }
 
 // One DescriptionElement's \pnum blocks, in emission order. Each entry is

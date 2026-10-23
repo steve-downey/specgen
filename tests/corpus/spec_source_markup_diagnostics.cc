@@ -5,8 +5,8 @@
 // (issue #149):
 //
 // - `close` misspells its element, a grammar finding positioned here.
-// - `audit` is a namespace-scope function, and only a class member's
-//   definition supplies markup from a source file.
+// - `audit` is a namespace-scope function declared in the header, and its
+//   definition supplies markup like a member's (issue #175).
 // - `helper` is declared nowhere but here.
 // - `entry` is a class, not a member definition.
 

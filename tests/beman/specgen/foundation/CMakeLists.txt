@@ -8,6 +8,7 @@
 foreach(
     component
     overloaded
+    enumeration
     fold_left_short
     monoid
     traverse
@@ -34,3 +35,23 @@ foreach(
 endforeach()
 
 add_subdirectory(parse)
+
+# A table that leaves an enumerator out must not compile, and the diagnostic
+# names the enumerator. The probe is built on demand, by the test, rather than
+# with `all`.
+add_executable(
+    beman.specgen.probe.enumeration_missing
+    EXCLUDE_FROM_ALL
+    enumeration_missing.probe.cpp
+)
+target_link_libraries(beman.specgen.probe.enumeration_missing PRIVATE beman::specgen)
+add_test(
+    NAME foundation.enumeration.missing-case
+    COMMAND
+        ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR} --config $<CONFIG>
+        --target beman.specgen.probe.enumeration_missing
+)
+set_tests_properties(
+    foundation.enumeration.missing-case
+    PROPERTIES PASS_REGULAR_EXPRESSION "enumerator_handled_once<Color::Blue, 0>"
+)

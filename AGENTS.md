@@ -50,6 +50,12 @@ Gotchas that bite:
   over the compile database (~45 s), scope `src/`, `tools/`, `examples/`,
   and every `FILE_SET` header as its own TU. A new loop needs its marker
   before the suite is green.
+- A `switch` over an enumeration is a defect, gated by `style.no-raw-switch`
+  (the `specgen-no-raw-switch` check): use `foundation::table` or
+  `foundation::match` (`foundation/enumeration.hpp`) so a missing enumerator is
+  a compile error. A new enumeration needs its `foundation::enumerators<E>`
+  list beside it. CI builds with `-Wall -Wextra -Werror=switch
+  -Werror=switch-enum`, and a warning in a file you touched is yours to fix.
 
 ## Invariants to check before touching wording behavior
 

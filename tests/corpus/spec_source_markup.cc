@@ -30,4 +30,11 @@ int* tally::data() { return &count_; }
 //! \returns `x.size() == y.size()`.
 bool operator==(const tally& x, const tally& y) { return x.count_ == y.count_; }
 
+//! \effects Exchanges the counts of `x` and `y`.
+void swap(tally& x, tally& y) {
+    const long kept = x.size();
+    x.assign(y.size());
+    y.assign(kept);
+}
+
 } // namespace demo

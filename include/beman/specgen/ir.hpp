@@ -9,6 +9,7 @@
 #ifndef BEMAN_SPECGEN_IR_HPP
 #define BEMAN_SPECGEN_IR_HPP
 
+#include <array>
 #include <cstddef>
 #include <expected>
 #include <optional>
@@ -16,6 +17,8 @@
 #include <string_view>
 #include <variant>
 #include <vector>
+
+#include <beman/specgen/foundation/enumeration.hpp>
 
 namespace beman::specgen::ir {
 
@@ -30,6 +33,20 @@ enum class SpanKind {
     Ref,          // payload = stable name (cross-reference inside a comment)
     LibraryIndex, // payload = enclosing class, or empty for a global name
 };
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::SpanKind> = std::array{
+    beman::specgen::ir::SpanKind::ExposId,
+    beman::specgen::ir::SpanKind::SeeBelow,
+    beman::specgen::ir::SpanKind::ImplDefined,
+    beman::specgen::ir::SpanKind::Placeholder,
+    beman::specgen::ir::SpanKind::Ref,
+    beman::specgen::ir::SpanKind::LibraryIndex,
+};
+
+namespace beman::specgen::ir {
 
 struct Span {
     std::size_t begin = 0; // byte offsets into CodeText::text, [begin, end)
@@ -80,6 +97,27 @@ enum class ElementKind {
     Remarks,
     Errors, // Error conditions
 };
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::ElementKind> = std::array{
+    beman::specgen::ir::ElementKind::Constraints,
+    beman::specgen::ir::ElementKind::Mandates,
+    beman::specgen::ir::ElementKind::Expects,
+    beman::specgen::ir::ElementKind::HardExpects,
+    beman::specgen::ir::ElementKind::Effects,
+    beman::specgen::ir::ElementKind::Sync,
+    beman::specgen::ir::ElementKind::Ensures,
+    beman::specgen::ir::ElementKind::Result,
+    beman::specgen::ir::ElementKind::Returns,
+    beman::specgen::ir::ElementKind::Throws,
+    beman::specgen::ir::ElementKind::Complexity,
+    beman::specgen::ir::ElementKind::Remarks,
+    beman::specgen::ir::ElementKind::Errors,
+};
+
+namespace beman::specgen::ir {
 
 constexpr int canonical_rank(ElementKind k) { return static_cast<int>(k); }
 
@@ -152,6 +190,22 @@ struct DescriptionElement {
 // --- items -----------------------------------------------------------------
 enum class IndexKind { Global, Constructor, Destructor, Member, MemberX, MemberExpos, Zombie, Misc };
 
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::IndexKind> = std::array{
+    beman::specgen::ir::IndexKind::Global,
+    beman::specgen::ir::IndexKind::Constructor,
+    beman::specgen::ir::IndexKind::Destructor,
+    beman::specgen::ir::IndexKind::Member,
+    beman::specgen::ir::IndexKind::MemberX,
+    beman::specgen::ir::IndexKind::MemberExpos,
+    beman::specgen::ir::IndexKind::Zombie,
+    beman::specgen::ir::IndexKind::Misc,
+};
+
+namespace beman::specgen::ir {
+
 struct IndexEntry {
     IndexKind   kind = IndexKind::Global;
     std::string name;
@@ -218,6 +272,23 @@ enum class Disposition {
     Undocumented, // none of the above -- what the coverage validator reports
 };
 
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::Disposition> = std::array{
+    beman::specgen::ir::Disposition::Described,
+    beman::specgen::ir::Disposition::Routed,
+    beman::specgen::ir::Disposition::Merged,
+    beman::specgen::ir::Disposition::Omitted,
+    beman::specgen::ir::Disposition::Defaulted,
+    beman::specgen::ir::Disposition::Declared,
+    beman::specgen::ir::Disposition::Expos,
+    beman::specgen::ir::Disposition::Private,
+    beman::specgen::ir::Disposition::Undocumented,
+};
+
+namespace beman::specgen::ir {
+
 std::string_view           disposition_name(Disposition); // "described", ...
 std::optional<Disposition> disposition_from_name(std::string_view);
 
@@ -235,6 +306,17 @@ std::optional<Disposition> disposition_from_name(std::string_view);
 // default-constructed entry, and a hand-written golden that omits the key,
 // must report nothing.
 enum class MemberKind { Function, Data, Alias };
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::MemberKind> = std::array{
+    beman::specgen::ir::MemberKind::Function,
+    beman::specgen::ir::MemberKind::Data,
+    beman::specgen::ir::MemberKind::Alias,
+};
+
+namespace beman::specgen::ir {
 
 std::string_view          member_kind_name(MemberKind); // "function", "data"
 std::optional<MemberKind> member_kind_from_name(std::string_view);

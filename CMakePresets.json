@@ -30,11 +30,19 @@
       }
     },
     {
+      "name": "_gnu-warnings",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_CXX_FLAGS": "-Wall -Wextra"
+      }
+    },
+    {
       "name": "gcc-debug",
       "displayName": "GCC Debug Build",
       "inherits": [
         "_root-config",
-        "_debug-base"
+        "_debug-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/gnu-toolchain.cmake"
@@ -45,7 +53,8 @@
       "displayName": "GCC Release Build",
       "inherits": [
         "_root-config",
-        "_release-base"
+        "_release-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/gnu-toolchain.cmake",
@@ -56,7 +65,8 @@
       "name": "gcc-multi-config",
       "displayName": "GCC multi-config build (the Makefile's generator)",
       "inherits": [
-        "_root-config"
+        "_root-config",
+        "_gnu-warnings"
       ],
       "generator": "Ninja Multi-Config",
       "cacheVariables": {
@@ -69,7 +79,8 @@
       "displayName": "manylinux_2_34 release binary (inside the specgen-toolchain image)",
       "inherits": [
         "_root-config",
-        "_release-base"
+        "_release-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "Clang_DIR": "/opt/llvm/lib/cmake/clang",
@@ -86,7 +97,8 @@
       "displayName": "Clang Debug Build",
       "inherits": [
         "_root-config",
-        "_debug-base"
+        "_debug-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/llvm-toolchain.cmake"
@@ -102,7 +114,8 @@
       "displayName": "Clang Release Build",
       "inherits": [
         "_root-config",
-        "_release-base"
+        "_release-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/llvm-toolchain.cmake"
@@ -118,7 +131,8 @@
       "displayName": "Appleclang Debug Build",
       "inherits": [
         "_root-config",
-        "_debug-base"
+        "_debug-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/appleclang-toolchain.cmake"
@@ -134,7 +148,8 @@
       "displayName": "Appleclang Release Build",
       "inherits": [
         "_root-config",
-        "_release-base"
+        "_release-base",
+        "_gnu-warnings"
       ],
       "cacheVariables": {
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/infra/cmake/appleclang-toolchain.cmake"

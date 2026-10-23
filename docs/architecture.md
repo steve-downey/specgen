@@ -206,8 +206,10 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   declaration's file and byte offset, which both parses read identically, and
   is placed there as a hidden friend's is. Its markers join the header's
   `\omit`, `\seebelow` and `\freestanding` pre-pass sets, and the roster reads
-  its directives. A documented definition of anything but such a member is an
-  Error against the source file (issue #149).
+  its directives. A namespace-scope function declared in the header is keyed
+  the same way and placed at its *declaration's* position in the `\rSec`
+  stream, as if defined there (issue #175). A documented definition of
+  anything else is an Error against the source file (issue #149).
 - In-class-defined members (hidden friends, compiler-bug workarounds): markup
   attaches to the in-class definition. Their itemdescr position is inferred from
   class-body order within their `\ref` section, relative to out-of-line siblings;

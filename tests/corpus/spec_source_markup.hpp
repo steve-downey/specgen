@@ -8,7 +8,8 @@
 // Mandates from its static_assert, `reset`'s Equivalent to, and `size`'s
 // Returns. Its markers reach this synopsis too: `data`'s `\seebelow` masks the
 // return type, and `rehash`'s `\omit` drops the line. `operator==` is a
-// friend whose definition is in the source file.
+// friend whose definition is in the source file, and `swap` is a namespace-scope
+// function whose item sits where it is declared (issue #175).
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_SOURCE_MARKUP_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_SOURCE_MARKUP_HPP
@@ -41,6 +42,8 @@ class tally {
 // \rSec3[tally.observers]{Observers}
 
 // \rSec3[tally.ops]{Operations}
+
+void swap(tally& x, tally& y);
 
 } // namespace demo
 

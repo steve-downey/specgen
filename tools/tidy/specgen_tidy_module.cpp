@@ -32,12 +32,54 @@ namespace {
 // counting as a mark, rather than trading it for a different rule.
 constexpr llvm::StringRef kMarker = "substrate generic algorithm";
 
+// The no-raw-switch check's marker, read the same way.
+constexpr llvm::StringRef kSwitchMarker = "enumeration eliminator";
+
 // A line whose first non-blank characters open or continue a comment: `//`,
 // `/*`, or a block comment's continuation `*`. The same three prefixes the
 // text gate's upward walk accepts.
 bool is_comment_line(llvm::StringRef line) {
     const llvm::StringRef trimmed = line.ltrim(" \t");
     return trimmed.starts_with("//") || trimmed.starts_with("/*") || trimmed.starts_with("*");
+}
+
+// Does `site` carry `marker`: on its own line (the trailing-comment form), or
+// in the contiguous run of comment lines directly above it (the block form)?
+// Shared by every check whose escape hatch is a marker comment, so the
+// doctrines agree on what "marked" means.
+bool marked_at(const clang::SourceManager& sm, clang::SourceLocation site, llvm::StringRef marker) {
+    const auto [file, offset]    = sm.getDecomposedLoc(site);
+    bool                  broken = false;
+    const llvm::StringRef buffer = sm.getBufferData(file, &broken);
+    if (broken)
+        return true; // nothing to read, so nothing to report
+
+    // The site's own line first: the trailing-comment form.
+    // (llvm::StringRef::rfind searches [0, From), so npos + 1 lands on
+    // offset 0 for a site on the buffer's first line.)
+    const std::size_t line_begin = buffer.rfind('\n', offset) + 1;
+    std::size_t       line_end   = buffer.find('\n', offset);
+    if (line_end == llvm::StringRef::npos)
+        line_end = buffer.size();
+    if (buffer.slice(line_begin, line_end).contains(marker))
+        return true;
+
+    // Then the contiguous comment block directly above: walk upward
+    // while each line is a comment line, stopping at the first that is
+    // not -- a marker separated from its site by code marks nothing.
+    // substrate generic algorithm: an upward unfold over the buffer's
+    // line structure with two early exits; there is no range of lines to
+    // fold until this loop manufactures it.
+    for (std::size_t begin = line_begin; begin > 0;) {
+        const std::size_t     prev_begin = buffer.rfind('\n', begin - 1) + 1;
+        const llvm::StringRef prev       = buffer.slice(prev_begin, begin - 1);
+        if (!is_comment_line(prev))
+            break;
+        if (prev.contains(marker))
+            return true;
+        begin = prev_begin;
+    }
+    return false;
 }
 
 } // namespace
@@ -74,37 +116,8 @@ class NoRawLoopsCheck : public clang::tidy::ClangTidyCheck {
         const clang::SourceLocation site = sm.getExpansionLoc(loop->getBeginLoc());
         if (site.isInvalid())
             return;
-        const auto [file, offset]    = sm.getDecomposedLoc(site);
-        bool                  broken = false;
-        const llvm::StringRef buffer = sm.getBufferData(file, &broken);
-        if (broken)
+        if (marked_at(sm, site, kMarker))
             return;
-
-        // The loop's own line first: the trailing-comment form.
-        // (llvm::StringRef::rfind searches [0, From), so npos + 1 lands on
-        // offset 0 for a site on the buffer's first line.)
-        const std::size_t line_begin = buffer.rfind('\n', offset) + 1;
-        std::size_t       line_end   = buffer.find('\n', offset);
-        if (line_end == llvm::StringRef::npos)
-            line_end = buffer.size();
-        if (buffer.slice(line_begin, line_end).contains(kMarker))
-            return;
-
-        // Then the contiguous comment block directly above: walk upward
-        // while each line is a comment line, stopping at the first that is
-        // not — a marker separated from its loop by code marks nothing.
-        // substrate generic algorithm: an upward unfold over the buffer's
-        // line structure with two early exits; there is no range of lines to
-        // fold until this loop manufactures it.
-        for (std::size_t begin = line_begin; begin > 0;) {
-            const std::size_t     prev_begin = buffer.rfind('\n', begin - 1) + 1;
-            const llvm::StringRef prev       = buffer.slice(prev_begin, begin - 1);
-            if (!is_comment_line(prev))
-                break;
-            if (prev.contains(kMarker))
-                return;
-            begin = prev_begin;
-        }
 
         diag(site,
              "raw loop outside a substrate generic algorithm; convert it to a named algorithm, or mark it "
@@ -112,10 +125,47 @@ class NoRawLoopsCheck : public clang::tidy::ClangTidyCheck {
     }
 };
 
+// The no-raw-switch check (docs/CODING_RULES.md "No raw switch over an
+// enumeration"): a `switch` whose condition has enumeration type is a defect
+// unless it carries the marker. An enumeration is a sum type, and
+// foundation/enumeration.hpp (`table`, `match`) is its eliminator: a case
+// missing from either fails to compile, where `-Wswitch` is a warning that a
+// fallback `return` or a `default:` silences. A `switch` over a `char` or an
+// `int` is not an enumeration's and is outside the rule by construction.
+class NoRawSwitchCheck : public clang::tidy::ClangTidyCheck {
+  public:
+    using clang::tidy::ClangTidyCheck::ClangTidyCheck;
+
+    void registerMatchers(clang::ast_matchers::MatchFinder* finder) override {
+        using namespace clang::ast_matchers;
+        finder->addMatcher(
+            switchStmt(unless(isInTemplateInstantiation()),
+                       // An unscoped enumeration is promoted to int in the condition.
+                       hasCondition(ignoringImpCasts(expr(hasType(hasUnqualifiedDesugaredType(enumType()))))))
+                .bind("switch"),
+            this);
+    }
+
+    void check(const clang::ast_matchers::MatchFinder::MatchResult& result) override {
+        const auto* statement = result.Nodes.getNodeAs<clang::SwitchStmt>("switch");
+        if (statement == nullptr)
+            return;
+        const clang::SourceManager& sm   = *result.SourceManager;
+        const clang::SourceLocation site = sm.getExpansionLoc(statement->getBeginLoc());
+        if (site.isInvalid() || marked_at(sm, site, kSwitchMarker))
+            return;
+        diag(site,
+             "switch over an enumeration; use foundation::table or foundation::match so that a missing "
+             "enumerator is a compile error, or mark it '// enumeration eliminator: <reason>' on the switch line "
+             "or in the comment block directly above it");
+    }
+};
+
 class SpecgenModule : public clang::tidy::ClangTidyModule {
   public:
     void addCheckFactories(clang::tidy::ClangTidyCheckFactories& factories) override {
         factories.registerCheck<NoRawLoopsCheck>("specgen-no-raw-loops");
+        factories.registerCheck<NoRawSwitchCheck>("specgen-no-raw-switch");
     }
 };
 
