@@ -955,6 +955,9 @@ struct ExposUse {
     unsigned    qualifier_begin;
     unsigned    qualifier_end;
     std::string display;
+    // A parameter use renamed to the first declaration's spelling (issue
+    // #160): the name is replaced by `display` as plain text, not an exposid.
+    bool plain = false;
 };
 
 // Reference-resolved uses of namespace-scope exposition-only declarations.
@@ -1064,7 +1067,8 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
                 qual_end   = offset_after(range.getEnd());
             }
         }
-        out_.push_back(ExposUse{name_begin, name_end, qual_begin, qual_end, found->second});
+        out_.push_back(ExposUse{
+            name_begin, name_end, qual_begin, qual_end, found->second, llvm::isa<clang::ParmVarDecl>(marked_decl)});
     }
 
     const std::map<const clang::Decl*, std::string>& expos_;
@@ -3734,6 +3738,10 @@ beman::specgen::ir::CodeText code_rewritten(const clang::Stmt*                  
     // substrate generic algorithm: build a sentinel table and one-or-two edits
     // per resolved use; the shared counter couples both output collections.
     for (const ExposUse& use : expos_uses(walked, expos_set, sm, lang_opts)) {
+        if (use.plain) {
+            edits.push_back(SynopsisEdit{use.name_begin, use.name_end, use.display});
+            continue;
+        }
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, use.display, use.display};
         edits.push_back(SynopsisEdit{use.name_begin, use.name_end, sentinel});
@@ -4391,6 +4399,10 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
     for (const ExposUse& use : semantic_uses) {
         if (use.name_begin < begin || use.name_end > end || is_deleted(use.name_begin, use.name_end))
             continue;
+        if (use.plain) {
+            replacements.push_back(SynopsisEdit{use.name_begin, use.name_end, use.display});
+            continue;
+        }
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, use.display, use.display};
         replacements.push_back(SynopsisEdit{use.name_begin, use.name_end, sentinel});
@@ -4628,6 +4640,29 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
                                         "\\verbatim-synopsis applies to a class or class template definition"});
 }
 
+// `expos_set` plus the renames that keep a definition's code on the itemdecl's
+// parameter names (issue #160). The itemdecl is the declaration's text, so a
+// definition that spells a parameter differently would otherwise make the
+// wording name one parameter two ways. A parameter the declaration leaves
+// unnamed has no spelling to rename to and is left alone.
+std::map<const clang::Decl*, std::string>
+with_parameter_renames(const clang::FunctionDecl*                       def,
+                       const clang::FunctionDecl*                       decl_form,
+                       const std::map<const clang::Decl*, std::string>& expos_set) {
+    std::map<const clang::Decl*, std::string> out = expos_set;
+    if (def == decl_form)
+        return out;
+    // substrate generic algorithm: a pairwise walk that inserts into a map
+    // keyed by the definition's parameter, not a transform of either range.
+    for (const auto& [definition_param, declared_param] :
+         std::views::zip(def->parameters(), decl_form->parameters())) {
+        const std::string declared = declared_param->getNameAsString();
+        if (!declared.empty() && declared != definition_param->getNameAsString())
+            out.emplace(definition_param, declared);
+    }
+    return out;
+}
+
 // Build the AttachedItem for one function, given the decl its markup/body/
 // derivations come from (`def`) and the decl its itemdecl *text* comes from
 // (`decl_form`). For an out-of-line definition those differ — markup at the
@@ -4753,14 +4788,15 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
 
     // Constraints (design §5.1): derive from the definition's own trailing
     // requires-clause unless `\constraints-in-decl` leaves it in the itemdecl.
+    const auto body_expos = with_parameter_renames(def, decl_form, expos_set);
     if (strip_requires) {
-        attach_derivation(derive_constraints(def, sm, lang_opts, ns_drop_set, expos_set));
+        attach_derivation(derive_constraints(def, sm, lang_opts, ns_drop_set, body_expos));
     }
 
     // Mandates (design §5.2): derive from the definition body's static_assert
     // prefix, independent of the requires-clause handling above, and re-fold
     // into canonical [structure.specifications] order.
-    attach_derivation(derive_mandates(def, sm, lang_opts, ns_drop_set, expos_set));
+    attach_derivation(derive_mandates(def, sm, lang_opts, ns_drop_set, body_expos));
 
     // \effects-equiv (design §4.2): fill the empty EquivalentTo lowering left
     // on the marker's element from the definition body, excluding the
@@ -4770,11 +4806,11 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     // uses of its exposition-only members render as \exposid — in the extracted
     // equiv body, and in backticked prose.
     const std::map<std::string, std::string> expos_names = expos_spellings(enclosing_record(def), expos_set);
-    fill_equiv_bodies(def, attached.item.descr, sm, lang_opts, expos_names, expos_set, ns_drop_set, skipped);
+    fill_equiv_bodies(def, attached.item.descr, sm, lang_opts, expos_names, body_expos, ns_drop_set, skipped);
     // \returns-expr builds its Returns element from the same body, with the
     // same expos rewriting.
     if (attached.directives.returns_expr) {
-        if (auto returns = derive_returns_expr(def, sm, lang_opts, ns_drop_set, expos_set, expos_names)) {
+        if (auto returns = derive_returns_expr(def, sm, lang_opts, ns_drop_set, body_expos, expos_names)) {
             attached.item.descr.elements.push_back(std::move(*returns));
             ir::canonicalize(attached.item.descr);
         } else {
