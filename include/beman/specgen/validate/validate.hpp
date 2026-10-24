@@ -4,8 +4,8 @@
 // specgen — IR validators (decision expected-error-taxonomy).
 // A validator is `fold_with<Diagnostics>` over `ir::NodeF` (ir_fold.hpp):
 // no inherited attribute is resolved during descent, which is the case
-// `backend/common.hpp`'s rule assigns to `ir::NodeF`/`node_project` rather
-// than `backend::common::RenderF` -- a diagnostic has no header text that
+// `backend/render_fold.hpp`'s rule assigns to `ir::NodeF`/`node_project` rather
+// than `backend::RenderF` -- a diagnostic has no header text that
 // needed rendering on the way down. Findings accumulate under the
 // diagnostics monoid instead of failing fast: a malformed span table three
 // sections deep should not hide every other finding in the document.

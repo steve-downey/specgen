@@ -48,7 +48,7 @@ using beman::specgen::foundation::overloaded;
 
 // The span-table validator: ir.hpp:42 documents
 // `CodeText::spans` as "sorted by begin, non-overlapping", but nothing
-// enforces it. `render_code_spans` (backend/common.hpp) silently
+// enforces it. `render_code_spans` (backend/code_spans.hpp) silently
 // `continue`s past any span that is out of range, inverted, or overlapping,
 // so a malformed table renders as plausible wording with a span quietly
 // missing, and no golden can see it -- this reports the same three defects
@@ -77,7 +77,7 @@ Diagnostics check_spans(const std::string& context, const ir::CodeText& code) {
     // comparison -- a span that starts before its predecessor ends is
     // either out of order or overlapping, and it does not matter which:
     // either way the table cannot be walked left to right the way
-    // render_code_spans (backend/common.hpp) walks it.
+    // render_code_spans (backend/code_spans.hpp) walks it.
     Diagnostics overlap =
         code.spans | std::views::pairwise | std::views::enumerate | std::views::filter([](const auto& entry) {
             const auto& [index, pair]      = entry;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // The org-mode backend, written as a direct algebra over
-// backend::common::RenderF -- the third file in this directory with that
+// backend::backend::RenderF -- the third file in this directory with that
 // shape, after latex.cpp and mpark.cpp. Decision backend-direct-algebra's
 // claim that `RenderF` / `RenderedSectionF` / `render_fmap` are a substrate
 // holds across all three backends; nothing here needs to change them either.
@@ -26,7 +26,7 @@
 //      because inside those environments `escapechar=@` and `texcl=true` are
 //      genuinely in force. This backend and the LaTeX one therefore emit the
 //      same bytes for a code block's spans, and share the one function that
-//      produces them (`common::draft_span_codeblock`) rather than each
+//      produces them (`backend::draft_span_codeblock`) rather than each
 //      spelling the convention out.
 //
 //   3. Prose is org, not LaTeX: `/Effects/: ` for a description element,
@@ -44,7 +44,10 @@
 
 #include <beman/specgen/backend/org.hpp>
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/code_spans.hpp>
+#include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -70,17 +73,17 @@ using beman::specgen::foundation::overloaded;
 
 // --- code -------------------------------------------------------------------
 
-// The span escape is `common::draft_span_codeblock` -- the draft's own, not
+// The span escape is `backend::draft_span_codeblock` -- the draft's own, not
 // one of this backend's -- for the reason in note 2 at the top of this file.
 // It is passed to the same `render_code_spans` extension point every backend
 // plugs into (decision backend-direct-algebra).
 std::string escape_span(const ir::Span& span, std::string_view spelling) {
     if (span.kind == ir::SpanKind::LibraryIndex)
         return std::string(spelling); // Paper fragments do not build an index.
-    return common::draft_span_codeblock(span, spelling);
+    return backend::draft_span_codeblock(span, spelling);
 }
 
-std::string render_code(const ir::CodeText& code) { return common::render_code_spans(code, escape_span); }
+std::string render_code(const ir::CodeText& code) { return backend::render_code_spans(code, escape_span); }
 
 // One special block. `env` is the draft environment name org will export to,
 // which is also the org block name -- that identity is the whole point of
@@ -200,7 +203,7 @@ struct PieceRenderer {
     // a doubled-up `\tcode{\exposid{value}}`.
     std::string operator()(const ir::CodeInline& v) const {
         if (needs_latex_snippet(v))
-            return "@@latex:" + common::draft_code_inline(v) + "@@@@html:" + html_code_inline(v) + "@@";
+            return "@@latex:" + backend::draft_code_inline(v) + "@@@@html:" + html_code_inline(v) + "@@";
         return '~' + v.code.text + '~';
     }
 
@@ -282,7 +285,7 @@ std::string render_flat_table(const ir::Table1D& table, std::span<const std::str
 // the same function in each of the other two backends, block for block. The
 // caller joins these, and every other element's, with a blank-line separator.
 //
-// The element's label ("/Effects/: ") comes from common::element_label and
+// The element's label ("/Effects/: ") comes from backend::element_label and
 // appears exactly once, on whichever block is emitted first. Italic rather
 // than bold because that is what the draft's `\Fundesc` sets and what
 // `view-maybe.org` writes by hand; there is no paragraph number in front of it
@@ -292,7 +295,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                                         const std::vector<ir::Table1D>& flat_tables,
                                         std::span<const std::string>    new_roots) {
     std::vector<std::string> blocks;
-    const std::string        label = std::format("/{}/: ", common::element_label(element.kind));
+    const std::string        label = std::format("/{}/: ", backend::element_label(element.kind));
 
     if (!element.paragraphs.empty()) {
         blocks.push_back(label + render_paragraph(element.paragraphs.front(), new_roots) + '\n');
@@ -316,7 +319,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
         // before it is not required by org the way it is by pandoc, but it is
         // what makes the fragment read as the draft's own layout does.
         if (blocks.empty())
-            blocks.push_back(std::format("/{}/:", common::element_label(element.kind)) + "\n\n" + items);
+            blocks.push_back(std::format("/{}/:", backend::element_label(element.kind)) + "\n\n" + items);
         else
             blocks.back() += '\n' + items;
     }
@@ -327,7 +330,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
         std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_tables.empty()) {
         if (blocks.empty())
-            blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_tables);
+            blocks.push_back(std::format("/{}/:\n\n", backend::element_label(element.kind)) + rendered_tables);
         else
             blocks.back() += '\n' + rendered_tables;
     }
@@ -338,7 +341,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
         std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_flat_tables.empty()) {
         if (blocks.empty())
-            blocks.push_back(std::format("/{}/:\n\n", common::element_label(element.kind)) + rendered_flat_tables);
+            blocks.push_back(std::format("/{}/:\n\n", backend::element_label(element.kind)) + rendered_flat_tables);
         else
             blocks.back() += '\n' + rendered_flat_tables;
     }
@@ -430,7 +433,7 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
     return out;
 }
 
-// --- the direct algebra over backend::common::RenderF ---------------------
+// --- the direct algebra over backend::backend::RenderF ---------------------
 
 // Inherited attribute carrier, handed down through `project` below. Only the
 // outline level travels. Paragraph numbering is delegated to wg21org's pnum
@@ -461,7 +464,7 @@ struct SeededProjector {
     // The stable name rides the heading as bracketed text and as its export
     // target.  The wg21org exporters preserve CUSTOM_ID verbatim for both
     // HTML anchors and LaTeX labels, so no target-specific markup is needed.
-    common::RenderF<Seeded> operator()(const ir::Section& s) const {
+    backend::RenderF<Seeded> operator()(const ir::Section& s) const {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
@@ -478,17 +481,17 @@ struct SeededProjector {
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return common::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
     }
 
     // The three leaves render independently of outline level, so they pass
     // through unchanged.
-    common::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
 };
 
-common::RenderF<Seeded> project(const Seeded& seeded) {
+backend::RenderF<Seeded> project(const Seeded& seeded) {
     return std::visit(overloaded{SeededProjector{seeded.ctx}}, *seeded.node);
 }
 
@@ -500,7 +503,7 @@ common::RenderF<Seeded> project(const Seeded& seeded) {
 struct OrgAlgebra {
     std::span<const std::string> new_roots;
 
-    std::string operator()(const common::RenderedSectionF<std::string>& s) const {
+    std::string operator()(const backend::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
             return s.header;
         return s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>());
@@ -516,14 +519,14 @@ struct OrgAlgebra {
     }
 };
 
-std::string render_layer(const common::RenderF<std::string>& layer, std::span<const std::string> new_roots) {
+std::string render_layer(const backend::RenderF<std::string>& layer, std::span<const std::string> new_roots) {
     return std::visit(overloaded{OrgAlgebra{new_roots}}, layer);
 }
 
 std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx, std::span<const std::string> new_roots) {
     return beman::tree_algorithms::fold_with<std::string>(
-        [new_roots](const common::RenderF<std::string>& layer) { return render_layer(layer, new_roots); },
-        common::render_fmap,
+        [new_roots](const backend::RenderF<std::string>& layer) { return render_layer(layer, new_roots); },
+        backend::render_fmap,
         project,
         Seeded{&node, ctx});
 }

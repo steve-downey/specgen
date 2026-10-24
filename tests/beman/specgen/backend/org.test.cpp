@@ -11,7 +11,8 @@
 #include <beman/specgen/backend/org.hpp>
 #include <beman/specgen/backend/org.hpp> // Re-inclusion verification
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/element_label.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -22,7 +23,7 @@ namespace org = beman::specgen::backend::org;
 std::string framed(std::string body) { return body; }
 
 std::string pnum(std::string body) { return "#+begin_pnum\n" + body + "#+end_pnum\n"; }
-namespace common = beman::specgen::backend::common;
+namespace backend = beman::specgen::backend;
 using namespace beman::specgen::ir;
 
 TEST_CASE("org - HeaderIsIdempotent") {
@@ -81,7 +82,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
 
 // --- the shared-convention claim -------------------------------------------
 
-// The reason `draft_span_*` lives in backend/common.hpp. An
+// The reason `draft_span_*` lives in backend/draft_spans.hpp. An
 // org code block is exported to the draft's `\begin{itemdecl}`, where
 // `escapechar=@` is in force, so the escape is not "org's" at all.
 TEST_CASE("org - a span in a code block uses the draft's own @...@ escape") {
@@ -93,7 +94,7 @@ TEST_CASE("org - a span in a code block uses the draft's own @...@ escape") {
     CHECK(out.find("T @\\exposidnc{val}@;") != std::string::npos);
     // And the escape is literally the shared function's output, not a
     // lookalike -- if latex.cpp's convention ever changes, this moves with it.
-    CHECK(out.find(common::draft_span_codeblock({2, 5, SpanKind::ExposId, "val"}, "VAL")) != std::string::npos);
+    CHECK(out.find(backend::draft_span_codeblock({2, 5, SpanKind::ExposId, "val"}, "VAL")) != std::string::npos);
 }
 
 TEST_CASE("org - a see-below span in a code block") {
@@ -267,7 +268,7 @@ TEST_CASE("org - every element kind renders as its draft label, in italics") {
         element.paragraphs.push_back({TextInline{"x."}});
         item.descr.elements.push_back(std::move(element));
 
-        const std::string label = '/' + std::string(common::element_label(kind)) + "/: x.";
+        const std::string label = '/' + std::string(backend::element_label(kind)) + "/: x.";
         CHECK(org::render_to_string(item).find(label) != std::string::npos);
     }
 }

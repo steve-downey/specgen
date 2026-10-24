@@ -92,7 +92,7 @@ The decision record is [visitation-rules](decisions/visitation-rules.md).
   of yours wants to call itself, either lift the recursion into a fold or
   move the traversal into a table, and do not reintroduce the shape.
 - A fold that resolves an **inherited** attribute on the way down (a depth, a
-  section context) uses `backend/common.hpp`'s `RenderF`, seeded with the
+  section context) uses `backend/render_fold.hpp`'s `RenderF`, seeded with the
   attribute; one that does not uses `ir::NodeF` / `node_project` and does its
   combining on the way back up, as `validate.cpp` does. The rule is stated at
   `RenderF`'s definition; parking a resolved value in a field named for

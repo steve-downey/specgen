@@ -1577,7 +1577,7 @@ beman::specgen::ir::CodeText recover_sentinels(std::string text, const std::map<
     std::size_t  src = 0;
     // substrate generic algorithm: a position-tracking left-to-right walk
     // over a sorted, non-overlapping hit table -- the same array-substitution
-    // primitive backend/common.hpp's render_code_spans already marks -- not a
+    // primitive backend/code_spans.hpp's render_code_spans already marks -- not a
     // fold in disguise, since a hit's recorded span begin depends on how much
     // the walk has already appended, which std::ranges::fold_left would have
     // to smuggle through a synthetic multi-field accumulator for no gain in
@@ -1821,7 +1821,7 @@ std::string apply_expos_sentinels(std::string                               text
     std::size_t pos = 0;
     // substrate generic algorithm: a position-tracking left-to-right walk
     // that rewrites whole-identifier matches into sentinels is the
-    // array-substitution primitive itself (the same shape backend/common.hpp's
+    // array-substitution primitive itself (the same shape backend/code_spans.hpp's
     // render_code_spans marks) -- there is no smaller unit to fold over.
     while (pos < text.size()) {
         if (!is_ident_char(text[pos]) || (pos > 0 && is_ident_char(text[pos - 1]))) {

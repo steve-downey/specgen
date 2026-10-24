@@ -1,7 +1,16 @@
 # tests/beman/specgen/backend/CMakeLists.txt                       -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-foreach(component common latex mpark org)
+foreach(
+    component
+    code_spans
+    draft_spans
+    element_label
+    render_fold
+    latex
+    mpark
+    org
+)
     add_executable(beman.specgen.tests.backend.${component})
     target_sources(
         beman.specgen.tests.backend.${component}

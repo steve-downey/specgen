@@ -8,7 +8,10 @@ export {
 #pragma clang diagnostic ignored "-Winclude-angled-in-module-purview"
 #include <beman/specgen/config.hpp>
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/code_spans.hpp>
+#include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/backend/mpark.hpp>
 #include <beman/specgen/backend/org.hpp>

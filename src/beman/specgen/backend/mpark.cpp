@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // The mpark/wg21 backend, written as a direct algebra over
-// backend::common::RenderF -- the same shape backend/latex.cpp uses, and
+// backend::backend::RenderF -- the same shape backend/latex.cpp uses, and
 // deliberately so. Decision backend-direct-algebra calls
 // `RenderF`/`RenderedSectionF`/`render_fmap` a shared substrate,
 // and the parallel between the two files is the evidence for that claim. Where this
@@ -31,7 +31,9 @@
 
 #include <beman/specgen/backend/mpark.hpp>
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/code_spans.hpp>
+#include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -99,7 +101,7 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
 // escape this function could apply. Neither character is a C++ token, so no
 // corpus header contains either; `mpark.test.cpp` pins the pass-through, since
 // no golden can (the same shape of hole as `write_json_string`'s).
-std::string render_code(const ir::CodeText& code) { return common::render_code_spans(code, escape_span); }
+std::string render_code(const ir::CodeText& code) { return backend::render_code_spans(code, escape_span); }
 
 std::string render_codeblock(const ir::CodeText& code) { return "```cpp\n" + render_code(code) + "\n```\n"; }
 
@@ -179,14 +181,14 @@ std::string render_flat_table(const ir::Table1D& table) {
 // one already-terminated `[#]{.pnum}` unit; the caller joins these, and every
 // other element's, with a blank-line separator.
 //
-// The element's label ("*Effects*: ") comes from common::element_label and
+// The element's label ("*Effects*: ") comes from backend::element_label and
 // appears exactly once, on whichever block is emitted first -- the same rule
 // the LaTeX backend applies to its `\effects` macro.
 std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                                         const std::vector<ir::Table2D>& tables,
                                         const std::vector<ir::Table1D>& flat_tables) {
     std::vector<std::string> blocks;
-    const std::string        label = std::format("*{}*: ", common::element_label(element.kind));
+    const std::string        label = std::format("*{}*: ", backend::element_label(element.kind));
 
     if (!element.paragraphs.empty()) {
         blocks.push_back("[#]{.pnum} " + label + render_paragraph(element.paragraphs.front()) + '\n');
@@ -212,7 +214,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
         // is one and opens its own numbered paragraph -- carrying the label,
         // since it is then the element's only content -- when there is not.
         if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:", common::element_label(element.kind)) + "\n\n" +
+            blocks.push_back("[#]{.pnum} " + std::format("*{}*:", backend::element_label(element.kind)) + "\n\n" +
                              items);
         else
             blocks.back() += '\n' + items;
@@ -222,7 +224,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
         tables | std::views::transform(render_table) | std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_tables.empty()) {
         if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", common::element_label(element.kind)) +
+            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", backend::element_label(element.kind)) +
                              rendered_tables);
         else
             blocks.back() += '\n' + rendered_tables;
@@ -232,7 +234,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
                                              std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!rendered_flat_tables.empty()) {
         if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", common::element_label(element.kind)) +
+            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", backend::element_label(element.kind)) +
                              rendered_flat_tables);
         else
             blocks.back() += '\n' + rendered_flat_tables;
@@ -251,7 +253,7 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
 // derived twin are one description, so a run of same-kind elements folds into
 // one before rendering and the label is emitted once. Behaviourally identical
 // to latex.cpp's merge_element_group; kept as its own copy rather than hoisted
-// into backend/common.hpp because it is three lines of ranges over a type both
+// into a shared backend component because it is three lines of ranges over a type both
 // backends already see, and a shared helper here would be the wrong seam --
 // what the two backends share is the *substrate* (RenderF, render_code_spans),
 // not their item-assembly policy, which is where a third backend is most
@@ -325,7 +327,7 @@ std::string render_item(const ir::SpecItem& item) {
     return out;
 }
 
-// --- the direct algebra over backend::common::RenderF ---------------------
+// --- the direct algebra over backend::backend::RenderF ---------------------
 
 // Inherited attribute carrier, handed down through `project` below. Only the
 // heading level travels: unlike the LaTeX backend's RenderCtx there is no
@@ -358,7 +360,7 @@ struct SeededProjector {
     // of its own. Unnumbered because a facility being proposed is not in the
     // srefs database the numbered form looks up: `{.sref}` alone would warn at
     // paper-build time and discard the title specgen already knows.
-    common::RenderF<Seeded> operator()(const ir::Section& s) const {
+    backend::RenderF<Seeded> operator()(const ir::Section& s) const {
         // Markdown has six heading levels; a document nested past that is
         // already past what a paper's outline can express, so the level
         // saturates rather than emitting a run of hashes pandoc would read as
@@ -376,17 +378,17 @@ struct SeededProjector {
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return common::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
     }
 
     // The three leaves render independently of heading level, so they pass
     // through unchanged.
-    common::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
 };
 
-common::RenderF<Seeded> project(const Seeded& seeded) {
+backend::RenderF<Seeded> project(const Seeded& seeded) {
     return std::visit(overloaded{SeededProjector{seeded.ctx}}, *seeded.node);
 }
 
@@ -396,7 +398,7 @@ common::RenderF<Seeded> project(const Seeded& seeded) {
 // already been resolved by `project`, so every case is a plain
 // RenderF<std::string> -> std::string mapping.
 struct MparkAlgebra {
-    std::string operator()(const common::RenderedSectionF<std::string>& s) const {
+    std::string operator()(const backend::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
             return s.header;
         return s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>());
@@ -409,13 +411,13 @@ struct MparkAlgebra {
     }
 };
 
-std::string render_layer(const common::RenderF<std::string>& layer) {
+std::string render_layer(const backend::RenderF<std::string>& layer) {
     return std::visit(overloaded{MparkAlgebra{}}, layer);
 }
 
 std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
     return beman::tree_algorithms::fold_with<std::string>(
-        render_layer, common::render_fmap, project, Seeded{&node, ctx});
+        render_layer, backend::render_fmap, project, Seeded{&node, ctx});
 }
 
 // `[#]{.pnum}` is only auto-numbered inside a `::: wording` div, and the
@@ -471,7 +473,7 @@ std::string renumber_added(const std::string& text) {
     std::size_t pos  = 0;
     // substrate generic algorithm: a position-tracking left-to-right walk
     // performing array substitution, the same primitive
-    // backend/common.hpp's render_code_spans is marked for -- and here the
+    // backend/code_spans.hpp's render_code_spans is marked for -- and here the
     // replacement depends on how many paragraphs the walk has already passed,
     // which is the walk's own position restated, not a separate accumulator.
     while (pos < text.size()) {
