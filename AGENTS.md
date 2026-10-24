@@ -70,7 +70,7 @@ The full statements live in `docs/architecture.md`; headlines only:
   Doxygen (`///`, `/** */`, dropped from synopses), or draft-form (`//`,
   `/* */`, survives verbatim). See design §1.
 - Adding wording to one backend means adding it to all three; a description
-  element's label comes from `backend::common::element_label`, not
+  element's label comes from `backend::element_label`, not
   `ir::element_name` (design §8 spells out the escape conventions and the
   traps that unit tests alone guard).
 - `render --split` fragments belong to the driver, not the backends: a

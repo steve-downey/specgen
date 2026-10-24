@@ -1,7 +1,7 @@
 // src/beman/specgen/backend/latex.cpp                              -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// The LaTeX backend, a direct algebra over backend::common::RenderF
+// The LaTeX backend, a direct algebra over backend::backend::RenderF
 // (decision backend-direct-algebra). Every case
 // below returns already-rendered text; nothing writes to an ambient
 // std::ostream at all, which is what lets separators become a property of
@@ -20,13 +20,15 @@
 // known the moment its parent hands it a child seed, so it is rendered
 // during descent, into `RenderF`'s `RenderedSectionF::header` (an honestly
 // named field, unlike `ir::SectionF::stable_name`, which is not this
-// backend's to repurpose -- see `backend/common.hpp`). The algebra that
+// backend's to repurpose -- see `backend/render_fold.hpp`). The algebra that
 // follows is therefore a plain `RenderF<std::string> -> std::string`, with
 // no per-node closures and no type erasure.
 
 #include <beman/specgen/backend/latex.hpp>
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/code_spans.hpp>
+#include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -49,22 +51,22 @@ using beman::specgen::foundation::overloaded;
 
 // --- span substitution: the shared substrate's escape hooks ---------------
 
-// The escape function this backend plugs into `common::render_code_spans`
-// lives in `backend/common.hpp` as `draft_span_codeblock`, and the sharing is
+// The escape function this backend plugs into `backend::render_code_spans`
+// lives in `backend/draft_spans.hpp` as `draft_span_codeblock`, and the sharing is
 // not tidying: the org backend emits the *same* bytes,
 // because its `#+begin_codeblock`/`#+begin_itemdecl` special blocks export to
 // the draft's own listings environments. Two backends writing one convention
 // have to write it once, or the second silently drifts from the first.
 // The prose half of the pair, `draft_span_prose`, is reached only through
-// `common::draft_code_inline` (and through `draft_span_codeblock` itself),
+// `backend::draft_code_inline` (and through `draft_span_codeblock` itself),
 // so this backend never names it.
 // The shared header says the rest.
-using common::draft_span_codeblock;
+using backend::draft_span_codeblock;
 
 // Code text is the author's own tokens; it is never re-escaped. Only the
-// spans are substituted, via the shared substrate (backend/common.hpp).
+// spans are substituted, via the shared substrate (backend/code_spans.hpp).
 std::string render_code_codeblock(const ir::CodeText& code) {
-    return common::render_code_spans(code, draft_span_codeblock);
+    return backend::render_code_spans(code, draft_span_codeblock);
 }
 
 std::string render_codeblock(const ir::CodeText& code) {
@@ -82,8 +84,8 @@ struct PieceRenderer {
 
     // A code inline, with the whole-span shortcut the draft's macros need.
     // Shared with the org backend for the reason the span escapes
-    // above are (backend/common.hpp).
-    std::string operator()(const ir::CodeInline& v) const { return common::draft_code_inline(v); }
+    // above are (backend/draft_spans.hpp).
+    std::string operator()(const ir::CodeInline& v) const { return backend::draft_code_inline(v); }
 
     // A cross-reference to another stable name.
     std::string operator()(const ir::RefInline& v) const { return "\\iref{" + v.stable_name + '}'; }
@@ -318,7 +320,7 @@ std::string render_item(const ir::SpecItem& item) {
     return out;
 }
 
-// --- the direct algebra over backend::common::RenderF ---------------------
+// --- the direct algebra over backend::backend::RenderF ---------------------
 // (decision backend-direct-algebra)
 
 // Inherited attribute carrier, handed down through `project` below (not
@@ -356,25 +358,25 @@ struct SeededProjector {
     // RenderedSectionF<std::string> with no ambient context. So the header
     // is rendered now, into `RenderedSectionF::header` -- a field named for
     // exactly this, unlike `ir::SectionF::stable_name`, which stays the
-    // frozen JSON field it must remain (see backend/common.hpp).
-    common::RenderF<Seeded> operator()(const ir::Section& s) const {
+    // frozen JSON field it must remain (see backend/render_fold.hpp).
+    backend::RenderF<Seeded> operator()(const ir::Section& s) const {
         std::string         header = std::format("\\rSec{}[{}]{{{}}}\n", ctx.depth, s.stable_name, s.title);
         const RenderCtx     child_ctx{ctx.depth + 1, ctx.pnum_base};
         std::vector<Seeded> children =
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return common::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
     }
 
     // The three leaves render independently of depth, so -- exactly like
     // ir::node_project's own leaf cases -- they pass through unchanged.
-    common::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
-    common::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::Synopsis& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::SpecItem& v) const { return v; }
+    backend::RenderF<Seeded> operator()(const ir::FreeParagraph& v) const { return v; }
 };
 
-common::RenderF<Seeded> project(const Seeded& seeded) {
+backend::RenderF<Seeded> project(const Seeded& seeded) {
     return std::visit(overloaded{SeededProjector{seeded.ctx}}, *seeded.node);
 }
 
@@ -390,7 +392,7 @@ struct LatexAlgebra {
     // underneath it with a blank-line separator (the algebra's join-based
     // separation -- no `bool& first`, no recursion parameter threading
     // depth, no front-identity test).
-    std::string operator()(const common::RenderedSectionF<std::string>& s) const {
+    std::string operator()(const backend::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
             return s.header;
         return s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>());
@@ -406,13 +408,13 @@ struct LatexAlgebra {
     std::string operator()(const ir::FreeParagraph& v) const { return "\\pnum\n" + render_paragraph(v.text) + '\n'; }
 };
 
-std::string render_layer(const common::RenderF<std::string>& layer) {
+std::string render_layer(const backend::RenderF<std::string>& layer) {
     return std::visit(overloaded{LatexAlgebra{}}, layer);
 }
 
 std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
     return beman::tree_algorithms::fold_with<std::string>(
-        render_layer, common::render_fmap, project, Seeded{&node, ctx});
+        render_layer, backend::render_fmap, project, Seeded{&node, ctx});
 }
 
 } // namespace

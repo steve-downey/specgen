@@ -9,14 +9,14 @@
 #include <beman/specgen/backend/mpark.hpp>
 #include <beman/specgen/backend/mpark.hpp> // Re-inclusion verification
 
-#include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/backend/element_label.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
 
-namespace mpark  = beman::specgen::backend::mpark;
-namespace common = beman::specgen::backend::common;
+namespace mpark   = beman::specgen::backend::mpark;
+namespace backend = beman::specgen::backend;
 using namespace beman::specgen::ir;
 
 TEST_CASE("mpark - HeaderIsIdempotent") {
@@ -180,7 +180,7 @@ TEST_CASE("mpark - every element kind renders as its draft label") {
         item.descr.elements.push_back({kind, {{TextInline{"Prose."}}}, {}});
 
         const std::string out      = mpark::render_to_string(item);
-        const std::string expected = "[#]{.pnum} *" + std::string(common::element_label(kind)) + "*: Prose.";
+        const std::string expected = "[#]{.pnum} *" + std::string(backend::element_label(kind)) + "*: Prose.";
         INFO("kind: " << element_name(kind));
         CHECK(out.find(expected) != std::string::npos);
     }

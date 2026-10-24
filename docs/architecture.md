@@ -880,14 +880,14 @@ There are exactly three backends, and **adding wording to one means adding it to
   wraps rootless material in `addedblock`, and changes the fragment's one
   paragraph run to `x`, `x+1`, ... labels.
 
-Shared substrate (`backend/common.hpp`): `render_code_spans` walks a span table, handing each
+Shared substrate: `render_code_spans` (`backend/code_spans.hpp`) walks a span table, handing each
 backend's single `escape_span` both the semantic span and the covered source spelling; the
-`RenderF`/`RenderedSectionF`/`render_fmap` algebra is what all three backends are written
-against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
+`RenderF`/`RenderedSectionF`/`render_fmap` algebra (`backend/render_fold.hpp`) is what all three backends are
+written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
 [no-typeclass-objects](decisions/no-typeclass-objects.md)). Before touching any of them:
 
 - A description element's *label* ("Preconditions" for `\expects`, "Error conditions" for
-  `\errors`) comes from `backend::common::element_label`, not from `ir::element_name`, which
+  `\errors`) comes from `backend::element_label` (`backend/element_label.hpp`), not from `ir::element_name`, which
   spells the LaTeX macro and is simultaneously the IR's frozen JSON key. The two agree on
   eight of thirteen kinds, which is exactly enough to make a hand-written table look right
   and be wrong.
@@ -911,7 +911,7 @@ against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   `\input{stdtex/macros}`. So `escapechar=@` and `texcl=true` are genuinely in force inside
   them, and the bytes there are the *same bytes* the LaTeX backend emits (verified by diffing
   the two renderings of one IR). That is why `draft_span_prose` / `draft_span_codeblock` /
-  `draft_code_inline` live in `backend/common.hpp` rather than in `latex.cpp`: two backends
+  `draft_code_inline` live in `backend/draft_spans.hpp` rather than in `latex.cpp`: two backends
   writing one convention have to write it once. The blocks are not org src blocks: a src
   block's text is the exporter's to route rather than to read, and `{{{macro}}}` or `@…@`
   inside one would break `c++-ts-mode`.
@@ -1165,9 +1165,11 @@ The build assembles the tool from these components, each following the shared CM
 - **org backend** — `include/beman/specgen/backend/org.hpp`,
   `src/beman/specgen/backend/org.cpp`. Org for the `wg21org` exporter per §8,
   including paper mode.
-- **Backend substrate** — `include/beman/specgen/backend/common.hpp`. `render_code_spans`,
-  the `RenderF`/`render_fmap` algebra, `element_label`, and the shared draft span/inline
-  spellings (`draft_span_prose`, `draft_span_codeblock`, `draft_code_inline`).
+- **Backend substrate** — four header-only components under `include/beman/specgen/backend/`,
+  below the backends that use them: `code_spans.hpp` (`render_code_spans`), `render_fold.hpp`
+  (the `RenderF`/`render_fmap` algebra), `element_label.hpp` (`element_label`), and
+  `draft_spans.hpp` (the shared draft span/inline spellings, `draft_span_prose`,
+  `draft_span_codeblock`, `draft_code_inline`).
 - **Fragment split** — `include/beman/specgen/fragments.hpp`,
   `src/beman/specgen/fragments.cpp`. `fragments::split` per §8; backend-agnostic, with
   `usable_as_file_name` as the path boundary.

@@ -93,7 +93,7 @@ Name: `specgen-no-raw-loops`, in module `specgen-module`. Semantics, restated fo
   at the macro's use. The text gate could not see those at all.
 - A site is marked if the marker text appears on the site's own line of the file buffer (trailing-comment form, as
   `foundation/monoid.hpp` writes it) or in the contiguous run of comment lines directly above it (block form, as
-  `backend/common.hpp` writes it), walking upward while each line's first non-blank characters are `//`, `/*`, or
+  `backend/code_spans.hpp` writes it), walking upward while each line's first non-blank characters are `//`, `/*`, or
   `*`, and stopping at the first line that is not. A marker separated from its loop by code marks nothing.
 - Diagnostic text: `raw loop outside a substrate generic algorithm; convert it to a named algorithm, or mark it
   '// substrate generic algorithm: <reason>' on the loop line or in the comment block directly above it`.

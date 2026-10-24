@@ -31,7 +31,7 @@ to its output — no intermediate document/layout type. The mechanics:
   return constant functions of the context.
 - **One shared substrate.** The span-substitution walk over `CodeText::spans`
   and the per-backend escape hooks (`\exposid{…}`/`@…@` versus markdown) live
-  in `backend/common.hpp`, written once and marked
+  in `backend/code_spans.hpp`, written once and marked
   `// substrate generic algorithm`; each backend supplies its escape functions
   to it.
 
