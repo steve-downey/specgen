@@ -118,9 +118,9 @@ on the shared `\` and never reach a sibling once the first candidate's second
 character mismatched — confirmed by a negative test in
 `tests/beman/specgen/foundation/parse/parser.test.cpp`
 ("operator| - a committed (consumed) failure is final ..."). This is not a gap
-in the primitive set: `docblock.cpp`'s `find_marker` sidesteps
+in the primitive set: `docblock.cpp` sidesteps
 it by scanning the identifier once (`[a-zA-Z-]+`) and dispatching the resulting
-name through a table, which is the shape to keep — `many`/`satisfy` to
+name through the marker table (`find_marker`, `markers.hpp`), which is the shape to keep — `many`/`satisfy` to
 scan the name, then a table lookup, never a `keyword` alternation over
 siblings. `keyword` is for a single spelling already known to be the only
 candidate at that grammar position (e.g. `\rSec` once a comment is known to be

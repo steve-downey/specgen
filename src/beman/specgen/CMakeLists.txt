@@ -9,6 +9,7 @@ target_sources(
     PRIVATE
         ir.cpp
         docblock.cpp
+        markers.cpp
         lower.cpp
         conjuncts.cpp
         depfile.cpp

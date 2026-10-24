@@ -108,26 +108,49 @@ rationalizes the co-location. `json_writer.hpp` is the precedent for the other d
 
 ### [marker-registry-home](#marker-registry-home)
 
-**Question:** should the marker registry sit with the marker struct? **Status:** OPEN. `markers.hpp` holds the
-struct and claims a single definition; the table, arity enum, and setters live in `docblock.hpp`, and the only test
-of the struct is inside `docblock.test.cpp`. Decision `marker-registry` names one table, not one header.
+**Question:** should the marker registry sit with the marker struct? **Status:** DONE, 2026-10-24. `markers.hpp`
+holds the struct and claims a single definition; the table, arity enum, and setters live in `docblock.hpp`, and the
+only test of the struct is inside `docblock.test.cpp`. Decision `marker-registry` names one table, not one header.
+
+**Decision:** the registry moves to `markers.hpp`. `MarkerArity`, `MarkerInfo`, and `kMarkers` sit beside the
+struct, with `find_marker` declared there; the setters and `find_marker` are defined in a new `markers.cpp`. The
+table stays an inline `constexpr` array in the header so that tests can walk it. `docblock.cpp` looks spellings up
+through it and no longer owns any of it. **Decided by:** Steve Downey.
+
+**Log:** 2026-10-24: the new `markers.test.cpp` collided with the front end's `markers.test.cpp` target, because
+`frontend/` was the one test directory whose targets did not carry the directory name. They now do
+(`beman.specgen.tests.frontend.<component>`). `docblock.test.cpp` keeps its registry walk, since that case checks
+that `parse_docblock` honors each row.
 
 ### [umbrella-header-fate](#umbrella-header-fate)
 
-**Question:** what is `specgen.hpp` for? **Status:** OPEN. It aggregates every header except the front end, so it is
-neither everything nor a coherent subset. No production TU includes it, and it is the only route by which
+**Question:** what is `specgen.hpp` for? **Status:** DONE, 2026-10-24. It aggregates every header except the front
+end, so it is neither everything nor a coherent subset. No production TU includes it, and it is the only route by which
 `foundation/traverse.hpp` is reached outside its test. Either it is the public face of the library, in which case it
 needs a definition of what that is, or it is dead and takes `traverse.hpp`'s liveness question with it.
 
+**Decision:** it is dead, and is deleted. specgen is a tool, not a library (decision `tool-not-library`), so there
+is no public face to define. Its one real job was supplying the include list for the module lane, so that list
+moves into `specgen.cppm`, and the [component recipe](../decisions/component-recipe.md) adds a new header there.
+**Decided by:** Steve Downey.
+
+**Log:** 2026-10-24: `foundation/traverse.hpp` is still reached only by its test and the module unit; its liveness
+is a separate question.
+
 ### [untested-headers](#untested-headers)
 
-**Question:** which headers get a test file? **Status:** DECIDED for `diagnostic.hpp`, 2026-10-23; OPEN for
-`markers.hpp`. `diagnostic.hpp` declares `severity_label`, which no test calls. `config.hpp` and `specgen.hpp` have
-nothing testable beyond compiling, which the verify TUs cover. `markers.hpp` is tested only through the registry.
+**Question:** which headers get a test file? **Status:** DECIDED for `diagnostic.hpp`, 2026-10-23, and for
+`markers.hpp`, 2026-10-24. `diagnostic.hpp` declares `severity_label`, which no test calls. `config.hpp` and
+`specgen.hpp` have nothing testable beyond compiling, which the verify TUs cover. `markers.hpp` is tested only
+through the registry.
 
 **Decision:** `diagnostic.hpp` gets `diagnostic.test.cpp`, which pins each severity's label. `config.hpp` and
 `specgen.hpp` get none. `markers.hpp` waits on [marker-registry-home](#marker-registry-home): if the registry moves
 into it, the registry's tests are its tests. **Decided by:** Steve Downey.
+
+**Log:** 2026-10-24: the registry moved, and `markers.test.cpp` tests it: lookup, unique spellings, each row's
+arity against its setter and error message, and the setters. `specgen.hpp` was deleted
+([umbrella-header-fate](#umbrella-header-fate)).
 
 ### [recursion-schemes-test-home](#recursion-schemes-test-home)
 

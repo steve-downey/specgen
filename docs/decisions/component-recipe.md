@@ -25,8 +25,8 @@ and the module lane means step 7 is not optional:
 5. Add the source to `target_sources` in `src/beman/specgen/CMakeLists.txt`.
 6. Add `foo` to the `foreach(component …)` list in
    `tests/beman/specgen/CMakeLists.txt`.
-7. Add the include to `include/beman/specgen/specgen.hpp` so the module
-   umbrella (`specgen.cppm`) exports it.
+7. Add the include to the module umbrella,
+   `include/beman/specgen/specgen.cppm`, so it exports it.
 
 Subdirectories get their own `CMakeLists.txt` and an `add_subdirectory` from
 the immediate parent (`foundation/parse/` and `backend/` are the worked
