@@ -7,8 +7,11 @@
 
 #include <beman/specgen/fragments.hpp>
 
+#include <beman/specgen/ir.hpp>
+
 #include <algorithm>
 #include <cstddef>
+#include <expected>
 #include <format>
 #include <optional>
 #include <ranges>

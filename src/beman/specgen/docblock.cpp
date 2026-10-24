@@ -8,15 +8,22 @@
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>
 #include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/ir.hpp>
+#include <beman/specgen/markers.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstddef>
+#include <expected>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace beman::specgen::grammar {
 

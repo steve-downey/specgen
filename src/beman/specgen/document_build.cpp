@@ -3,14 +3,21 @@
 
 #include <beman/specgen/document_build.hpp>
 
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
+#include <beman/specgen/ir.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <format>
 #include <map>
+#include <optional>
 #include <ranges>
+#include <span>
+#include <string>
 #include <utility>
+#include <variant>
+#include <vector>
 
 namespace beman::specgen::document_build {
 

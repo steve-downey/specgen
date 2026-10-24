@@ -10,15 +10,18 @@
 
 #include <beman/specgen/validate/validate.hpp>
 
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
+#include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir_fold.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <format>
 #include <functional>
 #include <iterator>

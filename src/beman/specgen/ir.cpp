@@ -3,10 +3,11 @@
 
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/json_descriptor.hpp>
 
 #include <algorithm>
-#include <array>
+#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>

@@ -34,14 +34,17 @@
 #include <beman/specgen/backend/common.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
+#include <beman/specgen/ir.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <format>
 #include <ranges>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
