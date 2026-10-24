@@ -137,9 +137,21 @@ re-implementing emission through `json_writer`, and the file's own comment ackno
 
 ### [json-reader-home](#json-reader-home)
 
-**Question:** is the `Reader` lexer in `foundation/json_descriptor.hpp` a facility of its own? **Status:** OPEN.
-It is about 240 lines of hand-written JSON lexing inside a header named for descriptors; the head comment
+**Question:** is the `Reader` lexer in `foundation/json_descriptor.hpp` a facility of its own? **Status:** DONE,
+2026-10-24. It is about 240 lines of hand-written JSON lexing inside a header named for descriptors; the head comment
 rationalizes the co-location. `json_writer.hpp` is the precedent for the other direction.
+
+**Decision:** yes, and the JSON code is two things, not one: an IR-agnostic JSON library and the IR's own format
+built on it ([ir-serialization-home](#ir-serialization-home)). The library gets a directory of its own, `json/`,
+namespace `json`, as three components: `writer.hpp` (the old `json_writer.hpp`), `reader.hpp` (the `Reader`), and
+`descriptor.hpp` (the schema engine, which uses both). The writer and the reader stay apart, since neither calls the
+other. It leaves `foundation/` because `foundation` is a name for things without a better one, and for imports being
+evaluated for upstream feedback; a sub-library with a name of its own does not belong there. **Decided by:** Steve
+Downey.
+
+**Log:** 2026-10-24: `reader.test.cpp` gives the `Reader` direct tests: string escapes and `\u` decoding, numbers
+and booleans, object and array callbacks, `skip_value`, and that the first failure is the one recorded. Identifiers
+keep their names (`json_object`, `json_descriptor`), so the move renames nothing but namespaces and paths.
 
 ### [marker-registry-home](#marker-registry-home)
 
