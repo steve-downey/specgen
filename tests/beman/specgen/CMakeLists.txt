@@ -21,6 +21,7 @@ foreach(
     lower
     conjuncts
     depfile
+    diagnostic
     document_build
     fragments
 )
