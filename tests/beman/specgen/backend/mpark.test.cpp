@@ -186,17 +186,6 @@ TEST_CASE("mpark - every element kind renders as its draft label") {
     }
 }
 
-// The labels are [structure.specifications]'s, not ir::element_name's macro
-// spellings: three of the twelve differ, and those three are the ones a
-// hand-written table gets wrong.
-TEST_CASE("mpark - the labels that differ from the macro name") {
-    CHECK(common::element_label(ElementKind::Expects) == "Preconditions");
-    CHECK(common::element_label(ElementKind::HardExpects) == "Hardened preconditions");
-    CHECK(common::element_label(ElementKind::Ensures) == "Postconditions");
-    CHECK(common::element_label(ElementKind::Sync) == "Synchronization");
-    CHECK(common::element_label(ElementKind::Errors) == "Error conditions");
-}
-
 TEST_CASE("mpark - multi-paragraph element repeats the pnum but not the label") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});

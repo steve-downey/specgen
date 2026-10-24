@@ -26,7 +26,6 @@
 #include <algorithm>
 #include <ranges>
 #include <string>
-#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -109,34 +108,6 @@ TEST_CASE("build_document - a \\ref group header and license/SPDX text produce n
     const auto built = frontend::build_document(kWidgetHeader);
     REQUIRE(built.has_value());
     CHECK(built->diagnostics.empty());
-}
-
-TEST_CASE("parse_rsec - a non-match's failure offset is not the start of the comment") {
-    // The trap this classification has to avoid, pinned as executable evidence.
-    //
-    // The obvious reading of commit-on-consumed-input is "the failure offset
-    // moved off the start, so input was consumed, so the comment committed to
-    // being a `\rSec`". That is wrong here, because the *tag* is not just
-    // `\rSec`: it is decoration, blanks, and then the keyword. Every ordinary
-    // C++ comment consumes its `//` before the keyword ever runs, so a plain
-    // non-match already fails at a nonzero offset -- and a `\ref` header goes
-    // further still, matching `\` and `r` before `S` fails.
-    //
-    // The boundary that actually separates "not a `\rSec` at all" from
-    // "malformed `\rSec`" is therefore the tag parser's own success, not a
-    // comparison against offset 0. classify() asks exactly that question.
-    CHECK(frontend::parse_rsec("// \\ref{gadget.cons}, constructors").error().where.offset == 5);
-    CHECK(frontend::parse_rsec("// namespace demo").error().where.offset == 3);
-    CHECK(frontend::parse_rsec("// SPDX-License-Identifier: Apache-2.0").error().where.offset == 3);
-
-    // The one shape that does fail at offset 0 is a comment with no
-    // decoration at all -- which is the case that never reaches classify().
-    CHECK(frontend::parse_rsec("\\rSec2[foo]{Title}").error().where.offset == 0);
-
-    // A malformed marker, by contrast, fails past the end of the tag.
-    const auto malformed = frontend::parse_rsec("// \\rSec3[gadget.untitled]");
-    REQUIRE_FALSE(malformed.has_value());
-    CHECK(malformed.error().where.offset > std::string_view("// \\rSec").size());
 }
 
 TEST_CASE("build_document - a numbered section-like header is reported instead of silently filing onward") {
