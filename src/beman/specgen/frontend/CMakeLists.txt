@@ -10,7 +10,7 @@
 add_library(beman.specgen.frontend STATIC)
 add_library(beman::specgen.frontend ALIAS beman.specgen.frontend)
 
-target_sources(beman.specgen.frontend PRIVATE frontend.cpp)
+target_sources(beman.specgen.frontend PRIVATE compile_args.cpp frontend.cpp)
 
 target_sources(
     beman.specgen.frontend
@@ -18,6 +18,7 @@ target_sources(
         FILE_SET HEADERS
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
 )
 

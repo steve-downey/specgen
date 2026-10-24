@@ -10,8 +10,10 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>
 #include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
+#include <beman/specgen/rsec.hpp>
 
 // GCC reports -Wnonnull eight times from inside LLVM's own headers when it
 // inlines RecursiveASTVisitor::TraverseCXXRecordHelper for the visitors below:
@@ -52,7 +54,6 @@
 #include <clang/Lex/PreprocessingRecord.h>
 #include <clang/Options/OptionUtils.h>
 #include <clang/Lex/Preprocessor.h>
-#include <clang/Tooling/CompilationDatabase.h>
 #include <clang/Tooling/Core/Replacement.h>
 #include <clang/Tooling/Tooling.h>
 
@@ -95,10 +96,12 @@
 
 namespace beman::specgen::frontend {
 
-// Short alias for the combinator library (decision parser-combinators) used
-// by parse_rsec, below.
 namespace parse      = beman::specgen::foundation::parse;
 namespace foundation = beman::specgen::foundation;
+
+using grammar::parse_rsec;
+using grammar::rsec_tag_recognized;
+using grammar::SectionHeader;
 
 // Outside the anonymous namespace below because `foundation::enumerators`
 // can only be specialized for an enumeration that has a name to specialize
@@ -156,81 +159,6 @@ void install_crash_handler(std::string_view argv0, std::string banner) {
         },
         nullptr);
     llvm::sys::PrintStackTraceOnErrorSignal(llvm::StringRef(argv0.data(), argv0.size()));
-}
-
-// --- compiler-argument sourcing ---------------------------------------------
-// A corpus header never needs an include path — every one is self-contained
-// (decision hermetic-corpus) — but a header outside the corpus (the real
-// beman/optional/optional.hpp) can reach outside itself. ParseOptions
-// (frontend.hpp) names the three possible sources; these two functions are
-// what parse_header (below) and the driver share to turn one into the actual
-// argument vector.
-
-std::vector<std::string> filter_compile_command_args(const std::vector<std::string>& command_line,
-                                                     const std::string&              filename) {
-    // A stateful filter: dropping `-o <file>` has to consume the *next*
-    // element too, which a plain views::filter predicate cannot express (it
-    // sees one element at a time, never two). This is a fold building the
-    // surviving vector, threading "skip the next token" as the one bit of
-    // state the shape needs — every read is still at the current position,
-    // so this is not the scatter the zip/index rule reserves a raw loop for.
-    struct State {
-        std::vector<std::string> out;
-        bool                     skip_next = false;
-    };
-    // element 0 is the compiler itself (argv[0]), dropped by starting the
-    // fold past it rather than by a branch inside the step function.
-    State result = std::ranges::fold_left(command_line | std::views::drop(command_line.empty() ? 0 : 1),
-                                          State{},
-                                          [&](State state, const std::string& arg) {
-                                              if (state.skip_next) {
-                                                  state.skip_next = false;
-                                                  return state;
-                                              }
-                                              // A bare "--" is not a flag: it is clang tooling's own
-                                              // end-of-options sentinel, which `inferMissingCompileCommands`
-                                              // appends (as `{"--", filename}`) when a database is asked about
-                                              // a file it has no literal entry for -- see this function's doc
-                                              // comment for why leaving it in corrupts the parse rather than
-                                              // merely doing nothing.
-                                              if (arg == filename || arg == "-c" || arg == "--")
-                                                  return state;
-                                              if (arg == "-o") {
-                                                  state.skip_next = true;
-                                                  return state;
-                                              }
-                                              state.out.push_back(arg);
-                                              return state;
-                                          });
-    return std::move(result.out);
-}
-
-ResolvedArgs resolve_extra_args(std::string_view header_path, const ParseOptions& options) {
-    // A caller who spelled flags is not asking to be second-guessed.
-    if (!options.extra_args.empty())
-        return ResolvedArgs{options.extra_args, {}};
-
-    // At most one of these two is even attempted, and the order is
-    // precedence, not preference — an explicit directory beats autodetection
-    // whenever both happen to be set at once.
-    std::unique_ptr<clang::tooling::CompilationDatabase> db;
-    std::string                                          error;
-    if (!options.compile_commands_dir.empty())
-        db = clang::tooling::CompilationDatabase::loadFromDirectory(options.compile_commands_dir, error);
-    else if (options.probe_compile_commands)
-        db = clang::tooling::CompilationDatabase::autoDetectFromSource(std::string(header_path), error);
-
-    if (!db)
-        return {};
-
-    // The first entry for this file; no entry is not an error — fall
-    // through to the caller's fixed defaults, the same as no database at all.
-    const std::vector<clang::tooling::CompileCommand> commands = db->getCompileCommands(std::string(header_path));
-    if (commands.empty())
-        return {};
-
-    const clang::tooling::CompileCommand& command = commands.front();
-    return ResolvedArgs{filter_compile_command_args(command.CommandLine, command.Filename), command.Directory};
 }
 
 namespace {
@@ -594,10 +522,9 @@ std::string decl_label(clang::Decl* decl) {
 
 // --- \rSec parsing and the document-tree builder ----------------------------
 //
-// parse_rsec (producing SectionHeader) is declared in frontend.hpp and
-// defined after this anonymous namespace closes, on the combinator library
-// (decision parser-combinators) so its positioned failures are directly
-// testable. parse_ref just below is a different marker (`\ref{...}`, unused
+// parse_rsec (producing SectionHeader) is the \rSec grammar in rsec.hpp,
+// built on the combinator library (decision parser-combinators) so its
+// positioned failures are directly testable. parse_ref just below is a different marker (`\ref{...}`, unused
 // by the \rSec grammar) and stays a hand scan.
 
 // Recognize a `\ref{<stable>}` synopsis-group comment inside a class body
@@ -6555,11 +6482,6 @@ FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, c
 // inside build_tree rather than as a later pass over the finished tree).
 namespace db = beman::specgen::document_build;
 
-// Defined alongside parse_rsec's other helpers, below (needs forward
-// declaring here since classify() -- textually earlier in the file -- is its
-// only caller). See its definition for what it does and why.
-bool rsec_tag_recognized(std::string_view raw);
-
 struct UnrecognizedSectionHeader {
     std::string stable_name;
     unsigned    line_offset = 0;
@@ -6992,86 +6914,6 @@ db::DocEvent classify(const RawItem&                                   ev,
     return item_decl_event(std::move(attached), doc);
 }
 
-} // namespace
-
-namespace {
-
-// Helper parsers for parse_rsec, below (decision parser-combinators). Not
-// promoted to foundation/parse/parser.hpp: nothing else needs a `\rSec`
-// grammar's blank-skipping or delimiter-content shape yet.
-
-// Skips leading horizontal whitespace (space/tab only). Unlike
-// foundation/parse/cursor.hpp's
-// skip_intertoken_space(), this does not cross a newline — a `\rSec` marker
-// is scanned within a single raw comment line, so a later line of a
-// multi-line raw comment must never read as more leading whitespace before
-// the tag.
-constexpr auto skip_blank(parse::cursor cur) -> parse::cursor {
-    while (!cur.empty() && (cur.peek() == ' ' || cur.peek() == '\t')) // substrate generic algorithm
-        cur = cur.bump();
-    return cur;
-}
-
-// A parser that always succeeds, skipping leading blanks and discarding its
-// own value — the sequence_right glue at parse_rsec's four blank-tolerant
-// points (before the decoration, before the tag,
-// before '[', before '{').
-[[nodiscard]] auto blanks() {
-    return parse::parser{[](parse::cursor cur) -> parse::parse_result<bool> {
-        return parse::parse_state<bool>{true, skip_blank(cur)};
-    }};
-}
-
-// "//", "///", or "//!": the three raw-comment decorations
-// RawComment::getRawText() may hand back. Always consumes the shared "//"
-// first, then greedily consumes one more '/' or '!' if present — equivalent
-// to trying the longest decoration first, since no value depends on which
-// one matched.
-[[nodiscard]] auto decoration() {
-    return parse::sequence_right(parse::keyword("//"), parse::opt(parse::char_p('/') | parse::char_p('!')));
-}
-
-// Collects the run of characters strictly between an `open`/`close` pair,
-// discarding the delimiters — the shared shape behind both `[stable]` and
-// `{title}`. The run may be empty (e.g. `[]`); an unterminated run (no
-// `close` before the input ends) is a positioned failure at end-of-input
-// rather than a silent non-match.
-[[nodiscard]] auto bracketed(char open, char close, const char* open_message, const char* close_message) {
-    return parse::map(parse::sequence_right(
-                          parse::satisfy([open](char c) { return c == open; }, open_message),
-                          parse::sequence_left(
-                              parse::many(parse::satisfy([close](char c) { return c != close; }, "delimiter content")),
-                              parse::satisfy([close](char c) { return c == close; }, close_message))),
-                      [](std::vector<char> chars) { return std::string(chars.begin(), chars.end()); });
-}
-
-// The `\rSec` tag alone -- decoration, blanks, and the literal "\rSec"
-// keyword -- with no depth/[stable]/{title} grammar attached. parse_rsec,
-// below, runs this as its own first step; rsec_tag_recognized() runs
-// it again on its own so classify() can ask "did this comment even look
-// like \rSec" independent of whether the rest of the marker goes on to
-// parse, without duplicating the grammar by hand.
-[[nodiscard]] auto rsec_tag() {
-    return parse::sequence_right(
-        blanks(), parse::sequence_right(decoration(), parse::sequence_right(blanks(), parse::keyword("\\rSec"))));
-}
-
-// True once `raw`'s \rSec tag
-// itself has matched, independent of whether the depth/[stable]/{title}
-// grammar after it goes on to parse. classify() calls this only when
-// parse_rsec(raw) has already failed, to tell apart the two ways that can
-// happen: the tag itself never matched (this returns false -- "not a \rSec
-// at all", frontend.hpp's parse_rsec doc comment's non-match case, e.g. a
-// `\ref` group header sharing \rSec's leading "\r" isn't enough to make this
-// true, since the keyword comparison itself still fails), or the tag matched
-// and something after it did not (this returns true -- a malformed \rSec).
-// This is the tag's own success/failure, the same commit-on-consumed-input
-// boundary parse_rsec's combinators already apply internally -- not a
-// re-derivation of the distinction by some other means, such as comparing
-// parse_error offsets against a guessed constant, which a marker sharing a
-// literal prefix with "\rSec" (like `\ref`) would get wrong.
-[[nodiscard]] bool rsec_tag_recognized(std::string_view raw) { return rsec_tag()(parse::cursor{raw}).has_value(); }
-
 // Recognize the other section-heading convention real headers use,
 // `// 22.5.3.3 Destructor[optional.dtor]`. It cannot open a section because it
 // carries no depth, but silently treating it as ordinary prose files every
@@ -7132,77 +6974,6 @@ std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string
     }
     return std::nullopt;
 }
-
-// Join a clang-format-wrapped `{title}` (issue #8): each newline, together
-// with the continuation line's indentation and `//` decoration, reads as one
-// space, so `{Accumulating applicative instance for\n// expected}` yields
-// the title exactly as authored before the formatter wrapped it.
-std::string unwrap_title(std::string_view title) {
-    std::string out;
-    out.reserve(title.size());
-    std::size_t pos = 0;
-    // substrate generic algorithm: a scan whose newline case consumes a
-    // variable-length run (trailing blanks behind, indentation, decoration,
-    // and leading blanks ahead) and emits a single joiner.
-    while (pos < title.size()) {
-        if (title[pos] != '\n') {
-            out.push_back(title[pos]);
-            ++pos;
-            continue;
-        }
-        // substrate generic algorithm: trim the joiner's left side in place.
-        while (!out.empty() && (out.back() == ' ' || out.back() == '\t' || out.back() == '\r'))
-            out.pop_back();
-        ++pos;
-        // substrate generic algorithm: skip the continuation's indentation.
-        while (pos < title.size() && (title[pos] == ' ' || title[pos] == '\t'))
-            ++pos;
-        if (pos + 1 < title.size() && title[pos] == '/' && title[pos + 1] == '/') {
-            pos += 2;
-            if (pos < title.size() && (title[pos] == '/' || title[pos] == '!'))
-                ++pos;
-            // substrate generic algorithm: skip the blanks after the
-            // decoration.
-            while (pos < title.size() && (title[pos] == ' ' || title[pos] == '\t'))
-                ++pos;
-        }
-        if (!out.empty() && pos < title.size())
-            out.push_back(' ');
-    }
-    return out;
-}
-
-} // namespace
-
-parse::parse_result<SectionHeader> parse_rsec(std::string_view raw) {
-    // \rSec<depth>[<stable>]{<title>}, tolerant of "//"/"///"/"//!"
-    // decoration and horizontal whitespace at the points blanks() marks
-    // below — never inside the brackets/braces, matching the grammar
-    // classify() accepts. rsec_tag() is this same tag,
-    // factored out so rsec_tag_recognized() can run it on its own.
-    auto depth = parse::sequence_right(rsec_tag(), parse::digits());
-
-    auto depth_and_stable =
-        parse::lift2(depth,
-                     parse::sequence_right(blanks(), bracketed('[', ']', "expected '['", "expected ']'")),
-                     [](int d, std::string stable) { return std::pair{d, std::move(stable)}; });
-
-    auto header =
-        parse::lift2(depth_and_stable,
-                     parse::sequence_right(blanks(), bracketed('{', '}', "expected '{'", "expected '}'")),
-                     [](std::pair<int, std::string> depth_stable, std::string title) {
-                         // The braced content may span physical lines when a
-                         // formatter wrapped a long title (issue #8) — the
-                         // comment splitter keeps such continuations in one
-                         // item — so the value joins them back into the
-                         // authored title.
-                         return SectionHeader{depth_stable.first, std::move(depth_stable.second), unwrap_title(title)};
-                     });
-
-    return header(parse::cursor{raw});
-}
-
-namespace {
 
 // Clang coalesces adjacent line comments into one RawComment, but each
 // physical \rSec or END line is a distinct structure event. Split only around

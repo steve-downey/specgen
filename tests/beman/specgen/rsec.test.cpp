@@ -1,4 +1,4 @@
-// tests/beman/specgen/frontend/rsec.test.cpp                       -*-C++-*-
+// tests/beman/specgen/rsec.test.cpp                                -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // parse_rsec() is built on the combinator library (decision
@@ -19,19 +19,20 @@
 // name therefore swallows the following test names into one bogus ctest
 // entry, which then matches nothing and fails. Spell the character out.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/rsec.hpp>
+#include <beman/specgen/rsec.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
 #include <string_view>
 
-namespace frontend = beman::specgen::frontend;
+namespace grammar = beman::specgen::grammar;
 
 // --- well-formed markers: the exact accepted grammar ------------------------
 
 TEST_CASE("parse_rsec - well-formed marker with plain // decoration") {
-    auto r = frontend::parse_rsec("// \\rSec2[algorithms.sort]{Sorting}");
+    auto r = grammar::parse_rsec("// \\rSec2[algorithms.sort]{Sorting}");
     REQUIRE(r.has_value());
     CHECK(r->value.depth == 2);
     CHECK(r->value.stable == "algorithms.sort");
@@ -39,7 +40,7 @@ TEST_CASE("parse_rsec - well-formed marker with plain // decoration") {
 }
 
 TEST_CASE("parse_rsec - well-formed marker with /// decoration") {
-    auto r = frontend::parse_rsec("/// \\rSec1[general]{General utilities}");
+    auto r = grammar::parse_rsec("/// \\rSec1[general]{General utilities}");
     REQUIRE(r.has_value());
     CHECK(r->value.depth == 1);
     CHECK(r->value.stable == "general");
@@ -47,7 +48,7 @@ TEST_CASE("parse_rsec - well-formed marker with /// decoration") {
 }
 
 TEST_CASE("parse_rsec - well-formed marker with //! decoration and tab whitespace") {
-    auto r = frontend::parse_rsec("//!\t\\rSec3\t[x.y]\t{Z}");
+    auto r = grammar::parse_rsec("//!\t\\rSec3\t[x.y]\t{Z}");
     REQUIRE(r.has_value());
     CHECK(r->value.depth == 3);
     CHECK(r->value.stable == "x.y");
@@ -56,7 +57,7 @@ TEST_CASE("parse_rsec - well-formed marker with //! decoration and tab whitespac
 
 TEST_CASE("parse_rsec - empty stable name and title are accepted") {
     // Non-empty bracket/brace content is not required.
-    auto r = frontend::parse_rsec("// \\rSec1[]{}");
+    auto r = grammar::parse_rsec("// \\rSec1[]{}");
     REQUIRE(r.has_value());
     CHECK(r->value.depth == 1);
     CHECK(r->value.stable.empty());
@@ -64,7 +65,7 @@ TEST_CASE("parse_rsec - empty stable name and title are accepted") {
 }
 
 TEST_CASE("parse_rsec - leading blanks before the decoration are tolerated") {
-    auto r = frontend::parse_rsec("   // \\rSec4[a]{B}");
+    auto r = grammar::parse_rsec("   // \\rSec4[a]{B}");
     REQUIRE(r.has_value());
     CHECK(r->value.depth == 4);
 }
@@ -72,12 +73,12 @@ TEST_CASE("parse_rsec - leading blanks before the decoration are tolerated") {
 // --- non-matches: "not a structure comment", not an error ------------------
 
 TEST_CASE("parse_rsec - a \\ref group header is a non-match") {
-    auto r = frontend::parse_rsec("// \\ref{foo.bar}, Human Label");
+    auto r = grammar::parse_rsec("// \\ref{foo.bar}, Human Label");
     CHECK(!r.has_value());
 }
 
 TEST_CASE("parse_rsec - input without comment decoration fails at the start") {
-    auto r = frontend::parse_rsec("\\rSec2[foo]{Title}");
+    auto r = grammar::parse_rsec("\\rSec2[foo]{Title}");
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == 0);
 }
@@ -97,16 +98,16 @@ TEST_CASE("parse_rsec - a non-match's failure offset is not the start of the com
     // "malformed `\rSec`" is therefore the tag parser's own success, not a
     // comparison against offset 0. classify() asks exactly that question, and
     // diagnostics.test.cpp pins the result end to end.
-    CHECK(frontend::parse_rsec("// \\ref{gadget.cons}, constructors").error().where.offset == 5);
-    CHECK(frontend::parse_rsec("// namespace demo").error().where.offset == 3);
-    CHECK(frontend::parse_rsec("// SPDX-License-Identifier: Apache-2.0").error().where.offset == 3);
+    CHECK(grammar::parse_rsec("// \\ref{gadget.cons}, constructors").error().where.offset == 5);
+    CHECK(grammar::parse_rsec("// namespace demo").error().where.offset == 3);
+    CHECK(grammar::parse_rsec("// SPDX-License-Identifier: Apache-2.0").error().where.offset == 3);
 
     // The one shape that does fail at offset 0 is a comment with no
     // decoration at all -- which is the case that never reaches classify().
-    CHECK(frontend::parse_rsec("\\rSec2[foo]{Title}").error().where.offset == 0);
+    CHECK(grammar::parse_rsec("\\rSec2[foo]{Title}").error().where.offset == 0);
 
     // A malformed marker, by contrast, fails past the end of the tag.
-    const auto malformed = frontend::parse_rsec("// \\rSec3[gadget.untitled]");
+    const auto malformed = grammar::parse_rsec("// \\rSec3[gadget.untitled]");
     REQUIRE_FALSE(malformed.has_value());
     CHECK(malformed.error().where.offset > std::string_view("// \\rSec").size());
 }
@@ -116,7 +117,7 @@ TEST_CASE("parse_rsec - whitespace between the tag and the depth is not tolerate
     // and before '{' -- never between the tag and the depth digits. Pins
     // the grammar against a combinator refactor accidentally widening it.
     const std::string prefix = "// \\rSec";
-    auto              r      = frontend::parse_rsec(prefix + " 2[foo]{Title}");
+    auto              r      = grammar::parse_rsec(prefix + " 2[foo]{Title}");
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == prefix.size());
 }
@@ -132,7 +133,7 @@ TEST_CASE("parse_rsec - an out-of-range depth is a positioned failure, not a thr
     // digits() reports the same input as a positioned parse_error instead.
     const std::string prefix = "// \\rSec";
     const std::string huge   = "99999999999"; // overflows int
-    auto              r      = frontend::parse_rsec(prefix + huge + "[foo]{Title}");
+    auto              r      = grammar::parse_rsec(prefix + huge + "[foo]{Title}");
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == prefix.size());
     CHECK(r.error().message != nullptr);
@@ -140,14 +141,14 @@ TEST_CASE("parse_rsec - an out-of-range depth is a positioned failure, not a thr
 
 TEST_CASE("parse_rsec - a missing open bracket after the depth is a positioned failure") {
     const std::string prefix = "// \\rSec2 ";
-    auto              r      = frontend::parse_rsec(prefix + "no bracket here");
+    auto              r      = grammar::parse_rsec(prefix + "no bracket here");
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == prefix.size());
 }
 
 TEST_CASE("parse_rsec - a non-numeric depth is a positioned failure") {
     const std::string prefix = "// \\rSec";
-    auto              r      = frontend::parse_rsec(prefix + "x[foo]{Title}");
+    auto              r      = grammar::parse_rsec(prefix + "x[foo]{Title}");
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == prefix.size());
 }
@@ -155,14 +156,29 @@ TEST_CASE("parse_rsec - a non-numeric depth is a positioned failure") {
 TEST_CASE("parse_rsec - a missing stable name (no closing bracket) is a positioned failure") {
     // '[' opens but the input ends before a ']' terminates the stable name.
     const std::string raw = "// \\rSec2[foo";
-    auto              r   = frontend::parse_rsec(raw);
+    auto              r   = grammar::parse_rsec(raw);
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == raw.size());
 }
 
 TEST_CASE("parse_rsec - an unterminated title (no closing '}') is a positioned failure") {
     const std::string raw = "// \\rSec2[foo]{Title";
-    auto              r   = frontend::parse_rsec(raw);
+    auto              r   = grammar::parse_rsec(raw);
     REQUIRE(!r.has_value());
     CHECK(r.error().where.offset == raw.size());
+}
+
+// --- the tag alone ----------------------------------------------------------
+
+TEST_CASE("rsec_tag_recognized - true once the tag matches, whatever follows it") {
+    CHECK(grammar::rsec_tag_recognized("// \\rSec2[algorithms.sort]{Sorting}"));
+    CHECK(grammar::rsec_tag_recognized("//! \\rSec3[gadget.untitled]")); // malformed after the tag
+    CHECK(grammar::rsec_tag_recognized("/// \\rSec"));
+}
+
+TEST_CASE("rsec_tag_recognized - false for a comment that is not a \\rSec at all") {
+    // A `\ref` group header shares the leading "\r" but not the keyword.
+    CHECK_FALSE(grammar::rsec_tag_recognized("// \\ref{gadget.cons}, constructors"));
+    CHECK_FALSE(grammar::rsec_tag_recognized("// SPDX-License-Identifier: Apache-2.0"));
+    CHECK_FALSE(grammar::rsec_tag_recognized("\\rSec2[foo]{Title}")); // no decoration
 }

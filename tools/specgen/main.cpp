@@ -35,6 +35,7 @@
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/validate/validate.hpp>
 
+#include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/frontend.hpp>
 
 #include <algorithm>

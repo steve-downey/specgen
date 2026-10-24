@@ -83,7 +83,7 @@ namespace beman::specgen::document_build {
 // kinds reach this channel:
 //
 //  - A malformed `\rSec` marker: the tag itself matched but the grammar after
-//    it (depth, `[stable]`, `{title}`) failed to parse. frontend.hpp's
+//    it (depth, `[stable]`, `{title}`) failed to parse. rsec.hpp's
 //    parse_rsec doc comment explains the position-based distinction between
 //    this case and a genuine non-match (a `\ref` group header, license/SPDX
 //    text, a trailing-brace comment), which stays silent. The message is
@@ -122,7 +122,7 @@ struct Diagnostic {
 };
 
 // Opens a nested ir::Section frame (design §3.2): a `\rSec<depth>[stable]
-// {title}` marker, already parsed by classify()'s call to frontend::parse_rsec.
+// {title}` marker, already parsed by classify()'s call to grammar::parse_rsec.
 // build_tree closes every open frame at depth >= this one before opening its
 // own — a `\rSec1` after two nested `\rSec3`/`\rSec2` frames closes both.
 struct SectionOpen {

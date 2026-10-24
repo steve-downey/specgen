@@ -10,6 +10,7 @@ target_sources(
         ir.cpp
         docblock.cpp
         markers.cpp
+        rsec.cpp
         lower.cpp
         conjuncts.cpp
         depfile.cpp
