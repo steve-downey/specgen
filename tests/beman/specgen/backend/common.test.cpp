@@ -67,3 +67,44 @@ TEST_CASE("backend common - render_code_spans defensively skips a malformed span
     const CodeText code{"abc", {{10, 12, SpanKind::SeeBelow, ""}}};
     CHECK(common::render_code_spans(code, bracket_escape) == "abc");
 }
+
+// --- element_label -----------------------------------------------------------
+
+// The labels are [structure.specifications]'s, not ir::element_name's macro
+// spellings: several differ, and those are the ones a hand-written table gets
+// wrong.
+TEST_CASE("backend common - element_label spells the labels that differ from the macro name") {
+    CHECK(common::element_label(ElementKind::Expects) == "Preconditions");
+    CHECK(common::element_label(ElementKind::HardExpects) == "Hardened preconditions");
+    CHECK(common::element_label(ElementKind::Ensures) == "Postconditions");
+    CHECK(common::element_label(ElementKind::Sync) == "Synchronization");
+    CHECK(common::element_label(ElementKind::Errors) == "Error conditions");
+}
+
+// --- the draft's own spelling of a span ---------------------------------------
+
+TEST_CASE("backend common - draft_span_prose writes each span as the draft's macro") {
+    CHECK(common::draft_span_prose({0, 3, SpanKind::ExposId, "val"}, "VAL") == "\\exposid{val}");
+    CHECK(common::draft_span_prose({0, 1, SpanKind::SeeBelow, ""}, "x") == "\\seebelow");
+    CHECK(common::draft_span_prose({0, 1, SpanKind::ImplDefined, ""}, "x") == "\\impdef");
+    CHECK(common::draft_span_prose({0, 1, SpanKind::Placeholder, "T"}, "x") == "\\placeholder{T}");
+    CHECK(common::draft_span_prose({0, 1, SpanKind::Ref, "optional.ctor"}, "x") == "\\ref{optional.ctor}");
+    CHECK(common::draft_span_prose({0, 8, SpanKind::LibraryIndex, ""}, "optional") == "\\libglobal{optional}");
+    CHECK(common::draft_span_prose({0, 5, SpanKind::LibraryIndex, "optional"}, "reset") ==
+          "\\libmember{reset}{optional}");
+}
+
+// Inside a codeblock the draft escapes back to LaTeX with @...@, except for a
+// Ref, which only ever sits in a comment that is already in TeX mode, and an
+// exposition-only name takes the no-correction form.
+TEST_CASE("backend common - draft_span_codeblock wraps every span but a Ref in the draft's escape") {
+    CHECK(common::draft_span_codeblock({0, 3, SpanKind::ExposId, "val"}, "VAL") == "@\\exposidnc{val}@");
+    CHECK(common::draft_span_codeblock({0, 1, SpanKind::SeeBelow, ""}, "x") == "@\\seebelow@");
+    CHECK(common::draft_span_codeblock({0, 1, SpanKind::Ref, "optional.ctor"}, "x") == "\\ref{optional.ctor}");
+}
+
+TEST_CASE("backend common - draft_code_inline wraps a partial span in tcode but not a whole one") {
+    CHECK(common::draft_code_inline(CodeInline{{"val", {{0, 3, SpanKind::ExposId, "val"}}}}) == "\\exposid{val}");
+    CHECK(common::draft_code_inline(CodeInline{{"x.val", {{2, 5, SpanKind::ExposId, "val"}}}}) ==
+          "\\tcode{x.\\exposid{val}}");
+}

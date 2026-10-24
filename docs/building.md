@@ -125,9 +125,11 @@ markdownlint, and the rest).
 The "No raw loops" and "No raw switch over an enumeration" doctrines
 (`docs/CODING_RULES.md`) are enforced separately, as the ctest cases
 `style.no-raw-loops` and `style.no-raw-switch`, the same run with a different
-check (`-DCHECK=specgen-no-raw-switch`). Described for the first: the `specgen-no-raw-loops` clang-tidy
-plugin check run by the pinned `run-clang-tidy` over the compile database —
-every production TU plus every `FILE_SET` header as its own verification TU,
+check (`-DCHECK=specgen-no-raw-switch`), and the rule against relying on a
+transitive include as `style.include-cleaner` (`-DCHECK=misc-include-cleaner`).
+Described for the first: the `specgen-no-raw-loops` clang-tidy plugin check run
+by the pinned `run-clang-tidy` over the compile database — every production TU
+plus every `FILE_SET` header as its own verification TU,
 which is why `CMAKE_VERIFY_INTERFACE_HEADER_SETS` is on in the `gcc-release`
 preset, the one the lint runs from. It needs the pinned LLVM's `clang-tidy`
 and the clang-tools-extra headers; configure's

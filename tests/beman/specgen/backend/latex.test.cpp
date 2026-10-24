@@ -184,6 +184,50 @@ Second.
     CHECK(latex::render_to_string(item) == expected);
 }
 
+TEST_CASE("latex - an itemize with no lead-in prose follows the label") {
+    SpecItem           item;
+    DescriptionElement mandates;
+    mandates.kind    = ElementKind::Mandates;
+    mandates.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    item.decl.signatures.push_back({"int f();", {}});
+    item.descr.elements.push_back(std::move(mandates));
+
+    const std::string expected =
+        R"(\begin{itemdescr}
+\pnum
+\mandates
+\begin{itemize}
+\item one,
+\item two.
+\end{itemize}
+\end{itemdescr}
+)";
+    const std::string out = latex::render_to_string(item);
+    INFO(out);
+    CHECK(out.find(expected) != std::string::npos);
+}
+
+TEST_CASE("latex - an itemize with lead-in prose stays in that paragraph's pnum") {
+    SpecItem           item;
+    DescriptionElement constraints;
+    constraints.kind = ElementKind::Constraints;
+    constraints.paragraphs.push_back({TextInline{"All of the following are true:"}});
+    constraints.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    item.decl.signatures.push_back({"int f();", {}});
+    item.descr.elements.push_back(std::move(constraints));
+
+    const std::string expected =
+        R"(\pnum
+\constraints
+All of the following are true:
+\begin{itemize}
+\item one,
+\item two.
+\end{itemize}
+)";
+    CHECK(latex::render_to_string(item).find(expected) != std::string::npos);
+}
+
 TEST_CASE("latex - same-kind authored itemizes concatenate") {
     SpecItem           item;
     DescriptionElement first;

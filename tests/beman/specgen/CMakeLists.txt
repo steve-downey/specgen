@@ -21,6 +21,7 @@ foreach(
     lower
     conjuncts
     depfile
+    diagnostic
     document_build
     fragments
 )
@@ -45,6 +46,7 @@ endforeach()
 add_subdirectory(backend)
 add_subdirectory(foundation)
 add_subdirectory(validate)
+add_subdirectory(vendor)
 
 # Tier B tests: the Clang front end's own.
 add_subdirectory(frontend)

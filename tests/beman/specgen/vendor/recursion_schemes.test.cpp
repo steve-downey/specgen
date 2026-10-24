@@ -1,14 +1,15 @@
-// tests/beman/specgen/foundation/recursion_schemes.test.cpp      -*-C++-*-
+// tests/beman/specgen/vendor/recursion_schemes.test.cpp            -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// fold_with identity/composition law tests on
-// a toy rose tree. This exercises the vendored recursion verb through the
-// explicit-parameter tier only (decision no-typeclass-objects) — a
-// hand-written base functor, fmap, and
-// projection, with no dependency on tree_algorithms' lookup tier (Fix,
+// An acceptance test of the vendored tree_algorithms recursion verbs, kept
+// beside specgen's own tests rather than in the subtree, which has its own:
+// fold_with identity/composition law tests on a toy rose tree. This
+// exercises the vendored recursion verb through the explicit-parameter tier
+// only (decision no-typeclass-objects) — a hand-written base functor, fmap,
+// and projection, with no dependency on tree_algorithms' lookup tier (Fix,
 // functor_typeclass, RoseTreeFix). It proves the seam the node-base-functor
-// decision relies on: fold a tree
-// in its own representation, const, no Fix materialized.
+// decision relies on: fold a tree in its own representation, const, no Fix
+// materialized.
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 #include <beman/tree_algorithms/recursion_schemes.hpp> // Re-inclusion verification

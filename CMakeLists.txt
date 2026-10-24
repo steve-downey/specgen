@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.5.4
+    VERSION 0.5.5
 )
 
 # `specgen --version` identifies both the release and the exact source
@@ -361,6 +361,19 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
                 "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
                 "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
         )
+        # Every symbol a TU uses comes from a header it includes itself, not
+        # through a transitive include (docs/CODING_RULES.md).
+        add_test(
+            NAME style.include-cleaner
+            COMMAND
+                ${CMAKE_COMMAND} "-DCHECK=misc-include-cleaner"
+                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
+                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
+                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
+                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
+                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
+        )
         unset(_specgen_gate_implicit_dirs)
     else()
         add_test(
@@ -371,6 +384,12 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
         )
         add_test(
             NAME style.no-raw-switch
+            COMMAND
+                ${CMAKE_COMMAND} -P
+                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
+        )
+        add_test(
+            NAME style.include-cleaner
             COMMAND
                 ${CMAKE_COMMAND} -P
                 "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"

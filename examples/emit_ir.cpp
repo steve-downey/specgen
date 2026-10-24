@@ -8,6 +8,7 @@
 #include <beman/specgen/ir.hpp>
 
 #include <print>
+#include <utility>
 
 int main() {
     namespace grammar = beman::specgen::grammar;

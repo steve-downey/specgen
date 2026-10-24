@@ -4,11 +4,13 @@
 #include <beman/specgen/frontend/frontend.hpp>
 
 #include <beman/specgen/conjuncts.hpp>
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>
 #include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
 
 // GCC reports -Wnonnull eight times from inside LLVM's own headers when it
@@ -22,6 +24,7 @@
 // fully checked.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wnonnull"
+#include <clang/AST/ASTConcept.h>
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclCXX.h>
@@ -30,12 +33,19 @@
 #include <clang/AST/Expr.h>
 #include <clang/AST/ExprCXX.h>
 #include <clang/AST/ExprConcepts.h>
-#include <clang/AST/NestedNameSpecifier.h>
+#include <clang/AST/NestedNameSpecifierBase.h>
+#include <clang/AST/OperationKinds.h>
 #include <clang/AST/RawCommentList.h>
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/AST/Stmt.h>
+#include <clang/AST/TypeBase.h>
+#include <clang/AST/TypeLoc.h>
+#include <clang/Basic/FileEntry.h>
 #include <clang/Basic/LangOptions.h>
+#include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
+#include <clang/Basic/Specifiers.h>
+#include <clang/Basic/TokenKinds.h>
 #include <clang/Format/Format.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
@@ -49,6 +59,7 @@
 #include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/Error.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/Signals.h>
 #pragma GCC diagnostic pop
@@ -57,10 +68,14 @@
 #include <array>
 #include <cctype>
 #include <concepts>
+#include <cstddef>
+#include <expected>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <functional>
+#include <ios>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -71,7 +86,9 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <unistd.h>

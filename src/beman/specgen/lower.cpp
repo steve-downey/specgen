@@ -3,10 +3,14 @@
 
 #include <beman/specgen/lower.hpp>
 
+#include <beman/specgen/docblock.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
+#include <beman/specgen/ir.hpp>
 
 #include <algorithm>
 #include <ranges>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 

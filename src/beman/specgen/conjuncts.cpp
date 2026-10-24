@@ -3,8 +3,13 @@
 
 #include <beman/specgen/conjuncts.hpp>
 
+#include <beman/specgen/ir.hpp>
+
+#include <cstddef>
 #include <ranges>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace beman::specgen::conjuncts {
 

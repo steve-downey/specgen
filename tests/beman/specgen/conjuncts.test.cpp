@@ -4,7 +4,7 @@
 #include <beman/specgen/conjuncts.hpp>
 #include <beman/specgen/conjuncts.hpp> // Re-inclusion verification
 
-#include <beman/specgen/backend/latex.hpp>
+#include <beman/specgen/foundation/overloaded.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,9 +13,9 @@
 #include <variant>
 #include <vector>
 
-namespace latex = beman::specgen::backend::latex;
 using namespace beman::specgen::conjuncts;
 using namespace beman::specgen::ir;
+using beman::specgen::foundation::overloaded;
 
 namespace {
 
@@ -31,16 +31,27 @@ std::vector<Paragraph> traits(std::size_t n) {
     return out;
 }
 
-// Render a conjunction through an element so the prose is readable as wording.
-std::string wording(std::size_t n, Options options = {}) {
+// A paragraph read back as text, code in backquotes, so a case can state the
+// conjunction it expects as the sentence it is. How a backend lays the
+// paragraph out is that backend's test's business.
+std::string prose(const Paragraph& paragraph) {
+    std::string out;
+    for (const Inline& piece : paragraph)
+        out += std::visit(overloaded{
+                              [](const TextInline& v) { return v.text; },
+                              [](const CodeInline& v) { return '`' + v.code.text + '`'; },
+                              [](const RefInline& v) { return "[" + v.stable_name + "]"; },
+                              [](const ConceptRef& v) { return v.name; },
+                          },
+                          piece);
+    return out;
+}
+
+DescriptionElement conjunction(std::size_t n, Options options = {}) {
     DescriptionElement element;
     element.kind = ElementKind::Mandates;
     render_into(traits(n), element, options);
-
-    SpecItem item;
-    item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back(std::move(element));
-    return latex::render_to_string(item);
+    return element;
 }
 
 } // namespace
@@ -52,40 +63,43 @@ TEST_CASE("conjuncts - HeaderIsIdempotent") {
 }
 
 TEST_CASE("conjuncts - sentence form for one, two, and three") {
-    CHECK(wording(1).find("\\mandates\n\\tcode{T0} is \\tcode{true}.\n") != std::string::npos);
-    CHECK(wording(2).find("\\tcode{T0} is \\tcode{true} and \\tcode{T1} is \\tcode{true}.\n") != std::string::npos);
+    const DescriptionElement one = conjunction(1);
+    REQUIRE(one.paragraphs.size() == 1);
+    CHECK(prose(one.paragraphs[0]) == "`T0` is `true`.");
+    CHECK_FALSE(one.itemize.has_value());
+
+    const DescriptionElement two = conjunction(2);
+    REQUIRE(two.paragraphs.size() == 1);
+    CHECK(prose(two.paragraphs[0]) == "`T0` is `true` and `T1` is `true`.");
+
     // Serial comma before the final conjunct, as the draft writes it.
-    CHECK(wording(3).find("\\tcode{T0} is \\tcode{true}, \\tcode{T1} is \\tcode{true}, and "
-                          "\\tcode{T2} is \\tcode{true}.\n") != std::string::npos);
+    const DescriptionElement three = conjunction(3);
+    REQUIRE(three.paragraphs.size() == 1);
+    CHECK(prose(three.paragraphs[0]) == "`T0` is `true`, `T1` is `true`, and `T2` is `true`.");
 }
 
 TEST_CASE("conjuncts - beyond the threshold becomes an itemize") {
-    const std::string out = wording(4);
-    const std::string expected =
-        R"(\begin{itemdescr}
-\pnum
-\mandates
-\begin{itemize}
-\item \tcode{T0} is \tcode{true},
-\item \tcode{T1} is \tcode{true},
-\item \tcode{T2} is \tcode{true},
-\item \tcode{T3} is \tcode{true}.
-\end{itemize}
-\end{itemdescr}
-)";
-    INFO(out);
-    CHECK(out.find(expected) != std::string::npos);
+    const DescriptionElement four = conjunction(4);
+    CHECK(four.paragraphs.empty());
+    REQUIRE(four.itemize.has_value());
+    REQUIRE(four.itemize->items.size() == 4);
+    CHECK(prose(four.itemize->items[0]) == "`T0` is `true`,");
+    CHECK(prose(four.itemize->items[1]) == "`T1` is `true`,");
+    CHECK(prose(four.itemize->items[2]) == "`T2` is `true`,");
+    CHECK(prose(four.itemize->items[3]) == "`T3` is `true`.");
 }
 
 TEST_CASE("conjuncts - the threshold is configurable") {
     Options options;
     options.sentence_threshold = 2;
-    CHECK(wording(3, options).find("\\begin{itemize}") != std::string::npos);
-    CHECK(wording(2, options).find("\\begin{itemize}") == std::string::npos);
+    CHECK(conjunction(3, options).itemize.has_value());
+    CHECK_FALSE(conjunction(2, options).itemize.has_value());
 
-    options.sentence_threshold = 5;
-    CHECK(wording(4, options).find("\\begin{itemize}") == std::string::npos);
-    CHECK(wording(4, options).find(", and \\tcode{T3} is \\tcode{true}.") != std::string::npos);
+    options.sentence_threshold    = 5;
+    const DescriptionElement four = conjunction(4, options);
+    CHECK_FALSE(four.itemize.has_value());
+    REQUIRE(four.paragraphs.size() == 1);
+    CHECK(prose(four.paragraphs[0]) == "`T0` is `true`, `T1` is `true`, `T2` is `true`, and `T3` is `true`.");
 }
 
 TEST_CASE("conjuncts - an empty conjunction contributes nothing") {
@@ -110,7 +124,7 @@ TEST_CASE("conjuncts - join_sentence and as_itemize directly") {
     CHECK(std::get<TextInline>(list.items[2].back()).text == ".");
 }
 
-TEST_CASE("conjuncts - a lead-in paragraph keeps the list in its own pnum") {
+TEST_CASE("conjuncts - a lead-in paragraph is kept ahead of the list") {
     DescriptionElement element;
     element.kind = ElementKind::Constraints;
     element.paragraphs.push_back({TextInline{"All of the following are true:"}});
@@ -118,39 +132,9 @@ TEST_CASE("conjuncts - a lead-in paragraph keeps the list in its own pnum") {
     options.sentence_threshold = 0; // force the list form
     render_into(traits(2), element, options);
 
-    SpecItem item;
-    item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back(std::move(element));
-
-    const std::string expected =
-        R"(\pnum
-\constraints
-All of the following are true:
-\begin{itemize}
-\item \tcode{T0} is \tcode{true},
-\item \tcode{T1} is \tcode{true}.
-\end{itemize}
-)";
-    CHECK(latex::render_to_string(item).find(expected) != std::string::npos);
-}
-
-TEST_CASE("conjuncts - itemize survives the IR round trip") {
-    DescriptionElement element;
-    element.kind = ElementKind::Constraints;
-    render_into(traits(4), element);
-
-    Document doc;
-    SpecItem item;
-    item.descr.elements.push_back(std::move(element));
-    doc.nodes.push_back(std::move(item));
-
-    const std::string json   = emit_json(doc);
-    const auto        parsed = parse_document(json);
-    REQUIRE(parsed.has_value());
-
-    CHECK(emit_json(*parsed) == json);
-
-    const auto& round_tripped = std::get<SpecItem>(parsed->nodes[0]).descr.elements[0];
-    REQUIRE(round_tripped.itemize.has_value());
-    CHECK(round_tripped.itemize->items.size() == 4);
+    REQUIRE(element.paragraphs.size() == 1);
+    CHECK(prose(element.paragraphs[0]) == "All of the following are true:");
+    REQUIRE(element.itemize.has_value());
+    REQUIRE(element.itemize->items.size() == 2);
+    CHECK(prose(element.itemize->items[1]) == "`T1` is `true`.");
 }

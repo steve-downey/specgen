@@ -66,7 +66,7 @@ struct NodeProjector {
     // The recursive alternative: children become cheap const-ref handles
     // that `node_project` itself accepts back on recursion (the handle
     // contract `fold_with` documents; see the toy-Rose precedent in
-    // `foundation/recursion_schemes.test.cpp`).
+    // `vendor/recursion_schemes.test.cpp`).
     NodeF<Handle> operator()(const Section& s) const {
         return SectionF<Handle>{
             s.stable_name,
@@ -148,7 +148,7 @@ inline Node node_embed(NodeF<Node>&& layer) {
 /// node-base-functor specifies --
 /// `fold_with<Result>(algebra, node_fmap, node_project, node)` -- matching
 /// the toy rose-tree `fmap` precedent
-/// (`foundation/recursion_schemes.test.cpp`): a bare function template
+/// (`vendor/recursion_schemes.test.cpp`): a bare function template
 /// cannot be deduced as `fold_with`'s `FMap` parameter with no fixed
 /// instantiation, but a concrete closure type whose call operator is itself
 /// a template can.

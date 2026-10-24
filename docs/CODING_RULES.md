@@ -20,7 +20,9 @@ documents win on rationale, this one wins on "is this diff acceptable."
 - Include project headers only by canonical angle-bracket spelling
   (`#include <beman/specgen/foundation/overloaded.hpp>`) — never relative,
   never by leaf name, never relying on a transitive include. Headers are
-  self-contained and never contain `using namespace`.
+  self-contained and never contain `using namespace`. The gate for the
+  transitive-include rule is `style.include-cleaner`: clang-tidy's
+  `misc-include-cleaner`, same scope as `style.no-raw-loops`.
 - Declare functions before defining them; define ordinary member and free
   functions out of line, qualified with full namespace and class scope. The
   one exception is a hidden friend for a customization point, kept short and

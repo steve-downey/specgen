@@ -1,10 +1,8 @@
 # tests/beman/specgen/foundation/CMakeLists.txt                    -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-# Foundation idioms: the ported headers and the vendored recursion verbs.
-# recursion_schemes.test.cpp holds the fold_with
-# identity/composition law tests on a toy rose tree. Catch2 and its module path
-# are set up by the parent tests CMakeLists.
+# Foundation idioms: the ported headers. Catch2 and its module path are set up
+# by the parent tests CMakeLists.
 foreach(
     component
     overloaded
@@ -12,7 +10,6 @@ foreach(
     fold_left_short
     monoid
     traverse
-    recursion_schemes
     json_writer
     json_descriptor
 )

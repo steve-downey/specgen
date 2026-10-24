@@ -18,7 +18,12 @@
 #include "clang-tidy/ClangTidyCheck.h"
 #include "clang-tidy/ClangTidyModule.h"
 
+#include <clang/AST/Stmt.h>
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <clang/ASTMatchers/ASTMatchers.h>
+#include <clang/Basic/SourceLocation.h>
+
+#include <llvm/ADT/StringRef.h>
 
 #include <cstddef>
 

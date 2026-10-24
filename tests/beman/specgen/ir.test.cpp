@@ -188,14 +188,6 @@ TEST_CASE("ir - document structure emission") {
     CHECK(json.find("\"type\":\"synopsis\"") != std::string::npos);
 }
 
-TEST_CASE("ir - JSON string escaping") {
-    const std::string json = emit_json(CodeText{"a \"quoted\"\n\tline \\ backslash", {}});
-    CHECK(json.find("\\\"quoted\\\"") != std::string::npos);
-    CHECK(json.find("\\n") != std::string::npos);
-    CHECK(json.find("\\t") != std::string::npos);
-    CHECK(json.find("\\\\ backslash") != std::string::npos);
-}
-
 // --- deserialization -------------------------------------------------------
 
 namespace {
@@ -284,6 +276,9 @@ TEST_CASE("ir - round-trip: empty document") { check_round_trip(Document{}); }
 
 TEST_CASE("ir - round-trip: every node, span, and index kind") { check_round_trip(kitchen_sink()); }
 
+// How each character is escaped is json_writer's, and
+// foundation/json_writer.test.cpp pins it; what the IR owes is that a string
+// needing escapes comes back out of the parser unchanged.
 TEST_CASE("ir - round-trip: strings needing escapes") {
     Document doc;
     Synopsis syn;
@@ -293,6 +288,32 @@ TEST_CASE("ir - round-trip: strings needing escapes") {
     doc.nodes.push_back(syn);
     doc.nodes.push_back(FreeParagraph{{TextInline{"unicode: \xE2\x88\x80 \xC2\xA9"}}});
     check_round_trip(doc);
+}
+
+TEST_CASE("ir - round-trip: an element's itemize, with and without lead-in prose") {
+    DescriptionElement mandates;
+    mandates.kind = ElementKind::Mandates;
+    mandates.itemize =
+        Itemize{{{CodeInline{{"A", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{","}},
+                 {CodeInline{{"B", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{"."}}}};
+    DescriptionElement constraints;
+    constraints.kind = ElementKind::Constraints;
+    constraints.paragraphs.push_back({TextInline{"All of the following are true:"}});
+    constraints.itemize = Itemize{{{TextInline{"one."}}}};
+
+    SpecItem item;
+    item.descr.elements = {std::move(mandates), std::move(constraints)};
+    Document doc;
+    doc.nodes.push_back(std::move(item));
+    check_round_trip(doc);
+
+    const auto parsed = parse_document(to_json(doc));
+    REQUIRE(parsed.has_value());
+    const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
+    REQUIRE(elements[0].itemize.has_value());
+    CHECK(elements[0].itemize->items.size() == 2);
+    REQUIRE(elements[1].itemize.has_value());
+    CHECK(elements[1].paragraphs.size() == 1);
 }
 
 TEST_CASE("ir - round-trip preserves every disposition") {
