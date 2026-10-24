@@ -57,6 +57,6 @@ else()
 endif()
 
 add_subdirectory(backend)
-add_subdirectory(foundation/parse)
 add_subdirectory(json)
+add_subdirectory(parse)
 add_subdirectory(validate)

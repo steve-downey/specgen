@@ -1,4 +1,4 @@
-// tests/beman/specgen/foundation/parse/parser.test.cpp          -*-C++-*-
+// tests/beman/specgen/parse/parser.test.cpp                       -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // Ported from compile-time-scheme's src/smd/smdscheme/parser/parser.test.cpp
@@ -9,28 +9,28 @@
 // semantics, and digits() overflow. keyword() has no upstream equivalent (see
 // the provenance note in parser.hpp) so its tests are new outright.
 
-#include <beman/specgen/foundation/parse/parser.hpp>
-#include <beman/specgen/foundation/parse/parser.hpp> // Re-inclusion verification
+#include <beman/specgen/parse/parser.hpp>
+#include <beman/specgen/parse/parser.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <limits>
 #include <string>
 
-using beman::specgen::foundation::parse::char_p;
-using beman::specgen::foundation::parse::cursor;
-using beman::specgen::foundation::parse::digits;
-using beman::specgen::foundation::parse::keyword;
-using beman::specgen::foundation::parse::lexeme;
-using beman::specgen::foundation::parse::lift2;
-using beman::specgen::foundation::parse::many;
-using beman::specgen::foundation::parse::map;
-using beman::specgen::foundation::parse::opt;
-using beman::specgen::foundation::parse::pure;
-using beman::specgen::foundation::parse::satisfy;
-using beman::specgen::foundation::parse::sequence_left;
-using beman::specgen::foundation::parse::sequence_right;
-using beman::specgen::foundation::parse::some;
+using beman::specgen::parse::char_p;
+using beman::specgen::parse::cursor;
+using beman::specgen::parse::digits;
+using beman::specgen::parse::keyword;
+using beman::specgen::parse::lexeme;
+using beman::specgen::parse::lift2;
+using beman::specgen::parse::many;
+using beman::specgen::parse::map;
+using beman::specgen::parse::opt;
+using beman::specgen::parse::pure;
+using beman::specgen::parse::satisfy;
+using beman::specgen::parse::sequence_left;
+using beman::specgen::parse::sequence_right;
+using beman::specgen::parse::some;
 
 // --- ported: applicative primitives (parser.hpp) ----------------------------
 

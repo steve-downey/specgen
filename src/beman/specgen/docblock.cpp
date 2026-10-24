@@ -6,8 +6,8 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <beman/specgen/foundation/overloaded.hpp>
-#include <beman/specgen/foundation/parse/cursor.hpp>
-#include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/parse/cursor.hpp>
+#include <beman/specgen/parse/parser.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/markers.hpp>
 
@@ -35,7 +35,7 @@ namespace beman::specgen::grammar {
 // call site rather than propagated out (decision expected-error-taxonomy
 // assigns docblock parsing to the accumulating/Validation row, not
 // fail-fast expected).
-namespace parse      = beman::specgen::foundation::parse;
+namespace parse      = beman::specgen::parse;
 namespace foundation = beman::specgen::foundation;
 
 namespace detail {

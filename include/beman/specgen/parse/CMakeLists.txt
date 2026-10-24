@@ -1,4 +1,4 @@
-# include/beman/specgen/foundation/parse/CMakeLists.txt            -*-CMake-*-
+# include/beman/specgen/parse/CMakeLists.txt                       -*-CMake-*-
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 # The runtime-ized parser-combinator core (decision parser-combinators):

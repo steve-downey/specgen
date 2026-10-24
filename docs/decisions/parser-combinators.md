@@ -14,7 +14,7 @@ a combinator core that can be runtime-ized.
 
 ## Decision
 
-`foundation/parse/{cursor,parser}.hpp`, runtime-ized from
+`parse/{cursor,parser}.hpp`, runtime-ized from
 `compile-time-scheme`'s parser: immutable `cursor` (`bump()` returns a new
 cursor; offset/line/column ride along, so parsers checkpoint and backtrack
 freely), `parse_state<T>{value, rest}`,

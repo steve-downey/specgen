@@ -26,8 +26,8 @@ export {
 #include <beman/specgen/json/writer.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
-#include <beman/specgen/foundation/parse/cursor.hpp>
-#include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/parse/cursor.hpp>
+#include <beman/specgen/parse/parser.hpp>
 #include <beman/specgen/foundation/traverse.hpp>
 #include <beman/specgen/fragments.hpp>
 #include <beman/specgen/ir.hpp>

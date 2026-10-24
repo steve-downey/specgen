@@ -29,8 +29,6 @@ foreach(
     catch_discover_tests(beman.specgen.tests.foundation.${component})
 endforeach()
 
-add_subdirectory(parse)
-
 # A table that leaves an enumerator out must not compile, and the diagnostic
 # names the enumerator. The probe is built on demand, by the test, rather than
 # with `all`.

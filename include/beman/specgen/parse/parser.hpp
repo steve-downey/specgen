@@ -1,4 +1,4 @@
-// include/beman/specgen/foundation/parse/parser.hpp             -*-C++-*-
+// include/beman/specgen/parse/parser.hpp                          -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // Provenance: ported from compile-time-scheme
@@ -27,10 +27,10 @@
 // lift2, sequence_left, sequence_right, operator|, many, some, opt, lexeme)
 // otherwise carry upstream's shape and doc comments. See
 // foundation/DIVERGENCES.md.
-#ifndef BEMAN_SPECGEN_FOUNDATION_PARSE_PARSER_HPP
-#define BEMAN_SPECGEN_FOUNDATION_PARSE_PARSER_HPP
+#ifndef BEMAN_SPECGEN_PARSE_PARSER_HPP
+#define BEMAN_SPECGEN_PARSE_PARSER_HPP
 
-#include <beman/specgen/foundation/parse/cursor.hpp>
+#include <beman/specgen/parse/cursor.hpp>
 
 #include <charconv>
 #include <expected>
@@ -38,7 +38,7 @@
 #include <string_view>
 #include <vector>
 
-namespace beman::specgen::foundation::parse {
+namespace beman::specgen::parse {
 
 /// A parse failure with the position in the input where it occurred and a
 /// static string describing the expected token or form.
@@ -365,6 +365,6 @@ template <parser_like P>
     }};
 }
 
-} // namespace beman::specgen::foundation::parse
+} // namespace beman::specgen::parse
 
-#endif // BEMAN_SPECGEN_FOUNDATION_PARSE_PARSER_HPP
+#endif // BEMAN_SPECGEN_PARSE_PARSER_HPP

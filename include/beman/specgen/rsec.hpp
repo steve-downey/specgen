@@ -9,7 +9,7 @@
 #ifndef BEMAN_SPECGEN_RSEC_HPP
 #define BEMAN_SPECGEN_RSEC_HPP
 
-#include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/parse/parser.hpp>
 
 #include <string>
 #include <string_view>
@@ -29,7 +29,7 @@ struct SectionHeader {
 // "//", "///", or "//!" decoration and horizontal whitespace (never a
 // newline) around the tag and its brackets; the bracket/brace contents
 // themselves are taken verbatim. Built on the combinator library
-// (decision parser-combinators, foundation/parse/{cursor,parser}.hpp):
+// (decision parser-combinators, parse/{cursor,parser}.hpp):
 //
 //  - Failing before any input is consumed means "not a \rSec comment at
 //    all" -- a `\ref{...}` synopsis-group header, license/SPDX text, a
@@ -49,7 +49,7 @@ struct SectionHeader {
 // A numbered draft-style heading ending in a dotted `[stable.name]` gets the
 // same channel: it is not parsed as structure, but a Warning reports it
 // rather than silently leaving the preceding section open.
-beman::specgen::foundation::parse::parse_result<SectionHeader> parse_rsec(std::string_view raw);
+beman::specgen::parse::parse_result<SectionHeader> parse_rsec(std::string_view raw);
 
 // True once `raw`'s \rSec tag itself -- decoration, blanks, and the literal
 // "\rSec" -- has matched, independent of whether the depth/[stable]/{title}

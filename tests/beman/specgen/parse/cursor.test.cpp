@@ -1,4 +1,4 @@
-// tests/beman/specgen/foundation/parse/cursor.test.cpp          -*-C++-*-
+// tests/beman/specgen/parse/cursor.test.cpp                       -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // Ported from compile-time-scheme's
@@ -8,15 +8,15 @@
 // no specgen grammar to serve) plus coverage for multi-line
 // offset/line/column tracking.
 
-#include <beman/specgen/foundation/parse/cursor.hpp>
-#include <beman/specgen/foundation/parse/cursor.hpp> // Re-inclusion verification
+#include <beman/specgen/parse/cursor.hpp>
+#include <beman/specgen/parse/cursor.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 
-using beman::specgen::foundation::parse::cursor;
-using beman::specgen::foundation::parse::is_space;
-using beman::specgen::foundation::parse::skip_intertoken_space;
-using beman::specgen::foundation::parse::source_pos;
+using beman::specgen::parse::cursor;
+using beman::specgen::parse::is_space;
+using beman::specgen::parse::skip_intertoken_space;
+using beman::specgen::parse::source_pos;
 
 static_assert([] {
     cursor c{"  x"};

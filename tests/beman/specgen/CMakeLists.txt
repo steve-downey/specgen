@@ -49,6 +49,7 @@ endforeach()
 add_subdirectory(backend)
 add_subdirectory(foundation)
 add_subdirectory(json)
+add_subdirectory(parse)
 add_subdirectory(validate)
 add_subdirectory(vendor)
 
