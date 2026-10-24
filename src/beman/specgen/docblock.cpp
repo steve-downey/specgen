@@ -257,11 +257,6 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
     return para;
 }
 
-const MarkerInfo* find_marker(std::string_view name) {
-    const auto it = std::ranges::find_if(kMarkers, [name](const MarkerInfo& info) { return info.spelling == name; });
-    return it != std::ranges::end(kMarkers) ? &*it : nullptr;
-}
-
 // -------------------------------------------------------------------------
 // parse_docblock: the `\name` tag head and the `(arg)` marker-argument
 // scanner.
@@ -356,40 +351,6 @@ TableHead parse_table_head(std::string_view after, int line, std::vector<Diagnos
 }
 
 } // namespace
-
-namespace detail {
-
-bool set_expos_name(Markers& markers, std::string arg) {
-    const bool had     = markers.expos_name.has_value();
-    markers.expos_name = std::move(arg);
-    return had;
-}
-
-bool set_at_anchor(Markers& markers, std::string arg) {
-    const bool had    = markers.at_anchor.has_value();
-    markers.at_anchor = std::move(arg);
-    return had;
-}
-
-bool set_seebelow_target(Markers& markers, std::string arg) {
-    const bool had          = markers.seebelow_target.has_value();
-    markers.seebelow_target = std::move(arg);
-    return had;
-}
-
-bool set_group_id(Markers& markers, std::string arg) {
-    const bool had   = markers.group_id.has_value();
-    markers.group_id = std::move(arg);
-    return had;
-}
-
-bool set_also_target(Markers& markers, std::string arg) {
-    const bool had      = markers.also_target.has_value();
-    markers.also_target = std::move(arg);
-    return had;
-}
-
-} // namespace detail
 
 std::string strip_comment_decorations(std::string_view raw) {
     std::string_view text  = trim(raw);
