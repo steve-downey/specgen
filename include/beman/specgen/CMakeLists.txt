@@ -26,7 +26,6 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     ir_fold.hpp
                     lower.hpp
                     markers.hpp
-                    specgen.hpp
                     "${PROJECT_BINARY_DIR}/include/beman/specgen/config_generated.hpp"
     )
 else()
@@ -53,7 +52,6 @@ else()
                     ir_fold.hpp
                     lower.hpp
                     markers.hpp
-                    specgen.hpp
                     "${PROJECT_BINARY_DIR}/include/beman/specgen/config_generated.hpp"
     )
 endif()
