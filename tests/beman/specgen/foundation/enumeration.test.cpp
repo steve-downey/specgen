@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <beman/specgen/foundation/enumeration.hpp>
+#include <beman/specgen/foundation/enumeration.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 

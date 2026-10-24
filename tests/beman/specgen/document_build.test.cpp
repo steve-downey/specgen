@@ -16,6 +16,7 @@
 // push order, before the placement-key sort — not after.
 
 #include <beman/specgen/document_build.hpp>
+#include <beman/specgen/document_build.hpp> // Re-inclusion verification
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>
