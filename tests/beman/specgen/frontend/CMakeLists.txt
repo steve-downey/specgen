@@ -26,21 +26,21 @@ foreach(
     diagnostics
     doxygen
 )
-    add_executable(beman.specgen.tests.${component})
+    add_executable(beman.specgen.tests.frontend.${component})
     target_sources(
-        beman.specgen.tests.${component}
+        beman.specgen.tests.frontend.${component}
         PRIVATE ${component}.test.cpp
     )
     target_link_libraries(
-        beman.specgen.tests.${component}
+        beman.specgen.tests.frontend.${component}
         PRIVATE beman::specgen.frontend Catch2::Catch2WithMain
     )
     # collect.test.cpp reads the hand-curated corpus header (decision hermetic-corpus); point
     # it at the corpus directory instead of hard-coding a relative path that
     # would depend on the test's working directory.
     target_compile_definitions(
-        beman.specgen.tests.${component}
+        beman.specgen.tests.frontend.${component}
         PRIVATE BEMAN_SPECGEN_CORPUS_DIR="${PROJECT_SOURCE_DIR}/tests/corpus"
     )
-    catch_discover_tests(beman.specgen.tests.${component})
+    catch_discover_tests(beman.specgen.tests.frontend.${component})
 endforeach()
