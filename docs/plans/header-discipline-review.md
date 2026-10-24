@@ -105,11 +105,27 @@ real `compile_commands.json`.
 
 ### [backend-common-facilities](#backend-common-facilities)
 
-**Question:** what are the facilities in `backend/common.hpp`, and which backends consume each? **Status:** OPEN.
+**Question:** what are the facilities in `backend/common.hpp`, and which backends consume each? **Status:** DONE,
+2026-10-24.
 Four live there with different consumer sets: the element-label table (mpark, org), `render_code_spans` (all),
 the draft-LaTeX span spellings (latex, org), and the `RenderF` base functor. `common.test.cpp` tests only
 `render_code_spans`; the label table is asserted from `mpark.test.cpp` and `org.test.cpp` instead, and the span
 spellings from `org.test.cpp`. The name says "shared", which is a layer, not a facility.
+
+**Decision:** each facility moves out of `common.hpp` into a header-only component of its own, below the backends
+that use it, and `common.hpp` is deleted. They stay in `backend/`, in namespace `backend`, because the backends are
+their only consumers:
+
+- `backend/element_label.hpp`: `kElementLabels` and `element_label`, on `ir`. Used by mpark and org.
+- `backend/code_spans.hpp`: `render_code_spans`, on `ir`. Used by all three.
+- `backend/draft_spans.hpp`: `draft_span_prose`, `draft_span_codeblock`, and `draft_code_inline`, on `code_spans`
+  and `ir`. Used by latex and org.
+- `backend/render_fold.hpp`: `RenderedSectionF`, `RenderF`, and `render_fmap`, on `ir` and `foundation/overloaded`.
+  Used by all three.
+
+Each has its own test file, split from `common.test.cpp`. `render_fmap`, which had no test, gets one, and
+`element_label` gains a check that every element kind has a label. The per-backend label cases in `mpark.test.cpp`
+and `org.test.cpp` stay, as [tests-of-dependencies](#tests-of-dependencies) decided. **Decided by:** Steve Downey.
 
 ### [ir-serialization-home](#ir-serialization-home)
 
