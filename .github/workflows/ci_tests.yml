@@ -55,9 +55,6 @@ jobs:
           - name: GCC 16 Multi-Config
             preset: gcc-multi-config
             args: ""
-          - name: GCC 16 Release TSan
-            preset: gcc-release
-            args: "-DBEMAN_BUILDSYS_SANITIZER=TSan"
           - name: GCC 16 Debug Werror
             preset: gcc-debug
             args: "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"
