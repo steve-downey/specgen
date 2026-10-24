@@ -32,6 +32,7 @@
 #include <beman/specgen/backend/mpark.hpp>
 
 #include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
@@ -63,32 +64,24 @@ using beman::specgen::foundation::overloaded;
 // \textit{\texttt{...}}. Only a cross-reference needs the general form, since
 // its payload is a span with attributes rather than a run of text.
 std::string escape_span(const ir::Span& span, std::string_view spelling) {
-    switch (span.kind) {
-    case ir::SpanKind::ExposId:
-        return '$' + span.payload + '$';
-    case ir::SpanKind::SeeBelow:
-        return "$see below$";
-    case ir::SpanKind::ImplDefined:
-        return "$implementation-defined$";
-    case ir::SpanKind::Placeholder:
-        return '$' + span.payload + '$';
-    case ir::SpanKind::Ref:
-        // No parentheses: a Ref span is the *bare* cross-reference the
-        // draft's `\ref` sets inside a comment, and the author writes the
-        // punctuation around it (`// \ref{optional.ctor}, constructors`).
-        // `ir::RefInline` is the parenthesized prose form and keeps its
-        // parens, matching `\iref` -- see PieceRenderer below.
-        //
-        // Wrapped in `@...@`, where the LaTeX backend deliberately leaves this
-        // one kind unwrapped: that exception is a property of the *draft's*
-        // listings setup (`texcl=true` puts comments in TeX mode already), and
-        // mpark has no comment exception at all -- its scanner is purely
-        // delimiter-driven and does not know a comment from any other text.
-        return "@[" + span.payload + "]{- .sref}@";
-    case ir::SpanKind::LibraryIndex:
-        return std::string(spelling);
-    }
-    std::unreachable(); // SpanKind is exhaustively handled above
+    return foundation::match(span.kind,
+                             foundation::when<ir::SpanKind::ExposId>([&] { return '$' + span.payload + '$'; }),
+                             foundation::when<ir::SpanKind::SeeBelow>([&] { return "$see below$"; }),
+                             foundation::when<ir::SpanKind::ImplDefined>([&] { return "$implementation-defined$"; }),
+                             foundation::when<ir::SpanKind::Placeholder>([&] { return '$' + span.payload + '$'; }),
+                             // No parentheses: a Ref span is the *bare* cross-reference the
+                             // draft's `\ref` sets inside a comment, and the author writes the
+                             // punctuation around it (`// \ref{optional.ctor}, constructors`).
+                             // `ir::RefInline` is the parenthesized prose form and keeps its
+                             // parens, matching `\iref` -- see PieceRenderer below.
+                             //
+                             // Wrapped in `@...@`, where the LaTeX backend deliberately leaves this
+                             // one kind unwrapped: that exception is a property of the *draft's*
+                             // listings setup (`texcl=true` puts comments in TeX mode already), and
+                             // mpark has no comment exception at all -- its scanner is purely
+                             // delimiter-driven and does not know a comment from any other text.
+                             foundation::when<ir::SpanKind::Ref>([&] { return "@[" + span.payload + "]{- .sref}@"; }),
+                             foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this

@@ -3,11 +3,14 @@
 
 #include <beman/specgen/docblock.hpp>
 
+#include <beman/specgen/foundation/enumeration.hpp>
+
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>
 #include <beman/specgen/foundation/parse/parser.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <format>
 #include <ranges>
@@ -25,7 +28,29 @@ namespace beman::specgen::grammar {
 // call site rather than propagated out (decision expected-error-taxonomy
 // assigns docblock parsing to the accumulating/Validation row, not
 // fail-fast expected).
-namespace parse = beman::specgen::foundation::parse;
+namespace parse      = beman::specgen::foundation::parse;
+namespace foundation = beman::specgen::foundation;
+
+namespace detail {
+// Which part of a table the text being gathered belongs to. Named, outside the
+// anonymous namespace, so `foundation::enumerators` can be specialized for it.
+enum class TablePart { None, Caption, Column1, Column2, RowHeader, Cell1, Cell2 };
+} // namespace detail
+
+} // namespace beman::specgen::grammar
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::grammar::detail::TablePart> = std::array{
+    beman::specgen::grammar::detail::TablePart::None,
+    beman::specgen::grammar::detail::TablePart::Caption,
+    beman::specgen::grammar::detail::TablePart::Column1,
+    beman::specgen::grammar::detail::TablePart::Column2,
+    beman::specgen::grammar::detail::TablePart::RowHeader,
+    beman::specgen::grammar::detail::TablePart::Cell1,
+    beman::specgen::grammar::detail::TablePart::Cell2,
+};
+
+namespace beman::specgen::grammar {
 using beman::specgen::foundation::overloaded;
 
 namespace {
@@ -391,7 +416,7 @@ ParseResult parse_docblock(std::string_view raw) {
     int                      item_line  = 0;
     bool                     in_itemize = false;
     bool                     item_open  = false;
-    enum class TablePart { None, Caption, Column1, Column2, RowHeader, Cell1, Cell2 };
+    using detail::TablePart;
     bool                     in_table       = false;
     bool                     table_terminal = false;
     TableKind                table_kind     = TableKind::None;
@@ -456,50 +481,31 @@ ParseResult parse_docblock(std::string_view raw) {
         Element* element = current_element();
         if (element != nullptr && table_kind == TableKind::TwoD && element->table) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
-            switch (table_part) {
-            case TablePart::Caption:
-                element->table->caption = std::move(paragraph);
-                break;
-            case TablePart::Column1:
-                element->table->column1 = std::move(paragraph);
-                break;
-            case TablePart::Column2:
-                element->table->column2 = std::move(paragraph);
-                break;
-            case TablePart::RowHeader:
-                element->table->rows.back().header = std::move(paragraph);
-                break;
-            case TablePart::Cell1:
-                element->table->rows.back().cell1 = std::move(paragraph);
-                break;
-            case TablePart::Cell2:
-                element->table->rows.back().cell2 = std::move(paragraph);
-                break;
-            case TablePart::None:
-                std::unreachable();
-            }
+            auto&          table     = *element->table;
+            foundation::match(
+                table_part,
+                foundation::when<TablePart::Caption>([&] { table.caption = std::move(paragraph); }),
+                foundation::when<TablePart::Column1>([&] { table.column1 = std::move(paragraph); }),
+                foundation::when<TablePart::Column2>([&] { table.column2 = std::move(paragraph); }),
+                foundation::when<TablePart::RowHeader>([&] { table.rows.back().header = std::move(paragraph); }),
+                foundation::when<TablePart::Cell1>([&] { table.rows.back().cell1 = std::move(paragraph); }),
+                foundation::when<TablePart::Cell2>([&] { table.rows.back().cell2 = std::move(paragraph); }),
+                foundation::when<TablePart::None>([] { std::unreachable(); }));
         } else if (element != nullptr && table_kind == TableKind::Flat && element->flat_table) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
-            switch (table_part) {
-            case TablePart::Caption:
-                element->flat_table->caption = std::move(paragraph);
-                break;
-            case TablePart::Column1:
-                element->flat_table->column1 = std::move(paragraph);
-                break;
-            case TablePart::Column2:
-                element->flat_table->column2 = std::move(paragraph);
-                break;
-            case TablePart::RowHeader: // \row's own text: the flat table's first column
-                element->flat_table->rows.back().cell1 = std::move(paragraph);
-                break;
-            case TablePart::Cell1: // \libtab2's one \cell: the second column
-                element->flat_table->rows.back().cell2 = std::move(paragraph);
-                break;
-            case TablePart::Cell2: // arity 1: \cell never reaches a second slot (see table_cell_arity)
-            case TablePart::None:
-                std::unreachable();
-            }
+            auto&          table     = *element->flat_table;
+            foundation::match(
+                table_part,
+                foundation::when<TablePart::Caption>([&] { table.caption = std::move(paragraph); }),
+                foundation::when<TablePart::Column1>([&] { table.column1 = std::move(paragraph); }),
+                foundation::when<TablePart::Column2>([&] { table.column2 = std::move(paragraph); }),
+                // \row's own text: the flat table's first column
+                foundation::when<TablePart::RowHeader>([&] { table.rows.back().cell1 = std::move(paragraph); }),
+                // \libtab2's one \cell: the second column
+                foundation::when<TablePart::Cell1>([&] { table.rows.back().cell2 = std::move(paragraph); }),
+                // arity 1: \cell never reaches a second slot (see table_cell_arity)
+                foundation::when<TablePart::Cell2>([] { std::unreachable(); }),
+                foundation::when<TablePart::None>([] { std::unreachable(); }));
         }
         table_part = TablePart::None;
     };
@@ -533,46 +539,49 @@ ParseResult parse_docblock(std::string_view raw) {
         const std::string name{info.spelling};
         bool              arg_replaced_value = false;
 
-        switch (info.arity) {
-        case MarkerArity::Flag:
-            break;
-        case MarkerArity::ParenOptional: { // \expos(name)
-            auto arg = parse::opt(paren_arg())(parse::cursor{after});
-            if (!arg.has_value()) {
-                diags.push_back({Severity::Error, lineno, "unterminated '(' in \\" + name});
-                return;
-            }
-            if (arg->value) {
-                std::string parsed{trim(*arg->value)};
-                after              = trim(arg->rest.remaining());
-                arg_replaced_value = info.set_arg(block.markers, std::move(parsed));
-            }
-            break;
-        }
-        case MarkerArity::RestRequired: { // \at anchor, \group id
-            std::string_view arg = trim(after);
-            if (arg.empty()) {
-                diags.push_back({Severity::Error, lineno, std::string(info.missing_arg_error)});
-                return;
-            }
-            arg_replaced_value = info.set_arg(block.markers, std::string(arg));
-            after              = {};
-            break;
-        }
-        case MarkerArity::RestOptional: { // \seebelow [target], \also [id]
-            std::string_view arg = trim(after);
-            if (!arg.empty()) {
-                info.set_arg(block.markers, std::string(arg));
-                if (name == "seebelow" && arg != "noexcept" && arg != "explicit")
-                    diags.push_back(
-                        {Severity::Error,
-                         lineno,
-                         std::format("unknown \\seebelow target '{}'; expected 'noexcept' or 'explicit'", arg)});
-            }
-            after = {};
-            break;
-        }
-        }
+        // Each case answers whether the marker is well formed enough to go on
+        // to the checks below; false is a marker already reported.
+        const bool well_formed = foundation::match(
+            info.arity,
+            foundation::when<MarkerArity::Flag>([] { return true; }),
+            foundation::when<MarkerArity::ParenOptional>([&] { // \expos(name)
+                auto arg = parse::opt(paren_arg())(parse::cursor{after});
+                if (!arg.has_value()) {
+                    diags.push_back({Severity::Error, lineno, "unterminated '(' in \\" + name});
+                    return false;
+                }
+                if (arg->value) {
+                    std::string parsed{trim(*arg->value)};
+                    after              = trim(arg->rest.remaining());
+                    arg_replaced_value = info.set_arg(block.markers, std::move(parsed));
+                }
+                return true;
+            }),
+            foundation::when<MarkerArity::RestRequired>([&] { // \at anchor, \group id
+                std::string_view arg = trim(after);
+                if (arg.empty()) {
+                    diags.push_back({Severity::Error, lineno, std::string(info.missing_arg_error)});
+                    return false;
+                }
+                arg_replaced_value = info.set_arg(block.markers, std::string(arg));
+                after              = {};
+                return true;
+            }),
+            foundation::when<MarkerArity::RestOptional>([&] { // \seebelow [target], \also [id]
+                std::string_view arg = trim(after);
+                if (!arg.empty()) {
+                    info.set_arg(block.markers, std::string(arg));
+                    if (name == "seebelow" && arg != "noexcept" && arg != "explicit")
+                        diags.push_back(
+                            {Severity::Error,
+                             lineno,
+                             std::format("unknown \\seebelow target '{}'; expected 'noexcept' or 'explicit'", arg)});
+                }
+                after = {};
+                return true;
+            }));
+        if (!well_formed)
+            return;
 
         // Markers with no dedicated flag (arity RestRequired, e.g. \at and
         // \group) have nothing else to signal a repeat occurrence, so the

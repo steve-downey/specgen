@@ -45,6 +45,7 @@
 #include <beman/specgen/backend/org.hpp>
 
 #include <beman/specgen/backend/common.hpp>
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
@@ -139,21 +140,14 @@ std::string html_escape(std::string_view text) {
 }
 
 std::string html_span(const ir::Span& span, std::string_view spelling) {
-    switch (span.kind) {
-    case ir::SpanKind::ExposId:
-        return "<var>" + html_escape(span.payload) + "</var>";
-    case ir::SpanKind::SeeBelow:
-        return "<var>see below</var>";
-    case ir::SpanKind::ImplDefined:
-        return "<var>implementation-defined</var>";
-    case ir::SpanKind::Placeholder:
-        return "<var>" + html_escape(span.payload) + "</var>";
-    case ir::SpanKind::Ref:
-        return "[" + html_escape(span.payload) + "]";
-    case ir::SpanKind::LibraryIndex:
-        return html_escape(spelling);
-    }
-    std::unreachable();
+    return foundation::match(
+        span.kind,
+        foundation::when<ir::SpanKind::ExposId>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        foundation::when<ir::SpanKind::SeeBelow>([&] { return "<var>see below</var>"; }),
+        foundation::when<ir::SpanKind::ImplDefined>([&] { return "<var>implementation-defined</var>"; }),
+        foundation::when<ir::SpanKind::Placeholder>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        foundation::when<ir::SpanKind::Ref>([&] { return "[" + html_escape(span.payload) + "]"; }),
+        foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {

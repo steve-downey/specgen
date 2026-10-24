@@ -10,9 +10,24 @@
 #ifndef BEMAN_SPECGEN_DIAGNOSTIC_HPP
 #define BEMAN_SPECGEN_DIAGNOSTIC_HPP
 
+#include <array>
+
+#include <beman/specgen/foundation/enumeration.hpp>
+
 namespace beman::specgen {
 
 enum class Severity { Error, Warning, Note };
+
+} // namespace beman::specgen
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::Severity> = std::array{
+    beman::specgen::Severity::Error,
+    beman::specgen::Severity::Warning,
+    beman::specgen::Severity::Note,
+};
+
+namespace beman::specgen {
 
 // The one spelling of a severity in user-facing output, shared by every
 // printer: validate::format_diagnostic renders a validator finding
@@ -21,15 +36,12 @@ enum class Severity { Error, Warning, Note };
 // severity can drift — as far as `generate` printing a docblock Error as
 // `warning:`.
 constexpr const char* severity_label(Severity severity) {
-    switch (severity) {
-    case Severity::Error:
-        return "error";
-    case Severity::Warning:
-        return "warning";
-    case Severity::Note:
-        return "note";
-    }
-    return "note";
+    // A total table: a fourth severity that is not listed here fails to
+    // compile, instead of printing as a note.
+    static constexpr auto labels = foundation::table<Severity>(foundation::is<Severity::Error>("error"),
+                                                               foundation::is<Severity::Warning>("warning"),
+                                                               foundation::is<Severity::Note>("note"));
+    return labels[severity];
 }
 
 } // namespace beman::specgen

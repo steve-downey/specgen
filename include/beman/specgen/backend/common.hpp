@@ -12,6 +12,7 @@
 #ifndef BEMAN_SPECGEN_BACKEND_COMMON_HPP
 #define BEMAN_SPECGEN_BACKEND_COMMON_HPP
 
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
 
@@ -120,16 +121,12 @@ std::string render_code_spans(const ir::CodeText& code, EscapeSpan&& escape_span
 // Outside a codeblock we are already in LaTeX, so the macro is written
 // directly.
 inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
-    switch (span.kind) {
-    case ir::SpanKind::ExposId:
-        return "\\exposid{" + span.payload + '}';
-    case ir::SpanKind::SeeBelow:
-        return "\\seebelow";
-    case ir::SpanKind::ImplDefined:
-        return "\\impdef";
-    case ir::SpanKind::Placeholder:
-        return "\\placeholder{" + span.payload + '}';
-    case ir::SpanKind::Ref:
+    return foundation::match(
+        span.kind,
+        foundation::when<ir::SpanKind::ExposId>([&] { return "\\exposid{" + span.payload + '}'; }),
+        foundation::when<ir::SpanKind::SeeBelow>([&] { return std::string{"\\seebelow"}; }),
+        foundation::when<ir::SpanKind::ImplDefined>([&] { return std::string{"\\impdef"}; }),
+        foundation::when<ir::SpanKind::Placeholder>([&] { return "\\placeholder{" + span.payload + '}'; }),
         // `\ref`, not `\iref`. A Ref *span* is a cross-reference
         // inside a code comment, which the draft writes bare --
         // `// \ref{optional.ctor}, constructors` -- where `\iref` is the
@@ -137,13 +134,12 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
         // belongs in prose. `ir::RefInline` is the prose one and
         // renders `\iref`; the two are different cross-references and
         // must not share a mapping.
-        return "\\ref{" + span.payload + '}';
-    case ir::SpanKind::LibraryIndex:
-        if (span.payload.empty())
-            return std::format("\\libglobal{{{}}}", spelling);
-        return std::format("\\libmember{{{}}}{{{}}}", spelling, span.payload);
-    }
-    std::unreachable(); // SpanKind is exhaustively handled above
+        foundation::when<ir::SpanKind::Ref>([&] { return "\\ref{" + span.payload + '}'; }),
+        foundation::when<ir::SpanKind::LibraryIndex>([&] {
+            if (span.payload.empty())
+                return std::format("\\libglobal{{{}}}", spelling);
+            return std::format("\\libmember{{{}}}{{{}}}", spelling, span.payload);
+        }));
 }
 
 // Inside a codeblock the draft escapes back into LaTeX with @...@. Exposition

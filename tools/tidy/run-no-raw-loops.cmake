@@ -25,6 +25,12 @@
 # detection — one answer on every box the tree builds on (the same treatment
 # tests/tidy/run-strip.cmake pins for the check's own tests).
 
+# CHECK names the one check to run (specgen-no-raw-loops when not given), so
+# each gate is its own ctest case and `ctest -R style` selects them all.
+if(NOT DEFINED CHECK)
+    set(CHECK specgen-no-raw-loops)
+endif()
+
 foreach(_required RUN_CLANG_TIDY CLANG_TIDY PLUGIN BUILD_DIR)
     if(NOT DEFINED ${_required})
         message(
@@ -52,7 +58,7 @@ get_filename_component(_repo_root "${_repo_root}" DIRECTORY)
 # GCC-only instrumentation flags are clang parse errors or, under -Werror,
 # promoted "argument unused" warnings, and none of them change what the
 # check reads.
-set(_scope_dir "${BUILD_DIR}/no-raw-loops")
+set(_scope_dir "${BUILD_DIR}/${CHECK}")
 file(MAKE_DIRECTORY "${_scope_dir}")
 set(_scope_file "${_scope_dir}/scope.txt")
 execute_process(
@@ -77,8 +83,8 @@ set(_args
     "${_scope_dir}"
     -load
     "${PLUGIN}"
-    -checks=-*,specgen-*
-    -warnings-as-errors=specgen-*
+    -checks=-*,${CHECK}
+    -warnings-as-errors=${CHECK}
     "-header-filter=^${_repo_root}/(include|src|tools|examples)/"
     -quiet
 )
@@ -99,12 +105,9 @@ execute_process(
 if(NOT _status EQUAL 0)
     message(
         FATAL_ERROR
-        "specgen-no-raw-loops found raw loops outside substrate generic "
-        "algorithms (or a TU failed to parse) over ${_file_count} TUs:"
+        "${CHECK} found violations (or a TU failed to parse) over "
+        "${_file_count} TUs:"
         "\n${_out}\n${_err}"
     )
 endif()
-message(
-    STATUS
-    "no-raw-loops: ${_file_count} TUs clean under specgen-no-raw-loops"
-)
+message(STATUS "${CHECK}: ${_file_count} TUs clean")

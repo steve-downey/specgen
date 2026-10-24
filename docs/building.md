@@ -122,8 +122,10 @@ lane locally.
 `make lint` runs everything pre-commit is configured with (clang-format, gersemi,
 markdownlint, and the rest).
 
-The "No raw loops" doctrine (`docs/CODING_RULES.md`) is enforced separately, as
-the ctest case `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy
+The "No raw loops" and "No raw switch over an enumeration" doctrines
+(`docs/CODING_RULES.md`) are enforced separately, as the ctest cases
+`style.no-raw-loops` and `style.no-raw-switch`, the same run with a different
+check (`-DCHECK=specgen-no-raw-switch`). Described for the first: the `specgen-no-raw-loops` clang-tidy
 plugin check run by the pinned `run-clang-tidy` over the compile database —
 every production TU plus every `FILE_SET` header as its own verification TU,
 which is why `CMAKE_VERIFY_INTERFACE_HEADER_SETS` is on in the `gcc-release`
@@ -254,6 +256,13 @@ v2. The requirement is documented instead, and `check-portable.sh` fails if
 anything ever needs more than v2.
 
 ### Publishing the wheel
+
+The wheel is published to [PyPI](https://pypi.org/project/beman-specgen/) as
+`beman-specgen`: `uv tool install beman-specgen` gives the `specgen` command.
+The `pypi` GitHub environment and the pypi.org trusted publisher both name
+repository `steve-downey/specgen` and workflow `release-binary.yml`, and the
+repository variable `PYPI_PUBLISH` is `pypi`. The steps below are how an index
+is turned on; `testpypi` works the same way for a rehearsal.
 
 The release workflow builds and checks the wheel on every run and uploads it
 as the `beman-specgen-wheel` artifact. It publishes only when the repository

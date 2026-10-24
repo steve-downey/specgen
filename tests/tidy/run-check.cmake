@@ -6,17 +6,21 @@
 # directory stripped, and compare byte-for-byte against the checked-in
 # expected file — the golden pattern, for diagnostics.
 #
-#   cmake -DCLANG_TIDY=... -DPLUGIN=... -DSOURCE=<probe.cpp>
+#   cmake [-DCHECK=specgen-no-raw-loops] -DCLANG_TIDY=... -DPLUGIN=... -DSOURCE=<probe.cpp>
 #         -DEXPECTED=<probe.expected> -DACTUAL=<out> -P run-check.cmake
 #
 # The probes are freestanding (no includes), so no standard-library search
 # path is needed; a probe that fails to *parse* fails the test loudly, since
 # a diagnostic from a broken TU pins nothing.
 
+if(NOT DEFINED CHECK)
+    set(CHECK specgen-no-raw-loops)
+endif()
+
 execute_process(
     COMMAND
-        ${CLANG_TIDY} --load ${PLUGIN} --checks=-*,specgen-no-raw-loops
-        ${SOURCE} -- -std=c++2c
+        ${CLANG_TIDY} --load ${PLUGIN} --checks=-*,${CHECK} ${SOURCE} --
+        -std=c++2c
     OUTPUT_VARIABLE raw_out
     ERROR_VARIABLE raw_err
     RESULT_VARIABLE status
@@ -33,7 +37,7 @@ string(REPLACE ";" "\\;" _lines "${raw_out}")
 string(REPLACE "\n" ";" _lines "${_lines}")
 set(_findings "")
 foreach(_line IN LISTS _lines)
-    if(_line MATCHES "warning:.*\\[specgen-no-raw-loops\\]")
+    if(_line MATCHES "warning:.*\\[${CHECK}\\]")
         string(REPLACE "${_source_dir}/" "" _line "${_line}")
         string(APPEND _findings "${_line}\n")
     endif()

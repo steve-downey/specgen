@@ -101,6 +101,18 @@ enum class MarkerArity {
     RestRequired,  // \at             — required trailing text; carries no separate flag.
 };
 
+} // namespace beman::specgen::grammar
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::grammar::MarkerArity> = std::array{
+    beman::specgen::grammar::MarkerArity::Flag,
+    beman::specgen::grammar::MarkerArity::ParenOptional,
+    beman::specgen::grammar::MarkerArity::RestOptional,
+    beman::specgen::grammar::MarkerArity::RestRequired,
+};
+
+namespace beman::specgen::grammar {
+
 namespace detail {
 // Setters for the markers whose value is text, not mere presence. Each
 // returns whether it replaced an already-present value: the generic parser

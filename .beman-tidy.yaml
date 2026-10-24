@@ -54,6 +54,11 @@ ignored_paths:
   # carry no added license header, and their .tex files are test data rather
   # than papers.
   - tests/golden/
+  # A must-not-compile probe: the foundation.enumeration.missing-case test
+  # builds it and expects the build to fail, naming the missing enumerator. It
+  # is a fixture, not a test source, so it does not take the *.test.cpp name
+  # that would present it as one.
+  - tests/beman/specgen/foundation/enumeration_missing.probe.cpp
   # Captured example output, for exactly the reason above and with the
   # same force: these files are compared byte for byte against those goldens,
   # so a license header could not be added to them even in principle. The
