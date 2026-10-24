@@ -74,7 +74,8 @@ is decided here.
 
 ### [frontend-header-facilities](#frontend-header-facilities)
 
-**Question:** which facilities in `frontend/frontend.hpp` belong in headers of their own? **Status:** OPEN.
+**Question:** which facilities in `frontend/frontend.hpp` belong in headers of their own? **Status:** DECIDED for
+the compile-argument handling and `parse_rsec`, 2026-10-24; OPEN for the rest.
 The header bundles at least five: `smoke_check` (a link probe), `collect_interleaved` and `SourceItem`,
 `ParseOptions` with `filter_compile_command_args` and `resolve_extra_args` (pure string handling, no Clang), the
 `parse_rsec` combinator parser, and `build_document`. The header's own comments call two of them out as
@@ -83,6 +84,24 @@ Clang-free and exposed for testability. The 18 test files are the visible sympto
 by corpus feature. That last group is scenario slicing of one facility, which the rule allows; the first three are
 facilities without a header. Splitting touches the tier boundary described by decision `ir-boundary`, so it is a
 design change, not a move.
+
+**Decision:** the tier split is not itself a constraint. Front end, IR, and backend have been a useful shape, but
+they are an artifact of how the tool was built; what matters is that components form a DAG. Code the tiers would
+share drops down a level, to `foundation/` or to a new level that needs no name. So:
+
+- `frontend/compile_args.hpp` takes `ParseOptions`, `filter_compile_command_args`, `ResolvedArgs`, and
+  `resolve_extra_args`. It stays in the front-end library, because `resolve_extra_args` loads a Clang compilation
+  database, but its interface is plain strings. Its tests are `frontend/compile_args.test.cpp`.
+- `rsec.hpp` takes `SectionHeader`, `parse_rsec`, and `rsec_tag_recognized`, in namespace `grammar` beside the
+  docblock grammar. It needs no Clang, so it moves into the core library, and its tests move up from `frontend/`.
+- `smoke_check`, `install_crash_handler`, `collect_interleaved`, and `build_document` stay in `frontend.hpp` for
+  now. Splitting them is the open part of this question, and the cost there is `frontend.cpp`, not the header.
+
+**Decided by:** Steve Downey.
+
+**Log:** 2026-10-24: the draft-heading heuristic (`unrecognized_section_header`) stays in `frontend.cpp`: it reads
+comment vocabulary through an LLVM string type. `resolve_extra_args` gained direct tests, including one against a
+real `compile_commands.json`.
 
 ### [backend-common-facilities](#backend-common-facilities)
 

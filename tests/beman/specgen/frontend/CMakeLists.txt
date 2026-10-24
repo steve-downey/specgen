@@ -22,7 +22,7 @@ foreach(
     header_synopsis
     index
     mandates
-    rsec
+    compile_args
     diagnostics
     doxygen
 )

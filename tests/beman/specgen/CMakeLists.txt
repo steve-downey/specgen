@@ -19,6 +19,7 @@ foreach(
     ir_fold
     docblock
     markers
+    rsec
     lower
     conjuncts
     depfile
