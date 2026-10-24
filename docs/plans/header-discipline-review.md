@@ -121,20 +121,31 @@ needs a definition of what that is, or it is dead and takes `traverse.hpp`'s liv
 
 ### [untested-headers](#untested-headers)
 
-**Question:** which headers get a test file? **Status:** OPEN. `diagnostic.hpp` declares `severity_label`, which no
-test calls. `config.hpp` and `specgen.hpp` have nothing testable beyond compiling, which the verify TUs cover.
-`markers.hpp` is tested only through the registry.
+**Question:** which headers get a test file? **Status:** DECIDED for `diagnostic.hpp`, 2026-10-23; OPEN for
+`markers.hpp`. `diagnostic.hpp` declares `severity_label`, which no test calls. `config.hpp` and `specgen.hpp` have
+nothing testable beyond compiling, which the verify TUs cover. `markers.hpp` is tested only through the registry.
+
+**Decision:** `diagnostic.hpp` gets `diagnostic.test.cpp`, which pins each severity's label. `config.hpp` and
+`specgen.hpp` get none. `markers.hpp` waits on [marker-registry-home](#marker-registry-home): if the registry moves
+into it, the registry's tests are its tests. **Decided by:** Steve Downey.
 
 ### [recursion-schemes-test-home](#recursion-schemes-test-home)
 
-**Question:** where does `foundation/recursion_schemes.test.cpp` belong? **Status:** OPEN. It tests
+**Question:** where does `foundation/recursion_schemes.test.cpp` belong? **Status:** DECIDED, 2026-10-23. It tests
 `vendor/tree_algorithms`'s `recursion_schemes.hpp`, a subtree header, under a foundation name that has no
 foundation header. It is an acceptance test for the vendored code; it should say so in its name or location.
+
+**Decision:** it moves to `tests/beman/specgen/vendor/recursion_schemes.test.cpp`. The location says it is a test of
+vendored code and the name still matches the header; it stays on specgen's side because it tests the seam specgen
+relies on, and the subtree has its own `recursion_schemes.test.cpp`. **Decided by:** Steve Downey.
 
 ### [document-build-reinclusion](#document-build-reinclusion)
 
 **Question:** none; `document_build.test.cpp` is the one tested header missing the re-inclusion line.
-**Status:** OPEN, one-line fix.
+**Status:** DONE, 2026-10-23.
+
+**Log:** 2026-10-23: `foundation/enumeration.test.cpp`, added since the review, was missing it too; both now have
+it. `frontend/frontend.test.cpp` checks re-inclusion inside a test case instead, which counts.
 
 ### [tests-of-dependencies](#tests-of-dependencies)
 
@@ -151,6 +162,25 @@ foundation header. It is an acceptance test for the vendored code; it should say
 
 Some of these are integration checks worth keeping under that name; the rule is that they do not masquerade as the
 dependent facility's unit tests.
+
+**Status:** DECIDED, 2026-10-23. **Decided by:** Steve Downey.
+
+**Decision:** case by case.
+
+- The `element_label` assertions in `mpark.test.cpp` move to `backend/common.test.cpp`, which also gains direct
+  cases for `draft_span_prose`, `draft_span_codeblock`, and `draft_code_inline`. The per-backend "every element
+  kind renders as its draft label" cases and `org.test.cpp`'s use of `draft_span_codeblock` stay: they check that
+  the backend uses the shared helper, which is the backend's claim.
+- `conjuncts.test.cpp` asserts on the IR `render_into` builds, not on LaTeX. The layouts it was pinning through the
+  LaTeX backend, an itemize with and without lead-in prose, are now `latex.test.cpp` cases, and the itemize JSON
+  round trip is an `ir.test.cpp` case.
+- `validate.test.cpp`'s monoid-law cases stay. They test `diagnostics_monoid`, an instance `validate.hpp` itself
+  defines, not the generic laws `monoid.test.cpp` covers.
+- `ir.test.cpp`'s string-escaping case goes: `json_writer.test.cpp` pins each escape, and the IR's claim, that a
+  string needing escapes survives the round trip, is the existing round-trip case.
+- `document.test.cpp`'s `validate::validate` checks stay, as the end-to-end claim that a built document validates
+  clean.
+- `diagnostics.test.cpp`'s `parse_rsec` failure-offset case moves to `rsec.test.cpp`.
 
 ### [cpp-transitive-includes](#cpp-transitive-includes)
 
