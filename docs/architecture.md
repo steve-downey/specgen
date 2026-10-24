@@ -1146,6 +1146,10 @@ The build assembles the tool from these components, each following the shared CM
   `canonicalize()`.
 - **IR serialization** — same files. JSON round trip: `emit_json` (returns a `std::string`)
   and `parse_json_document`/`_item`/`_code`; one schema for both directions.
+- **JSON** — `include/beman/specgen/json/`, namespace `json`, three
+  IR-agnostic header-only components: `writer.hpp` (escaping and the comma-placing scopes),
+  `reader.hpp` (the `Reader` lexer), and `descriptor.hpp` (the per-type schema tables and the
+  emit and parse walkers over them, on the other two).
 - **Docblock grammar** — `include/beman/specgen/docblock.hpp`,
   `src/beman/specgen/docblock.cpp`. Decoration stripping for the §1 comment vocabulary, the
   §4.1 element tags, the §4.3 structural markers, the multi-paragraph rule, backtick inlines,
@@ -1216,7 +1220,7 @@ The build assembles the tool from these components, each following the shared CM
   producer so its leaves can `<<` into it: return the text and write it once. Streams keep
   one job: moving bytes that are already built (which is why `read_all` in the driver slurps
   with one). Concretely: `ir::emit_json` returns a `std::string`,
-  `foundation::json_writer`'s scopes append to a `std::string&`, and each backend's
+  `json`'s writer scopes append to a `std::string&`, and each backend's
   `render_to_string` is its entire surface.
 - **One wording convention, three writers**: anything that changes what wording *says* lands
   in all three backends (§8), and anything that changes a backend's document-level framing

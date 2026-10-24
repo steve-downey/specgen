@@ -16,7 +16,7 @@ emitted format — key order included — is contract.
 
 Replace both directions in two stages:
 
-1. **`foundation/json_writer`** — RAII object/array scopes own comma
+1. **`json/writer.hpp`** — RAII object/array scopes own comma
    placement. This kills the comma logic independently of everything else,
    with JSON bytes identical.
 2. **Per-IR-type member descriptor tables** —

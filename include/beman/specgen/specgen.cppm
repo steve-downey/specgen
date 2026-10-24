@@ -21,8 +21,9 @@ export {
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/foundation/fold_left_short.hpp>
-#include <beman/specgen/foundation/json_descriptor.hpp>
-#include <beman/specgen/foundation/json_writer.hpp>
+#include <beman/specgen/json/descriptor.hpp>
+#include <beman/specgen/json/reader.hpp>
+#include <beman/specgen/json/writer.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/foundation/parse/cursor.hpp>

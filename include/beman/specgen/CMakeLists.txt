@@ -16,8 +16,6 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     document_build.hpp
                     foundation/enumeration.hpp
                     foundation/fold_left_short.hpp
-                    foundation/json_descriptor.hpp
-                    foundation/json_writer.hpp
                     foundation/monoid.hpp
                     foundation/overloaded.hpp
                     foundation/traverse.hpp
@@ -43,8 +41,6 @@ else()
                     document_build.hpp
                     foundation/enumeration.hpp
                     foundation/fold_left_short.hpp
-                    foundation/json_descriptor.hpp
-                    foundation/json_writer.hpp
                     foundation/monoid.hpp
                     foundation/overloaded.hpp
                     foundation/traverse.hpp
@@ -60,4 +56,5 @@ endif()
 
 add_subdirectory(backend)
 add_subdirectory(foundation/parse)
+add_subdirectory(json)
 add_subdirectory(validate)
