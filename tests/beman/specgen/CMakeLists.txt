@@ -17,6 +17,7 @@ foreach(
     component
     ir
     ir_fold
+    ir_json
     docblock
     markers
     rsec

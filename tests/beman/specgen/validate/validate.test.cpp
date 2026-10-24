@@ -12,6 +12,7 @@
 #include <beman/specgen/validate/validate.hpp> // Re-inclusion verification
 
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/ir_json.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -87,7 +87,7 @@ The decision record is [visitation-rules](decisions/visitation-rules.md).
   ([node-base-functor](decisions/node-base-functor.md),
   [backend-direct-algebra](decisions/backend-direct-algebra.md)). The two
   sanctioned shapes are live in the tree: `backend/latex.cpp`'s `render_node`
-  is a `fold_with` algebra over `RenderF`, and `ir.cpp`'s `emit_json(Node)`
+  is a `fold_with` algebra over `RenderF`, and `ir_json.cpp`'s `emit_json(Node)`
   does not recurse at all — descriptor tables own the walk. So if a visitor
   of yours wants to call itself, either lift the recursion into a fold or
   move the traversal into a table, and do not reintroduce the shape.

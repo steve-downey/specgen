@@ -33,6 +33,7 @@
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/fragments.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/ir_json.hpp>
 #include <beman/specgen/validate/validate.hpp>
 
 #include <beman/specgen/frontend/compile_args.hpp>

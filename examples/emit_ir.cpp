@@ -6,6 +6,7 @@
 
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/ir_json.hpp>
 
 #include <print>
 #include <utility>

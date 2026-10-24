@@ -21,7 +21,7 @@
 // node_project, node)` -- no `Fix<F>` is materialized, matching the decision's "fold a
 // tree in its own representation" mandate. `ir::Document` is a forest, not a
 // single tree: fold each root in `Document::nodes` and combine (see
-// `ir.cpp`'s `emit_json(Document&)`, which still walks `Document::nodes`
+// `ir_json.cpp`'s `emit_json(Document&)`, which still walks `Document::nodes`
 // directly -- `Document` itself has no `NodeF`).
 //
 // Per decision visitation-rules, `NodeF` has four alternatives (above the

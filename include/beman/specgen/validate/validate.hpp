@@ -62,7 +62,7 @@ Diagnostics validate(const ir::Node& node);
 
 /// `ir::Document` is a forest, not a single tree (ir_fold.hpp says so): fold
 /// each root in `Document::nodes` and combine under the monoid, the same
-/// walk `ir.cpp`'s `emit_json(Document&)` does directly over the roots.
+/// walk `ir_json.cpp`'s `emit_json(Document&)` does directly over the roots.
 Diagnostics validate(const ir::Document& document);
 
 /// The names @p document documents: every roster entry with a visible

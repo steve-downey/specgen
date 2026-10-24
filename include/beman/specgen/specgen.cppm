@@ -32,6 +32,7 @@ export {
 #include <beman/specgen/fragments.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir_fold.hpp>
+#include <beman/specgen/ir_json.hpp>
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/markers.hpp>
 #include <beman/specgen/rsec.hpp>
