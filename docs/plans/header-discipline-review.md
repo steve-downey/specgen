@@ -184,5 +184,11 @@ dependent facility's unit tests.
 
 ### [cpp-transitive-includes](#cpp-transitive-includes)
 
-**Question:** none; the 183 `misc-include-cleaner` findings in production `.cpp` files. **Status:** OPEN, mechanical.
+**Question:** none; the 183 `misc-include-cleaner` findings in production `.cpp` files. **Status:** DONE, 2026-10-24.
 The fix is `clang-tidy --fix` under review, and it is the precondition for the check joining the lint pass.
+
+**Log:** 2026-10-24: 282 findings by then, the growth mostly `foundation::is` and `foundation::table` reached
+without including `enumeration.hpp`; `tools/specgen/main.cpp` had none left. `--fix` added the 58 missing includes
+and dropped two, which were then moved into each file's existing blocks (it spells project headers in quotes and
+puts Clang headers outside the `-Wnonnull` pragma in `frontend.cpp`). The check now runs as `style.include-cleaner`,
+the same pass and scope as `style.no-raw-loops`.
