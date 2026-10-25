@@ -156,11 +156,19 @@ in `qualifiers.cpp`. `frontend.cpp` no longer uses `foundation::` at all, and is
 
 ### [synopsis-extraction](#synopsis-extraction)
 
-*Stage 5.*
+*Stage 5.* **Status:** DONE, 2026-10-25.
 
 The exposition-only uses section, then lines 2118–3268. That range is two topics under one banner: merged twins
 (2118–2274), and synopsis extraction (2275 onward), which the twins feed. They become two components. At about
 1550 lines, this is the largest step.
+
+**Log:** 2026-10-25: done as five components. The exposition-only uses section held two topics, so it became
+`frontend/record_members.hpp` (the member projections) and `frontend/expos_spellings.hpp` (the name-match
+rewrites). The merged twins forward-declared `split_conjuncts`, which was defined later, in the Constraints
+section, and the three requires-clause accessors sat between the twins and extraction under extraction's doc
+comment. All five now form `frontend/requires_clauses.hpp`, below the twins, extraction, and the derivations that
+come next. The rest are `frontend/merged_twins.hpp` and `frontend/synopsis_extraction.hpp`. Default arguments stay
+on the header declarations. `frontend.cpp` is about 4770 lines.
 
 ### [itemdecl-and-derivations](#itemdecl-and-derivations)
 
