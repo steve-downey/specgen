@@ -11,6 +11,7 @@
 #include <beman/specgen/ir_fold.hpp>
 #include <beman/specgen/ir_fold.hpp> // Re-inclusion verification
 
+#include <beman/specgen/ir_json.hpp>
 #include <beman/specgen/json/writer.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 

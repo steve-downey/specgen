@@ -129,11 +129,24 @@ and `org.test.cpp` stay, as [tests-of-dependencies](#tests-of-dependencies) deci
 
 ### [ir-serialization-home](#ir-serialization-home)
 
-**Question:** does JSON emit and parse belong in `ir.hpp`? **Status:** OPEN. The header carries the node types,
+**Question:** does JSON emit and parse belong in `ir.hpp`? **Status:** DONE, 2026-10-24. The header carries the node types,
 `canonicalize`, the name tables, and the JSON contract with three deprecated shims. Decision `node-base-functor`
 already chose to keep `ir.hpp` byte-identical and put the functor beside it in `ir_fold.hpp`, which is the pressure
 this bundling creates. `ir.test.cpp` and `ir_fold.test.cpp` both pin the JSON schema, the second one by
 re-implementing emission through `json_writer`, and the file's own comment acknowledges the duplication.
+
+**Decision:** no. The IR's JSON format becomes `ir_json.hpp`/`ir_json.cpp`, in namespace `ir` on the `ir_fold.hpp`
+precedent: `emit_json`, `ParseError`, `parse_document`/`parse_item`/`parse_code`, and the descriptor table for each IR
+type. It sits above `ir` and the generic `json/` components ([json-reader-home](#json-reader-home)), and nothing in
+the pipeline depends on it: the front end, backends, and validators never serialize; the driver and the examples do.
+`ir.hpp` keeps the node types, `canonicalize`, and the enumeration name tables, which the LaTeX backend and the
+docblock grammar read as well. The deprecated `parse_json_*` shims, whose only caller was their own test, are
+deleted rather than moved. **Decided by:** Steve Downey.
+
+**Log:** 2026-10-24: `span_kind_name` and `index_kind_name` (and their reverse lookups) were private to `ir.cpp`;
+they are now declared in `ir.hpp` beside their enumerations, like the other three name tables, so `ir_json.cpp` can
+read them. The JSON cases move from `ir.test.cpp` to `ir_json.test.cpp`. `ir_fold.test.cpp` keeps its emission
+algebra, which is the proof obligation decision `node-base-functor` set for the fold, pinned against `emit_json`.
 
 ### [json-reader-home](#json-reader-home)
 

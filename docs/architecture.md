@@ -821,8 +821,8 @@ deliberate.
   declarations there; multi-document validation unions them with synopsis and
   ItemDecl names (issue #113, decision `paper-visible-names`).
 - **Serializable** (`--emit-ir`): one JSON schema for emit and parse
-  ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` returns a
-  `std::string` and `parse_json_document`/`_item`/`_code` read it back, with the round-trip
+  ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` (`ir_json.hpp`)
+  returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition. The
   serialized form decouples the wg21org exporter, enables backend-independent golden tests,
   and provides the seam for future IR-level diff markup (add/rm wording generated from two
@@ -1144,8 +1144,11 @@ The build assembles the tool from these components, each following the shared CM
   validator channels (`paper_entities`, `foreign_namespaces`, `foreign_declarations`,
   `unextracted_uses`), and
   `canonicalize()`.
-- **IR serialization** — same files. JSON round trip: `emit_json` (returns a `std::string`)
-  and `parse_json_document`/`_item`/`_code`; one schema for both directions.
+- **IR serialization** — `include/beman/specgen/ir_json.hpp`, `src/beman/specgen/ir_json.cpp`.
+  JSON round trip: `emit_json` (returns a `std::string`) and `parse_document`/`parse_item`/
+  `parse_code` (return `std::expected<T, ParseError>`); one descriptor table per IR type
+  drives both directions, on the generic `json/` components. Above `ir`, and depended on
+  only by the driver, the examples, and tests.
 - **JSON** — `include/beman/specgen/json/`, namespace `json`, three
   IR-agnostic header-only components: `writer.hpp` (escaping and the comma-placing scopes),
   `reader.hpp` (the `Reader` lexer), and `descriptor.hpp` (the per-type schema tables and the

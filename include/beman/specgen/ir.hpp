@@ -11,7 +11,6 @@
 
 #include <array>
 #include <cstddef>
-#include <expected>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -47,6 +46,9 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
 };
 
 namespace beman::specgen::ir {
+
+std::string_view        span_kind_name(SpanKind); // "exposid", ...
+std::optional<SpanKind> span_kind_from_name(std::string_view);
 
 struct Span {
     std::size_t begin = 0; // byte offsets into CodeText::text, [begin, end)
@@ -205,6 +207,9 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
 };
 
 namespace beman::specgen::ir {
+
+std::string_view         index_kind_name(IndexKind); // "global", "ctor", ...
+std::optional<IndexKind> index_kind_from_name(std::string_view);
 
 struct IndexEntry {
     IndexKind   kind = IndexKind::Global;
@@ -449,51 +454,6 @@ struct Document {
     // builds it, so the emitted IR does not depend on decl visitation order.
     std::vector<BodyUse> unextracted_uses = {};
 };
-
-// --- serialization (--emit-ir) --------------------------------------------
-// Emission returns the JSON rather than writing it into an ambient stream
-// (decision format-print-output): the one caller that has a sink writes the
-// result once, at the end. This mirrors `backend::latex::render_to_string`,
-// and is the same "produce a value, write at the very end" shape
-// backend/latex.cpp's prolog argues for. The *format* is the frozen contract,
-// not this signature.
-std::string emit_json(const Document&);
-std::string emit_json(const Node&);
-std::string emit_json(const SpecItem&);
-std::string emit_json(const CodeText&);
-
-// --- deserialization -------------------------------------------------------
-// The IR is the contract between the clang-dependent front end and everything
-// downstream, so the emitted form has to be readable back: it is what lets the
-// external orgwg21 exporter and the backend goldens work without linking clang.
-//
-// Accepts the JSON these emitters produce. Key order is not significant and
-// insignificant whitespace is permitted, so hand-edited goldens stay valid.
-struct ParseError {
-    std::size_t offset = 0; // byte offset into the input
-    std::string message;
-};
-
-// A single fallible step (decision expected-error-taxonomy): JSON parsing is
-// fail-fast, and in a serialization format the first error is definitive, so
-// the taxonomy's carrier is `std::expected<T, ParseError>` plus
-// `.and_then(...)`, not Validation-style accumulation (the taxonomy makes IR
-// JSON parsing one of the two named fail-fast cases, alongside `parse_rsec`).
-std::expected<Document, ParseError> parse_document(std::string_view);
-std::expected<SpecItem, ParseError> parse_item(std::string_view);
-std::expected<CodeText, ParseError> parse_code(std::string_view);
-
-// Transitional shims, kept so existing callers migrate on their own
-// schedule: thin wrappers over the `expected` entry points above,
-// translating a failure into `std::nullopt` plus an optional out-param
-// instead of an `unexpected`. New code should call
-// parse_document()/parse_item()/parse_code() directly.
-[[deprecated("use parse_document(); transitional shim")]] std::optional<Document>
-parse_json_document(std::string_view, ParseError* = nullptr);
-[[deprecated("use parse_item(); transitional shim")]] std::optional<SpecItem> parse_json_item(std::string_view,
-                                                                                              ParseError* = nullptr);
-[[deprecated("use parse_code(); transitional shim")]] std::optional<CodeText> parse_json_code(std::string_view,
-                                                                                              ParseError* = nullptr);
 
 } // namespace beman::specgen::ir
 

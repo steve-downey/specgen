@@ -8,6 +8,7 @@ target_sources(
     beman.specgen
     PRIVATE
         ir.cpp
+        ir_json.cpp
         docblock.cpp
         markers.cpp
         rsec.cpp

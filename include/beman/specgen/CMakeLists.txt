@@ -22,6 +22,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     fragments.hpp
                     ir.hpp
                     ir_fold.hpp
+                    ir_json.hpp
                     lower.hpp
                     markers.hpp
                     rsec.hpp
@@ -47,6 +48,7 @@ else()
                     fragments.hpp
                     ir.hpp
                     ir_fold.hpp
+                    ir_json.hpp
                     lower.hpp
                     markers.hpp
                     rsec.hpp
