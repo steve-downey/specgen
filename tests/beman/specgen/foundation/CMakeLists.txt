@@ -3,14 +3,7 @@
 
 # Foundation idioms: the ported headers. Catch2 and its module path are set up
 # by the parent tests CMakeLists.
-foreach(
-    component
-    overloaded
-    enumeration
-    fold_left_short
-    monoid
-    traverse
-)
+foreach(component overloaded enumeration fold_left_short monoid)
     add_executable(beman.specgen.tests.foundation.${component})
     target_sources(
         beman.specgen.tests.foundation.${component}

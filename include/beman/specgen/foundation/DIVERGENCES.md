@@ -33,8 +33,8 @@ Ground rules (decision subtree-consumption):
 
 **Decision.** specgen's fallible carrier is **`std::expected<T, E>`** (C++23,
 shipping in libstdc++ 16 and usable under Clang 22/23 with libstdc++ — the
-cxx26-baseline toolchain matrix). The vendored/ported helpers
-(`fold_left_short`, `traverse`) are written against it once, here.
+cxx26-baseline toolchain matrix). The ported helper `fold_left_short` is
+written against it once, here.
 
 **Spike.** The expected-error-taxonomy decision asked whether
 `steve-downey/expected` — the implementation with
@@ -91,6 +91,24 @@ never the CRTP `Functor` base / `functor_typeclass` lookup that
 tier sufficed for a real tool" is itself the feedback: the lookup tier was not
 needed. **Filed** as a usage report:
 [transpose#34](https://github.com/steve-downey/transpose/issues/34).
+
+**Log:** 2026-10-25: `foundation/traverse.hpp`, specgen's concrete
+`sequence`/`traverse` over `std::vector<std::expected<T, E>>`, is deleted
+unused (issue #189). It was written to the `traverse` shape that `transpose`
+suggested for validation, and in a real pipeline that shape found no caller:
+
+- Validation became a `fold_with` over the IR's `NodeF` with the diagnostics
+  monoid. Its whole value is the context that each section adds as the fold
+  goes back up the tree, which a shape-preserving traversal does not provide.
+- The one flat site with the right types, the front end's harvest of
+  out-of-line source files, merges each result into accumulators as soon as
+  it arrives. That is a short-circuiting fold, and a `traverse` would build
+  an intermediate vector only to fold it away.
+
+For the usage report: at this scale, a fallible effect over a sequence was
+always reduced right away and never kept with its shape intact. `traverse`
+pays for itself where a caller wants the structure back, and specgen has no
+such caller. Recorded here only: upstream has the same author, so nothing is filed.
 
 ### OBS-3 — `keyword` and `digits` are new, not upstream ports
 

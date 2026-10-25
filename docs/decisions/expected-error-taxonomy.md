@@ -57,3 +57,15 @@ the chosen carrier once, up front.
   algebra-writing over this skeleton.
 - Every fallible signature in the tree has one of four sanctioned shapes, so
   review can flag deviations mechanically.
+
+## Amendment (2026-10-25)
+
+`foundation/traverse.hpp` is deleted. Its `sequence` and `traverse` overloads
+over `std::vector<std::expected<T, E>>` never found a caller. The `NodeF`
+analogue was never written, since `fold_with` over `NodeF` already threads
+diagnostics through the IR tree. The one call site with the shape, the front
+end's harvest of out-of-line source files, consumes each result as soon as it
+arrives by merging it into accumulators. That is a short-circuiting fold
+(`fold_left_short`), not a traversal that keeps the vector of results.
+The third shape remains, served by `fold_with` over `NodeF` for the IR tree. A
+flat sequence of fallible steps is the second shape.

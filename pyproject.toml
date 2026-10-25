@@ -3,7 +3,7 @@
 # packaging/pypi/, which owns the name `beman-specgen` on PyPI.
 [project]
 name = "beman-specgen-dev"
-version = "0.5.11"
+version = "0.5.12"
 description = "Spec Generator"
 readme = "README.md"
 requires-python = ">=3.13"
