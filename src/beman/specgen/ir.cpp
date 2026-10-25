@@ -4,7 +4,8 @@
 #include <beman/specgen/ir.hpp>
 
 #include <beman/specgen/foundation/enumeration.hpp>
-#include <beman/specgen/foundation/json_descriptor.hpp>
+#include <beman/specgen/json/descriptor.hpp>
+#include <beman/specgen/json/reader.hpp>
 
 #include <algorithm>
 #include <expected>
@@ -114,9 +115,9 @@ void canonicalize(ItemDescr& d) {
 // --- the schema: one member-descriptor table per IR type (decision json-single-schema) ---
 //
 // Each specialization below is the *entire* JSON shape of its type: field
-// names, order, and how each is read/written. foundation/json_descriptor.hpp
-// walks these same tables for both emit_json (foundation::emit_value /
-// foundation::emit_variant) and parse (foundation::parse_value), so there is
+// names, order, and how each is read/written. json/descriptor.hpp
+// walks these same tables for both emit_json (json::emit_value /
+// json::emit_variant) and parse (json::parse_value), so there is
 // exactly one place that knows, say, that a Span is {begin, end, kind,
 // payload} in that order -- adding, renaming, or reordering a field is a
 // one-line edit here, not a synchronized edit to a hand-written emitter and
@@ -129,10 +130,10 @@ void canonicalize(ItemDescr& d) {
 
 } // namespace beman::specgen::ir
 
-// json_descriptor is a foundation::-namespace template, so its
-// specializations are declared here rather than in namespace ir; each one
-// names its ir:: type explicitly.
-namespace beman::specgen::foundation {
+// json_descriptor is a json template, so its specializations are
+// declared here rather than in namespace ir; each one names its ir:: type
+// explicitly.
+namespace beman::specgen::json {
 
 using beman::specgen::ir::BodyUse;
 using beman::specgen::ir::CodeInline;
@@ -377,7 +378,7 @@ struct json_descriptor<Document> {
     };
 };
 
-} // namespace beman::specgen::foundation
+} // namespace beman::specgen::json
 
 namespace beman::specgen::ir {
 
@@ -385,13 +386,13 @@ namespace beman::specgen::ir {
 
 std::string emit_json(const CodeText& c) {
     std::string out;
-    foundation::emit_json_described(c, out, foundation::json_descriptor<CodeText>::members);
+    json::emit_json_described(c, out, json::json_descriptor<CodeText>::members);
     return out;
 }
 
 std::string emit_json(const Node& node) {
     std::string out;
-    foundation::emit_variant(node, out);
+    json::emit_variant(node, out);
     return out;
 }
 
@@ -399,14 +400,14 @@ std::string emit_json(const SpecItem& item) { return emit_json(Node{item}); }
 
 std::string emit_json(const Document& doc) {
     std::string out;
-    foundation::emit_json_described(doc, out, foundation::json_descriptor<Document>::members);
+    json::emit_json_described(doc, out, json::json_descriptor<Document>::members);
     return out;
 }
 
 namespace {
 
 // Shared tail: require the whole input to be consumed, and report errors.
-// The engine underneath (foundation::Reader/parse_value, frozen —
+// The engine underneath (json::Reader/parse_value, frozen —
 // see this file's schema note above) is bool-returning; this is the
 // one seam that lifts that into the expected carrier (decision
 // expected-error-taxonomy: a single fallible step -> std::expected<T, E>),
@@ -414,8 +415,8 @@ namespace {
 // an `if (!r.has_value()) return r;` ladder.
 template <class T, class Read>
 std::expected<T, ParseError> finish(std::string_view text, Read read) {
-    foundation::Reader r(text);
-    T                  value{};
+    json::Reader r(text);
+    T            value{};
     if (!read(r, value))
         return std::unexpected(ParseError{r.offset(), r.message()});
     if (!r.at_end()) {
@@ -428,14 +429,13 @@ std::expected<T, ParseError> finish(std::string_view text, Read read) {
 } // namespace
 
 std::expected<Document, ParseError> parse_document(std::string_view text) {
-    return finish<Document>(text,
-                            [](foundation::Reader& r, Document& out) { return foundation::parse_value(r, out); });
+    return finish<Document>(text, [](json::Reader& r, Document& out) { return json::parse_value(r, out); });
 }
 
 std::expected<SpecItem, ParseError> parse_item(std::string_view text) {
-    return finish<SpecItem>(text, [](foundation::Reader& r, SpecItem& out) {
+    return finish<SpecItem>(text, [](json::Reader& r, SpecItem& out) {
         Node node;
-        if (!foundation::parse_value(r, node))
+        if (!json::parse_value(r, node))
             return false;
         if (const auto* item = std::get_if<SpecItem>(&node)) {
             out = *item;
@@ -446,8 +446,7 @@ std::expected<SpecItem, ParseError> parse_item(std::string_view text) {
 }
 
 std::expected<CodeText, ParseError> parse_code(std::string_view text) {
-    return finish<CodeText>(text,
-                            [](foundation::Reader& r, CodeText& out) { return foundation::parse_value(r, out); });
+    return finish<CodeText>(text, [](json::Reader& r, CodeText& out) { return json::parse_value(r, out); });
 }
 
 // --- transitional shims -----------------------------------------------------

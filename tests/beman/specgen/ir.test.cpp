@@ -277,7 +277,7 @@ TEST_CASE("ir - round-trip: empty document") { check_round_trip(Document{}); }
 TEST_CASE("ir - round-trip: every node, span, and index kind") { check_round_trip(kitchen_sink()); }
 
 // How each character is escaped is json_writer's, and
-// foundation/json_writer.test.cpp pins it; what the IR owes is that a string
+// json/writer.test.cpp pins it; what the IR owes is that a string
 // needing escapes comes back out of the parser unchanged.
 TEST_CASE("ir - round-trip: strings needing escapes") {
     Document doc;

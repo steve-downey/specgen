@@ -11,7 +11,7 @@
 #include <beman/specgen/ir_fold.hpp>
 #include <beman/specgen/ir_fold.hpp> // Re-inclusion verification
 
-#include <beman/specgen/foundation/json_writer.hpp>
+#include <beman/specgen/json/writer.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
@@ -124,6 +124,7 @@ TEST_CASE("ir_fold - node_fmap composition law") {
 namespace {
 
 namespace foundation = beman::specgen::foundation;
+namespace json       = beman::specgen::json;
 
 // --- the node-base-functor proof obligation ---------------------------------
 //
@@ -139,7 +140,7 @@ namespace foundation = beman::specgen::foundation;
 // json-single-schema) leave it a single non-recursive
 // emit_variant call. Folding there would trade that one generic call for a
 // bespoke Section case that has to reach around the descriptor engine,
-// because foundation::emit_value(vector<T>) always treats an element as live
+// because json::emit_value(vector<T>) always treats an element as live
 // data to serialize and has no way to accept an already-rendered blob. So
 // the production path stays table-driven and the functor is proven here
 // instead. The LaTeX backend is the acid test, and rendering is
@@ -159,11 +160,11 @@ struct EmitJsonAlgebra {
     std::string operator()(const SectionF<std::string>& s) const {
         std::string out;
         {
-            foundation::json_object obj(out);
-            foundation::write_json_string("section", obj.key("type"));
-            foundation::write_json_string(s.stable_name, obj.key("stable"));
-            foundation::write_json_string(s.title, obj.key("title"));
-            foundation::json_array items(obj.key("children"));
+            json::json_object obj(out);
+            json::write_json_string("section", obj.key("type"));
+            json::write_json_string(s.stable_name, obj.key("stable"));
+            json::write_json_string(s.title, obj.key("title"));
+            json::json_array items(obj.key("children"));
             // substrate generic algorithm: json_array places its separators
             // as a side effect of element() being called once per item, so
             // this is the array-emission primitive itself, not a fold in

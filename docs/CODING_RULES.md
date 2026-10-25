@@ -126,7 +126,7 @@ returns a value that says so and acts on it after the `match`.
 
 The gate is `style.no-raw-switch`: the `specgen-no-raw-switch` clang-tidy check,
 same scope as `style.no-raw-loops`. The line it draws is the type of the
-`switch` condition, so the `char` switches in `foundation/json_*.hpp` and
+`switch` condition, so the `char` switches in `json/*.hpp` and
 `depfile.cpp` are outside it with no marker. A `switch` over an enumeration
 that cannot be a table or a `match` carries `// enumeration eliminator:
 <reason>` on its line or in the comment block directly above it. `-Wswitch-default`

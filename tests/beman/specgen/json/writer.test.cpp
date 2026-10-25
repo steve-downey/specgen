@@ -1,16 +1,16 @@
-// tests/beman/specgen/foundation/json_writer.test.cpp           -*-C++-*-
+// tests/beman/specgen/json/writer.test.cpp                        -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include <beman/specgen/foundation/json_writer.hpp>
-#include <beman/specgen/foundation/json_writer.hpp> // Re-inclusion verification
+#include <beman/specgen/json/writer.hpp>
+#include <beman/specgen/json/writer.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
 
-using beman::specgen::foundation::json_array;
-using beman::specgen::foundation::json_object;
-using beman::specgen::foundation::write_json_string;
+using beman::specgen::json::json_array;
+using beman::specgen::json::json_object;
+using beman::specgen::json::write_json_string;
 
 TEST_CASE("json_writer - write_json_string quotes a plain string") {
     std::string out;

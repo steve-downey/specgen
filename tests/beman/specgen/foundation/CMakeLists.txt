@@ -10,8 +10,6 @@ foreach(
     fold_left_short
     monoid
     traverse
-    json_writer
-    json_descriptor
 )
     add_executable(beman.specgen.tests.foundation.${component})
     target_sources(

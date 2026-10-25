@@ -25,7 +25,7 @@ anywhere in the tree.
 
 **Emission produces a value.** Do not thread a `std::ostream&` through a
 producer so its leaves can `<<` into it — return the text and write it once.
-Concretely: `foundation::json_writer`'s scopes and `json_descriptor`'s emit
+Concretely: `json`'s writer scopes and `json_descriptor`'s emit
 half take a `std::string&`, and `ir::emit_json` returns the JSON as a
 `std::string`. `backend/latex.cpp`'s prolog argues for this shape ("nothing
 writes to an ambient `std::ostream` until the very end"); the JSON half
@@ -36,7 +36,7 @@ instantiations and no caller.
 ## Consequences
 
 - `<ostream>` is absent from `ir.hpp`, `backend/latex.hpp`,
-  `foundation/json_writer.hpp` and `foundation/json_descriptor.hpp`;
+  `json/writer.hpp` and `json/descriptor.hpp`;
   `backend::latex::render_to_string` is the backend's whole surface.
 - Formatting a `std::size_t` is locale-*independent*: a small correctness
   gain for a frozen on-disk format that locale-sensitive `os << n` quietly
@@ -44,6 +44,6 @@ instantiations and no caller.
 - The hand-rolled lowercase hex table in `write_json_string` is `{:02x}`.
   This is the one substitution a golden could not catch on its own (every
   corpus control character is below 0x10, where upper and lower case hex
-  coincide), so `json_writer.test.cpp` carries a `0x1f` case that can tell
+  coincide), so `json/writer.test.cpp` carries a `0x1f` case that can tell
   `{:02x}` from `{:02X}`. If you touch JSON escaping, only the unit tests
   will catch it.

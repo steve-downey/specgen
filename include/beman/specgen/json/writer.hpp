@@ -1,4 +1,4 @@
-// include/beman/specgen/foundation/json_writer.hpp               -*-C++-*-
+// include/beman/specgen/json/writer.hpp                           -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // RAII object/array scopes that own JSON comma placement (decision
@@ -16,7 +16,7 @@
 // This header owns punctuation, nothing else. Callers
 // still decide what keys exist and in what order — the schema-describing
 // descriptor tables that also generate that shape live in
-// json_descriptor.hpp, not this header.
+// descriptor.hpp, not this header.
 //
 // The sink is a `std::string&`, not a `std::ostream&` (decision
 // format-print-output): emission produces a value and the one caller that
@@ -24,8 +24,8 @@
 // backend/latex.cpp. A concrete
 // string rather than a template on an output iterator, because there is
 // exactly one sink and genericity here would buy nothing but instantiations.
-#ifndef BEMAN_SPECGEN_FOUNDATION_JSON_WRITER_HPP
-#define BEMAN_SPECGEN_FOUNDATION_JSON_WRITER_HPP
+#ifndef BEMAN_SPECGEN_JSON_WRITER_HPP
+#define BEMAN_SPECGEN_JSON_WRITER_HPP
 
 #include <format>
 #include <iterator>
@@ -33,7 +33,7 @@
 #include <string_view>
 #include <utility>
 
-namespace beman::specgen::foundation {
+namespace beman::specgen::json {
 
 /// Appends @p s to @p out as a quoted, escaped JSON string.
 ///
@@ -140,6 +140,6 @@ class json_object {
     bool         first_ = true;
 };
 
-} // namespace beman::specgen::foundation
+} // namespace beman::specgen::json
 
-#endif // BEMAN_SPECGEN_FOUNDATION_JSON_WRITER_HPP
+#endif // BEMAN_SPECGEN_JSON_WRITER_HPP

@@ -1,8 +1,8 @@
-// tests/beman/specgen/foundation/json_descriptor.test.cpp        -*-C++-*-
+// tests/beman/specgen/json/descriptor.test.cpp                    -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include <beman/specgen/foundation/json_descriptor.hpp>
-#include <beman/specgen/foundation/json_descriptor.hpp> // Re-inclusion verification
+#include <beman/specgen/json/descriptor.hpp>
+#include <beman/specgen/json/descriptor.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -10,7 +10,7 @@
 #include <string>
 #include <tuple>
 
-using namespace beman::specgen::foundation;
+using namespace beman::specgen::json;
 
 TEST_CASE("json_descriptor - HeaderIsIdempotent") { REQUIRE(true); }
 
@@ -131,15 +131,15 @@ using Shape = std::variant<Circle, Square>;
 } // namespace
 
 template <>
-struct beman::specgen::foundation::json_descriptor<Circle> {
+struct beman::specgen::json::json_descriptor<Circle> {
     static constexpr auto members = std::tuple{field("radius", &Circle::radius)};
 };
 template <>
-struct beman::specgen::foundation::json_descriptor<Square> {
+struct beman::specgen::json::json_descriptor<Square> {
     static constexpr auto members = std::tuple{field("side", &Square::side)};
 };
 template <>
-struct beman::specgen::foundation::json_descriptor<Shape> {
+struct beman::specgen::json::json_descriptor<Shape> {
     static constexpr auto alts = alternatives("kind", "shape kind", alt<Circle>("circle"), alt<Square>("square"));
 };
 
