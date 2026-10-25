@@ -29,7 +29,7 @@ SmokeResult smoke_check(std::string_view source) {
 
     // Formatting surface (design §3.6): run clang-format over a fixed snippet.
     // FormatStyle tuning to draft conventions is draft_format_style() in
-    // frontend.cpp; here it only proves the surface links and produces output.
+    // draft_format.cpp; here it only proves the surface links and produces output.
     const std::string                        code   = "int  f(  int x ){return  x ;}";
     const clang::format::FormatStyle         style  = clang::format::getLLVMStyle();
     const std::vector<clang::tooling::Range> ranges = {clang::tooling::Range(0, static_cast<unsigned>(code.size()))};

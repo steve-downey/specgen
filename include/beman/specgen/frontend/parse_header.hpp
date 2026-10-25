@@ -46,7 +46,7 @@ struct ParsedHeader {
 // non-null `ast` is not by itself "the parse went fine".
 ParsedHeader parse_header(std::string_view header_path, const ParseOptions& options);
 
-// Every file the parse read, for build_document_with_sources (frontend.hpp):
+// Every file the parse read, for build_document_with_sources (build_document.hpp):
 // `header_path` first, then the non-system files the preprocessor opened,
 // sorted.
 //

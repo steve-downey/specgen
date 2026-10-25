@@ -15,6 +15,7 @@ target_sources(
     PRIVATE
         attach.cpp
         body_uses.cpp
+        build_document.cpp
         class_head_mandates.cpp
         classify.cpp
         compile_args.cpp
@@ -30,7 +31,6 @@ target_sources(
         expos_spellings.cpp
         file_views.cpp
         foreign_names.cpp
-        frontend.cpp
         header_synopsis.cpp
         inclass_items.cpp
         interleave.cpp
@@ -54,6 +54,7 @@ target_sources(
             FILES
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/attach.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/body_uses.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_document.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/class_head_mandates.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/classify.hpp"
@@ -70,7 +71,6 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/expos_spellings.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/foreign_names.hpp"
-                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/header_synopsis.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/inclass_items.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"

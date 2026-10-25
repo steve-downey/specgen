@@ -5,7 +5,7 @@
 # parent guards before add_subdirectory(frontend).
 foreach(
     component
-    frontend
+    build_document
     interleave
     document
     synopsis

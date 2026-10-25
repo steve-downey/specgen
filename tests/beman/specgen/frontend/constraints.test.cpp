@@ -21,7 +21,7 @@
 #include <beman/specgen/frontend/constraints.hpp>
 #include <beman/specgen/frontend/constraints.hpp> // Re-inclusion verification
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>

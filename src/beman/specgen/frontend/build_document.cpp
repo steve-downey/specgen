@@ -1,7 +1,7 @@
-// src/beman/specgen/frontend/frontend.cpp                          -*-C++-*-
+// src/beman/specgen/frontend/build_document.cpp                  -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/document_build.hpp>
@@ -105,7 +105,7 @@ namespace db = beman::specgen::document_build;
 std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    header_path,
                                                             const ParseOptions& options) {
     // A projection of the richer entry point, not a second parse and not a
-    // second implementation (see DocumentBuild in frontend.hpp): the callers
+    // second implementation (see DocumentBuild in build_document.hpp): the callers
     // that want only the document say so by calling this.
     return build_document_with_sources(header_path, options).transform([](DocumentBuild built) {
         return std::move(built.result);

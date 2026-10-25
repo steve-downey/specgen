@@ -1182,8 +1182,8 @@ The build assembles the tool from these components, each following the shared CM
   `usable_as_file_name` as the path boundary.
 - **Validators** — `include/beman/specgen/validate/`. The §9 checks as cases of a shared
   validation algebra over the IR.
-- **Front end** — `include/beman/specgen/frontend/frontend.hpp`,
-  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document` and
+- **Build document** — `include/beman/specgen/frontend/build_document.hpp`,
+  `src/beman/specgen/frontend/build_document.cpp`. §3 end to end: `build_document` and
   `build_document_with_sources`, composing the components below.
 - **Classify** — `frontend/classify.hpp`/`.cpp`. Stage 1 of the document build (decision
   `document-build-stages`): each raw declaration or comment into a `DocEvent`.

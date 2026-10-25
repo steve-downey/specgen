@@ -1,7 +1,7 @@
-// include/beman/specgen/frontend/frontend.hpp                      -*-C++-*-
+// include/beman/specgen/frontend/build_document.hpp              -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-#ifndef BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
-#define BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
+#ifndef BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP
+#define BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP
 
 // Tier B — the Clang front end. See design plan §3 and decisions ir-boundary
 // and llvm-toolchain-pin. Built in every configuration, against the pinned
@@ -102,4 +102,4 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(
 
 } // namespace beman::specgen::frontend
 
-#endif // BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
+#endif // BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP

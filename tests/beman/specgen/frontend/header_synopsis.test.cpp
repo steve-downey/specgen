@@ -4,7 +4,7 @@
 #include <beman/specgen/frontend/header_synopsis.hpp>
 #include <beman/specgen/frontend/header_synopsis.hpp> // Re-inclusion verification
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>

@@ -347,7 +347,7 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     // substrate generic algorithm: a for_each-shaped mutation of the elements
     // it iterates, not a container rebuild -- filtering states the predicate
     // up front instead of burying it in the loop body's if, but this tree
-    // declines ranges::for_each for exactly the reason frontend.cpp's
+    // declines ranges::for_each for exactly the reason synopsis_extraction.cpp's
     // orphaned-label walk does: wrapping the assignment in a
     // call would hide the loop, not remove it.
     //

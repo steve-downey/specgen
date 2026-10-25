@@ -14,7 +14,7 @@
 // empty ir::SpecItem ahead of `box`'s ir::Synopsis — so this looks for the
 // first Synopsis in document order rather than assuming index 0.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>

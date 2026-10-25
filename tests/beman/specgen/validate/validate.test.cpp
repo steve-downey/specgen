@@ -1012,7 +1012,7 @@ TEST_CASE("validate - validate(Node) reports no body-use findings: the channel i
 
 namespace {
 
-// A derived conjunct in the `phrase_conjunct` (frontend.cpp) shape: a bool
+// A derived conjunct in the `phrase_conjunct` (frontend/constraints.cpp) shape: a bool
 // trait/negation reads `` `subject` is `polarity` ``.
 ir::Paragraph conjunct_paragraph(std::string subject, std::string polarity) {
     return {

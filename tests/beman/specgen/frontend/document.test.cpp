@@ -9,7 +9,7 @@
 // source order. Code text is other files' business (synopsis.test.cpp,
 // template.test.cpp): this file pins the skeleton, not the bytes.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/validate/validate.hpp>
 

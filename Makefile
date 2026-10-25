@@ -175,7 +175,7 @@ realclean: clean-install
 # with a new Clang_DIR would move the front end while clang-tidy, LLVM_DIR and
 # the version pin itself stayed on the old one -- the mixed toolchain the pin
 # (decision llvm-toolchain-pin) exists to prevent. Without this check the
-# symptom is a compile error deep in frontend.cpp against the wrong headers.
+# symptom is a compile error deep in the front end against the wrong headers.
 # So every target that builds or tests goes through here first, and a tree
 # whose cached Clang_DIR is not the one this Makefile would pass stops and
 # names the fix: a fresh tree.

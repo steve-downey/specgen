@@ -1,13 +1,13 @@
 // include/beman/specgen/document_build.hpp                        -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// The clang-free half of frontend.cpp's document-tree builder (decision
+// The clang-free half of the front end's document-tree builder (decision
 // document-build-stages). Building a document is four jobs: classify a raw
 // item, fold `\rSec` depths into nested sections, group `\also`/empty-descr
 // followers onto their primary, and route in-class members to the section
 // their `\ref` group names. The build splits these across three stages:
 //
-//  1. classify(RawItem) -> DocEvent (frontend.cpp, Tier B) — the only place
+//  1. classify(RawItem) -> DocEvent (frontend/classify.cpp, Tier B) — the only place
 //     that touches a clang::Decl*, quarantining the dyn_cast if/else chain
 //     inside one function that converts Clang's world into the closed
 //     DocEvent variant below.
@@ -63,7 +63,7 @@
 //
 // DocEvent names no clang:: type, so stages 2 and 3 live in this core,
 // clang-free translation unit and carry tests that do not need
-// a Clang parse (tests/beman/specgen/document_build.test.cpp) — frontend.cpp
+// a Clang parse (tests/beman/specgen/document_build.test.cpp) — frontend/classify.cpp
 // is Tier B and needs the Clang front end to build.
 #ifndef BEMAN_SPECGEN_DOCUMENT_BUILD_HPP
 #define BEMAN_SPECGEN_DOCUMENT_BUILD_HPP

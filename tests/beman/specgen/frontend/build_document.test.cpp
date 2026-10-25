@@ -1,7 +1,7 @@
-// tests/beman/specgen/frontend/frontend.test.cpp                   -*-C++-*-
+// tests/beman/specgen/frontend/build_document.test.cpp           -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -11,14 +11,14 @@
 
 namespace frontend = beman::specgen::frontend;
 
-TEST_CASE("frontend - the header is self-contained on re-inclusion") {
+TEST_CASE("build_document - the header is self-contained on re-inclusion") {
 // Idempotence check (decision component-recipe): including the header twice is
 // a no-op, so the guard holds.
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
     SUCCEED();
 }
 
-// build_document_with_sources reports the files the parse read (frontend.hpp),
+// build_document_with_sources reports the files the parse read (build_document.hpp),
 // which is what a Makefile dependency fragment's prerequisite list is made of.
 // Checked here rather than only through the driver's `--depfile` golden,
 // because what it rests on is a Clang API contract -- that an `#include`d file
@@ -26,7 +26,7 @@ TEST_CASE("frontend - the header is self-contained on re-inclusion") {
 // golden diffing a whole fragment would report a Clang upgrade that broke that
 // as "the depfile moved".
 
-TEST_CASE("frontend - build_document_with_sources leads with the header itself") {
+TEST_CASE("build_document - build_document_with_sources leads with the header itself") {
     const std::string header = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_optional.hpp";
     const auto        built  = frontend::build_document_with_sources(header);
     REQUIRE(built.has_value());
@@ -34,7 +34,7 @@ TEST_CASE("frontend - build_document_with_sources leads with the header itself")
     CHECK(built->sources.front() == header);
 }
 
-TEST_CASE("frontend - build_document_with_sources reports an included header") {
+TEST_CASE("build_document - build_document_with_sources reports an included header") {
     // spec_foreign_include.hpp includes support/spec_foreign_detail.hpp, which
     // is a real file on disk and so does leave a FileEntry behind.
     const std::string header = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_foreign_include.hpp";
@@ -50,7 +50,7 @@ TEST_CASE("frontend - build_document_with_sources reports an included header") {
     CHECK(std::ranges::is_sorted(built->sources | std::views::drop(1)));
 }
 
-TEST_CASE("frontend - build_document_with_sources omits system headers") {
+TEST_CASE("build_document - build_document_with_sources omits system headers") {
     // -MMD semantics, not -MD: naming every libstdc++ path would bury the one
     // header a reader is scanning the fragment for.
     const std::string header = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_optional.hpp";
@@ -60,6 +60,6 @@ TEST_CASE("frontend - build_document_with_sources omits system headers") {
     CHECK(std::ranges::none_of(built->sources, is_system));
 }
 
-TEST_CASE("frontend - build_document_with_sources fails on a header it cannot read") {
+TEST_CASE("build_document - build_document_with_sources fails on a header it cannot read") {
     CHECK_FALSE(frontend::build_document_with_sources("/nonexistent/nowhere.hpp").has_value());
 }

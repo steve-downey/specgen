@@ -30,7 +30,7 @@
     "never produces one (design §5.2: \"validator warns\").",
     "",
     "The `conjuncts` field on each authored replacement is the suppressed",
-    "derivation's pre-join list (frontend.cpp); it is",
+    "derivation's pre-join list (frontend/mandates.cpp); it is",
     "what lets the check point at the specific assert rather than a joined",
     "sentence with no conjunct boundaries left in it."
   ],
