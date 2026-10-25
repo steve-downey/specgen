@@ -1187,6 +1187,11 @@ The build assembles the tool from these components, each following the shared CM
   `build_document`, `attach_function`, `collect_inclass_items`, `extract_synopsis`, the
   `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets,
   `format_and_recover` (the §3.6 sentinel pipeline), `draft_format_style()`.
+- **Front-end link probe** — `frontend/smoke_check.hpp`/`.cpp`. `smoke_check` parses a
+  snippet and runs clang-format, proving both LLVM surfaces are in the binary.
+- **Crash handler** — `frontend/crash_handler.hpp`/`.cpp`. `install_crash_handler` puts
+  LLVM's stack trace behind a banner naming the build. In the front-end library because
+  that is where LLVM is reachable.
 - **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
   single-pass render), `render` (`--from-ir`), the wording options both share
   (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`)

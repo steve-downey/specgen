@@ -77,11 +77,12 @@ The stages are numbered for reading order only. Cross-reference them by slug.
 
 ### [entry-point-headers](#entry-point-headers)
 
-*Stage 1.*
+*Stage 1.* **Status:** DONE, 2026-10-25.
 
 `smoke_check` and `SmokeResult` move to `frontend/smoke_check.hpp`/`.cpp`. `install_crash_handler` moves to
-`frontend/crash_handler.hpp`/`.cpp`. Neither depends on anything else in the file. `frontend.test.cpp` tests
-`smoke_check`, so it becomes `smoke_check.test.cpp`. `tools/specgen/main.cpp` includes the two headers directly.
+`frontend/crash_handler.hpp`/`.cpp`. Neither depends on anything else in the file. The `smoke_check` cases in
+`frontend.test.cpp` move to `smoke_check.test.cpp`, and the `build_document_with_sources` cases stay.
+`tools/specgen/main.cpp` includes the two headers directly.
 This needs no decision from the open questions below, because neither header carries a Clang type.
 
 ### [string-level-pieces](#string-level-pieces)

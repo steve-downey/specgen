@@ -102,6 +102,8 @@ share drops down a level, to `foundation/` or to a new level that needs no name.
 **Log:** 2026-10-24: the draft-heading heuristic (`unrecognized_section_header`) stays in `frontend.cpp`: it reads
 comment vocabulary through an LLVM string type. `resolve_extra_args` gained direct tests, including one against a
 real `compile_commands.json`.
+2026-10-25: the rest of the split is planned in [frontend-split](frontend-split.md). `smoke_check` and
+`install_crash_handler` now have headers of their own ([entry-point-headers](frontend-split.md#entry-point-headers)).
 
 ### [backend-common-facilities](#backend-common-facilities)
 

@@ -1,13 +1,8 @@
 // tests/beman/specgen/frontend/frontend.test.cpp                   -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
-// Smoke test for the Clang front-end tier. It asserts only that the two
-// LLVM surfaces the tier depends on — the tooling parser and clang::format —
-// link and run. Real extraction coverage lives in the other test files here.
-
 #include <beman/specgen/frontend/frontend.hpp>
 
-#include <catch2/catch_test_case_info.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -15,20 +10,6 @@
 #include <string>
 
 namespace frontend = beman::specgen::frontend;
-
-TEST_CASE("frontend - valid C++ parses into an AST") {
-    const auto result = frontend::smoke_check("int f(int x) { return x; }\n");
-    CHECK(result.ast_built);
-}
-
-TEST_CASE("frontend - clang-format normalizes the fixed snippet") {
-    const auto result = frontend::smoke_check("int g();\n");
-    // getLLVMStyle() collapses the doubled spaces and tightens the braces; we do
-    // not pin the exact bytes here (the goldens own the FormatStyle), only that
-    // the formatter ran and returned tightened output.
-    CHECK_FALSE(result.formatted.empty());
-    CHECK(result.formatted.find("  ") == std::string::npos);
-}
 
 TEST_CASE("frontend - the header is self-contained on re-inclusion") {
 // Idempotence check (decision component-recipe): including the header twice is
