@@ -43,6 +43,7 @@ foreach(
     synopsis_extraction
     itemdecl
     class_head_mandates
+    inclass_items
 )
     add_executable(beman.specgen.tests.frontend.${component})
     target_sources(

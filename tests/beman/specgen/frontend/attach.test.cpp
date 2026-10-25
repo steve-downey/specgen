@@ -9,6 +9,9 @@
 // in-class `\ref` group, and each SpecItem's itemdecl must come from its own
 // in-class declaration — unqualified (no `stack::`) — not its sibling's.
 
+#include <beman/specgen/frontend/attach.hpp>
+#include <beman/specgen/frontend/attach.hpp> // Re-inclusion verification
+
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/ir.hpp>
 

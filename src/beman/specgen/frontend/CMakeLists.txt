@@ -13,6 +13,7 @@ add_library(beman::specgen.frontend ALIAS beman.specgen.frontend)
 target_sources(
     beman.specgen.frontend
     PRIVATE
+        attach.cpp
         class_head_mandates.cpp
         compile_args.cpp
         constraints.cpp
@@ -25,6 +26,7 @@ target_sources(
         expos_spellings.cpp
         file_views.cpp
         frontend.cpp
+        inclass_items.cpp
         interleave.cpp
         itemdecl.cpp
         mandates.cpp
@@ -43,6 +45,7 @@ target_sources(
         FILE_SET HEADERS
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/attach.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/class_head_mandates.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
@@ -56,6 +59,7 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/expos_spellings.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/inclass_items.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/itemdecl.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/mandates.hpp"
