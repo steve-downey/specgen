@@ -1,4 +1,4 @@
-// tests/beman/specgen/frontend/collect.test.cpp                   -*-C++-*-
+// tests/beman/specgen/frontend/interleave.test.cpp               -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 // collect_interleaved() over the hand-curated corpus header
@@ -9,7 +9,8 @@
 // assertions below key off content and relative order rather than assuming
 // the first item is the class.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/interleave.hpp>
+#include <beman/specgen/frontend/interleave.hpp> // Re-inclusion verification
 
 #include <catch2/catch_test_macros.hpp>
 

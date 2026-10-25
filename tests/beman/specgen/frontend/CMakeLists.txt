@@ -6,7 +6,7 @@
 foreach(
     component
     frontend
-    collect
+    interleave
     document
     synopsis
     template
@@ -22,8 +22,14 @@ foreach(
     header_synopsis
     index
     mandates
+    build_failure
     compile_args
+    decl_projections
+    document_files
+    file_views
+    parse_header
     crash_handler
+    draft_format
     smoke_check
     diagnostics
     doxygen
@@ -37,7 +43,7 @@ foreach(
         beman.specgen.tests.frontend.${component}
         PRIVATE beman::specgen.frontend Catch2::Catch2WithMain
     )
-    # collect.test.cpp reads the hand-curated corpus header (decision hermetic-corpus); point
+    # interleave.test.cpp reads the hand-curated corpus header (decision hermetic-corpus); point
     # it at the corpus directory instead of hard-coding a relative path that
     # would depend on the test's working directory.
     target_compile_definitions(

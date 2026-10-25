@@ -12,11 +12,13 @@ target_sources(
         docblock.cpp
         markers.cpp
         rsec.cpp
+        section_markers.cpp
         lower.cpp
         conjuncts.cpp
         depfile.cpp
         document_build.cpp
         fragments.cpp
+        span_sentinels.cpp
 )
 
 add_subdirectory(backend)

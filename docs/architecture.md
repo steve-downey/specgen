@@ -367,7 +367,7 @@ back to name match within the class's fragments only):
    a backend's own wrapper (`$…$`, `\exposid{…}`) is added later and differs per backend, so
    the front end aligns for what the reader sees rather than for any one fragment spelling.
 2. `clang::format::reformat()` with a `FormatStyle` derived from `getLLVMStyle()`
-   (`draft_format_style()` in the front end), tuned to draft conventions:
+   (`draft_format_style()` in `frontend/draft_format.cpp`), tuned to draft conventions:
    `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,
    `IndentRequiresClause`, `BreakBeforeConceptDeclarations`, column limit ≈ 85–90, penalties
    keeping return type and name together. Tuned via golden-file diff, not a priori.
@@ -1183,10 +1183,31 @@ The build assembles the tool from these components, each following the shared CM
 - **Validators** — `include/beman/specgen/validate/`. The §9 checks as cases of a shared
   validation algebra over the IR.
 - **Front end** — `include/beman/specgen/frontend/frontend.hpp`,
-  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `collect_interleaved`,
-  `build_document`, `attach_function`, `collect_inclass_items`, `extract_synopsis`, the
-  `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets,
-  `format_and_recover` (the §3.6 sentinel pipeline), `draft_format_style()`.
+  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document`,
+  `attach_function`, `collect_inclass_items`, `extract_synopsis`, the
+  `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets.
+- **Front-end parse** — `frontend/parse_header.hpp`/`.cpp`. §3.1's one parse path:
+  `parse_header` (the fixed arguments, the bundled resource directory, and the resolved
+  extra arguments), `parse_sources`, and the `unparsed_header` failure.
+- **Document files** — `frontend/document_files.hpp`/`.cpp`. Which files make up one
+  document (issue #77) and its top-level declarations: `DocumentFiles`,
+  `collect_top_level_decl`, `collect_expos_scope_decl`.
+- **File views** — `frontend/file_views.hpp`/`.cpp`. The text, comments and skipped
+  preprocessor ranges of the file a location is in, and how a diagnostic names it.
+- **Decl projections** — `frontend/decl_projections.hpp`/`.cpp`. The function a
+  declaration is, and which of an entity's declarations it is.
+- **Interleave** — `frontend/interleave.hpp`/`.cpp`. `collect_interleaved` (§3.2's
+  decl/comment interleave as a flat list, for `dump-decls`).
+- **Build failure** — `frontend/build_failure.hpp`. What a front-end entry point reports
+  when it cannot build what it was asked for.
+- **Section markers** — `section_markers.hpp`/`.cpp`. The `/// END [stable]` fence and
+  the `// \ref{stable}` group comment, as scans over raw comment text. Clang-free.
+- **Draft formatting** — `frontend/draft_format.hpp`/`.cpp`. §3.6 step 2: `format_draft`,
+  `format_and_recover` (format, then recover the sentinels) and `format_expr_fragment`.
+  The interface is strings; the `FormatStyle` and every `clang::format` call stay inside.
+- **Span sentinels** — `span_sentinels.hpp`/`.cpp`. §3.6 steps 1 and 3 without the
+  formatter: `SpanInfo`, `span_sentinel`, `resize_sentinels`, `recover_sentinels`.
+  Clang-free, so it is in the core library.
 - **Front-end link probe** — `frontend/smoke_check.hpp`/`.cpp`. `smoke_check` parses a
   snippet and runs clang-format, proving both LLVM surfaces are in the binary.
 - **Crash handler** — `frontend/crash_handler.hpp`/`.cpp`. `install_crash_handler` puts

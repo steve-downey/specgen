@@ -21,7 +21,7 @@ target_link_libraries(specgen PRIVATE beman::specgen.frontend)
 
 # Clang's builtin headers (<stddef.h>, <stdarg.h>, ...), which the front end
 # finds at `<driver dir>/../lib/clang/<major>` -- Clang's own rule, asked of the
-# executable at run time (frontend.cpp, bundled_resource_dir_args). Both trees
+# executable at run time (frontend/parse_header.cpp, bundled_resource_dir_args). Both trees
 # lay that directory out, so the driver never depends on a distribution's
 # baked-in fallback for it: the build tree links the pinned LLVM's own resource
 # directory into place, and the install copies its headers. The path is the

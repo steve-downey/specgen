@@ -10,10 +10,18 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/parse/cursor.hpp>
 #include <beman/specgen/parse/parser.hpp>
+#include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/decl_projections.hpp>
+#include <beman/specgen/frontend/document_files.hpp>
+#include <beman/specgen/frontend/draft_format.hpp>
+#include <beman/specgen/frontend/file_views.hpp>
+#include <beman/specgen/frontend/parse_header.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/rsec.hpp>
+#include <beman/specgen/section_markers.hpp>
+#include <beman/specgen/span_sentinels.hpp>
 
 // GCC reports -Wnonnull eight times from inside LLVM's own headers when it
 // inlines RecursiveASTVisitor::TraverseCXXRecordHelper for the visitors below:
@@ -48,19 +56,14 @@
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/Specifiers.h>
 #include <clang/Basic/TokenKinds.h>
-#include <clang/Format/Format.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/PreprocessingRecord.h>
-#include <clang/Options/OptionUtils.h>
-#include <clang/Lex/Preprocessor.h>
 #include <clang/Tooling/Core/Replacement.h>
-#include <clang/Tooling/Tooling.h>
 
 #include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
-#include <llvm/Support/Error.h>
 #include <llvm/Support/Path.h>
 #pragma GCC diagnostic pop
 
@@ -72,9 +75,7 @@
 #include <expected>
 #include <filesystem>
 #include <format>
-#include <fstream>
 #include <functional>
-#include <ios>
 #include <iterator>
 #include <limits>
 #include <map>
@@ -82,7 +83,6 @@
 #include <optional>
 #include <ranges>
 #include <set>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -96,9 +96,15 @@ namespace beman::specgen::frontend {
 namespace parse      = beman::specgen::parse;
 namespace foundation = beman::specgen::foundation;
 
+using grammar::parse_ref;
 using grammar::parse_rsec;
 using grammar::rsec_tag_recognized;
+using grammar::section_end_fence;
+using grammar::SectionEndFence;
 using grammar::SectionHeader;
+using span_sentinels::recover_sentinels;
+using span_sentinels::span_sentinel;
+using span_sentinels::SpanInfo;
 
 // Outside the anonymous namespace below because `foundation::enumerators`
 // can only be specialized for an enumeration that has a name to specialize
@@ -120,407 +126,6 @@ namespace {
 
 namespace ir = beman::specgen::ir;
 
-// Result of parse_header: `ast` is null exactly when the header could
-// not be read or Clang could not build any AST from it at all;
-// `had_error` reports whether
-// Clang's own DiagnosticsEngine flagged an error somewhere during the parse
-// that *did* produce `ast`. The two are independent — buildASTFromCodeWithArgs
-// recovers as best it can after a fatal preprocessor error (an unsatisfiable
-// `#include`, the corpus case tests/corpus/include_path exercises) and still
-// hands back a non-null ASTUnit, so `ast != nullptr` alone cannot tell a clean
-// parse from a partial one. hasErrorOccurred(), not
-// hasUncompilableErrorOccurred(): the latter is about a later codegen stage
-// this `-fsyntax-only` tier never reaches, so it is the wrong question for a
-// syntax-only parse to ask.
-struct ParsedHeader {
-    std::unique_ptr<clang::ASTUnit> ast;
-    bool                            had_error = false;
-};
-
-// The `-resource-dir` that points Clang at the builtin headers (<stddef.h>,
-// <stdarg.h>, ...) specgen carries beside itself, or nothing when that
-// directory is not there.
-//
-// Left to itself, buildASTFromCodeWithArgs names the compiler `clang-tool`,
-// with no path in it, and derives the resource directory from that name: the
-// *relative* `lib/clang/<major>`, resolved against whatever directory the user
-// happens to be in. A distribution's libclang-cpp may bake in a fallback
-// search directory that hides this, but a machine without the pinned LLVM has
-// no such fallback, and every header that reaches the standard library reaches
-// <stddef.h>. So ask Clang's own rule, `<executable dir>/../lib/clang/<major>`,
-// with the executable this process really is; the build tree and the install
-// both lay that directory out (tools/specgen/CMakeLists.txt). A driver that
-// finds nothing there -- a unit-test binary, which has no such sibling -- keeps
-// Clang's default rather than being handed a directory that does not exist.
-//
-// It goes ahead of the resolved arguments so that a `-resource-dir` from the
-// `--` tail or a compile command overrides it by the same last-wins parsing
-// the `-std` default relies on.
-std::vector<std::string> bundled_resource_dir_args() {
-    static const std::vector<std::string> args = [] {
-        // Any address inside this executable, for the platforms where the
-        // executable is found by asking which image holds it.
-        static const int  anchor = 0;
-        const std::string dir    = clang::GetResourcesPath("specgen", const_cast<int*>(&anchor));
-        if (std::error_code ec; !std::filesystem::is_directory(dir, ec))
-            return std::vector<std::string>{};
-        return std::vector<std::string>{"-resource-dir", dir};
-    }();
-    return args;
-}
-
-// Shared parse path (design §3.1): slurp the header as text — buildASTFromCodeWithArgs
-// takes the source by value and a separate display path, rather than opening the file
-// itself (a real compilation database's ClangTool would; this tier does not stand one
-// up) — then build the AST with the fixed args every front-end entry point
-// uses, plus whatever `options` resolves to. `ast` is null on either
-// failure so callers share one "give up" check; see ParsedHeader for why a
-// non-null `ast` is not by itself "the parse went fine".
-ParsedHeader parse_header(std::string_view header_path, const ParseOptions& options) {
-    std::ifstream in(std::string(header_path), std::ios::binary);
-    if (!in)
-        return {};
-    std::ostringstream buffer;
-    buffer << in.rdbuf();
-
-    // specgen's own -std default first (a project's own -std, if it
-    // supplies one, overrides it — clang's last-wins argument parsing makes
-    // this ordering meaningful), the resolved args in the middle, and the two
-    // structural requirements last, where that same last-wins parsing
-    // protects them from being overridden by anything a caller supplies.
-    std::vector<std::string> args = {"-std=c++2c"};
-    args.append_range(bundled_resource_dir_args());
-    args.append_range(resolve_extra_args(header_path, options).args);
-    args.push_back("-fsyntax-only");
-    args.push_back("-fparse-all-comments");
-    args.push_back("-Xclang");
-    args.push_back("-detailed-preprocessing-record");
-    std::unique_ptr<clang::ASTUnit> ast =
-        clang::tooling::buildASTFromCodeWithArgs(buffer.str(), args, std::string(header_path));
-    const bool had_error = ast && ast->getDiagnostics().hasErrorOccurred();
-    return ParsedHeader{std::move(ast), had_error};
-}
-
-// Every file the parse read, for build_document_with_sources (frontend.hpp):
-// `header_path` first, then the non-system files the preprocessor opened,
-// sorted.
-//
-// The main file is taken from `header_path` rather than found in the walk,
-// because it is not there to find: parse_header hands Clang the source as an
-// in-memory buffer with a display path, so no FileEntry is ever created for it
-// and nothing in the SourceManager's FileInfos names it. A dependency list
-// missing the one file the caller named would be worse than no list at all.
-//
-// System headers are dropped -- `-MMD` semantics rather than `-MD`. Wording
-// really can move when the standard library under it moves, but a `.d` naming
-// every libstdc++ header buries the three that a reader is scanning for, and
-// the paths it would name are a property of the box that ran the tool rather
-// than of the paper.
-std::vector<std::string> parse_sources(std::string_view header_path, const clang::ASTUnit& ast) {
-    const clang::SourceManager& sm = ast.getSourceManager();
-
-    // Lexically, not `weakly_canonical`: `./a.hpp` and `a.hpp` are one file and
-    // have to dedup as one -- a header named on the command line is routinely
-    // `#include`d by a sibling too, and the two spellings reached the
-    // SourceManager by different routes. Resolving any further would make the
-    // paths absolute and follow symlinks, and a dependency fragment is read
-    // from the directory the build runs in, where the relative spelling is the
-    // one that works.
-    const auto normalized = [](std::string_view path) {
-        return std::filesystem::path(path).lexically_normal().generic_string();
-    };
-
-    std::vector<std::string> sources;
-    // substrate generic algorithm: a filter-map over a DenseMap's own iterator
-    // pair, which is not a range and so cannot be piped through views.
-    for (clang::SourceManager::fileinfo_iterator it = sm.fileinfo_begin(); it != sm.fileinfo_end(); ++it) {
-        const clang::FileID file = sm.translateFile(it->first);
-        if (file.isValid() && sm.isInSystemHeader(sm.getLocForStartOfFile(file)))
-            continue;
-        sources.push_back(normalized(it->first.getName()));
-    }
-
-    // A DenseMap iterates in hash order, so sorting is not presentation here:
-    // an unsorted list would make two runs over one unchanged header produce
-    // two different dependency fragments.
-    std::ranges::sort(sources);
-    const auto duplicates = std::ranges::unique(sources);
-    sources.erase(duplicates.begin(), duplicates.end());
-    // The main file leads, and appears once however it was reached.
-    const std::string main_file = normalized(header_path);
-    std::erase(sources, main_file);
-    sources.insert(sources.begin(), main_file);
-    return sources;
-}
-
-// The files whose declarations form one document (issue #77): the main file,
-// and the files `#include`d inside a gathered `.syn` region.  Anything else
-// reached through an include is implementation, exactly as it was when a
-// document was one file -- the region is the author's statement of which
-// includes are the header's specification surface, which is what a header
-// synopsis is.
-//
-// Positions are *document* offsets: the position in a virtual concatenation
-// where each followed include is replaced by that file's contents.  Every rule
-// that orders or compares positions -- region extents, the consumed-range
-// watermark, placement keys, `\also` adjacency -- keeps working against them
-// unchanged, which is why the mapping is this one and not a synthetic counter.
-// Extraction is unaffected: it works inside one declaration, in its own file's
-// buffer, at that file's own offsets.
-class DocumentFiles {
-  public:
-    struct Part {
-        clang::FileID file;
-        unsigned      include_offset = 0; // where the main file includes it
-        unsigned      size           = 0;
-        unsigned      base           = 0; // its first document offset
-    };
-
-    static DocumentFiles discover(clang::ASTUnit& ast, const clang::SourceManager& sm);
-
-    clang::FileID main() const { return main_; }
-
-    bool contains(clang::FileID file) const {
-        return file == main_ || std::ranges::any_of(parts_, [&](const Part& p) { return p.file == file; });
-    }
-
-    // The document offset of a location, or of a (file, local offset) pair.
-    unsigned offset(const clang::SourceManager& sm, clang::SourceLocation loc) const {
-        const auto [file, local] = sm.getDecomposedLoc(loc);
-        return offset_in(file, local);
-    }
-
-    unsigned offset_in(clang::FileID file, unsigned local) const {
-        if (file == main_)
-            return local + inserted_before(local);
-        const auto part = std::ranges::find(parts_, file, &Part::file);
-        return part == parts_.end() ? local : part->base + local;
-    }
-
-    const std::vector<Part>& parts() const { return parts_; }
-
-    // A document offset back to the file it came from and its offset there,
-    // which is what a diagnostic has to name: a line number in the virtual
-    // concatenation is a line in no file anyone can open.
-    std::pair<clang::FileID, unsigned> locate(unsigned document_offset) const {
-        // substrate generic algorithm: a linear scan over the parts, which are
-        // sorted and few -- one per include inside the region.
-        for (const Part& part : parts_)
-            if (document_offset >= part.base && document_offset < part.base + part.size)
-                return {part.file, document_offset - part.base};
-        unsigned shift = 0;
-        // substrate generic algorithm: the same running sum inserted_before
-        // makes, stopping where this offset sits rather than at a bound
-        // computed in advance.
-        for (const Part& part : parts_) {
-            if (part.base > document_offset)
-                break;
-            shift += part.size + 1;
-        }
-        return {main_, document_offset - shift};
-    }
-
-  private:
-    // How much followed content sits before a main-file offset.
-    unsigned inserted_before(unsigned main_offset) const {
-        unsigned shift = 0;
-        // substrate generic algorithm: a running sum over the parts that
-        // precede this offset, which are a prefix -- parts_ is sorted by
-        // include_offset.
-        for (const Part& part : parts_) {
-            if (part.include_offset >= main_offset)
-                break;
-            shift += part.size + 1;
-        }
-        return shift;
-    }
-
-    clang::FileID     main_;
-    std::vector<Part> parts_;
-};
-
-// Namespaces (and, incidentally, `extern "C"` blocks) are transparent scoping
-// constructs: their members are what design §3.1 means by "top-level decls",
-// not the enclosing namespace itself. top_level_begin()/end() yields the
-// NamespaceDecl, so descend through it and its ilk; a class or function found
-// this way (or directly at the top level) is a document-tree item in its own
-// right and is not descended into further — its members are not top-level.
-//
-// Collects the raw clang::Decl* (rather than a label) so that classify()
-// (stage 1 of the document-build pipeline) can classify each one;
-// collect_interleaved formats a label from it.
-void collect_top_level_decl(clang::Decl*                decl,
-                            const clang::SourceManager& sm,
-                            const DocumentFiles&        doc,
-                            std::vector<clang::Decl*>&  out) {
-    if (auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(decl)) {
-        // substrate generic algorithm: recursive descent over a decl tree --
-        // the recursion is the algorithm, and this loop only feeds it one
-        // child at a time; it is not a fold over a range that already
-        // exists, and this tree declines ranges::for_each as a costume for a
-        // loop whose job is a side effect (the recursive call), not building
-        // a container.
-        for (clang::Decl* child : ns->decls())
-            collect_top_level_decl(child, sm, doc, out);
-        return;
-    }
-    if (auto* linkage = llvm::dyn_cast<clang::LinkageSpecDecl>(decl)) {
-        // substrate generic algorithm: same recursive tree descent as above.
-        for (clang::Decl* child : linkage->decls())
-            collect_top_level_decl(child, sm, doc, out);
-        return;
-    }
-
-    // Implicit decls are compiler synthesis, not source: an implicit
-    // deduction guide reports the enclosing constructor's (or the class's)
-    // own location, so collecting one plants a phantom top-level decl in the
-    // middle of a class body — which a gathered header synopsis then
-    // re-extracts as raw source, markup comments and all (issue #22). Only
-    // authored declarations are document-tree items.
-    if (decl->isImplicit())
-        return;
-
-    const clang::SourceLocation loc = decl->getBeginLoc();
-    if (!loc.isValid())
-        return;
-    const auto [file_id, offset] = sm.getDecomposedLoc(loc);
-    if (!doc.contains(file_id))
-        return;
-
-    // What the parser hands back as a top-level declaration is not always one.
-    // A late-instantiated member function definition arrives here through
-    // HandleTopLevelDecl, reporting the location of the template it was
-    // instantiated from -- so a document that follows the header holding the
-    // pattern (issue #77) collected a class's private member as a namespace
-    // declaration and folded its whole body into the synopsis. Two questions
-    // separate an authored declaration from an instantiation of one: whose
-    // scope it is written in, and whether it is a specialization of something.
-    // *Lexical* scope, because an out-of-line member definition is written at
-    // namespace scope and is exactly what this file's house style puts there;
-    // its semantic context is the class, which is what an instantiation
-    // reports too.
-    if (!decl->getLexicalDeclContext()->isFileContext())
-        return;
-    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl);
-        fn != nullptr && fn->getTemplateSpecializationKind() != clang::TSK_Undeclared)
-        return;
-    if (llvm::isa<clang::ClassTemplateSpecializationDecl>(decl) &&
-        llvm::cast<clang::ClassTemplateSpecializationDecl>(decl)->getSpecializationKind() !=
-            clang::TSK_ExplicitSpecialization)
-        return;
-    // A variable template's instantiations arrive the same way, reporting the
-    // template's own location: `whatwg_decode<C>` used at thirty-eight codecs
-    // rendered thirty-eight identical declarations into one synopsis.  A
-    // *partial* specialization is authored and stays -- that is how
-    // `enable_borrowed_range` is written.
-    if (const auto* var_spec = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl);
-        var_spec != nullptr && !llvm::isa<clang::VarTemplatePartialSpecializationDecl>(var_spec) &&
-        var_spec->getSpecializationKind() != clang::TSK_ExplicitSpecialization)
-        return;
-
-    out.push_back(decl);
-}
-
-// The same descent, run for the `\expos` pre-pass alone and over the
-// declarations the walk above rejects: the ones outside the main file (issue
-// #36). Where an exposition-only helper is *declared* is not a property of
-// the wording. A concept in `detail/range_traits.hpp` named by a
-// requires-clause in the header being specified must still render
-// `$const-iterable$`; without this the marker on it was silently ignored, and
-// the only remedies the qualifier finding offered -- rewrite the name, or move
-// the entity out of `detail` -- were both edits to the library, made to suit
-// the generator, and both of them change name lookup and ADL.
-//
-// Only the marked declaration's *uses* are reached this way. It contributes no
-// node of its own, because document structure is still main-file-only (design
-// §3.1) and every routing arm reads the walk above; an author who wants the
-// helper's own declaration in the wording writes it in the header being
-// specified, which is where the draft would put it.
-//
-// A system header is skipped whole, namespace and all: nothing in one carries
-// specgen markup, and descending `namespace std` to establish that is
-// thousands of declarations per parse.
-void collect_expos_scope_decl(clang::Decl*                decl,
-                              const clang::SourceManager& sm,
-                              clang::FileID               main_file,
-                              std::vector<clang::Decl*>&  out) {
-    const clang::SourceLocation loc = decl->getBeginLoc();
-    if (!loc.isValid() || sm.isInSystemHeader(loc))
-        return;
-    if (auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(decl)) {
-        // substrate generic algorithm: the same recursive tree descent as
-        // collect_top_level_decl, for the same reason.
-        for (clang::Decl* child : ns->decls())
-            collect_expos_scope_decl(child, sm, main_file, out);
-        return;
-    }
-    if (auto* linkage = llvm::dyn_cast<clang::LinkageSpecDecl>(decl)) {
-        // substrate generic algorithm: same recursive tree descent as above.
-        for (clang::Decl* child : linkage->decls())
-            collect_expos_scope_decl(child, sm, main_file, out);
-        return;
-    }
-    if (decl->isImplicit() || sm.getDecomposedLoc(loc).first == main_file)
-        return; // implicit, or already collected by collect_top_level_decl
-
-    out.push_back(decl);
-}
-
-std::string decl_label(clang::Decl* decl) {
-    std::string label = decl->getDeclKindName();
-    if (const auto* named = llvm::dyn_cast<clang::NamedDecl>(decl)) {
-        label += ' ';
-        label += named->getNameAsString();
-    }
-    return label;
-}
-
-// --- \rSec parsing and the document-tree builder ----------------------------
-//
-// parse_rsec (producing SectionHeader) is the \rSec grammar in rsec.hpp,
-// built on the combinator library (decision parser-combinators) so its
-// positioned failures are directly testable. parse_ref just below is a different marker (`\ref{...}`, unused
-// by the \rSec grammar) and stays a hand scan.
-
-// Recognize a `\ref{<stable>}` synopsis-group comment inside a class body
-// (design §3.2) and return its stable name. The Beman form is
-// `// \ref{stable.name}, human label`; only the stable name is needed here, to
-// route an in-class-defined member's itemdescr to the matching `\rSec` section.
-// Same tolerant, decoration-aware scan as parse_rsec; anything that is
-// not a `\ref{...}` comment yields std::nullopt.
-std::optional<std::string> parse_ref(std::string_view raw) {
-    std::size_t pos     = 0;
-    auto        skip_ws = [&] {
-        pos = raw.find_first_not_of(" \t", pos);
-        if (pos == std::string_view::npos)
-            pos = raw.size();
-    };
-
-    skip_ws();
-    if (raw.compare(pos, 3, "///") == 0 || raw.compare(pos, 3, "//!") == 0)
-        pos += 3;
-    else if (raw.compare(pos, 2, "//") == 0)
-        pos += 2;
-    else
-        return std::nullopt;
-    skip_ws();
-
-    static constexpr std::string_view kTag = "\\ref";
-    if (raw.compare(pos, kTag.size(), kTag) != 0)
-        return std::nullopt;
-    pos += kTag.size();
-
-    skip_ws();
-    if (pos >= raw.size() || raw[pos] != '{')
-        return std::nullopt;
-    ++pos;
-    const std::size_t stable_begin = pos;
-    const std::size_t stable_end   = raw.find('}', pos);
-    if (stable_end == std::string_view::npos)
-        return std::nullopt;
-    return std::string(raw.substr(stable_begin, stable_end - stable_begin));
-}
-
 // One offset-ordered raw item: either a still-typed top-level decl or a
 // comment's raw text, collected before classify() (the pipeline's first
 // stage) converts it to a document_build::DocEvent. Mirrors SourceItem,
@@ -532,178 +137,6 @@ struct RawItem {
     clang::Decl* decl   = nullptr; // non-null: a decl event
     std::string  comment_text;     // decl == nullptr: a comment event
 };
-
-// The buffer and the comment map of the file a location is in, rather than of
-// the main file (issue #77).  Extraction is per declaration and every offset it
-// computes is local to that declaration's own file, so a document that spans
-// several files reads each one's text where it used to read the main file's.
-// For a document that is one file these are the main file, as before.
-llvm::StringRef file_buffer(const clang::SourceManager& sm, clang::SourceLocation loc) {
-    return sm.getBufferData(sm.getFileID(loc));
-}
-
-const std::map<unsigned, clang::RawComment*>*
-file_comments(const clang::ASTContext& ctx, const clang::SourceManager& sm, clang::SourceLocation loc) {
-    return ctx.Comments.getCommentsInFile(sm.getFileID(loc));
-}
-
-// The out-of-line definition of a class member, or null.  `isOutOfLine` alone
-// says yes for a hidden friend, which is lexically in the class and has no
-// in-class declaration to inherit a group from.
-const clang::FunctionDecl* as_out_of_line_member(const clang::Decl* decl) {
-    const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl);
-    if (fn == nullptr)
-        if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
-            fn = tmpl->getTemplatedDecl();
-    if (fn == nullptr || !fn->isOutOfLine())
-        return nullptr;
-    const clang::FunctionDecl* first = fn->getFirstDecl();
-    return first != fn && llvm::isa<clang::CXXRecordDecl>(first->getLexicalDeclContext()) ? fn : nullptr;
-}
-
-// The function a declaration is, looking through a function template.
-const clang::FunctionDecl* function_or_template(const clang::Decl* decl) {
-    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl))
-        return fn;
-    if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
-        return tmpl->getTemplatedDecl();
-    return nullptr;
-}
-
-// Is this the declaration of its entity that a synopsis should show?
-//
-// A synopsis lists an entity once.  In a document that is one file the question
-// never arose -- out-of-line definitions live after the `/// END` fence, and a
-// region held declarations only -- but a followed header (issue #77) carries
-// both, and a definition folded in would list a member the class synopsis
-// above it already declares, in the `Class::member` spelling the draft never
-// prints.  Its *wording* still travels: only the synopsis entry is dropped.
-bool is_first_declaration(const clang::Decl* decl) {
-    if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl))
-        return fn->getFirstDecl() == fn;
-    if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
-        return tmpl->getFirstDecl() == tmpl;
-    if (const auto* var = llvm::dyn_cast<clang::VarDecl>(decl))
-        return var->getFirstDecl() == var;
-    return true;
-}
-
-// How a diagnostic names the file a finding is in: empty for the main file,
-// which the driver already names, and otherwise the path relative to the main
-// file's own directory when the file is under it -- `document/errors.hpp` --
-// so a finding reads the way the `#include` that pulled the file in does.
-std::string diagnostic_file_name(const clang::SourceManager& sm, clang::FileID file) {
-    if (file == sm.getMainFileID() || file.isInvalid())
-        return {};
-    const clang::OptionalFileEntryRef entry = sm.getFileEntryRefForID(file);
-    const clang::OptionalFileEntryRef main  = sm.getFileEntryRefForID(sm.getMainFileID());
-    if (!entry)
-        return {};
-    const llvm::StringRef name = entry->getName();
-    if (main) {
-        const llvm::StringRef dir = llvm::sys::path::parent_path(main->getName());
-        if (!dir.empty() && name.starts_with(dir) && name.size() > dir.size() + 1)
-            return name.substr(dir.size() + 1).str();
-    }
-    return llvm::sys::path::filename(name).str();
-}
-
-// The line a document offset is on, in the file it is actually in: a line
-// number in the virtual concatenation is a line in no file anyone can open.
-unsigned document_line(const clang::SourceManager& sm, const DocumentFiles& doc, unsigned document_offset) {
-    const auto [file, local] = doc.locate(document_offset);
-    return sm.getLineNumber(file, local);
-}
-
-// A skipped preprocessor range, and the file it is in: the ranges are compared
-// against offsets local to one declaration's own file, and a document can span
-// several (issue #77), so a range from another file must not match.
-struct SkippedRange {
-    clang::FileID file;
-    unsigned      begin = 0;
-    unsigned      end   = 0;
-};
-
-using SkippedRanges = std::vector<SkippedRange>;
-
-SkippedRanges collect_skipped_ranges(clang::ASTUnit& ast) {
-    SkippedRanges               result;
-    const clang::SourceManager& sm     = ast.getSourceManager();
-    clang::PreprocessingRecord* record = ast.getPreprocessor().getPreprocessingRecord();
-    if (record == nullptr)
-        return result;
-
-    // substrate generic algorithm: a filter-map whose bounds conversion needs
-    // the SourceManager and can reject either endpoint after decomposition.
-    for (const clang::SourceRange range : record->getSkippedRanges()) {
-        if (!range.isValid())
-            continue;
-        const auto [begin_file, begin] = sm.getDecomposedLoc(range.getBegin());
-        const clang::SourceLocation end_loc =
-            clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm, ast.getLangOpts());
-        const auto [end_file, end] = sm.getDecomposedLoc(end_loc);
-        if (begin_file == end_file && end > begin)
-            result.emplace_back(begin_file, begin, end);
-    }
-    return result;
-}
-
-// --- normalization (design §3.6 step 2) -------------------------------------
-
-// Draft-tuned FormatStyle (design §3.6 step 2): start from the LLVM style and
-// layer on the options that make the draft's template/requires/concept
-// conventions come out right — templates get their own line, requires-clauses
-// go on their own (indented) line rather than trailing the declaration, and
-// concepts break before their body. The column limit and return-type penalty
-// favor the tighter, name-and-type-together shape draft synopses use. Per
-// design §3.6, tuned via golden-file diff rather than derived a priori.
-// The draft's line width, which a synopsis's final text has to respect too:
-// enclose_in_namespace_std indents a synopsis's body this far *after* it is
-// formatted, so a synopsis formats that much narrower (issue #157).
-constexpr unsigned kDraftColumnLimit = 88;
-constexpr unsigned kNamespaceIndent  = 2;
-
-clang::format::FormatStyle draft_format_style() {
-    clang::format::FormatStyle style     = clang::format::getLLVMStyle();
-    style.BreakTemplateDeclarations      = clang::format::FormatStyle::BTDS_MultiLine;
-    style.SpaceAfterTemplateKeyword      = false;
-    style.RequiresClausePosition         = clang::format::FormatStyle::RCPS_OwnLine;
-    style.IndentRequiresClause           = true;
-    style.BreakBeforeConceptDeclarations = clang::format::FormatStyle::BBCDS_Always;
-    style.ColumnLimit                    = kDraftColumnLimit;
-    style.PenaltyReturnTypeOnItsOwnLine  = 1000; // keep return type and name together
-    // WG21 draft wording attaches references/pointers to the type (`const T&`,
-    // `T*`), not the declarator; getLLVMStyle() defaults to the opposite.
-    style.PointerAlignment = clang::format::FormatStyle::PAS_Left;
-    // And it writes the qualifier on the left, always: `const T&`, never
-    // `T const&`. Left unset, clang-format keeps whichever order the header
-    // used, so the draft's spelling depended on the library's house style
-    // (issue #39). A header may write either; the wording says `const T&`.
-    //
-    // QualifierOrder is set alongside, and has to be: clang-format derives it
-    // from QualifierAlignment only while *parsing YAML*, so a style built in
-    // code gets the enum and an empty order, and the fixer it gates then has
-    // nothing to reorder by and silently does nothing.
-    style.QualifierAlignment            = clang::format::FormatStyle::QAS_Left;
-    style.QualifierOrder                = {"const", "volatile", "type"};
-    style.KeepEmptyLines.AtStartOfBlock = false;
-    return style;
-}
-
-// Run clang-format over `code` and apply its replacements, the same
-// apply-or-fall-back shape smoke_check uses for its proof-of-life formatting
-// call: if applyAllReplacements fails, consume the error and hand back the
-// input unchanged rather than propagating a formatting failure into the IR.
-std::string format_code(std::string_view code, const clang::format::FormatStyle& style) {
-    const std::string                        text   = std::string(code);
-    const std::vector<clang::tooling::Range> ranges = {clang::tooling::Range(0, static_cast<unsigned>(text.size()))};
-    const clang::tooling::Replacements       replacements = clang::format::reformat(style, text, ranges);
-    if (llvm::Expected<std::string> formatted = clang::tooling::applyAllReplacements(text, replacements))
-        return *formatted;
-    else
-        llvm::consumeError(formatted.takeError());
-    return text;
-}
 
 // --- reference-resolved namespace mapping (design §3.5) ---------------------
 // "All rewrites act on identifier tokens whose AST referent is known — never
@@ -1482,193 +915,6 @@ bool edits_overlap(const SynopsisEdit& a, const SynopsisEdit& b) { return a.begi
 void add_dominant_edit(std::vector<SynopsisEdit>& edits, SynopsisEdit dominant) {
     std::erase_if(edits, [&](const SynopsisEdit& edit) { return edits_overlap(edit, dominant); });
     edits.push_back(std::move(dominant));
-}
-
-// --- token rewriting via valid-C++ sentinels (design §3.6) ------------------
-// A rewrite replaces a token range with a `\exposid`/`\seebelow`/… span. Doing
-// it directly would put backend markup (`@\exposid{…}@`) into text clang-format
-// then mangles, so §3.6 splits it in three: (1) replace the range with a unique
-// valid-C++ *sentinel* identifier, (2) format, (3) recover — swap each sentinel
-// for its display text and record an ir::Span over it. This keeps the fragment
-// parseable and lets clang-format line-break on a real token.
-
-// The recovered form of one sentinel: `display` is what lands in CodeText::text
-// (e.g. the exposid name `val`); `payload` drives the backend macro (the exposid
-// name, or empty for \seebelow, whose macro takes no argument).
-struct SpanInfo {
-    beman::specgen::ir::SpanKind kind;
-    std::string                  display;
-    std::string                  payload;
-};
-
-// A unique, valid-C++ sentinel identifier for the n-th span in a fragment.
-std::string span_sentinel(unsigned n) { return std::format("SPECGEN_{}_SPAN", n); }
-
-// §3.6 step 3: replace each sentinel with its display text and record an
-// ir::Span over it. Kept separate from formatting because derived conjuncts
-// are expression fragments whose original layout is already the desired text.
-beman::specgen::ir::CodeText recover_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentinels) {
-    namespace ir = beman::specgen::ir;
-
-    if (sentinels.empty())
-        return ir::CodeText{std::move(text), {}};
-
-    // Each sentinel is unique and occurs once; collect the hits and order them.
-    struct Hit {
-        std::size_t        pos;
-        const std::string* name;
-        const SpanInfo*    info;
-    };
-    std::vector<Hit> hits =
-        sentinels | std::views::filter([&](const auto& kv) { return text.find(kv.first) != std::string::npos; }) |
-        std::views::transform([&](const auto& kv) {
-            const auto& [name, info] = kv;
-            return Hit{text.find(name), &name, &info};
-        }) |
-        std::ranges::to<std::vector<Hit>>();
-    std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.pos < b.pos; });
-
-    ir::CodeText out;
-    std::size_t  src = 0;
-    // substrate generic algorithm: a position-tracking left-to-right walk
-    // over a sorted, non-overlapping hit table -- the same array-substitution
-    // primitive backend/code_spans.hpp's render_code_spans already marks -- not a
-    // fold in disguise, since a hit's recorded span begin depends on how much
-    // the walk has already appended, which std::ranges::fold_left would have
-    // to smuggle through a synthetic multi-field accumulator for no gain in
-    // clarity over the loop.
-    for (const Hit& hit : hits) {
-        out.text += text.substr(src, hit.pos - src);
-        const std::size_t begin = out.text.size();
-        out.text += hit.info->display;
-        out.spans.push_back(ir::Span{begin, out.text.size(), hit.info->kind, hit.info->payload});
-        src = hit.pos + hit.name->size();
-    }
-    out.text += text.substr(src);
-    return out;
-}
-
-// An identifier of exactly `width` characters that occurs neither in `text` nor
-// among `taken`, or nullopt when none can be built (a width of zero, or every
-// candidate already present -- neither has happened, but a caller that gets
-// nullopt keeps the sentinel it has, which is what the code did before this).
-//
-// The letters are arbitrary; what matters is that a run of one letter followed
-// by a counter is not something C++ source contains, and that the result is
-// checked rather than assumed.
-std::optional<std::string>
-exact_width_sentinel(const std::string& text, const std::set<std::string>& taken, std::size_t width, unsigned n) {
-    if (width == 0)
-        return std::nullopt;
-    // substrate generic algorithm: try letters until one yields a candidate
-    // absent from the text -- a search whose subject is the text, not a range
-    // that already exists.
-    for (const char filler : std::string_view("ZQXJVWKY")) {
-        std::string candidate = std::format("{}{}", filler, n);
-        if (candidate.size() > width)
-            candidate.resize(width);
-        candidate.resize(width, filler);
-        if (!taken.contains(candidate) && text.find(candidate) == std::string::npos)
-            return candidate;
-    }
-    return std::nullopt;
-}
-
-// §3.6 step 1's "length-padded if needed so line-breaking stays honest", which
-// the design has always specified and the sentinels never were. A sentinel
-// stands in for its display text only until recovery, but clang-format decides
-// line breaks and continuation alignment while it is still there -- so a name
-// whose exposition-only spelling is a different width came out aligned to the
-// sentinel's width instead of its own, and a continuation under an opening `<`
-// lined up with nothing (issue #67).
-//
-// Resizing them here rather than at each of the twenty allocation sites keeps
-// the one rule in one place: a sentinel is exactly as wide as what replaces it.
-// It also has to be here, because it is the only point that holds the whole
-// fragment, which is what makes "this identifier appears nowhere else"
-// checkable rather than assumed.
-std::pair<std::string, std::map<std::string, SpanInfo>>
-resize_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentinels) {
-    std::map<std::string, SpanInfo> resized;
-    std::set<std::string>           taken;
-    unsigned                        n = 0;
-    // substrate generic algorithm: a scatter into two coupled outputs -- the
-    // rewritten text and the re-keyed table -- where each step's replacement
-    // depends on what the previous ones claimed.
-    for (const auto& [sentinel, info] : sentinels) {
-        const std::size_t                at = text.find(sentinel);
-        const std::optional<std::string> fitted =
-            at == std::string::npos ? std::nullopt : exact_width_sentinel(text, taken, info.display.size(), n++);
-        if (!fitted) {
-            resized.emplace(sentinel, info);
-            taken.insert(sentinel);
-            continue;
-        }
-        text.replace(at, sentinel.size(), *fitted);
-        resized.emplace(*fitted, info);
-        taken.insert(*fitted);
-    }
-    return {std::move(text), std::move(resized)};
-}
-
-// Whether some line of `text` holds nothing but a `;`.
-bool has_lone_semicolon(std::string_view text) {
-    return std::ranges::any_of(std::views::split(text, '\n'), [](auto line) {
-        const std::string_view view(line.begin(), line.end());
-        const std::size_t      first = view.find_first_not_of(" \t");
-        return first != std::string_view::npos && view.substr(first) == ";";
-    });
-}
-
-// `code` in the draft style, `indent` columns narrower than the draft's width
-// for text that is indented that far afterwards.
-//
-// When the last line of a declaration lands exactly on the column limit,
-// clang-format ends it there and puts the `;` on a line of its own rather than
-// break the line earlier -- a requires-clause ending in a nested
-// template-argument list, in practice (issue #157). A column narrower moves the
-// break back inside the line, so the formatting is retried narrower until the
-// lone `;` is gone. One that survives every retry is not that artifact but an
-// empty statement, `while (f())` over an indented `;`, and the first
-// formatting stands.
-std::string format_draft(std::string_view code, unsigned indent) {
-    clang::format::FormatStyle style = draft_format_style();
-    style.ColumnLimit -= indent;
-    const std::string formatted = format_code(code, style);
-    if (!has_lone_semicolon(formatted))
-        return formatted;
-    const unsigned limit = style.ColumnLimit;
-    // substrate generic algorithm: a bounded retry whose every attempt is a
-    // full reformat; the first acceptable one ends it.
-    for (unsigned narrower = 1; narrower <= 8; ++narrower) {
-        style.ColumnLimit = limit - narrower;
-        std::string again = format_code(code, style);
-        if (!has_lone_semicolon(again))
-            return again;
-    }
-    return formatted;
-}
-
-// `indent` is how far the result is indented once formatted: a synopsis's
-// kNamespaceIndent, else 0.
-beman::specgen::ir::CodeText format_and_recover(std::string                            text,
-                                                const std::map<std::string, SpanInfo>& sentinels,
-                                                std::optional<std::string_view>        record_tag = std::nullopt,
-                                                unsigned                               indent     = 0) {
-    auto [sized_text, sized] = resize_sentinels(std::move(text), sentinels);
-    std::string formatted    = format_draft(sized_text, indent);
-
-    // BTDS_MultiLine matches the draft for function templates, but considers a
-    // record head short even when its body is not and joins `template<...>` to
-    // `class`/`struct`. The AST gives this path the record tag, so preserve
-    // that one draft line break without guessing at arbitrary formatted code.
-    if (record_tag && !record_tag->empty() && formatted.starts_with("template<")) {
-        const std::size_t line_end = formatted.find('\n');
-        const std::size_t pos      = formatted.rfind(std::format(" {} ", *record_tag), line_end);
-        if (pos != std::string::npos && pos < line_end)
-            formatted[pos] = '\n';
-    }
-    return recover_sentinels(std::move(formatted), sized);
 }
 
 // --- exposition-only *uses* (design §3.5) -----------------------------------
@@ -3508,61 +2754,12 @@ void split_conjuncts(const clang::Expr* e, std::vector<const clang::Expr*>& out)
     out.push_back(e);
 }
 
-// The draft's qualifier order applied to a fragment whose layout is already
-// what the wording wants. Expression text -- a derived conjunct, an
-// *Equivalent to:* body -- is taken from source verbatim and never reflowed,
-// so a header writing `T const&` put `T const&` in a Constraints element while
-// the itemdecl above it, which does go through clang-format, said `const T&`
-// (issue #39). ColumnLimit 0 keeps the reflow off while the qualifier fixer
-// runs: with no limit clang-format honours the input's own line breaks.
-clang::format::FormatStyle qualifier_style() {
-    clang::format::FormatStyle style = draft_format_style();
-    style.ColumnLimit                = 0;
-    return style;
-}
-
-// Format an expression fragment in a declaration context, then take the
-// context back off.
-//
-// clang-format parses what it is handed, and a bare fragment carries no
-// context to parse in. From LLVM 23 on it reads the `&` of
-// `requires(const Impl& impl) { ... }` as a binary operator rather than a
-// declarator and spaces it as one, so a derived Constraints element came out
-// saying `const Impl & impl` where the draft says `const Impl&` -- the very
-// spelling draft_format_style() sets PAS_Left for. The draft's spelling is not
-// negotiable against a formatter defect
-// (docs/plans/llvm-23-port.md#constraints-fragment-spelling), so restore the
-// context instead: wrapped as a variable initializer the fragment parses as
-// what it is. An initializer and not a requires-clause because *any*
-// expression is a valid one, and this path also carries Mandates conjuncts
-// lifted from static_assert conditions, whose grammar a requires-clause need
-// not admit.
-//
-// The wrapper comes off by its own fixed length, and ColumnLimit 0 is what
-// makes that safe: with no limit clang-format honours the input's line breaks,
-// so the added prefix reflows nothing after it and a multi-line fragment
-// survives the round trip unchanged. Under LLVM 22, which formatted the bare
-// fragment correctly, the whole thing is a no-op.
-constexpr std::string_view expr_context_prefix = "auto beman_specgen_expr = ";
-
-std::string format_expr_fragment(const std::string& text) {
-    std::string formatted = format_code(std::format("{}{};", expr_context_prefix, text), qualifier_style());
-    // Should the wrapper not come back intact, format the fragment on its own
-    // rather than guess at where it now starts and ends: format_code already
-    // degrades to its input when clang-format fails, and this keeps that the
-    // only failure mode.
-    if (!formatted.starts_with(expr_context_prefix) || !formatted.ends_with(';'))
-        return format_code(text, qualifier_style());
-    formatted.pop_back();
-    formatted.erase(0, expr_context_prefix.size());
-    return formatted;
-}
-
 // Fold a formatted fragment onto one line. A conjunct is inline code inside a
 // sentence, so it has to be one: org's `~…~` does not span two newlines, and a
 // markdown span that does is one blank line from breaking. clang-format keeps
-// the author's line breaks here (ColumnLimit 0, above) and a multi-line
-// requires-expression is an ordinary way to write one, so fold them out.
+// the author's line breaks here (ColumnLimit 0, in format_expr_fragment) and
+// a multi-line requires-expression is an ordinary way to write one, so fold
+// them out.
 // Only a whitespace run containing a newline folds, which leaves the spacing
 // inside a string literal as written. This runs before recover_sentinels,
 // whose span offsets must be the folded text's; a sentinel is an identifier
@@ -6444,13 +5641,6 @@ struct UnrecognizedSectionHeader {
 
 std::optional<UnrecognizedSectionHeader> unrecognized_section_header(std::string_view raw);
 
-struct SectionEndFence {
-    std::string stable;
-    std::size_t line_begin = 0;
-};
-
-std::optional<SectionEndFence> section_end_fence(std::string_view raw);
-
 // Fold one attached item into its DocEvent: classify()'s shared tail for
 // every top-level decl that becomes an ItemDecl — an out-of-line or free
 // function definition, or a documented record declaration the header never
@@ -7003,43 +6193,6 @@ void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begi
         out.push_back(RawItem{raw_begin + static_cast<unsigned>(chunk_begin), nullptr, raw.substr(chunk_begin)});
 }
 
-// An END fence is deliberately Doxygen, not a specgen marker: it bounds a
-// section without becoming authored wording. Clang can merge a `.syn` fence
-// into the RawComment that carries a terminal \verbatim-synopsis, so return
-// byte offsets as well as the stable name.
-std::optional<SectionEndFence> section_end_fence(std::string_view raw) {
-    std::size_t begin = 0;
-    // substrate generic algorithm: preserve byte offsets while scanning a
-    // possibly merged RawComment for the exact physical fence line.
-    while (begin <= raw.size()) {
-        const std::size_t newline = raw.find('\n', begin);
-        const std::size_t end     = newline == std::string_view::npos ? raw.size() : newline;
-        std::string_view  text    = raw.substr(begin, end - begin);
-        const std::size_t first   = text.find_first_not_of(" \t");
-        if (first != std::string_view::npos) {
-            text.remove_prefix(first);
-            if (text.starts_with("///")) {
-                text.remove_prefix(3);
-                const std::size_t body = text.find_first_not_of(" \t");
-                if (body != std::string_view::npos)
-                    text.remove_prefix(body);
-                const std::size_t last = text.find_last_not_of(" \t\r");
-                text = last == std::string_view::npos ? std::string_view{} : text.substr(0, last + 1);
-                constexpr std::string_view prefix = "END [";
-                if (text.starts_with(prefix) && text.ends_with(']')) {
-                    const std::string_view stable = text.substr(prefix.size(), text.size() - prefix.size() - 1);
-                    if (!stable.empty())
-                        return SectionEndFence{std::string(stable), begin};
-                }
-            }
-        }
-        if (newline == std::string_view::npos)
-            break;
-        begin = newline + 1;
-    }
-    return std::nullopt;
-}
-
 // The draft writes every synopsis at namespace scope inside the namespace
 // it belongs to -- `namespace std {`, its body indented two spaces, then the
 // closing brace -- and the namespace mapping (design §3.5) has already made
@@ -7210,89 +6363,6 @@ beman::specgen::ir::CodeText header_comment_code(std::string text) {
     unsigned                        span_n = 0;
     text                                   = apply_ref_sentinels(std::move(text), span_n, sentinels);
     return recover_sentinels(std::move(text), sentinels);
-}
-
-DocumentFiles DocumentFiles::discover(clang::ASTUnit& ast, const clang::SourceManager& sm) {
-    DocumentFiles doc;
-    doc.main_ = sm.getMainFileID();
-
-    // The gathered region, if the main file opens one: a `\rSec` whose stable
-    // name ends in `.syn`, and the matching `/// END` fence.
-    const std::map<unsigned, clang::RawComment*>* comments = ast.getASTContext().Comments.getCommentsInFile(doc.main_);
-    if (comments == nullptr)
-        return doc;
-
-    std::optional<unsigned> region_begin;
-    std::string             region_stable;
-    std::optional<unsigned> region_end;
-    // substrate generic algorithm: a find-then-find over one ordered pass --
-    // the opener, then the fence that matches it -- whose state is which of
-    // the two is still being looked for.
-    for (const auto& [offset, comment] : *comments) {
-        const std::string text = comment->getRawText(sm).str();
-        if (!region_begin) {
-            if (const auto header = parse_rsec(text);
-                header && std::string_view(header->value.stable).ends_with(".syn")) {
-                region_begin  = offset;
-                region_stable = header->value.stable;
-            }
-            continue;
-        }
-        if (const auto end = section_end_fence(text); end && end->stable == region_stable) {
-            region_end = offset + static_cast<unsigned>(end->line_begin);
-            break;
-        }
-    }
-    if (!region_begin || !region_end)
-        return doc;
-
-    // The files included between them.  A file reached first from somewhere
-    // else keeps that first inclusion's location and so is not one of these:
-    // the synopsis lists its parts in an order that works, and one that does
-    // not is a header the author has to reorder.
-    std::vector<clang::FileID> candidates;
-    const auto                 note_file = [&](const clang::Decl* decl) {
-        if (decl == nullptr || decl->getBeginLoc().isInvalid())
-            return;
-        const clang::FileID file = sm.getFileID(decl->getBeginLoc());
-        if (file.isInvalid() || file == doc.main_)
-            return;
-        if (!std::ranges::contains(candidates, file))
-            candidates.push_back(file);
-    };
-    // substrate generic algorithm: a for_each-shaped walk driving note_file's
-    // side effect over the translation unit's own declaration list.
-    for (const clang::Decl* decl : std::ranges::subrange(ast.top_level_begin(), ast.top_level_end()))
-        note_file(decl);
-
-    // substrate generic algorithm: a filter-map with a side effect -- a
-    // candidate is kept only if its inclusion is the one inside the region,
-    // and what is kept is a Part built from the file's buffer.
-    for (clang::FileID file : candidates) {
-        const clang::SourceLocation include = sm.getIncludeLoc(file);
-        if (include.isInvalid())
-            continue;
-        const auto [include_file, include_offset] = sm.getDecomposedLoc(include);
-        if (include_file != doc.main_ || include_offset < *region_begin || include_offset >= *region_end)
-            continue;
-        doc.parts_.push_back(Part{file, include_offset, static_cast<unsigned>(sm.getBufferData(file).size()), 0});
-    }
-    std::ranges::sort(doc.parts_, {}, &Part::include_offset);
-
-    unsigned shift = 0;
-    // substrate generic algorithm: a running sum assigning each part its base,
-    // which is a scan whose state is the sum of the parts before it.
-    for (Part& part : doc.parts_) {
-        part.base = part.include_offset + 1 + shift;
-        shift += part.size + 1;
-    }
-    return doc;
-}
-
-// The one failure collect_interleaved and build_document share, worded once so
-// `dump-decls` and `generate` say the same thing about the same missing file.
-BuildFailure unparsed_header(std::string_view header_path) {
-    return BuildFailure{std::format("cannot read '{}', or Clang could not parse it", header_path)};
 }
 
 // --- source files (issue #149) ---------------------------------------------
@@ -7545,68 +6615,6 @@ SourceMarkupMap match_source_markup(const std::vector<clang::Decl*>&            
 }
 
 } // namespace
-
-std::expected<InterleaveResult, BuildFailure> collect_interleaved(std::string_view    header_path,
-                                                                  const ParseOptions& options) {
-    InterleaveResult result;
-
-    ParsedHeader parsed = parse_header(header_path, options);
-    if (!parsed.ast)
-        return std::unexpected(unparsed_header(header_path));
-    // Carried through rather than acted on here — dump-decls, this
-    // function's one caller, is the debugging view of exactly what the parse
-    // produced, so seeing a partial collection when the parse is partial is
-    // the entire point of the command (see InterleaveResult, BuildFailure).
-    result.had_parse_error = parsed.had_error;
-
-    clang::ASTContext&    ctx = parsed.ast->getASTContext();
-    clang::SourceManager& sm  = parsed.ast->getSourceManager();
-    // The same document rule build_document uses, so the debugging view shows
-    // what the wording is generated from and not a narrower file (issue #77).
-    const DocumentFiles doc = DocumentFiles::discover(*parsed.ast, sm);
-
-    // Main-file top-level declarations (design §3.1: "process only decls whose
-    // location is in the main file"). top_level_begin()/end() is a
-    // std::vector<Decl*>::iterator pair with no range object of its own;
-    // std::ranges::subrange gives it one.
-    std::vector<clang::Decl*> decls;
-    // substrate generic algorithm: a for_each-shaped walk driving
-    // collect_top_level_decl's side effect (recursively appending to
-    // `decls`), not a transform building a fresh container -- this tree
-    // declines ranges::for_each as a costume for a loop with a side effect
-    // (see collect_inclass_items's docblock-comment note above).
-    for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
-        collect_top_level_decl(decl, sm, doc, decls);
-    result.items.append_range(
-        decls | std::views::transform([&](clang::Decl* decl) {
-            return SourceItem{SourceItem::Kind::Declaration, doc.offset(sm, decl->getBeginLoc()), decl_label(decl)};
-        }));
-
-    // The document's raw comments (design §3.1/§3.2), keyed by begin offset;
-    // getCommentsInFile may return null when a file has none.
-    const auto collect_comments = [&](clang::FileID file) {
-        if (const std::map<unsigned, clang::RawComment*>* comments = ctx.Comments.getCommentsInFile(file)) {
-            result.items.append_range(*comments | std::views::transform([&](const auto& kv) {
-                return SourceItem{
-                    SourceItem::Kind::Comment, doc.offset_in(file, kv.first), kv.second->getRawText(sm).str()};
-            }));
-        }
-    };
-    collect_comments(doc.main());
-    // substrate generic algorithm: a for_each-shaped walk driving
-    // collect_comments' side effect over the followed files.
-    for (const DocumentFiles::Part& part : doc.parts())
-        collect_comments(part.file);
-
-    // Design §3.2: "collect top-level decls and raw comments; sort by source
-    // offset; interleave." Ties keep decls before comments, which cannot
-    // happen in practice — a comment and a decl cannot begin at the same byte.
-    std::stable_sort(result.items.begin(), result.items.end(), [](const SourceItem& a, const SourceItem& b) {
-        return a.offset < b.offset;
-    });
-
-    return result;
-}
 
 std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    header_path,
                                                             const ParseOptions& options) {
