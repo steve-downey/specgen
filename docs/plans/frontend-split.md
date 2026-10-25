@@ -203,10 +203,15 @@ component's test file. `frontend.cpp` is about 2710 lines.
 
 ### [coverage-roster](#coverage-roster)
 
-*Stage 8.*
+*Stage 8.* **Status:** DONE, 2026-10-25.
 
 The coverage roster and the pre-pass sets (`build_roster`, `build_expos_set`, `build_omit_set`, the foreign
 collections). Also what a non-extracted body names (`body_member_uses`, `collect_unextracted_uses`).
+
+**Log:** 2026-10-25: done as four components, because the two sections held four topics with no references
+between them: `frontend/coverage_roster.hpp`, `frontend/directive_sets.hpp` (the marker pre-passes, two of which
+sat in the second section), `frontend/foreign_names.hpp` (the leakage inputs), and `frontend/body_uses.hpp`.
+`frontend.cpp` is about 1630 lines.
 
 ### [classify-and-sources](#classify-and-sources)
 

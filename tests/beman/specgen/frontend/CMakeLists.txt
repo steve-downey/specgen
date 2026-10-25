@@ -44,6 +44,10 @@ foreach(
     itemdecl
     class_head_mandates
     inclass_items
+    coverage_roster
+    directive_sets
+    foreign_names
+    body_uses
 )
     add_executable(beman.specgen.tests.frontend.${component})
     target_sources(

@@ -14,17 +14,21 @@ target_sources(
     beman.specgen.frontend
     PRIVATE
         attach.cpp
+        body_uses.cpp
         class_head_mandates.cpp
         compile_args.cpp
         constraints.cpp
+        coverage_roster.cpp
         crash_handler.cpp
         decl_projections.cpp
         declaration_masks.cpp
+        directive_sets.cpp
         docblock_lookup.cpp
         document_files.cpp
         draft_format.cpp
         expos_spellings.cpp
         file_views.cpp
+        foreign_names.cpp
         frontend.cpp
         inclass_items.cpp
         interleave.cpp
@@ -46,18 +50,22 @@ target_sources(
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/attach.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/body_uses.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/class_head_mandates.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/constraints.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/coverage_roster.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/crash_handler.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/decl_projections.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/declaration_masks.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/directive_sets.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/docblock_lookup.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/document_files.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/draft_format.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/expos_spellings.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/foreign_names.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/inclass_items.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
