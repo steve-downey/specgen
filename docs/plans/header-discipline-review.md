@@ -196,6 +196,7 @@ moves into `specgen.cppm`, and the [component recipe](../decisions/component-rec
 
 **Log:** 2026-10-24: `foundation/traverse.hpp` is still reached only by its test and the module unit; its liveness
 is a separate question.
+2026-10-25: that question went to issue #189, and `foundation/traverse.hpp` is deleted. Nothing called it.
 
 ### [untested-headers](#untested-headers)
 

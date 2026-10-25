@@ -35,8 +35,8 @@ documents win on rationale, this one wins on "is this diff acceptable."
   standards or other compilers.
 - If an API can be meaningfully `constexpr`, make it `constexpr` and pin the
   contract with a compile-time test alongside the runtime ones —
-  `foundation/fold_left_short.hpp`, `foundation/traverse.hpp`, and
-  `foundation/monoid.hpp` all do this today.
+  `foundation/fold_left_short.hpp` and `foundation/monoid.hpp` both do this
+  today.
 - **Interpolate with `std::format`; print with `std::print`/`std::println` to
   a `FILE*`** ([format-print-output](decisions/format-print-output.md)).
   Never build a message by `+` and `std::to_string`, and
@@ -55,7 +55,7 @@ documents win on rationale, this one wins on "is this diff acceptable."
 
 specgen takes only the **explicit-parameter tier** of the fold/traverse/monoid
 vocabulary `tree_algorithms` and `transpose` each offer in two tiers. Every
-vendored or ported verb (`fold_with`, `traverse`, `mconcat`) receives its
+vendored or ported verb (`fold_with`, `mconcat`) receives its
 operations (`fmap`, `project`, `combine`/`identity`) as explicit arguments,
 the way `foundation/monoid.hpp`'s `mconcat(range, monoid{combine, identity})`
 already reads.
@@ -158,7 +158,7 @@ Four shapes, four tools. Do not blend them at one call site.
 | --- | --- | --- |
 | A single fallible step | `std::expected<T, E>` + `.and_then(...)` | `if (!r.has_value()) return r;` ladders |
 | A sequence that must stop on first failure | `fold_left_short` (`foundation/fold_left_short.hpp`) | a hand-rolled loop with a `break` on error |
-| A structure to thread the effect through, preserving shape | the concrete overloads in `foundation/traverse.hpp` (`sequence`, `traverse`), or a `fold_with` over `ir_fold.hpp`'s `NodeF` for the IR tree | a hand-rolled accumulate-and-check loop |
+| A structure to thread the effect through, preserving shape | a `fold_with` over `ir_fold.hpp`'s `NodeF` for the IR tree | a hand-rolled accumulate-and-check loop |
 | Multiple diagnostics that must all be reported, not just the first | Validation style — carry `{value, vector<Diagnostic>}` and combine with the diagnostics monoid (`combine` = concatenation, `identity` = empty) | fail-fast `and_then` |
 
 This is an assignment; specgen splits
@@ -217,9 +217,8 @@ Before writing one, name which algorithm it actually is:
 - Only a genuine scatter, or a loop that *implements* one of the primitives
   above rather than calling it, stays a raw loop — and it then carries the
   exact comment `// substrate generic algorithm` plus a one-line reason. This
-  is not a rule waiting to be adopted: `foundation/fold_left_short.hpp`,
-  `foundation/traverse.hpp`, and `foundation/monoid.hpp` each mark their one
-  internal loop this way today. The marker goes **on the loop line itself, or
+  is not a rule waiting to be adopted: `foundation/fold_left_short.hpp` and
+  `foundation/monoid.hpp` each mark their one internal loop this way today. The marker goes **on the loop line itself, or
   in the contiguous comment block immediately above it**; a comment above the
   enclosing function credits none of the loops inside it, because a reader
   standing at the loop should be able to see why it is allowed to be there.

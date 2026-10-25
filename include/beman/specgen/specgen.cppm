@@ -28,7 +28,6 @@ export {
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/parse/cursor.hpp>
 #include <beman/specgen/parse/parser.hpp>
-#include <beman/specgen/foundation/traverse.hpp>
 #include <beman/specgen/fragments.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir_fold.hpp>

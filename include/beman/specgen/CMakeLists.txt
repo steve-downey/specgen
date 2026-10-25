@@ -18,7 +18,6 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     foundation/fold_left_short.hpp
                     foundation/monoid.hpp
                     foundation/overloaded.hpp
-                    foundation/traverse.hpp
                     fragments.hpp
                     ir.hpp
                     ir_fold.hpp
@@ -44,7 +43,6 @@ else()
                     foundation/fold_left_short.hpp
                     foundation/monoid.hpp
                     foundation/overloaded.hpp
-                    foundation/traverse.hpp
                     fragments.hpp
                     ir.hpp
                     ir_fold.hpp
