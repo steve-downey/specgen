@@ -18,6 +18,9 @@
 // way so the two can be compared directly rather than against a transcription.
 // `\constraints-in-decl` keeps either one in the itemdecl.
 
+#include <beman/specgen/frontend/constraints.hpp>
+#include <beman/specgen/frontend/constraints.hpp> // Re-inclusion verification
+
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/ir.hpp>
 

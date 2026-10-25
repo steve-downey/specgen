@@ -172,11 +172,18 @@ on the header declarations. `frontend.cpp` is about 4770 lines.
 
 ### [itemdecl-and-derivations](#itemdecl-and-derivations)
 
-*Stage 6.*
+*Stage 6.* **Status:** DONE, 2026-10-25.
 
 Redeclaration-chain attachment (`extract_itemdecl`), then the three derivations as one component each: Constraints,
 Mandates, and the class-head `static_assert`s. Mandates and the class-head pass both use `phrase_conjunct`, so
 Constraints goes first.
+
+**Log:** 2026-10-25: done as four components, one per section: `frontend/itemdecl.hpp`,
+`frontend/constraints.hpp`, `frontend/mandates.hpp`, and `frontend/class_head_mandates.hpp` (not
+`class_description`, a name a scenario test already holds). `constraints.test.cpp` and `mandates.test.cpp` were
+already the scenario tests for those derivations, so they became the components' test files. `split_conjuncts`
+had gone to `requires_clauses` in [synopsis-extraction](#synopsis-extraction). `frontend.cpp` is about 3970
+lines.
 
 ### [body-extraction](#body-extraction)
 

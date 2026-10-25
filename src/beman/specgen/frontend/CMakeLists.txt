@@ -13,7 +13,9 @@ add_library(beman::specgen.frontend ALIAS beman.specgen.frontend)
 target_sources(
     beman.specgen.frontend
     PRIVATE
+        class_head_mandates.cpp
         compile_args.cpp
+        constraints.cpp
         crash_handler.cpp
         decl_projections.cpp
         declaration_masks.cpp
@@ -24,6 +26,8 @@ target_sources(
         file_views.cpp
         frontend.cpp
         interleave.cpp
+        itemdecl.cpp
+        mandates.cpp
         merged_twins.cpp
         parse_header.cpp
         qualifiers.cpp
@@ -40,7 +44,9 @@ target_sources(
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/class_head_mandates.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/constraints.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/crash_handler.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/decl_projections.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/declaration_masks.hpp"
@@ -51,6 +57,8 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/itemdecl.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/mandates.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/merged_twins.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/parse_header.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/qualifiers.hpp"

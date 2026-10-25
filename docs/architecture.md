@@ -1213,6 +1213,14 @@ The build assembles the tool from these components, each following the shared CM
 - **Synopsis edits** — `synopsis_edits.hpp`/`.cpp`. §3.4's edit algebra: `SynopsisEdit`,
   the back-to-front order, and the enclosing mask that wins over nested edits.
   Clang-free.
+- **Itemdecl** — `frontend/itemdecl.hpp`/`.cpp`. §3.3: a documented function's or
+  alias's itemdecl text, read from its first declaration.
+- **Constraints** — `frontend/constraints.hpp`/`.cpp`. §5.1's derivation, and
+  `phrase_conjunct`, which the Mandates derivations share.
+- **Mandates** — `frontend/mandates.hpp`/`.cpp`. §5.2's derivation from a body's leading
+  static_asserts.
+- **Class-head Mandates** — `frontend/class_head_mandates.hpp`/`.cpp`. A class's own
+  description: Mandates from its body's leading static_asserts, and its docblock.
 - **Synopsis extraction** — `frontend/synopsis_extraction.hpp`/`.cpp`. §3.4:
   `extract_synopsis` for a class, `extract_freestanding_declaration` and
   `extract_namespace_expos_synopsis` for namespace-scope declarations, and
