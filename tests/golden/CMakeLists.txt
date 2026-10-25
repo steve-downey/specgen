@@ -1422,7 +1422,7 @@ specgen_add_golden(
 
 # A header that includes one of Clang's builtin headers, parsed with
 # `-nostdlibinc`, so <stddef.h> comes from the resource directory the driver
-# carries beside itself (frontend.cpp, bundled_resource_dir_args) or from a
+# carries beside itself (frontend/parse_header.cpp, bundled_resource_dir_args) or from a
 # distribution's baked-in fallback, and from nowhere else. The fallback is why
 # driver.resource-dir exists too: it checks what Clang was told, which no
 # fallback can stand in for.

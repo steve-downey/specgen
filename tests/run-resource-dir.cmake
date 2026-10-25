@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 # The driver hands Clang the resource directory it carries beside itself
-# (frontend.cpp, bundled_resource_dir_args): run `generate -- -v` and read the
+# (frontend/parse_header.cpp, bundled_resource_dir_args): run `generate -- -v` and read the
 # `-resource-dir` back out of Clang's own -cc1 line. It has to be absolute,
 # since a relative one resolves against whatever directory the user is in, and
 # it has to hold Clang's builtin headers. Run from an empty directory, so a

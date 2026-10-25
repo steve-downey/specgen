@@ -21,6 +21,7 @@ foreach(
     docblock
     markers
     rsec
+    section_markers
     lower
     conjuncts
     depfile
