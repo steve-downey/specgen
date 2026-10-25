@@ -48,6 +48,9 @@ foreach(
     directive_sets
     foreign_names
     body_uses
+    classify
+    source_files
+    source_file
 )
     add_executable(beman.specgen.tests.frontend.${component})
     target_sources(

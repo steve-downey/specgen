@@ -215,13 +215,22 @@ sat in the second section), `frontend/foreign_names.hpp` (the leakage inputs), a
 
 ### [classify-and-sources](#classify-and-sources)
 
-*Stage 9.*
+*Stage 9.* **Status:** DONE, 2026-10-25.
 
 `classify()` and the source-file harvest. The harvest loop becomes a `fold_left_short` call in this step (#196).
 What is left in `frontend.cpp` is the entry points, about 560 lines; [frontend-hpp-name](#frontend-hpp-name)
 decides what the header and file are called after that. The step closes
 [frontend-header-facilities](header-discipline-review.md#frontend-header-facilities) and records the final
 component list in `docs/architecture.md` §11.
+
+**Log:** 2026-10-25: done as three components: `frontend/classify.hpp`, `frontend/header_synopsis.hpp` (the
+gathered `.syn` synopsis assembly, which sat after `classify()` and reads its `RawItem`), and
+`frontend/source_files.hpp`. `SourceFile` moved from `frontend.hpp` to a small header of its own,
+`frontend/source_file.hpp`, below the entry points and the harvest that both take one, as `BuildFailure` did in
+[parse-header](#parse-header). `header_synopsis.test.cpp` was already that feature's scenario test and became the
+component's test file. Using-declarations no code read any more were dropped across the front end. The harvest
+loop is a `fold_left_short` call (#196). `frontend.cpp` is about 610 lines: the two entry points.
+[frontend-hpp-name](#frontend-hpp-name) is still open, so `frontend.hpp` keeps its name.
 
 ## Open questions
 

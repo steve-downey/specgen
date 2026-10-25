@@ -42,6 +42,7 @@
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/frontend/interleave.hpp>
 #include <beman/specgen/frontend/smoke_check.hpp>
+#include <beman/specgen/frontend/source_file.hpp>
 
 #include <algorithm>
 #include <charconv>

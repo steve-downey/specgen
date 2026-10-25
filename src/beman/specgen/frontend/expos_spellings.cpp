@@ -5,7 +5,6 @@
 
 #include <beman/specgen/frontend/record_members.hpp>
 #include <beman/specgen/ir.hpp>
-#include <beman/specgen/section_markers.hpp>
 #include <beman/specgen/span_sentinels.hpp>
 
 #include <clang/AST/ASTContext.h>
@@ -32,7 +31,6 @@
 
 namespace beman::specgen::frontend {
 
-using grammar::parse_ref;
 using span_sentinels::span_sentinel;
 using span_sentinels::SpanInfo;
 

@@ -18,6 +18,7 @@
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/source_file.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <expected>
@@ -90,15 +91,6 @@ build_document(std::string_view header_path, const ParseOptions& options = {});
 struct DocumentBuild {
     beman::specgen::document_build::BuildResult result;
     std::vector<std::string>                    sources;
-};
-
-// A source file whose out-of-line member definitions carry the markup for
-// members the header declares (issue #149), and the options it is parsed with:
-// its own compile command's, since it is a translation unit of its own. Named
-// with `generate --source`, after the header whose document it belongs to.
-struct SourceFile {
-    std::string  path;
-    ParseOptions options;
 };
 
 // `source_files` are parsed after the header, each on its own, and a

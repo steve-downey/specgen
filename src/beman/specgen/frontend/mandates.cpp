@@ -5,8 +5,6 @@
 
 #include <beman/specgen/conjuncts.hpp>
 #include <beman/specgen/ir.hpp>
-#include <beman/specgen/span_sentinels.hpp>
-#include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/constraints.hpp>
 #include <beman/specgen/frontend/requires_clauses.hpp>
 
@@ -35,13 +33,6 @@
 #include <vector>
 
 namespace beman::specgen::frontend {
-
-using span_sentinels::recover_sentinels;
-using span_sentinels::span_sentinel;
-using span_sentinels::SpanInfo;
-using synopsis_edits::add_dominant_edit;
-using synopsis_edits::sort_back_to_front;
-using synopsis_edits::SynopsisEdit;
 
 namespace {
 

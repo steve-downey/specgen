@@ -1,6 +1,9 @@
 // tests/beman/specgen/frontend/header_synopsis.test.cpp         -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
+#include <beman/specgen/frontend/header_synopsis.hpp>
+#include <beman/specgen/frontend/header_synopsis.hpp> // Re-inclusion verification
+
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/ir.hpp>
 

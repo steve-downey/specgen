@@ -16,6 +16,7 @@ target_sources(
         attach.cpp
         body_uses.cpp
         class_head_mandates.cpp
+        classify.cpp
         compile_args.cpp
         constraints.cpp
         coverage_roster.cpp
@@ -30,6 +31,7 @@ target_sources(
         file_views.cpp
         foreign_names.cpp
         frontend.cpp
+        header_synopsis.cpp
         inclass_items.cpp
         interleave.cpp
         itemdecl.cpp
@@ -40,6 +42,7 @@ target_sources(
         record_members.cpp
         requires_clauses.cpp
         smoke_check.cpp
+        source_files.cpp
         synopsis_extraction.cpp
 )
 
@@ -53,6 +56,7 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/body_uses.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/class_head_mandates.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/classify.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/constraints.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/coverage_roster.hpp"
@@ -67,6 +71,7 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/foreign_names.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/header_synopsis.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/inclass_items.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/itemdecl.hpp"
@@ -77,6 +82,8 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/record_members.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/requires_clauses.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/smoke_check.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/source_file.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/source_files.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/synopsis_extraction.hpp"
 )
 
