@@ -19,7 +19,7 @@ namespace beman::specgen::frontend {
 // (decision hermetic-corpus) — but a header outside the corpus (the real
 // beman/optional/optional.hpp) can reach outside itself. ParseOptions
 // (compile_args.hpp) names the three possible sources; these two functions are
-// what parse_header (frontend.cpp) and the driver share to turn one into the actual
+// what parse_header (frontend/parse_header.hpp) and the driver share to turn one into the actual
 // argument vector.
 
 std::vector<std::string> filter_compile_command_args(const std::vector<std::string>& command_line,

@@ -12,6 +12,7 @@ target_sources(
         docblock.cpp
         markers.cpp
         rsec.cpp
+        section_markers.cpp
         lower.cpp
         conjuncts.cpp
         depfile.cpp

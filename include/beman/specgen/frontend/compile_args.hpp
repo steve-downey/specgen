@@ -82,7 +82,7 @@ std::vector<std::string> filter_compile_command_args(const std::vector<std::stri
                                                      const std::string&              filename);
 
 // The result of resolving ParseOptions' three sources for `header_path`:
-// `args` is what `parse_header` (frontend.cpp) appends between its own fixed
+// `args` is what `parse_header` (frontend/parse_header.hpp) appends between its own fixed
 // `-std=c++2c` and its two structural flags; `source` is the *entry's own*
 // working directory (a CompileCommand's `Directory`) when a database
 // contributed flags — empty when `extra_args` won outright (a caller who

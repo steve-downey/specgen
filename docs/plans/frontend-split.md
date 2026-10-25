@@ -106,7 +106,7 @@ the header exposes `format_draft`, `format_and_recover` and `format_expr_fragmen
 
 ### [parse-header](#parse-header)
 
-*Stage 3.*
+*Stage 3.* **Status:** DONE, 2026-10-25.
 
 The prelude's parse path and the file helpers: `ParsedHeader`, `parse_header`, `parse_sources`, the resource-dir
 handling, `DocumentFiles`, decl collection, `file_buffer`, `file_comments`, skipped ranges and
@@ -116,6 +116,22 @@ handling, `DocumentFiles`, decl collection, `file_buffer`, `file_comments`, skip
 `collect_interleaved`, `SourceItem` and `InterleaveResult` then move to `frontend/interleave.hpp`, and
 `collect.test.cpp` becomes `interleave.test.cpp`. `parse_header` gains a from-text overload if the step needs one
 for tests; it becomes the fixture later component tests build their ASTs with.
+
+**Log:** 2026-10-25: done as seven components. The table's row 0 hid one exception to "every use points
+backwards": `DocumentFiles::discover` is defined after `classify()` and reads `section_end_fence`, which lived there.
+The fence scan, and `parse_ref` beside it, are Clang-free, so they went to the core as `section_markers.hpp`,
+namespace `grammar`. `BuildFailure` moved below the entry points to `frontend/build_failure.hpp`, so
+`interleave.hpp` names it without including `frontend.hpp`. The rest:
+
+- `frontend/parse_header.hpp`: `ParsedHeader`, `parse_header`, `parse_sources`, `unparsed_header`
+- `frontend/document_files.hpp`: `DocumentFiles`, `document_line`, the two top-level collections
+- `frontend/file_views.hpp`: `file_buffer`, `file_comments`, `diagnostic_file_name`, skipped ranges
+- `frontend/decl_projections.hpp`: `as_out_of_line_member`, `function_or_template`, `is_first_declaration`. The
+  shared unwrapping projections of [body-extraction](#body-extraction) can join it.
+- `frontend/interleave.hpp`: `SourceItem`, `InterleaveResult`, `collect_interleaved`. `collect.test.cpp` is now
+  `interleave.test.cpp`.
+
+`frontend.cpp` no longer includes `clang/Tooling/Tooling.h`. It is down to about 7100 lines.
 
 ### [qualifiers-and-edits](#qualifiers-and-edits)
 
@@ -176,7 +192,7 @@ component list in `docs/architecture.md` §11.
 ### [clang-header-home](#clang-header-home)
 
 **Question:** where does a header whose interface carries Clang types live, and how is it checked? **Status:**
-OPEN.
+DECIDED, 2026-10-25. **Decided by:** Steve Downey.
 
 `CMAKE_VERIFY_INTERFACE_HEADER_SETS` compiles each FILE_SET header against the target's *interface*. The front-end
 target takes the Clang include directories `PRIVATE`, so a FILE_SET header that includes `<clang/AST/Decl.h>`
@@ -193,6 +209,9 @@ FILE_SET is invisible to them.
   This breaks the header-discipline rule that every header compiles standalone, and that is a checked rule.
 
 Recommendation: the first. Its cost is mostly theoretical, while the second gives up a gate.
+
+**Decision:** the first. The front-end target takes the Clang include directories as `PUBLIC SYSTEM`, and its
+component headers go in `include/beman/specgen/frontend/` like any other.
 
 ### [sentinel-home](#sentinel-home)
 

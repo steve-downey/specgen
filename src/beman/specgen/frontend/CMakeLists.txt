@@ -15,8 +15,13 @@ target_sources(
     PRIVATE
         compile_args.cpp
         crash_handler.cpp
+        decl_projections.cpp
+        document_files.cpp
         draft_format.cpp
+        file_views.cpp
         frontend.cpp
+        interleave.cpp
+        parse_header.cpp
         smoke_check.cpp
 )
 
@@ -26,10 +31,16 @@ target_sources(
         FILE_SET HEADERS
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/crash_handler.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/decl_projections.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/document_files.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/draft_format.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/parse_header.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/smoke_check.hpp"
 )
 
@@ -44,11 +55,16 @@ if(NOT LLVM_ENABLE_RTTI)
 endif()
 
 # LLVM/Clang headers are noisy and not warning-clean under this project's flags;
-# take them as SYSTEM so -Werror stays meaningful for our own code.
+# take them as SYSTEM so -Werror stays meaningful for our own code. PUBLIC
+# because the front end's own component headers name Clang types, and every
+# header in the FILE_SET is compiled on its own against the target's interface
+# (VERIFY_INTERFACE_HEADER_SETS, and through it the style gates). specgen is a
+# tool, not a library, so only the driver and the tests see them (decision
+# tool-not-library; docs/plans/frontend-split.md#clang-header-home).
 target_include_directories(
     beman.specgen.frontend
     SYSTEM
-    PRIVATE ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS}
+    PUBLIC ${LLVM_INCLUDE_DIRS} ${CLANG_INCLUDE_DIRS}
 )
 
 # How Clang reaches the driver. `shared` is the distribution build's
@@ -89,7 +105,7 @@ if(specgen_llvm_link STREQUAL "shared")
     endif()
     set(specgen_clang_libraries clang-cpp LLVM)
 elseif(specgen_llvm_link STREQUAL "static")
-    # clangOptions holds clang::GetResourcesPath (frontend.cpp,
+    # clangOptions holds clang::GetResourcesPath (parse_header.cpp,
     # bundled_resource_dir_args); the rest are the tooling and format
     # surfaces and what they are built on.
     set(specgen_clang_libraries
