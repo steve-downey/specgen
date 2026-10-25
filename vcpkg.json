@@ -1,6 +1,6 @@
 {
   "name": "beman-specgen",
-  "version-semver": "0.5.14",
+  "version-semver": "0.5.15",
   "dependencies": [
     {
       "name": "catch2",
