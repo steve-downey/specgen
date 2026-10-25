@@ -16,12 +16,15 @@ target_sources(
         compile_args.cpp
         crash_handler.cpp
         decl_projections.cpp
+        declaration_masks.cpp
+        docblock_lookup.cpp
         document_files.cpp
         draft_format.cpp
         file_views.cpp
         frontend.cpp
         interleave.cpp
         parse_header.cpp
+        qualifiers.cpp
         smoke_check.cpp
 )
 
@@ -35,12 +38,15 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/crash_handler.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/decl_projections.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/declaration_masks.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/docblock_lookup.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/document_files.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/draft_format.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/parse_header.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/qualifiers.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/smoke_check.hpp"
 )
 

@@ -19,6 +19,7 @@ target_sources(
         document_build.cpp
         fragments.cpp
         span_sentinels.cpp
+        synopsis_edits.cpp
 )
 
 add_subdirectory(backend)
