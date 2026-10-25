@@ -1202,6 +1202,17 @@ The build assembles the tool from these components, each following the shared CM
   when it cannot build what it was asked for.
 - **Section markers** — `section_markers.hpp`/`.cpp`. The `/// END [stable]` fence and
   the `// \ref{stable}` group comment, as scans over raw comment text. Clang-free.
+- **Qualifiers** — `frontend/qualifiers.hpp`/`.cpp`. §3.5's reference-resolved namespace
+  mapping: `namespace_qualifier_edits`, and `expos_uses` for the uses of namespace-scope
+  exposition-only declarations.
+- **Docblock lookup** — `frontend/docblock_lookup.hpp`/`.cpp`. A line's comment vocabulary
+  (§1), where markup starts in a merged comment, the comment attached to a declaration,
+  and its directives and findings.
+- **Declaration masks** — `frontend/declaration_masks.hpp`/`.cpp`. What `\seebelow` and
+  `\impdef` mask on an alias, a concept or a function, as source ranges.
+- **Synopsis edits** — `synopsis_edits.hpp`/`.cpp`. §3.4's edit algebra: `SynopsisEdit`,
+  the back-to-front order, and the enclosing mask that wins over nested edits.
+  Clang-free.
 - **Draft formatting** — `frontend/draft_format.hpp`/`.cpp`. §3.6 step 2: `format_draft`,
   `format_and_recover` (format, then recover the sentinels) and `format_expr_fragment`.
   The interface is strings; the `FormatStyle` and every `clang::format` call stay inside.

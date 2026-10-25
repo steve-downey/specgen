@@ -135,7 +135,7 @@ namespace `grammar`. `BuildFailure` moved below the entry points to `frontend/bu
 
 ### [qualifiers-and-edits](#qualifiers-and-edits)
 
-*Stage 4.*
+*Stage 4.* **Status:** DONE, 2026-10-25.
 
 The reference-resolved namespace mapping becomes `frontend/qualifiers.hpp`. The docblock-lookup-and-edits section
 splits in two:
@@ -145,6 +145,14 @@ splits in two:
 - **Synopsis edits:** `SynopsisEdit`, `add_dominant_edit`, `sort_back_to_front`, `edits_overlap` and the masks.
   `SynopsisEdit` holds absolute offsets. If the edit algebra turns out to be Clang-free, it drops into the core
   like the sentinels do.
+
+**Log:** 2026-10-25: done as four components. The edit algebra (`SynopsisEdit`, `sort_back_to_front`,
+`edits_overlap`, `add_dominant_edit`) is Clang-free and went to the core as `synopsis_edits.hpp`. The masks
+(`SeeBelowTarget` and its enumerator list, the alias and definition masks, `seebelow_source_range`) became
+`frontend/declaration_masks.hpp` rather than staying with the docblock lookup. `expos_uses` was a template over a
+dozen node types, which would have put its visitor in the header; the header declares two overloads instead,
+`clang::Decl*` and `clang::Stmt*`, which is what the template's `if constexpr` dispatched on, and the visitors stay
+in `qualifiers.cpp`. `frontend.cpp` no longer uses `foundation::` at all, and is about 6350 lines.
 
 ### [synopsis-extraction](#synopsis-extraction)
 

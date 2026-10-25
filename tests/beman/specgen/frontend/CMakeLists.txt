@@ -25,9 +25,12 @@ foreach(
     build_failure
     compile_args
     decl_projections
+    declaration_masks
+    docblock_lookup
     document_files
     file_views
     parse_header
+    qualifiers
     crash_handler
     draft_format
     smoke_check
