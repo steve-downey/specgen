@@ -55,3 +55,11 @@ Two mechanisms, chosen per piece:
   `tree_algorithms` freezes its API behind a released port.
 - Every adaptation in `foundation/` is traceable to its source and its reason
   via the provenance header and the divergence log.
+
+## Amendment (2026-10-24)
+
+`foundation/` is a staging area: ported pieces land there while specgen finds
+out whether they are useful and what to report back upstream. A piece that
+specgen adopts as a component with a name of its own moves out to that name:
+the parser-combinator core is now `parse/`, namespace `parse`. It keeps its
+provenance header, and `foundation/DIVERGENCES.md` stays its divergence log.

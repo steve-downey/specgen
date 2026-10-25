@@ -1,4 +1,4 @@
-// include/beman/specgen/foundation/parse/cursor.hpp             -*-C++-*-
+// include/beman/specgen/parse/cursor.hpp                          -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 // Provenance: ported from compile-time-scheme
@@ -9,14 +9,14 @@
 // in the repetition combinators ported alongside parser.hpp). Adapted here by
 // folding smdscheme::foundation::source_pos in directly (specgen has no
 // separate foundation::source_pos of its own) and renaming the namespace to
-// beman::specgen::foundation::parse. See foundation/DIVERGENCES.md.
-#ifndef BEMAN_SPECGEN_FOUNDATION_PARSE_CURSOR_HPP
-#define BEMAN_SPECGEN_FOUNDATION_PARSE_CURSOR_HPP
+// beman::specgen::parse. See foundation/DIVERGENCES.md.
+#ifndef BEMAN_SPECGEN_PARSE_CURSOR_HPP
+#define BEMAN_SPECGEN_PARSE_CURSOR_HPP
 
 #include <cstddef>
 #include <string_view>
 
-namespace beman::specgen::foundation::parse {
+namespace beman::specgen::parse {
 
 /// A 1-based line/column position paired with a 0-based byte offset into the
 /// original input, used to report parse failures and to drive line/column
@@ -86,6 +86,6 @@ constexpr auto skip_intertoken_space(cursor cur) -> cursor {
     return cur;
 }
 
-} // namespace beman::specgen::foundation::parse
+} // namespace beman::specgen::parse
 
-#endif // BEMAN_SPECGEN_FOUNDATION_PARSE_CURSOR_HPP
+#endif // BEMAN_SPECGEN_PARSE_CURSOR_HPP

@@ -22,6 +22,10 @@ Ground rules (decision subtree-consumption):
   subtree'd) with a provenance header naming the source repo, commit, and path.
   Divergence from the source is expected for these by construction; the notes
   below say how and why.
+- A ported piece that specgen has adopted as a component with a name of its
+  own moves out to that name, as the parser combinators did to `parse/`. It
+  keeps its provenance header, and its entries stay in this log: the feedback
+  channel follows the code, not the directory.
 
 ## Decisions
 
@@ -99,7 +103,7 @@ keyword-datum reader, an unrelated concept) and the unchecked
 `some<20>(...)` + manual digit-to-int loop backing `smdscheme`'s integer atom
 parser (still no `std::from_chars`, still no overflow check). Both were
 written fresh in
-`foundation/parse/parser.hpp`, in the same char-at-a-time /
+`parse/parser.hpp`, in the same char-at-a-time /
 commit-on-consumed-input style as the ported `char_p`/`satisfy`, not invented
 independently of that style. Worth upstreaming: a whole-spelling
 `keyword(string_view)` combinator and a `std::from_chars`-backed checked
@@ -116,7 +120,7 @@ Chaining `keyword(a) | keyword(b)` only falls through to `b` when `a` fails
 naively alternating `keyword("\\pre") | keyword("\\post") | ...` would commit
 on the shared `\` and never reach a sibling once the first candidate's second
 character mismatched — confirmed by a negative test in
-`tests/beman/specgen/foundation/parse/parser.test.cpp`
+`tests/beman/specgen/parse/parser.test.cpp`
 ("operator| - a committed (consumed) failure is final ..."). This is not a gap
 in the primitive set: `docblock.cpp` sidesteps
 it by scanning the identifier once (`[a-zA-Z-]+`) and dispatching the resulting

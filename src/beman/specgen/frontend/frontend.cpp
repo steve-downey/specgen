@@ -8,8 +8,8 @@
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
-#include <beman/specgen/foundation/parse/cursor.hpp>
-#include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/parse/cursor.hpp>
+#include <beman/specgen/parse/parser.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
@@ -96,7 +96,7 @@
 
 namespace beman::specgen::frontend {
 
-namespace parse      = beman::specgen::foundation::parse;
+namespace parse      = beman::specgen::parse;
 namespace foundation = beman::specgen::foundation;
 
 using grammar::parse_rsec;

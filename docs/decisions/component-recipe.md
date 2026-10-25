@@ -29,7 +29,7 @@ and the module lane means step 7 is not optional:
    `include/beman/specgen/specgen.cppm`, so it exports it.
 
 Subdirectories get their own `CMakeLists.txt` and an `add_subdirectory` from
-the immediate parent (`foundation/parse/` and `backend/` are the worked
+the immediate parent (`parse/` and `backend/` are the worked
 examples).
 
 ## Consequences

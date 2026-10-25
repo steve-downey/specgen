@@ -3,8 +3,8 @@
 
 #include <beman/specgen/rsec.hpp>
 
-#include <beman/specgen/foundation/parse/cursor.hpp>
-#include <beman/specgen/foundation/parse/parser.hpp>
+#include <beman/specgen/parse/cursor.hpp>
+#include <beman/specgen/parse/parser.hpp>
 
 #include <cstddef>
 #include <string>
@@ -14,16 +14,16 @@
 
 namespace beman::specgen::grammar {
 
-namespace parse = beman::specgen::foundation::parse;
+namespace parse = beman::specgen::parse;
 
 namespace {
 
 // Helper parsers for parse_rsec, below (decision parser-combinators). Not
-// promoted to foundation/parse/parser.hpp: nothing else needs a `\rSec`
+// promoted to parse/parser.hpp: nothing else needs a `\rSec`
 // grammar's blank-skipping or delimiter-content shape yet.
 
 // Skips leading horizontal whitespace (space/tab only). Unlike
-// foundation/parse/cursor.hpp's
+// parse/cursor.hpp's
 // skip_intertoken_space(), this does not cross a newline — a `\rSec` marker
 // is scanned within a single raw comment line, so a later line of a
 // multi-line raw comment must never read as more leading whitespace before
