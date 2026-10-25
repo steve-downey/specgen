@@ -37,7 +37,9 @@
 #include <beman/specgen/validate/validate.hpp>
 
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/crash_handler.hpp>
 #include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/smoke_check.hpp>
 
 #include <algorithm>
 #include <charconv>

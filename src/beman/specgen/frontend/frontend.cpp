@@ -62,7 +62,6 @@
 #include <llvm/Support/Casting.h>
 #include <llvm/Support/Error.h>
 #include <llvm/Support/Path.h>
-#include <llvm/Support/Signals.h>
 #pragma GCC diagnostic pop
 
 #include <algorithm>
@@ -92,8 +91,6 @@
 #include <variant>
 #include <vector>
 
-#include <unistd.h>
-
 namespace beman::specgen::frontend {
 
 namespace parse      = beman::specgen::parse;
@@ -118,48 +115,6 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::fr
 };
 
 namespace beman::specgen::frontend {
-
-SmokeResult smoke_check(std::string_view source) {
-    SmokeResult result;
-
-    // Tooling surface (design §3.1): parse into an AST with the flags the real
-    // front end will use. -fsyntax-only keeps it to a parse; -fparse-all-comments
-    // is what the raw-comment collection needs, exercised here so the flag is
-    // proven wired.
-    const std::vector<std::string>  args = {"-std=c++2c", "-fsyntax-only", "-fparse-all-comments"};
-    std::unique_ptr<clang::ASTUnit> ast  = clang::tooling::buildASTFromCodeWithArgs(std::string(source), args);
-    result.ast_built                     = ast != nullptr;
-
-    // Formatting surface (design §3.6): run clang-format over a fixed snippet.
-    // FormatStyle tuning to draft conventions is draft_format_style(), below;
-    // here it only proves the surface links and produces output.
-    const std::string                        code   = "int  f(  int x ){return  x ;}";
-    const clang::format::FormatStyle         style  = clang::format::getLLVMStyle();
-    const std::vector<clang::tooling::Range> ranges = {clang::tooling::Range(0, static_cast<unsigned>(code.size()))};
-    const clang::tooling::Replacements       replacements = clang::format::reformat(style, code, ranges);
-    if (llvm::Expected<std::string> formatted = clang::tooling::applyAllReplacements(code, replacements))
-        result.formatted = *formatted;
-    else
-        llvm::consumeError(formatted.takeError());
-
-    return result;
-}
-
-void install_crash_handler(std::string_view argv0, std::string banner) {
-    // Owned for the life of the process, because the handler reads it from a
-    // signal context at any point after this returns; written with write(2),
-    // the one output call that is safe there.
-    static std::string crash_banner;
-    crash_banner = std::move(banner);
-    // Registered first, so it runs ahead of the stack trace, which
-    // PrintStackTraceOnErrorSignal adds as a handler of its own.
-    llvm::sys::AddSignalHandler(
-        [](void*) {
-            [[maybe_unused]] const auto written = ::write(STDERR_FILENO, crash_banner.data(), crash_banner.size());
-        },
-        nullptr);
-    llvm::sys::PrintStackTraceOnErrorSignal(llvm::StringRef(argv0.data(), argv0.size()));
-}
 
 namespace {
 

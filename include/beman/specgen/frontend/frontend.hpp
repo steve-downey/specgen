@@ -11,8 +11,9 @@
 // and nowhere else, which keeps the LLVM version dependency a single
 // replaceable target.
 //
-// smoke_check is a link-proving smoke check; the other entry points are the
-// real ClangTool decl-collection and extraction path.
+// These entry points are the ClangTool decl-collection and extraction path.
+// The link probe is frontend/smoke_check.hpp, and the crash handler is
+// frontend/crash_handler.hpp.
 
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
@@ -24,30 +25,6 @@
 #include <vector>
 
 namespace beman::specgen::frontend {
-
-// Result of smoke_check: whether Clang parsed the source into an AST,
-// and the text clang::format produced for a fixed snippet. Exercising both
-// surfaces is the point — the tooling front end (design §3.1) and the
-// formatting normalizer (design §3.6) are the two LLVM dependencies the tier
-// rests on, so the smoke test asserts both link and run.
-struct SmokeResult {
-    bool        ast_built = false;
-    std::string formatted;
-};
-
-// Parse `source` as C++26 into a Clang AST and reformat a fixed snippet through
-// clang-format's LLVM style. Proves the Tier B toolchain is wired end to end;
-// carries no wording-generation logic yet.
-SmokeResult smoke_check(std::string_view source);
-
-// Install LLVM's crash handler for the life of the process: on a fatal signal,
-// write `banner` to stderr and then LLVM's stack trace. Called once, first
-// thing, by the driver. A release binary is fully stripped, so its trace is a
-// list of `specgen(+0x...)` offsets; the banner says which build those offsets
-// belong to, which is what makes the release's separate debug-information
-// asset usable against them. It lives here rather than in the driver because
-// this tier is the one place LLVM is reachable from (decision ir-boundary).
-void install_crash_handler(std::string_view argv0, std::string banner);
 
 // One entry in the decl/comment interleave (design §3.2): either a main-file
 // top-level declaration or a main-file raw comment, tagged with its source

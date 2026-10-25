@@ -23,6 +23,8 @@ foreach(
     index
     mandates
     compile_args
+    crash_handler
+    smoke_check
     diagnostics
     doxygen
 )
