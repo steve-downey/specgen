@@ -6,6 +6,7 @@
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/parse/parser.hpp>
+#include <beman/specgen/foundation/fold_left_short.hpp>
 #include <beman/specgen/frontend/attach.hpp>
 #include <beman/specgen/frontend/body_uses.hpp>
 #include <beman/specgen/frontend/build_failure.hpp>
@@ -84,7 +85,8 @@
 
 namespace beman::specgen::frontend {
 
-namespace parse = beman::specgen::parse;
+namespace foundation = beman::specgen::foundation;
+namespace parse      = beman::specgen::parse;
 
 using grammar::parse_ref;
 using grammar::parse_rsec;
@@ -180,22 +182,27 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     document_paths.insert_range(doc.parts() | std::views::transform([&](const DocumentFiles::Part& part) {
                                     return canonical_file_path(sm, part.file, header_path);
                                 }));
-    std::map<DeclPosition, SourceMarkup>                    source_items;
-    std::vector<beman::specgen::document_build::Diagnostic> source_diagnostics;
-    std::vector<std::string>                                source_reads;
-    std::vector<std::pair<std::string, std::string>>        source_uses;
-    // substrate generic algorithm: a short-circuiting fold over the source
-    // files, each of which may fail the build, merging three results.
-    for (const SourceFile& source : source_files) {
-        std::expected<SourceHarvest, BuildFailure> harvest = harvest_source_file(source, document_paths);
-        if (!harvest)
-            return std::unexpected(std::move(harvest.error()));
-        source_items.merge(harvest->items);
-        source_uses.append_range(std::move(harvest->unextracted_uses));
-        source_diagnostics.append_range(std::move(harvest->diagnostics));
-        source_reads.append_range(std::move(harvest->sources));
-    }
-    const SourceMarkupMap source_markup =
+    // fold_left_short: a source file that fails stops the build, and each one
+    // that parses merges its harvest into what the ones before it found.
+    std::expected<SourceHarvest, BuildFailure> harvested = foundation::fold_left_short(
+        source_files,
+        SourceHarvest{},
+        [&](SourceHarvest found, const SourceFile& source) -> std::expected<SourceHarvest, BuildFailure> {
+            return harvest_source_file(source, document_paths).transform([&](SourceHarvest harvest) {
+                found.items.merge(harvest.items);
+                found.unextracted_uses.append_range(std::move(harvest.unextracted_uses));
+                found.diagnostics.append_range(std::move(harvest.diagnostics));
+                found.sources.append_range(std::move(harvest.sources));
+                return found;
+            });
+        });
+    if (!harvested)
+        return std::unexpected(std::move(harvested.error()));
+    std::map<DeclPosition, SourceMarkup>&                    source_items       = harvested->items;
+    std::vector<beman::specgen::document_build::Diagnostic>& source_diagnostics = harvested->diagnostics;
+    std::vector<std::string>&                                source_reads       = harvested->sources;
+    std::vector<std::pair<std::string, std::string>>&        source_uses        = harvested->unextracted_uses;
+    const SourceMarkupMap                                    source_markup =
         match_source_markup(decls, sm, header_path, source_items, source_diagnostics);
     std::ranges::for_each(source_markup, [&](const auto& entry) {
         const auto& [decl, markup] = entry;
