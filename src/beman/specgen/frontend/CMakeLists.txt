@@ -12,7 +12,12 @@ add_library(beman::specgen.frontend ALIAS beman.specgen.frontend)
 
 target_sources(
     beman.specgen.frontend
-    PRIVATE compile_args.cpp crash_handler.cpp frontend.cpp smoke_check.cpp
+    PRIVATE
+        compile_args.cpp
+        crash_handler.cpp
+        draft_format.cpp
+        frontend.cpp
+        smoke_check.cpp
 )
 
 target_sources(
@@ -23,6 +28,7 @@ target_sources(
             FILES
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/compile_args.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/crash_handler.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/draft_format.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/smoke_check.hpp"
 )

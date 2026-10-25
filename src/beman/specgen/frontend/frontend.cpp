@@ -11,9 +11,11 @@
 #include <beman/specgen/parse/cursor.hpp>
 #include <beman/specgen/parse/parser.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/rsec.hpp>
+#include <beman/specgen/span_sentinels.hpp>
 
 // GCC reports -Wnonnull eight times from inside LLVM's own headers when it
 // inlines RecursiveASTVisitor::TraverseCXXRecordHelper for the visitors below:
@@ -48,7 +50,6 @@
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/Specifiers.h>
 #include <clang/Basic/TokenKinds.h>
-#include <clang/Format/Format.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/PreprocessingRecord.h>
@@ -60,7 +61,6 @@
 #include <llvm/ADT/FoldingSet.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
-#include <llvm/Support/Error.h>
 #include <llvm/Support/Path.h>
 #pragma GCC diagnostic pop
 
@@ -99,6 +99,9 @@ namespace foundation = beman::specgen::foundation;
 using grammar::parse_rsec;
 using grammar::rsec_tag_recognized;
 using grammar::SectionHeader;
+using span_sentinels::recover_sentinels;
+using span_sentinels::span_sentinel;
+using span_sentinels::SpanInfo;
 
 // Outside the anonymous namespace below because `foundation::enumerators`
 // can only be specialized for an enumeration that has a name to specialize
@@ -646,63 +649,6 @@ SkippedRanges collect_skipped_ranges(clang::ASTUnit& ast) {
             result.emplace_back(begin_file, begin, end);
     }
     return result;
-}
-
-// --- normalization (design §3.6 step 2) -------------------------------------
-
-// Draft-tuned FormatStyle (design §3.6 step 2): start from the LLVM style and
-// layer on the options that make the draft's template/requires/concept
-// conventions come out right — templates get their own line, requires-clauses
-// go on their own (indented) line rather than trailing the declaration, and
-// concepts break before their body. The column limit and return-type penalty
-// favor the tighter, name-and-type-together shape draft synopses use. Per
-// design §3.6, tuned via golden-file diff rather than derived a priori.
-// The draft's line width, which a synopsis's final text has to respect too:
-// enclose_in_namespace_std indents a synopsis's body this far *after* it is
-// formatted, so a synopsis formats that much narrower (issue #157).
-constexpr unsigned kDraftColumnLimit = 88;
-constexpr unsigned kNamespaceIndent  = 2;
-
-clang::format::FormatStyle draft_format_style() {
-    clang::format::FormatStyle style     = clang::format::getLLVMStyle();
-    style.BreakTemplateDeclarations      = clang::format::FormatStyle::BTDS_MultiLine;
-    style.SpaceAfterTemplateKeyword      = false;
-    style.RequiresClausePosition         = clang::format::FormatStyle::RCPS_OwnLine;
-    style.IndentRequiresClause           = true;
-    style.BreakBeforeConceptDeclarations = clang::format::FormatStyle::BBCDS_Always;
-    style.ColumnLimit                    = kDraftColumnLimit;
-    style.PenaltyReturnTypeOnItsOwnLine  = 1000; // keep return type and name together
-    // WG21 draft wording attaches references/pointers to the type (`const T&`,
-    // `T*`), not the declarator; getLLVMStyle() defaults to the opposite.
-    style.PointerAlignment = clang::format::FormatStyle::PAS_Left;
-    // And it writes the qualifier on the left, always: `const T&`, never
-    // `T const&`. Left unset, clang-format keeps whichever order the header
-    // used, so the draft's spelling depended on the library's house style
-    // (issue #39). A header may write either; the wording says `const T&`.
-    //
-    // QualifierOrder is set alongside, and has to be: clang-format derives it
-    // from QualifierAlignment only while *parsing YAML*, so a style built in
-    // code gets the enum and an empty order, and the fixer it gates then has
-    // nothing to reorder by and silently does nothing.
-    style.QualifierAlignment            = clang::format::FormatStyle::QAS_Left;
-    style.QualifierOrder                = {"const", "volatile", "type"};
-    style.KeepEmptyLines.AtStartOfBlock = false;
-    return style;
-}
-
-// Run clang-format over `code` and apply its replacements, the same
-// apply-or-fall-back shape smoke_check uses for its proof-of-life formatting
-// call: if applyAllReplacements fails, consume the error and hand back the
-// input unchanged rather than propagating a formatting failure into the IR.
-std::string format_code(std::string_view code, const clang::format::FormatStyle& style) {
-    const std::string                        text   = std::string(code);
-    const std::vector<clang::tooling::Range> ranges = {clang::tooling::Range(0, static_cast<unsigned>(text.size()))};
-    const clang::tooling::Replacements       replacements = clang::format::reformat(style, text, ranges);
-    if (llvm::Expected<std::string> formatted = clang::tooling::applyAllReplacements(text, replacements))
-        return *formatted;
-    else
-        llvm::consumeError(formatted.takeError());
-    return text;
 }
 
 // --- reference-resolved namespace mapping (design §3.5) ---------------------
@@ -1482,193 +1428,6 @@ bool edits_overlap(const SynopsisEdit& a, const SynopsisEdit& b) { return a.begi
 void add_dominant_edit(std::vector<SynopsisEdit>& edits, SynopsisEdit dominant) {
     std::erase_if(edits, [&](const SynopsisEdit& edit) { return edits_overlap(edit, dominant); });
     edits.push_back(std::move(dominant));
-}
-
-// --- token rewriting via valid-C++ sentinels (design §3.6) ------------------
-// A rewrite replaces a token range with a `\exposid`/`\seebelow`/… span. Doing
-// it directly would put backend markup (`@\exposid{…}@`) into text clang-format
-// then mangles, so §3.6 splits it in three: (1) replace the range with a unique
-// valid-C++ *sentinel* identifier, (2) format, (3) recover — swap each sentinel
-// for its display text and record an ir::Span over it. This keeps the fragment
-// parseable and lets clang-format line-break on a real token.
-
-// The recovered form of one sentinel: `display` is what lands in CodeText::text
-// (e.g. the exposid name `val`); `payload` drives the backend macro (the exposid
-// name, or empty for \seebelow, whose macro takes no argument).
-struct SpanInfo {
-    beman::specgen::ir::SpanKind kind;
-    std::string                  display;
-    std::string                  payload;
-};
-
-// A unique, valid-C++ sentinel identifier for the n-th span in a fragment.
-std::string span_sentinel(unsigned n) { return std::format("SPECGEN_{}_SPAN", n); }
-
-// §3.6 step 3: replace each sentinel with its display text and record an
-// ir::Span over it. Kept separate from formatting because derived conjuncts
-// are expression fragments whose original layout is already the desired text.
-beman::specgen::ir::CodeText recover_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentinels) {
-    namespace ir = beman::specgen::ir;
-
-    if (sentinels.empty())
-        return ir::CodeText{std::move(text), {}};
-
-    // Each sentinel is unique and occurs once; collect the hits and order them.
-    struct Hit {
-        std::size_t        pos;
-        const std::string* name;
-        const SpanInfo*    info;
-    };
-    std::vector<Hit> hits =
-        sentinels | std::views::filter([&](const auto& kv) { return text.find(kv.first) != std::string::npos; }) |
-        std::views::transform([&](const auto& kv) {
-            const auto& [name, info] = kv;
-            return Hit{text.find(name), &name, &info};
-        }) |
-        std::ranges::to<std::vector<Hit>>();
-    std::sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.pos < b.pos; });
-
-    ir::CodeText out;
-    std::size_t  src = 0;
-    // substrate generic algorithm: a position-tracking left-to-right walk
-    // over a sorted, non-overlapping hit table -- the same array-substitution
-    // primitive backend/code_spans.hpp's render_code_spans already marks -- not a
-    // fold in disguise, since a hit's recorded span begin depends on how much
-    // the walk has already appended, which std::ranges::fold_left would have
-    // to smuggle through a synthetic multi-field accumulator for no gain in
-    // clarity over the loop.
-    for (const Hit& hit : hits) {
-        out.text += text.substr(src, hit.pos - src);
-        const std::size_t begin = out.text.size();
-        out.text += hit.info->display;
-        out.spans.push_back(ir::Span{begin, out.text.size(), hit.info->kind, hit.info->payload});
-        src = hit.pos + hit.name->size();
-    }
-    out.text += text.substr(src);
-    return out;
-}
-
-// An identifier of exactly `width` characters that occurs neither in `text` nor
-// among `taken`, or nullopt when none can be built (a width of zero, or every
-// candidate already present -- neither has happened, but a caller that gets
-// nullopt keeps the sentinel it has, which is what the code did before this).
-//
-// The letters are arbitrary; what matters is that a run of one letter followed
-// by a counter is not something C++ source contains, and that the result is
-// checked rather than assumed.
-std::optional<std::string>
-exact_width_sentinel(const std::string& text, const std::set<std::string>& taken, std::size_t width, unsigned n) {
-    if (width == 0)
-        return std::nullopt;
-    // substrate generic algorithm: try letters until one yields a candidate
-    // absent from the text -- a search whose subject is the text, not a range
-    // that already exists.
-    for (const char filler : std::string_view("ZQXJVWKY")) {
-        std::string candidate = std::format("{}{}", filler, n);
-        if (candidate.size() > width)
-            candidate.resize(width);
-        candidate.resize(width, filler);
-        if (!taken.contains(candidate) && text.find(candidate) == std::string::npos)
-            return candidate;
-    }
-    return std::nullopt;
-}
-
-// §3.6 step 1's "length-padded if needed so line-breaking stays honest", which
-// the design has always specified and the sentinels never were. A sentinel
-// stands in for its display text only until recovery, but clang-format decides
-// line breaks and continuation alignment while it is still there -- so a name
-// whose exposition-only spelling is a different width came out aligned to the
-// sentinel's width instead of its own, and a continuation under an opening `<`
-// lined up with nothing (issue #67).
-//
-// Resizing them here rather than at each of the twenty allocation sites keeps
-// the one rule in one place: a sentinel is exactly as wide as what replaces it.
-// It also has to be here, because it is the only point that holds the whole
-// fragment, which is what makes "this identifier appears nowhere else"
-// checkable rather than assumed.
-std::pair<std::string, std::map<std::string, SpanInfo>>
-resize_sentinels(std::string text, const std::map<std::string, SpanInfo>& sentinels) {
-    std::map<std::string, SpanInfo> resized;
-    std::set<std::string>           taken;
-    unsigned                        n = 0;
-    // substrate generic algorithm: a scatter into two coupled outputs -- the
-    // rewritten text and the re-keyed table -- where each step's replacement
-    // depends on what the previous ones claimed.
-    for (const auto& [sentinel, info] : sentinels) {
-        const std::size_t                at = text.find(sentinel);
-        const std::optional<std::string> fitted =
-            at == std::string::npos ? std::nullopt : exact_width_sentinel(text, taken, info.display.size(), n++);
-        if (!fitted) {
-            resized.emplace(sentinel, info);
-            taken.insert(sentinel);
-            continue;
-        }
-        text.replace(at, sentinel.size(), *fitted);
-        resized.emplace(*fitted, info);
-        taken.insert(*fitted);
-    }
-    return {std::move(text), std::move(resized)};
-}
-
-// Whether some line of `text` holds nothing but a `;`.
-bool has_lone_semicolon(std::string_view text) {
-    return std::ranges::any_of(std::views::split(text, '\n'), [](auto line) {
-        const std::string_view view(line.begin(), line.end());
-        const std::size_t      first = view.find_first_not_of(" \t");
-        return first != std::string_view::npos && view.substr(first) == ";";
-    });
-}
-
-// `code` in the draft style, `indent` columns narrower than the draft's width
-// for text that is indented that far afterwards.
-//
-// When the last line of a declaration lands exactly on the column limit,
-// clang-format ends it there and puts the `;` on a line of its own rather than
-// break the line earlier -- a requires-clause ending in a nested
-// template-argument list, in practice (issue #157). A column narrower moves the
-// break back inside the line, so the formatting is retried narrower until the
-// lone `;` is gone. One that survives every retry is not that artifact but an
-// empty statement, `while (f())` over an indented `;`, and the first
-// formatting stands.
-std::string format_draft(std::string_view code, unsigned indent) {
-    clang::format::FormatStyle style = draft_format_style();
-    style.ColumnLimit -= indent;
-    const std::string formatted = format_code(code, style);
-    if (!has_lone_semicolon(formatted))
-        return formatted;
-    const unsigned limit = style.ColumnLimit;
-    // substrate generic algorithm: a bounded retry whose every attempt is a
-    // full reformat; the first acceptable one ends it.
-    for (unsigned narrower = 1; narrower <= 8; ++narrower) {
-        style.ColumnLimit = limit - narrower;
-        std::string again = format_code(code, style);
-        if (!has_lone_semicolon(again))
-            return again;
-    }
-    return formatted;
-}
-
-// `indent` is how far the result is indented once formatted: a synopsis's
-// kNamespaceIndent, else 0.
-beman::specgen::ir::CodeText format_and_recover(std::string                            text,
-                                                const std::map<std::string, SpanInfo>& sentinels,
-                                                std::optional<std::string_view>        record_tag = std::nullopt,
-                                                unsigned                               indent     = 0) {
-    auto [sized_text, sized] = resize_sentinels(std::move(text), sentinels);
-    std::string formatted    = format_draft(sized_text, indent);
-
-    // BTDS_MultiLine matches the draft for function templates, but considers a
-    // record head short even when its body is not and joins `template<...>` to
-    // `class`/`struct`. The AST gives this path the record tag, so preserve
-    // that one draft line break without guessing at arbitrary formatted code.
-    if (record_tag && !record_tag->empty() && formatted.starts_with("template<")) {
-        const std::size_t line_end = formatted.find('\n');
-        const std::size_t pos      = formatted.rfind(std::format(" {} ", *record_tag), line_end);
-        if (pos != std::string::npos && pos < line_end)
-            formatted[pos] = '\n';
-    }
-    return recover_sentinels(std::move(formatted), sized);
 }
 
 // --- exposition-only *uses* (design §3.5) -----------------------------------
@@ -3508,61 +3267,12 @@ void split_conjuncts(const clang::Expr* e, std::vector<const clang::Expr*>& out)
     out.push_back(e);
 }
 
-// The draft's qualifier order applied to a fragment whose layout is already
-// what the wording wants. Expression text -- a derived conjunct, an
-// *Equivalent to:* body -- is taken from source verbatim and never reflowed,
-// so a header writing `T const&` put `T const&` in a Constraints element while
-// the itemdecl above it, which does go through clang-format, said `const T&`
-// (issue #39). ColumnLimit 0 keeps the reflow off while the qualifier fixer
-// runs: with no limit clang-format honours the input's own line breaks.
-clang::format::FormatStyle qualifier_style() {
-    clang::format::FormatStyle style = draft_format_style();
-    style.ColumnLimit                = 0;
-    return style;
-}
-
-// Format an expression fragment in a declaration context, then take the
-// context back off.
-//
-// clang-format parses what it is handed, and a bare fragment carries no
-// context to parse in. From LLVM 23 on it reads the `&` of
-// `requires(const Impl& impl) { ... }` as a binary operator rather than a
-// declarator and spaces it as one, so a derived Constraints element came out
-// saying `const Impl & impl` where the draft says `const Impl&` -- the very
-// spelling draft_format_style() sets PAS_Left for. The draft's spelling is not
-// negotiable against a formatter defect
-// (docs/plans/llvm-23-port.md#constraints-fragment-spelling), so restore the
-// context instead: wrapped as a variable initializer the fragment parses as
-// what it is. An initializer and not a requires-clause because *any*
-// expression is a valid one, and this path also carries Mandates conjuncts
-// lifted from static_assert conditions, whose grammar a requires-clause need
-// not admit.
-//
-// The wrapper comes off by its own fixed length, and ColumnLimit 0 is what
-// makes that safe: with no limit clang-format honours the input's line breaks,
-// so the added prefix reflows nothing after it and a multi-line fragment
-// survives the round trip unchanged. Under LLVM 22, which formatted the bare
-// fragment correctly, the whole thing is a no-op.
-constexpr std::string_view expr_context_prefix = "auto beman_specgen_expr = ";
-
-std::string format_expr_fragment(const std::string& text) {
-    std::string formatted = format_code(std::format("{}{};", expr_context_prefix, text), qualifier_style());
-    // Should the wrapper not come back intact, format the fragment on its own
-    // rather than guess at where it now starts and ends: format_code already
-    // degrades to its input when clang-format fails, and this keeps that the
-    // only failure mode.
-    if (!formatted.starts_with(expr_context_prefix) || !formatted.ends_with(';'))
-        return format_code(text, qualifier_style());
-    formatted.pop_back();
-    formatted.erase(0, expr_context_prefix.size());
-    return formatted;
-}
-
 // Fold a formatted fragment onto one line. A conjunct is inline code inside a
 // sentence, so it has to be one: org's `~…~` does not span two newlines, and a
 // markdown span that does is one blank line from breaking. clang-format keeps
-// the author's line breaks here (ColumnLimit 0, above) and a multi-line
-// requires-expression is an ordinary way to write one, so fold them out.
+// the author's line breaks here (ColumnLimit 0, in format_expr_fragment) and
+// a multi-line requires-expression is an ordinary way to write one, so fold
+// them out.
 // Only a whitespace run containing a newline folds, which leaves the spacing
 // inside a string literal as written. This runs before recover_sentinels,
 // whose span offsets must be the folded text's; a sentinel is an identifier

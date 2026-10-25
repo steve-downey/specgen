@@ -87,7 +87,7 @@ This needs no decision from the open questions below, because neither header car
 
 ### [string-level-pieces](#string-level-pieces)
 
-*Stage 2.*
+*Stage 2.* **Status:** DONE, 2026-10-25.
 
 The two sections that barely touch Clang, with direct tests on strings:
 
@@ -98,6 +98,11 @@ The two sections that barely touch Clang, with direct tests on strings:
   derivation builds its own variant of the style (line 3564), so the step decides whether the header exposes
   `clang::format::FormatStyle` or names the two styles as functions over strings. The second keeps Clang out of
   the interface, the way `compile_args.hpp` does, and is preferred if the Constraints variant fits it.
+
+**Log:** 2026-10-25: done as `span_sentinels.hpp` in the core and `frontend/draft_format.hpp`. The Constraints
+variant fit the string interface: `qualifier_style` and `format_expr_fragment` moved into `draft_format.cpp`, so
+the header exposes `format_draft`, `format_and_recover` and `format_expr_fragment`, and no `FormatStyle`.
+`frontend.cpp` no longer includes `clang/Format/Format.h`. Both components have direct tests on strings.
 
 ### [parse-header](#parse-header)
 
@@ -191,10 +196,13 @@ Recommendation: the first. Its cost is mostly theoretical, while the second give
 
 ### [sentinel-home](#sentinel-home)
 
-**Question:** where do the sentinel helpers go? **Status:** OPEN.
+**Question:** where do the sentinel helpers go? **Status:** DECIDED, 2026-10-25. **Decided by:** Steve Downey.
 
 They need only `ir`, so the DAG puts them in the core library, beside `conjuncts` and `lower`, whatever their only
-caller is. Recommendation: `span_sentinels.hpp` in the core, namespace `beman::specgen`, tested directly on strings.
+caller is.
+
+**Decision:** `span_sentinels.hpp` in the core, tested directly on strings. Its namespace is
+`beman::specgen::span_sentinels`, after the header, as `conjuncts.hpp`'s is `conjuncts`.
 
 ### [frontend-component-tests](#frontend-component-tests)
 

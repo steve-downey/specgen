@@ -24,6 +24,7 @@ foreach(
     mandates
     compile_args
     crash_handler
+    draft_format
     smoke_check
     diagnostics
     doxygen

@@ -35,6 +35,7 @@ export {
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/markers.hpp>
 #include <beman/specgen/rsec.hpp>
+#include <beman/specgen/span_sentinels.hpp>
 #include <beman/specgen/validate/validate.hpp>
 #pragma clang diagnostic pop
 }

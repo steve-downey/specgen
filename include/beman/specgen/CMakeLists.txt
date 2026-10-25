@@ -25,6 +25,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     lower.hpp
                     markers.hpp
                     rsec.hpp
+                    span_sentinels.hpp
                     "${PROJECT_BINARY_DIR}/include/beman/specgen/config_generated.hpp"
     )
 else()
@@ -50,6 +51,7 @@ else()
                     lower.hpp
                     markers.hpp
                     rsec.hpp
+                    span_sentinels.hpp
                     "${PROJECT_BINARY_DIR}/include/beman/specgen/config_generated.hpp"
     )
 endif()

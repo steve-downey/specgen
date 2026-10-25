@@ -27,6 +27,7 @@ foreach(
     diagnostic
     document_build
     fragments
+    span_sentinels
 )
     add_executable(beman.specgen.tests.${component})
     target_sources(

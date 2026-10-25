@@ -147,7 +147,7 @@ Stage 3. **Done** (2026-09-06), per
 [constraints-fragment-spelling](#constraints-fragment-spelling): `Impl&` is
 restored rather than the goldens regenerated.
 
-`format_expr_fragment` (`frontend.cpp`, beside `qualifier_style()`) formats the
+`format_expr_fragment` (`frontend/draft_format.cpp`, beside `qualifier_style()`) formats the
 fragment as a variable initializer — `auto beman_specgen_expr = <expr>;` — and
 takes the wrapper off again by its own fixed length. An initializer and not a
 requires-clause because *any* expression is a valid initializer, and this path
