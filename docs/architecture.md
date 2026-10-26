@@ -1183,8 +1183,8 @@ The build assembles the tool from these components, each following the shared CM
 - **Validators** — `include/beman/specgen/validate/`. The §9 checks as cases of a shared
   validation algebra over the IR.
 - **Front end** — `include/beman/specgen/frontend/frontend.hpp`,
-  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document`, the
-  `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets.
+  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document` and
+  `classify()`.
 - **Front-end parse** — `frontend/parse_header.hpp`/`.cpp`. §3.1's one parse path:
   `parse_header` (the fixed arguments, the bundled resource directory, and the resolved
   extra arguments), `parse_sources`, and the `unparsed_header` failure.
@@ -1212,6 +1212,15 @@ The build assembles the tool from these components, each following the shared CM
 - **Synopsis edits** — `synopsis_edits.hpp`/`.cpp`. §3.4's edit algebra: `SynopsisEdit`,
   the back-to-front order, and the enclosing mask that wins over nested edits.
   Clang-free.
+- **Directive sets** — `frontend/directive_sets.hpp`/`.cpp`. The marker pre-passes:
+  `build_omit_set`, `build_expos_set`, `build_namespace_drop_set`, `build_seebelow_map`,
+  `build_freestanding_map`.
+- **Coverage roster** — `frontend/coverage_roster.hpp`/`.cpp`. §9: `build_roster`, every
+  entity a synopsis declares and its disposition.
+- **Foreign names** — `frontend/foreign_names.hpp`/`.cpp`. §9's leakage inputs: the
+  paper's own entities, and the foreign namespaces and declarations a document names.
+- **Body uses** — `frontend/body_uses.hpp`/`.cpp`. §9: the class members a body the
+  wording leaves unrendered still names.
 - **Attach** — `frontend/attach.hpp`/`.cpp`. §3.3 and §4.2: a docblock attached to the
   declaration it documents, with its derived elements and extracted `\effects-equiv` /
   `\returns-expr` bodies, as an `AttachedItem`: `attach_function`, `attach_alias`,
