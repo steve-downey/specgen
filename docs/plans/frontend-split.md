@@ -187,11 +187,19 @@ lines.
 
 ### [body-extraction](#body-extraction)
 
-*Stage 7.*
+*Stage 7.* **Status:** DONE, 2026-10-25.
 
 `\effects-equiv` / `\returns-expr` body extraction with its `attach_*` family, the shared unwrapping projections,
 and in-class member collection. The projections section uses `attach_function`, and `build_spec_item` lives there,
 so the step decides whether the projections stand alone or join body extraction.
+
+**Log:** 2026-10-25: done as two components, and four projections that joined `decl_projections`. The body
+extraction section is really attachment: `AttachedItem` and the `attach_*` family, with body extraction as their
+file-local helpers, so it is `frontend/attach.hpp`. `build_spec_item` calls `attach_function`, so it went there
+rather than to the projections. In-class collection is `frontend/inclass_items.hpp`. `ClassRefGroups` had its
+member functions defined in the class body; they are defined out of line in `inclass_items.cpp` instead, so the
+header carries only the declarations. `attach.test.cpp` was already attachment's scenario test and became the
+component's test file. `frontend.cpp` is about 2710 lines.
 
 ### [coverage-roster](#coverage-roster)
 

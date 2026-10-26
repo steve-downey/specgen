@@ -10,6 +10,9 @@
 
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclBase.h>
+#include <clang/AST/DeclCXX.h>
+
+#include <utility>
 
 namespace beman::specgen::frontend {
 
@@ -30,6 +33,38 @@ const clang::FunctionDecl* function_or_template(const clang::Decl* decl);
 // above it already declares, in the `Class::member` spelling the draft never
 // prints.  Its *wording* still travels: only the synopsis entry is dropped.
 bool is_first_declaration(const clang::Decl* decl);
+
+//
+// collect_inclass_items below and the build_omit_set/build_expos_set/
+// build_seebelow_map pre-passes further down each walk a class's members
+// looking for a function or a hidden friend, or walk `decls` looking for an
+// out-of-line function definition or a class/class-template definition. Their
+// own comments already say so ("Same pre-pass shape as build_omit_set"). The
+// projections below are that repeated dyn_cast unwrapping, named once each;
+// the caller-specific predicate (does the docblock say \omit, \expos,
+// \seebelow; does the member carry a real body) stays local to each caller,
+// since that is the part that is not actually shared.
+
+// The out-of-line function a top-level decl defines: itself if a
+// FunctionDecl, or a FunctionTemplateDecl's templated declaration.
+// build_expos_set has no out-of-line case of its own (exposition-only
+// applies only to members), so only build_omit_set and build_seebelow_map
+// use this.
+const clang::FunctionDecl* as_out_of_line_function(const clang::Decl* decl);
+
+// A specialization and the primary it specializes, or {decl, nullptr} when
+// `decl` specializes nothing. Partial and explicit alike: the partial kinds
+// derive from these, so one cast each covers both (issue #49).
+std::pair<const clang::Decl*, const clang::Decl*> specialized_primary(const clang::Decl* decl);
+
+// A class or class template's templated record, if `decl` names either.
+// Shared by all three set-builder pre-passes' outer walk.
+const clang::CXXRecordDecl* as_record_decl(const clang::Decl* decl);
+
+// The function a member decl names without unwrapping a function template.
+// build_seebelow_map uses this as its first projection before handling a plain
+// FunctionTemplateDecl explicitly.
+const clang::FunctionDecl* member_as_function_or_friend(const clang::Decl* member);
 
 } // namespace beman::specgen::frontend
 
