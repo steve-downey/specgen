@@ -1,7 +1,7 @@
-// include/beman/specgen/frontend/frontend.hpp                      -*-C++-*-
+// include/beman/specgen/frontend/build_document.hpp              -*-C++-*-
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
-#ifndef BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
-#define BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
+#ifndef BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP
+#define BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP
 
 // Tier B — the Clang front end. See design plan §3 and decisions ir-boundary
 // and llvm-toolchain-pin. Built in every configuration, against the pinned
@@ -18,6 +18,7 @@
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/source_file.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <expected>
@@ -92,15 +93,6 @@ struct DocumentBuild {
     std::vector<std::string>                    sources;
 };
 
-// A source file whose out-of-line member definitions carry the markup for
-// members the header declares (issue #149), and the options it is parsed with:
-// its own compile command's, since it is a translation unit of its own. Named
-// with `generate --source`, after the header whose document it belongs to.
-struct SourceFile {
-    std::string  path;
-    ParseOptions options;
-};
-
 // `source_files` are parsed after the header, each on its own, and a
 // documented member definition in one becomes the item of the declaration it
 // defines, placed as a definition in the header would be. Their reads join
@@ -110,4 +102,4 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(
 
 } // namespace beman::specgen::frontend
 
-#endif // BEMAN_SPECGEN_FRONTEND_FRONTEND_HPP
+#endif // BEMAN_SPECGEN_FRONTEND_BUILD_DOCUMENT_HPP

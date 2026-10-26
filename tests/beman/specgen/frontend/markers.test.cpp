@@ -10,7 +10,7 @@
 // groups; `scratch()` carries `\omit` and produces no SpecItem at all; `size()`
 // is a plain, undisturbed described member.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>

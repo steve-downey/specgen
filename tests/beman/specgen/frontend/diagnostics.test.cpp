@@ -19,7 +19,7 @@
 // in the document — the channel is additive.
 
 #include <beman/specgen/document_build.hpp>
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/frontend/interleave.hpp>
 
 #include <catch2/catch_test_macros.hpp>

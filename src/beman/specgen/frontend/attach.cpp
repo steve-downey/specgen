@@ -8,7 +8,6 @@
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
-#include <beman/specgen/section_markers.hpp>
 #include <beman/specgen/span_sentinels.hpp>
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/constraints.hpp>
@@ -57,11 +56,8 @@
 
 namespace beman::specgen::frontend {
 
-using grammar::parse_ref;
-using span_sentinels::recover_sentinels;
 using span_sentinels::span_sentinel;
 using span_sentinels::SpanInfo;
-using synopsis_edits::add_dominant_edit;
 using synopsis_edits::sort_back_to_front;
 using synopsis_edits::SynopsisEdit;
 
@@ -351,7 +347,7 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     // substrate generic algorithm: a for_each-shaped mutation of the elements
     // it iterates, not a container rebuild -- filtering states the predicate
     // up front instead of burying it in the loop body's if, but this tree
-    // declines ranges::for_each for exactly the reason frontend.cpp's
+    // declines ranges::for_each for exactly the reason synopsis_extraction.cpp's
     // orphaned-label walk does: wrapping the assignment in a
     // call would hide the loop, not remove it.
     //

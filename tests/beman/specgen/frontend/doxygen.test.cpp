@@ -25,7 +25,7 @@
 // than anything here can: its `expected.json` is `widget_skeleton`'s modulo
 // the rename.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <string>

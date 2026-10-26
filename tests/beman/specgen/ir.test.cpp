@@ -53,7 +53,7 @@ TEST_CASE("ir - canonicalize sorts into structure.specifications order") {
 TEST_CASE("ir - canonicalize sorts a derived element before an authored one of the same kind") {
     // Design §5.2: "derived conjuncts first, authored prose
     // appended". The authored element is pushed first here (the order
-    // frontend.cpp builds them in -- the docblock is lowered before the
+    // the front end builds them in -- the docblock is lowered before the
     // derivation runs), so this also confirms canonicalize actually
     // reorders rather than merely leaving a pre-sorted input alone.
     DescriptionElement authored;

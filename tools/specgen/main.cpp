@@ -39,9 +39,10 @@
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/crash_handler.hpp>
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/frontend/interleave.hpp>
 #include <beman/specgen/frontend/smoke_check.hpp>
+#include <beman/specgen/frontend/source_file.hpp>
 
 #include <algorithm>
 #include <charconv>

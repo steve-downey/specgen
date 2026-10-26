@@ -1182,9 +1182,15 @@ The build assembles the tool from these components, each following the shared CM
   `usable_as_file_name` as the path boundary.
 - **Validators** — `include/beman/specgen/validate/`. The §9 checks as cases of a shared
   validation algebra over the IR.
-- **Front end** — `include/beman/specgen/frontend/frontend.hpp`,
-  `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document` and
-  `classify()`.
+- **Build document** — `include/beman/specgen/frontend/build_document.hpp`,
+  `src/beman/specgen/frontend/build_document.cpp`. §3 end to end: `build_document` and
+  `build_document_with_sources`, composing the components below.
+- **Classify** — `frontend/classify.hpp`/`.cpp`. Stage 1 of the document build (decision
+  `document-build-stages`): each raw declaration or comment into a `DocEvent`.
+- **Header synopsis** — `frontend/header_synopsis.hpp`/`.cpp`. A gathered `.syn` region's
+  declarations and structure comments, assembled into one synopsis in `namespace std`.
+- **Source files** — `frontend/source_files.hpp`/`.cpp`, with `frontend/source_file.hpp`.
+  Issue #149: markup harvested from out-of-line definitions in a source file's own parse.
 - **Front-end parse** — `frontend/parse_header.hpp`/`.cpp`. §3.1's one parse path:
   `parse_header` (the fixed arguments, the bundled resource directory, and the resolved
   extra arguments), `parse_sources`, and the `unparsed_header` failure.

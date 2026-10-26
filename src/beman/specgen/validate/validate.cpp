@@ -946,7 +946,7 @@ Diagnostics check_unextracted_uses(const std::vector<ir::BodyUse>& uses,
 
 // Which way a conjunct's subject reads: "`X` is `true`", "`X` is `false`",
 // or neither (a concept-id, or the verbatim fallback) -- the two cases
-// `phrase_conjunct` (frontend.cpp) never puts a trailing `true`/`false`
+// `phrase_conjunct` (frontend/constraints.cpp) never puts a trailing `true`/`false`
 // literal onto.
 enum class ConjunctPolarity { Positive, Negative, Unknown };
 

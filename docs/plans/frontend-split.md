@@ -215,13 +215,22 @@ sat in the second section), `frontend/foreign_names.hpp` (the leakage inputs), a
 
 ### [classify-and-sources](#classify-and-sources)
 
-*Stage 9.*
+*Stage 9.* **Status:** DONE, 2026-10-25.
 
 `classify()` and the source-file harvest. The harvest loop becomes a `fold_left_short` call in this step (#196).
 What is left in `frontend.cpp` is the entry points, about 560 lines; [frontend-hpp-name](#frontend-hpp-name)
 decides what the header and file are called after that. The step closes
 [frontend-header-facilities](header-discipline-review.md#frontend-header-facilities) and records the final
 component list in `docs/architecture.md` §11.
+
+**Log:** 2026-10-25: done as three components: `frontend/classify.hpp`, `frontend/header_synopsis.hpp` (the
+gathered `.syn` synopsis assembly, which sat after `classify()` and reads its `RawItem`), and
+`frontend/source_files.hpp`. `SourceFile` moved from `frontend.hpp` to a small header of its own,
+`frontend/source_file.hpp`, below the entry points and the harvest that both take one, as `BuildFailure` did in
+[parse-header](#parse-header). `header_synopsis.test.cpp` was already that feature's scenario test and became the
+component's test file. Using-declarations no code read any more were dropped across the front end. The harvest
+loop is a `fold_left_short` call (#196). `frontend.cpp` is about 610 lines: the two entry points.
+2026-10-25: [frontend-hpp-name](#frontend-hpp-name) decided; the component is now `frontend/build_document`.
 
 ## Open questions
 
@@ -273,9 +282,16 @@ each step: a verbatim move does not need a new test to prove it moved.
 
 ### [frontend-hpp-name](#frontend-hpp-name)
 
-**Question:** once the rest has moved out, what is `frontend.hpp` called? **Status:** OPEN.
+**Question:** once the rest has moved out, what is `frontend.hpp` called? **Status:** DECIDED, 2026-10-25.
+**Decided by:** Steve Downey.
+
+**Decision:** `frontend/build_document.hpp`, with `build_document.cpp` and `build_document.test.cpp` beside it.
 
 What it will hold is `build_document`, `build_document_with_sources`, `BuildFailure`, `DocumentBuild` and
 `SourceFile`: one facility, building a document from a header. That suggests `frontend/build_document.hpp`. The
 name `frontend.hpp` describes a tier, which is the kind of name this review has been moving away from. Every
 scenario test includes it, so the rename is mechanical but touches about 60 files.
+
+**Log:** 2026-10-25: renamed in [classify-and-sources](#classify-and-sources)'s PR. It touched 25 includers, not
+60: `BuildFailure` and `SourceFile` had moved into headers of their own by then. The test cases are now
+`build_document - ...`, so a ctest filter on `frontend -` no longer selects them.

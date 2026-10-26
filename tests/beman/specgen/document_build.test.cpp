@@ -4,7 +4,7 @@
 // build_tree() and group_items() (decision document-build-stages) driven by
 // synthetic DocEvent/GroupCandidate values — tests of the `\rSec`
 // frame-stack fold and the `\also`/empty-descr grouping relation that do not
-// need a Clang parse, since both are clang-free (frontend.cpp's classify()
+// need a Clang parse, since both are clang-free (frontend/classify.cpp's classify()
 // remains the only place that touches a clang::Decl*, and is exercised
 // instead by the Tier B tests in tests/beman/specgen/frontend/).
 //
@@ -591,7 +591,7 @@ TEST_CASE("build_tree - named group targets are local to one section frame") {
 // --- build_tree: the diagnostics channel ------------------------------------
 //
 // classify() is the one that decides which findings an event carries
-// (frontend.cpp, exercised end to end in
+// (frontend/classify.cpp, exercised end to end in
 // tests/beman/specgen/frontend/diagnostics.test.cpp); these cases only pin
 // that build_tree collects whatever an event carries, leaves the tree itself
 // untouched either way, and does not invent one for an event that carries

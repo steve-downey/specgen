@@ -3,7 +3,7 @@
 //
 // How a front-end entry point says it could not build what it was asked
 // for. Below every entry point that can fail, so each can name it without
-// reaching for frontend.hpp.
+// reaching for build_document.hpp.
 
 #ifndef BEMAN_SPECGEN_FRONTEND_BUILD_FAILURE_HPP
 #define BEMAN_SPECGEN_FRONTEND_BUILD_FAILURE_HPP

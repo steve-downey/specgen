@@ -9,7 +9,7 @@
 // `\mandates` replaces the class-scope derived paragraph of design §5.2
 // while inheriting its conjuncts as validator-only drift evidence.
 
-#include <beman/specgen/frontend/frontend.hpp>
+#include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>
