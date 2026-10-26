@@ -11,6 +11,9 @@
 // ("is false") in source order. The trailing static_assert past a real
 // statement is *not* part of the prefix and must not appear.
 
+#include <beman/specgen/frontend/mandates.hpp>
+#include <beman/specgen/frontend/mandates.hpp> // Re-inclusion verification
+
 #include <beman/specgen/frontend/frontend.hpp>
 #include <beman/specgen/ir.hpp>
 

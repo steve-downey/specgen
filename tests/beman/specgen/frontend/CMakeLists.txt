@@ -41,6 +41,8 @@ foreach(
     record_members
     requires_clauses
     synopsis_extraction
+    itemdecl
+    class_head_mandates
 )
     add_executable(beman.specgen.tests.frontend.${component})
     target_sources(
