@@ -1184,7 +1184,7 @@ The build assembles the tool from these components, each following the shared CM
   validation algebra over the IR.
 - **Front end** — `include/beman/specgen/frontend/frontend.hpp`,
   `src/beman/specgen/frontend/frontend.cpp`. §3 end to end: `build_document`,
-  `attach_function`, `collect_inclass_items`, `extract_synopsis`, the
+  `attach_function`, `collect_inclass_items`, the
   `build_omit_set`/`build_expos_set`/`build_namespace_drop_set` directive sets.
 - **Front-end parse** — `frontend/parse_header.hpp`/`.cpp`. §3.1's one parse path:
   `parse_header` (the fixed arguments, the bundled resource directory, and the resolved
@@ -1213,6 +1213,18 @@ The build assembles the tool from these components, each following the shared CM
 - **Synopsis edits** — `synopsis_edits.hpp`/`.cpp`. §3.4's edit algebra: `SynopsisEdit`,
   the back-to-front order, and the enclosing mask that wins over nested edits.
   Clang-free.
+- **Synopsis extraction** — `frontend/synopsis_extraction.hpp`/`.cpp`. §3.4:
+  `extract_synopsis` for a class, `extract_freestanding_declaration` and
+  `extract_namespace_expos_synopsis` for namespace-scope declarations, and
+  `add_declaration_masks`.
+- **Merged twins** — `frontend/merged_twins.hpp`/`.cpp`. §4.3: which of a survivor's
+  trailing conjuncts its `\merge`d twins cut, and the edits that cut them.
+- **Requires-clauses** — `frontend/requires_clauses.hpp`/`.cpp`. A declaration's
+  requires-clauses in both positions, and their top-level `&&` conjuncts.
+- **Record members** — `frontend/record_members.hpp`/`.cpp`. A class's real members,
+  the function a member declares, and where a member declaration's text ends.
+- **Expos spellings** — `frontend/expos_spellings.hpp`/`.cpp`. §3.5's name-match
+  exception: a class's own exposition-only members, rewritten in its fragments and prose.
 - **Draft formatting** — `frontend/draft_format.hpp`/`.cpp`. §3.6 step 2: `format_draft`,
   `format_and_recover` (format, then recover the sentinels) and `format_expr_fragment`.
   The interface is strings; the `FormatStyle` and every `clang::format` call stay inside.

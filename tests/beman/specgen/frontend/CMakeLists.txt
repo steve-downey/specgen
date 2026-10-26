@@ -36,6 +36,11 @@ foreach(
     smoke_check
     diagnostics
     doxygen
+    expos_spellings
+    merged_twins
+    record_members
+    requires_clauses
+    synopsis_extraction
 )
     add_executable(beman.specgen.tests.frontend.${component})
     target_sources(

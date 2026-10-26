@@ -20,12 +20,17 @@ target_sources(
         docblock_lookup.cpp
         document_files.cpp
         draft_format.cpp
+        expos_spellings.cpp
         file_views.cpp
         frontend.cpp
         interleave.cpp
+        merged_twins.cpp
         parse_header.cpp
         qualifiers.cpp
+        record_members.cpp
+        requires_clauses.cpp
         smoke_check.cpp
+        synopsis_extraction.cpp
 )
 
 target_sources(
@@ -42,12 +47,17 @@ target_sources(
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/docblock_lookup.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/document_files.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/draft_format.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/expos_spellings.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/file_views.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/frontend.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/interleave.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/merged_twins.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/parse_header.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/qualifiers.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/record_members.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/requires_clauses.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/smoke_check.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/synopsis_extraction.hpp"
 )
 
 target_compile_features(beman.specgen.frontend PUBLIC cxx_std_26)
