@@ -74,8 +74,9 @@ is decided here.
 
 ### [frontend-header-facilities](#frontend-header-facilities)
 
-**Question:** which facilities in `frontend/frontend.hpp` belong in headers of their own? **Status:** DECIDED for
-the compile-argument handling and `parse_rsec`, 2026-10-24; OPEN for the rest.
+**Question:** which facilities in `frontend/frontend.hpp` belong in headers of their own? **Status:** DONE,
+2026-10-27; DECIDED for the compile-argument handling and `parse_rsec`, 2026-10-24, and for the rest in
+[frontend-split](frontend-split.md).
 The header bundles at least five: `smoke_check` (a link probe), `collect_interleaved` and `SourceItem`,
 `ParseOptions` with `filter_compile_command_args` and `resolve_extra_args` (pure string handling, no Clang), the
 `parse_rsec` combinator parser, and `build_document`. The header's own comments call two of them out as
@@ -104,6 +105,11 @@ comment vocabulary through an LLVM string type. `resolve_extra_args` gained dire
 real `compile_commands.json`.
 2026-10-25: the rest of the split is planned in [frontend-split](frontend-split.md). `smoke_check` and
 `install_crash_handler` now have headers of their own ([entry-point-headers](frontend-split.md#entry-point-headers)).
+2026-10-27: the split is complete. `frontend.hpp` and `frontend.cpp` no longer exist. The front end is 33
+components under `frontend/`, each a header, a `.cpp` and a test file, listed in `docs/architecture.md` §11;
+the pieces that needed no Clang (`span_sentinels`, `synopsis_edits`, `section_markers`, `rsec`) dropped into
+the core. The entry points are `frontend/build_document.hpp`
+([frontend-hpp-name](frontend-split.md#frontend-hpp-name)). This closes the question.
 
 ### [backend-common-facilities](#backend-common-facilities)
 
@@ -235,7 +241,7 @@ it. `frontend/frontend.test.cpp` checks re-inclusion inside a test case instead,
 
 ### [tests-of-dependencies](#tests-of-dependencies)
 
-**Question:** which assertions belong to another header's test file? **Status:** OPEN. The cases found:
+**Question:** which assertions belong to another header's test file? **Status:** DONE, 2026-10-23. The cases found:
 
 - `backend/mpark.test.cpp` and `backend/org.test.cpp` assert `common::element_label` directly; `org.test.cpp`
   pins `common::draft_span_codeblock`.
@@ -249,7 +255,7 @@ it. `frontend/frontend.test.cpp` checks re-inclusion inside a test case instead,
 Some of these are integration checks worth keeping under that name; the rule is that they do not masquerade as the
 dependent facility's unit tests.
 
-**Status:** DECIDED, 2026-10-23. **Decided by:** Steve Downey.
+**Decided by:** Steve Downey, 2026-10-23.
 
 **Decision:** case by case.
 
@@ -267,6 +273,9 @@ dependent facility's unit tests.
 - `document.test.cpp`'s `validate::validate` checks stay, as the end-to-end claim that a built document validates
   clean.
 - `diagnostics.test.cpp`'s `parse_rsec` failure-offset case moves to `rsec.test.cpp`.
+
+**Log:** 2026-10-23: done as decided, in one commit. The `element_label` cases went to `common.test.cpp` and then,
+when [backend-common-facilities](#backend-common-facilities) split that header, to `element_label.test.cpp`.
 
 ### [cpp-transitive-includes](#cpp-transitive-includes)
 
