@@ -1,5 +1,10 @@
 # Plan: split `frontend.cpp` into components
 
+**Status:** DONE, 2026-10-25. Every stage below is done, and
+[frontend-header-facilities](header-discipline-review.md#frontend-header-facilities) closed on it, 2026-10-27.
+The one question still open, [frontend-component-tests](#frontend-component-tests), is about what the test
+files hold, not about the split.
+
 This plan settles the open half of [frontend-header-facilities](header-discipline-review.md#frontend-header-facilities).
 The compile-argument handling and `parse_rsec` already moved out. What remains is `frontend.hpp`'s four entry
 points: `smoke_check`, `install_crash_handler`, `collect_interleaved` and `build_document`. Behind them sits the
@@ -279,6 +284,14 @@ Recommendation: every new header gets its test file with the double include and 
 the header rule requires. Direct cases are added where a snippet states the claim more clearly than a corpus
 header does, using `parse_header` from [parse-header](#parse-header) as the fixture. They are not a gate on
 each step: a verbatim move does not need a new test to prove it moved.
+
+**Log:** 2026-10-27: every stage followed the recommendation. Each of the 33 component headers has its test
+file with the double include and a bootstrap case. Direct cases went where a string or a snippet states the
+claim: the Clang-free pieces in the core (`span_sentinels`, `synopsis_edits`, `section_markers`) and
+`draft_format` are tested on strings, `parse_header` and `interleave` on parsed text, and the components that
+took over an existing scenario test (`attach`, `constraints`, `mandates`, `header_synopsis`) kept its cases.
+The rest hold the bootstrap case alone and are covered through `build_document`'s scenario tests. Whether that
+is the ruling, or more direct cases are wanted, is still to be decided.
 
 ### [frontend-hpp-name](#frontend-hpp-name)
 
