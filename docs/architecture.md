@@ -316,13 +316,53 @@ back to name match within the class's fragments only):
   built from **prefix-minimal** paths, so a nested namespace written out in full
   (`demo::detail::storage`) renders the same as the abbreviated spelling instead of losing
   its qualifier.
-- **Every synopsis is enclosed in `namespace std`.** The draft writes a synopsis at namespace
+- **A nested namespace is dropped, specified, or foreign** (issue #209, decision
+  `nested-namespace-rendering`). Below the dropped prefix, a namespace is *specified* when
+  some redeclaration of it, anywhere in the translation unit, carries `//! \specified` as
+  its docblock, or when its path is rooted in `std` (`std::ranges`, the standard's own
+  vocabulary). A declaration's **rendered namespace** is the longest prefix of its path past
+  the dropped one every component of which is specified: `beman::transcoding::views::x`
+  renders in `views`, `beman::transcoding::whatwg::detail::y` in `whatwg`, and an unmarked
+  `detail` flattens into whatever encloses it, exactly as it always flattened into `std`.
+  Nothing in the AST distinguishes `views` from `detail`, so the author says; the marker is
+  read across the whole translation unit so a project writes it once, in a header every
+  other header includes (the same reach `\expos` has, issue #36). Opt-in, because the
+  opposite default would silently withdraw §9's leakage Error from every existing `detail::`.
+  Three consequences, all text, so the IR does not change and `generate` and
+  `render --from-ir` agree by construction:
+  - a gathered header synopsis (§3.4) opens a `namespace views { ... }` block for a run of
+    declarations in one rendered namespace and closes it when source order leaves it, the
+    shape of [ranges.syn] and of [time.syn]'s re-opened `chrono` blocks; a `\ref` group
+    header between declarations goes with the declaration it heads; a rendered path of
+    several components writes one `namespace a::b {` block, an inline namespace keeps its
+    `inline`;
+  - a class synopsis in a rendered namespace encloses as `namespace std::whatwg {`, the
+    shape of [fs.class.path]; the enclosure is otherwise the one every synopsis gets;
+  - a namespace-scope **function's or variable's** itemdecl qualifies its declarator-id with
+    the rendered namespace, `proto::decode`, the way the draft writes `ranges::copy` and
+    `filesystem::absolute`; a type's (a concept, an alias, an enumeration, a class) stays
+    bare, as the grammar requires and the draft writes them, and so does a member of a class
+    in such a namespace, whose class synopsis already names it. A declarator that writes its
+    own qualifier takes no second one.
+  A written `views::x` is not in the drop set and survives; written in full,
+  `beman::transcoding::views::x` loses its dropped prefix through the ordinary prefix walk
+  and renders the same way. `collect_foreign_namespaces` skips a specified namespace as it
+  skips a `std`-rooted one, so §9 never sees `views` as foreign while an unmarked
+  `detail::` reports exactly as before. `\specified` off a namespace is an Error, and so is
+  anything beside it in a namespace's docblock, a namespace having no wording of its own; a
+  docblock on a namespace that does not carry the marker is not the namespace's (a detached
+  `\verbatim-itemdecl` block above a `namespace` line is attached to it by Clang) and is
+  left to classify.
+- **Every synopsis is enclosed in its namespace.** The draft writes a synopsis at namespace
   scope inside its namespace, body indented two spaces, and the mapping above has already made
-  that namespace `std`. The front end adds the enclosure as the last step before the tree is
+  that namespace `std`, or `std::whatwg` for a class in a specified nested namespace. The
+  front end adds the enclosure as the last step before the tree is
   built, so a gathered header region is enclosed once, as a whole, and spans move with the
   text they cover. A class's attached `\verbatim-synopsis` stands in for the extracted text and
   is enclosed like it; a standalone `\verbatim-synopsis` is the author's whole synopsis,
-  namespace included, and is left exactly as written.
+  namespace included, and is left exactly as written. Formatting (§3.6) already takes the
+  indentation the text receives afterwards, so a declaration inside a nested block is
+  formatted two levels narrower.
 - **Qualifier removal follows declaration ownership through a using-declaration.** A
   qualifier written as an implementation namespace is dropped for a use only when the
   referenced declaration is owned by a namespace already in the drop set, such as `std`. The
@@ -595,6 +635,9 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   declares as deleted. The two are distinct flags because [lib-intro] gives the comments
   distinct meanings. Either marker may live on an out-of-line definition even though the
   suffix is emitted on the earlier in-class declaration (§3.4).
+- `\specified` — on a `namespace`: its declarations render inside it rather than flattened
+  into the enclosing one (§3.5, issue #209). The only marker a namespace takes, and it takes
+  nothing else beside it; on anything but a namespace it is an Error.
 
 ## 5. Derivations from code
 
@@ -968,7 +1011,9 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      backticked prose naming a member the reader cannot see (e.g. an extracted body calling a
      private `hard_reset()`).
    - **Error** for an unresolved implementation-namespace qualifier anywhere in rendered
-     output: wording, itemdecl, and a **synopsis**. A finding
+     output: wording, itemdecl, and a **synopsis**. A specified namespace's qualifier
+     (`views::`, §3.5) is not one: the front end never records it as foreign, since the
+     rendered text declares what it names. A finding
      requires an actual qualifier occurrence: a bare English word matching a recorded foreign
      namespace is silent; only that identifier followed by `::` reports. (Hidden roster-name
      checks still inspect every identifier occurrence.) In a synopsis the roster half runs
@@ -1220,7 +1265,8 @@ The build assembles the tool from these components, each following the shared CM
   Clang-free.
 - **Directive sets** — `frontend/directive_sets.hpp`/`.cpp`. The marker pre-passes:
   `build_omit_set`, `build_expos_set`, `build_namespace_drop_set`, `build_seebelow_map`,
-  `build_freestanding_map`.
+  `build_freestanding_map`, `build_specified_namespace_set`; and §3.5's namespace
+  projections, `rendered_namespace` and `declarator_qualifier`.
 - **Coverage roster** — `frontend/coverage_roster.hpp`/`.cpp`. §9: `build_roster`, every
   entity a synopsis declares and its disposition.
 - **Foreign names** — `frontend/foreign_names.hpp`/`.cpp`. §9's leakage inputs: the
