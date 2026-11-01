@@ -137,7 +137,11 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
 // For an in-class definition (a hidden friend or a compiler-bug member)
 // the definition *is* its own first declaration, so both are the same decl and
 // `friend_begin` is the enclosing FriendDecl's begin location (invalid for a
-// plain member) so the itemdecl keeps `friend`.
+// plain member) so the itemdecl keeps `friend`. `declarator_qualifier` is
+// the specified namespace a namespace-scope function's itemdecl writes before
+// its name (`ranges::copy`; directive_sets.hpp's declarator_qualifier), empty
+// for a member, a hidden friend, or a function at the top of the document's
+// namespace.
 AttachedItem attach_function(const clang::FunctionDecl*                       def,
                              const clang::FunctionDecl*                       decl_form,
                              clang::SourceLocation                            friend_begin,
@@ -145,7 +149,8 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                              const clang::LangOptions&                        lang_opts,
                              const std::set<std::string>&                     ns_drop_set,
                              const std::map<const clang::Decl*, std::string>& expos_set,
-                             const SkippedRanges&                             skipped);
+                             const SkippedRanges&                             skipped,
+                             std::string_view                                 declarator_qualifier = {});
 
 // `head` is the enclosing TypeAliasTemplateDecl for a namespace-scope alias
 // template — the decl the docblock hangs off and the extraction range starts
@@ -183,11 +188,14 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
 // ([concept.same], [tuple.helper]). Aliases go through attach_alias instead,
 // which owns the alias masking rules; either way the item indexes as a
 // library global, the way a documented free function does.
+// `declarator_qualifier` is as for attach_function: a variable's itemdecl
+// writes its specified namespace before its name, a concept's stays bare.
 AttachedItem attach_namespace_entity(const clang::NamedDecl*                          decl,
                                      const clang::SourceManager&                      sm,
                                      const clang::LangOptions&                        lang_opts,
                                      const std::set<std::string>&                     ns_drop_set,
-                                     const std::map<const clang::Decl*, std::string>& expos_set);
+                                     const std::map<const clang::Decl*, std::string>& expos_set,
+                                     std::string_view                                 declarator_qualifier = {});
 
 // Build the AttachedItem for a documented static data member (issue #148): an
 // itemdecl of its own and the elements its docblock carries, routed by its
@@ -226,7 +234,8 @@ AttachedItem build_spec_item(clang::Decl*                                     de
                              const clang::LangOptions&                        lang_opts,
                              const std::set<std::string>&                     ns_drop_set,
                              const std::map<const clang::Decl*, std::string>& expos_set,
-                             const SkippedRanges&                             skipped);
+                             const SkippedRanges&                             skipped,
+                             const std::set<std::string>&                     specified_set);
 
 } // namespace beman::specgen::frontend
 

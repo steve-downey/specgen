@@ -115,10 +115,11 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
-                                 std::optional<std::string_view>                  record_tag    = std::nullopt,
-                                 const clang::VarDecl*                            unspecified   = nullptr,
-                                 std::optional<clang::SourceRange>                see_below     = std::nullopt,
-                                 const clang::VarDecl*                            uninitialized = nullptr);
+                                 std::optional<std::string_view>                  record_tag           = std::nullopt,
+                                 const clang::VarDecl*                            unspecified          = nullptr,
+                                 std::optional<clang::SourceRange>                see_below            = std::nullopt,
+                                 const clang::VarDecl*                            uninitialized        = nullptr,
+                                 std::string_view                                 declarator_qualifier = {});
 
 // A free-standing exposition-only entity is already a complete
 // definition, so it uses the ordinary Synopsis IR rather than inventing an

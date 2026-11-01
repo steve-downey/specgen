@@ -30,8 +30,13 @@ namespace beman::specgen::frontend {
 std::optional<std::vector<std::string>> collect_paper_entities(const std::vector<clang::Decl*>& decls,
                                                                const clang::SourceManager&      sm);
 
-std::vector<beman::specgen::ir::ForeignNamespace> collect_foreign_namespaces(const std::vector<clang::Decl*>& decls,
-                                                                             const std::set<std::string>&     drop);
+// `specified` (design §3.5, issue #209): the namespaces that render as part
+// of the interface, so a qualifier naming one survives the mapping without
+// being foreign -- `views::null_term` is the draft's own spelling.
+std::vector<beman::specgen::ir::ForeignNamespace>
+collect_foreign_namespaces(const std::vector<clang::Decl*>& decls,
+                           const std::set<std::string>&     drop,
+                           const std::set<std::string>&     specified = {});
 
 std::vector<beman::specgen::ir::ForeignDeclaration>
 collect_foreign_declarations(const std::vector<clang::Decl*>&                 decls,

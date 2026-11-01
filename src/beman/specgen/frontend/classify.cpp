@@ -242,6 +242,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const SeeBelowMap&                               seebelow_map,
                       const FreestandingMap&                           freestanding_map,
                       const std::set<std::string>&                     ns_drop_set,
+                      const std::set<std::string>&                     specified_set,
                       const SkippedRanges&                             skipped,
                       const AttachedCommentRanges&                     attached_comments,
                       const SourceMarkupMap&                           source_markup) {
@@ -374,9 +375,10 @@ db::DocEvent classify(const RawItem&                                   ev,
             see_below = definition_mask_range(ev.decl, sm, lang_opts);
 
         db::SynopsisDecl out;
-        out.offset        = ev.offset;
-        out.synopsis.name = namespace_expos->getNameAsString();
-        out.synopsis.code = extract_namespace_expos_synopsis(
+        out.offset           = ev.offset;
+        out.synopsis.name    = namespace_expos->getNameAsString();
+        out.nested_namespace = rendered_namespace(namespace_expos, ns_drop_set, specified_set).definition;
+        out.synopsis.code    = extract_namespace_expos_synopsis(
             namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below);
         // Its description renders beside that synopsis, the way a class's own
         // description does (design §4.3): the draft describes exposition-only
@@ -404,7 +406,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                 attach_alias(alias_tmpl->getTemplatedDecl(), sm, lang_opts, ns_drop_set, expos_set, alias_tmpl), doc);
         if (const auto* alias = llvm::dyn_cast<clang::TypeAliasDecl>(entity))
             return item_decl_event(attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set), doc);
-        return item_decl_event(attach_namespace_entity(entity, sm, lang_opts, ns_drop_set, expos_set), doc);
+        return item_decl_event(attach_namespace_entity(entity,
+                                                       sm,
+                                                       lang_opts,
+                                                       ns_drop_set,
+                                                       expos_set,
+                                                       declarator_qualifier(entity, ns_drop_set, specified_set)),
+                               doc);
     }
 
     // A class/struct/union definition heads a synopsis; every other top-level
@@ -433,9 +441,10 @@ db::DocEvent classify(const RawItem&                                   ev,
         // description, attached below.
         RecordDocblock   block = record_docblock(record, sm);
         db::SynopsisDecl out;
-        out.offset        = ev.offset;
-        out.synopsis.name = record->getNameAsString();
-        out.diagnostics   = std::move(block.diagnostics);
+        out.offset           = ev.offset;
+        out.synopsis.name    = record->getNameAsString();
+        out.nested_namespace = rendered_namespace(record, ns_drop_set, specified_set).definition;
+        out.diagnostics      = std::move(block.diagnostics);
         out.synopsis.code =
             block.synopsis
                 ? ir::CodeText{std::move(*block.synopsis), {}}
@@ -468,19 +477,20 @@ db::DocEvent classify(const RawItem&                                   ev,
         // reads use.
         RecordDocblock   block = record_docblock(tmpl, sm);
         db::SynopsisDecl out;
-        out.offset        = ev.offset;
-        out.synopsis.name = templated->getNameAsString();
-        out.diagnostics   = std::move(block.diagnostics);
-        out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
-                                           : extract_synopsis(templated,
-                                                              sm,
-                                                              lang_opts,
-                                                              omit_set,
-                                                              expos_set,
-                                                              seebelow_map,
-                                                              freestanding_map,
-                                                              ns_drop_set,
-                                                              tmpl);
+        out.offset           = ev.offset;
+        out.synopsis.name    = templated->getNameAsString();
+        out.nested_namespace = rendered_namespace(tmpl, ns_drop_set, specified_set).definition;
+        out.diagnostics      = std::move(block.diagnostics);
+        out.synopsis.code    = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
+                                              : extract_synopsis(templated,
+                                                                 sm,
+                                                                 lang_opts,
+                                                                 omit_set,
+                                                                 expos_set,
+                                                                 seebelow_map,
+                                                                 freestanding_map,
+                                                                 ns_drop_set,
+                                                                 tmpl);
         collect_inclass_items(
             templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // Build the roster before grouping so every alias offset still
@@ -515,7 +525,7 @@ db::DocEvent classify(const RawItem&                                   ev,
         }
     }
 
-    AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped);
+    AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped, specified_set);
     if (!attached.is_function_def) {
         // A top-level decl no arm above turned into a node. Undocumented,
         // that is the ordinary fate of an unannotated entity (design §6),

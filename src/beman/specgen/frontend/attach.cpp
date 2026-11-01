@@ -12,6 +12,7 @@
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/constraints.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
@@ -486,7 +487,8 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                              const clang::LangOptions&                        lang_opts,
                              const std::set<std::string>&                     ns_drop_set,
                              const std::map<const clang::Decl*, std::string>& expos_set,
-                             const SkippedRanges&                             skipped) {
+                             const SkippedRanges&                             skipped,
+                             std::string_view                                 declarator_qualifier) {
     namespace ir       = beman::specgen::ir;
     namespace grammar  = beman::specgen::grammar;
     namespace lowering = beman::specgen::lowering;
@@ -558,7 +560,8 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                                                                  ns_drop_set,
                                                                  expos_set,
                                                                  friend_begin,
-                                                                 seebelow_target(attached.directives)));
+                                                                 seebelow_target(attached.directives),
+                                                                 declarator_qualifier));
     }
     if (const std::string name = decl_form->getNameAsString(); !name.empty())
         attached.item.decl.entities.push_back(name);
@@ -700,7 +703,8 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                      const clang::SourceManager&                      sm,
                                      const clang::LangOptions&                        lang_opts,
                                      const std::set<std::string>&                     ns_drop_set,
-                                     const std::map<const clang::Decl*, std::string>& expos_set) {
+                                     const std::map<const clang::Decl*, std::string>& expos_set,
+                                     std::string_view                                 declarator_qualifier) {
     AttachedItem attached;
     attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     attached.file           = sm.getFileID(decl->getBeginLoc());
@@ -727,7 +731,9 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                                                                  /*exposition=*/false,
                                                                                  std::nullopt,
                                                                                  mask.unspecified,
-                                                                                 see_below));
+                                                                                 see_below,
+                                                                                 nullptr,
+                                                                                 declarator_qualifier));
     attached.item.decl.entities.push_back(decl->getNameAsString());
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
@@ -778,7 +784,8 @@ AttachedItem build_spec_item(clang::Decl*                                     de
                              const clang::LangOptions&                        lang_opts,
                              const std::set<std::string>&                     ns_drop_set,
                              const std::map<const clang::Decl*, std::string>& expos_set,
-                             const SkippedRanges&                             skipped) {
+                             const SkippedRanges&                             skipped,
+                             const std::set<std::string>&                     specified_set) {
     const clang::FunctionDecl* fn = llvm::dyn_cast<clang::FunctionDecl>(decl);
     if (fn == nullptr) {
         if (const auto* fn_tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
@@ -799,8 +806,15 @@ AttachedItem build_spec_item(clang::Decl*                                     de
     // from its first declaration (design §3.3). A free function stays ordered
     // where its documented definition appears, even when its first declaration
     // is earlier. Not a hidden friend, so there is no friend-begin override.
-    AttachedItem attached =
-        attach_function(fn, fn->getFirstDecl(), /*friend_begin=*/{}, sm, lang_opts, ns_drop_set, expos_set, skipped);
+    AttachedItem attached = attach_function(fn,
+                                            fn->getFirstDecl(),
+                                            /*friend_begin=*/{},
+                                            sm,
+                                            lang_opts,
+                                            ns_drop_set,
+                                            expos_set,
+                                            skipped,
+                                            declarator_qualifier(fn->getFirstDecl(), ns_drop_set, specified_set));
     if (documented_free)
         attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     attached.file = sm.getFileID(decl->getBeginLoc());

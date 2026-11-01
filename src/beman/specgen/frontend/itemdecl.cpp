@@ -56,7 +56,8 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
                                               const std::set<std::string>&                     ns_drop_set,
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               clang::SourceLocation                            friend_begin,
-                                              std::optional<SeeBelowTarget>                    seebelow) {
+                                              std::optional<SeeBelowTarget>                    seebelow,
+                                              std::string_view                                 declarator_qualifier) {
     // A member template's own `template <...>` head is part of its itemdecl
     // (the draft shows it), but a bare FunctionDecl's range starts at the
     // return type/name — the head lives on the described FunctionTemplateDecl.
@@ -129,15 +130,26 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
         namespace_qualifier_edits(const_cast<clang::Decl*>(range_decl), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& p) { return p.first >= decl_begin; }) |
         std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
-    unsigned span_n = sentinels.size();
-    if (const auto marked = expos_set.find(in_class->getCanonicalDecl()); marked != expos_set.end()) {
-        const clang::SourceRange name_range = in_class->getNameInfo().getSourceRange();
-        const unsigned           name_begin = sm.getDecomposedLoc(name_range.getBegin()).second;
-        const unsigned           name_end =
-            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_range.getEnd(), 0, sm, lang_opts)).second;
+    // The declarator-id, rewritten when either its spelling changes (an
+    // exposition-only member template renders under its exposid) or a
+    // specified namespace qualifies it (`ranges::copy`, design §3.5, issue
+    // #209). One edit for both: the qualifier is plain text ahead of the
+    // sentinel, and ahead of the name itself when there is no sentinel.
+    unsigned                 span_n     = sentinels.size();
+    const auto               marked     = expos_set.find(in_class->getCanonicalDecl());
+    const clang::SourceRange name_range = in_class->getNameInfo().getSourceRange();
+    const unsigned           name_begin = sm.getDecomposedLoc(name_range.getBegin()).second;
+    const unsigned           name_end =
+        sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_range.getEnd(), 0, sm, lang_opts)).second;
+    const std::string qualifier_prefix =
+        declarator_qualifier.empty() ? std::string{} : std::string(declarator_qualifier) + "::";
+    if (marked != expos_set.end()) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{ir::SpanKind::ExposId, marked->second, marked->second};
-        edits.push_back(SynopsisEdit{name_begin, name_end, sentinel});
+        edits.push_back(SynopsisEdit{name_begin, name_end, qualifier_prefix + sentinel});
+    } else if (!qualifier_prefix.empty() && name_begin >= decl_begin && name_end > name_begin) {
+        edits.push_back(SynopsisEdit{
+            name_begin, name_end, qualifier_prefix + text.substr(name_begin - decl_begin, name_end - name_begin)});
     }
     // substrate generic algorithm: the same stateful sentinel/edit flat-map
     // as the synopsis path above, scoped to this declaration fragment.

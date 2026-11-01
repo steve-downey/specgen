@@ -1,0 +1,3 @@
+spec_specified_diagnostics.hpp:17: error: \specified applies only to a namespace
+spec_specified_diagnostics.hpp:22: error: a namespace accepts only \specified: it has no wording of its own
+spec_specified_diagnostics.hpp:27: error: a namespace accepts only \specified: it has no wording of its own
