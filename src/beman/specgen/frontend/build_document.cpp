@@ -17,6 +17,7 @@
 #include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/document_files.hpp>
+#include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/foreign_names.hpp>
 #include <beman/specgen/frontend/header_synopsis.hpp>
@@ -172,7 +173,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     SeeBelowMap                                     seebelow_map     = build_seebelow_map(decls, sm);
     FreestandingMap                                 freestanding_map = build_freestanding_map(decls, sm);
     const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
-    const SkippedRanges                             skipped          = collect_skipped_ranges(*parsed.ast);
+    // The nested namespaces that render as interface rather than flatten
+    // (design §3.5, issue #209), with the findings their docblocks drew.
+    const SpecifiedNamespaces    specified     = build_specified_namespace_set(decls, ctx, sm);
+    const std::set<std::string>& specified_set = specified.paths;
+    const SkippedRanges          skipped       = collect_skipped_ranges(*parsed.ast);
 
     // The source files' items (issue #149), each built in its own parse and
     // matched here to the declaration it defines. Their markers act on the
@@ -271,7 +276,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     // pipeline goes clang-free below and attached to the finished document.
     // It is document-level data, so it rides past build_tree rather than
     // through it — no DocEvent carries it and no node owns it.
-    const std::vector<ir::ForeignNamespace> foreign = collect_foreign_namespaces(decls, ns_drop_set);
+    const std::vector<ir::ForeignNamespace> foreign = collect_foreign_namespaces(decls, ns_drop_set, specified_set);
 
     // The bare-name complement (issue #84), collected the same way and for
     // the same reason: a name whose declaration this run never documents,
@@ -299,6 +304,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         seebelow_map,
                         freestanding_map,
                         ns_drop_set,
+                        specified_set,
                         skipped,
                         attached_comments,
                         source_markup);
@@ -387,6 +393,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         // body; here the fold walks past them in source order, so the last one
         // seen is the one in force.
         std::string current_ref;
+        // The region's code, by nested namespace (design §3.5, issue #209): a
+        // declaration in a specified namespace below the document's own goes
+        // into that namespace's block, and the blocks open and close in source
+        // order, which is what the enclosing `namespace std {` then indents.
+        NamespaceRuns runs;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -399,10 +410,19 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     clang::Lexer::getLocForEndOfToken(item.decl->getEndLoc(), 0, sm, lang_opts);
                 consumed_end                              = std::max(consumed_end, doc.offset(sm, decl_end_tok));
                 const lowering::ItemDirectives directives = docblock_directives(item.decl, sm);
-                db::DocEvent                   classified = classify_one(item);
+                const std::string nested     = rendered_namespace(item.decl, ns_drop_set, specified_set).definition;
+                db::DocEvent      classified = classify_one(item);
                 if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified);
                     synopsis != nullptr && !synopsis->synopsis.code.text.empty()) {
-                    append_synopsis_code(gathered.synopsis.code, std::move(synopsis->synopsis.code));
+                    // A class defined inside a nested block is formatted for
+                    // one enclosure and indented for two, so a line of its
+                    // synopsis that reached the draft's width lands two
+                    // columns past it; a declaration extracted below is
+                    // formatted at the depth it will have. Classes a header
+                    // synopsis defines are rare enough (the draft's are
+                    // forward declarations) to take that rather than teach
+                    // classify where it is being called from.
+                    runs.append(std::move(synopsis->synopsis.code), nested);
                     gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                     // The class's routed in-class members ride along. They
                     // are not part of the gathered synopsis -- build_tree
@@ -519,10 +539,16 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         std::optional<clang::SourceRange> see_below;
                         if (marked.directives.seebelow && !marked.directives.seebelow_target)
                             see_below = definition_mask_range(item.decl, sm, lang_opts);
-                        append_synopsis_code(
-                            gathered.synopsis.code,
-                            extract_header_declaration(
-                                item.decl, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below));
+                        runs.append(
+                            extract_header_declaration(item.decl,
+                                                       sm,
+                                                       lang_opts,
+                                                       ns_drop_set,
+                                                       expos_set,
+                                                       mask.unspecified,
+                                                       see_below,
+                                                       nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent),
+                            nested);
                     }
                 }
                 continue;
@@ -532,7 +558,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
 
             db::DocEvent classified = classify_one(item);
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
-                append_synopsis_code(gathered.synopsis.code, std::move(synopsis->synopsis.code));
+                runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                 continue;
             }
@@ -560,8 +586,9 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     break;
                 line_begin = newline + 1;
             }
-            append_synopsis_code(gathered.synopsis.code, header_comment_code(std::move(refs)));
+            runs.append_comment(header_comment_code(std::move(refs)));
         }
+        gathered.synopsis.code = runs.finish();
         events.push_back(std::move(gathered));
         events.append_range(std::move(extras));
         i = *close_index + 1;
@@ -576,9 +603,13 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     // tests/beman/specgen/document_build.test.cpp.
     // Last, so a gathered region is enclosed once, as a whole, rather than
     // once per class folded into it.
+    // A class in a specified nested namespace encloses as the draft writes
+    // [fs.class.path]: `namespace std::filesystem {` (issue #209).
     std::ranges::for_each(events, [](db::DocEvent& event) {
         if (auto* synopsis = std::get_if<db::SynopsisDecl>(&event); synopsis != nullptr && !synopsis->exact)
-            enclose_in_namespace_std(synopsis->synopsis.code);
+            enclose_in_namespace(synopsis->synopsis.code,
+                                 synopsis->nested_namespace.empty() ? std::string("std")
+                                                                    : "std::" + synopsis->nested_namespace);
     });
 
     db::BuildResult built               = db::build_tree(events);
@@ -599,6 +630,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         });
     built.document.unextracted_uses.erase(duplicates.begin(), duplicates.end());
     built.diagnostics.insert(built.diagnostics.begin(), source_diagnostics.begin(), source_diagnostics.end());
+    built.diagnostics.insert(built.diagnostics.begin(), specified.diagnostics.begin(), specified.diagnostics.end());
     std::vector<std::string> sources = parse_sources(header_path, *parsed.ast);
     sources.append_range(std::move(source_reads));
     return DocumentBuild{std::move(built), std::move(sources)};

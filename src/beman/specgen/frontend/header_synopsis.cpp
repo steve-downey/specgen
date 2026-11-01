@@ -36,6 +36,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <format>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -123,10 +124,10 @@ void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begi
         out.push_back(RawItem{raw_begin + static_cast<unsigned>(chunk_begin), nullptr, raw.substr(chunk_begin)});
 }
 
-void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
+void enclose_in_namespace(beman::specgen::ir::CodeText& code, std::string_view name) {
     if (code.text.empty())
         return;
-    std::string              text = "namespace std {\n";
+    std::string              text = std::format("namespace {} {{\n", name);
     std::vector<std::size_t> moved(code.text.size());
     bool                     line_start = true;
     // substrate generic algorithm: one pass building the indented text and
@@ -148,6 +149,37 @@ void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
         span.end                = span.end > begin ? moved[span.end - 1] + 1 : span.begin;
     });
     code.text = std::move(text);
+}
+
+void NamespaceRuns::flush() {
+    if (run_.text.empty())
+        return;
+    if (!current_.empty())
+        enclose_in_namespace(run_, current_);
+    append_synopsis_code(out_, std::move(run_));
+    run_ = {};
+}
+
+void NamespaceRuns::append(beman::specgen::ir::CodeText part, std::string_view definition) {
+    if (definition != current_) {
+        flush();
+        current_ = std::string(definition);
+    }
+    append_synopsis_code(run_, std::move(deferred_));
+    deferred_ = {};
+    append_synopsis_code(run_, std::move(part));
+}
+
+void NamespaceRuns::append_comment(beman::specgen::ir::CodeText part) {
+    append_synopsis_code(deferred_, std::move(part));
+}
+
+beman::specgen::ir::CodeText NamespaceRuns::finish() {
+    flush();
+    current_.clear();
+    append_synopsis_code(out_, std::move(deferred_));
+    deferred_ = {};
+    return std::move(out_);
 }
 
 void append_synopsis_code(beman::specgen::ir::CodeText& out, beman::specgen::ir::CodeText part) {
@@ -173,7 +205,8 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const std::set<std::string>&                     ns_drop_set,
                                                         const std::map<const clang::Decl*, std::string>& expos_set,
                                                         const clang::VarDecl*                            unspecified,
-                                                        std::optional<clang::SourceRange>                see_below) {
+                                                        std::optional<clang::SourceRange>                see_below,
+                                                        unsigned                                         indent) {
     const unsigned        decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     clang::SourceLocation end_loc    = clang::Lexer::getLocForEndOfToken(decl->getEndLoc(), 0, sm, lang_opts);
     if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(decl->getEndLoc(), sm, lang_opts);
@@ -272,7 +305,7 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         text.replace(edit.begin - decl_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels, std::nullopt, kNamespaceIndent);
+    return format_and_recover(std::move(text), sentinels, std::nullopt, indent);
 }
 
 beman::specgen::ir::CodeText header_comment_code(std::string text) {

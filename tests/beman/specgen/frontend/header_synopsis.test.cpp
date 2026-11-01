@@ -278,3 +278,114 @@ TEST_CASE("a gathered region's routed namespace entity is on the roster") {
     CHECK(std::ranges::none_of(std::get<ir::Synopsis>(synopses.front()).roster,
                                [](const ir::SynopsisEntry& entry) { return entry.name == "limit"; }));
 }
+
+// The enclosure takes whatever namespace it is handed (issue #209): `std`
+// for the common case, `std::proto` for a class in a specified nested
+// namespace, `views` for a run inside a gathered region. Spans move with
+// their text either way.
+TEST_CASE("header_synopsis - enclose_in_namespace writes the name given and moves spans with the text") {
+    ir::CodeText code{"int x;\nint y;", {ir::Span{4, 5, ir::SpanKind::LibraryIndex, "x"}}};
+    frontend::enclose_in_namespace(code, "std::proto");
+    CHECK(code.text == "namespace std::proto {\n  int x;\n  int y;\n}");
+    REQUIRE(code.spans.size() == 1);
+    CHECK(code.text.substr(code.spans.front().begin, code.spans.front().end - code.spans.front().begin) == "x");
+}
+
+TEST_CASE("header_synopsis - enclosures compose into nested, doubly indented blocks") {
+    ir::CodeText inner{"int b;", {}};
+    frontend::enclose_in_namespace(inner, "views");
+    ir::CodeText outer{"int a;", {}};
+    frontend::append_synopsis_code(outer, std::move(inner));
+    frontend::enclose_in_namespace(outer, "std");
+    CHECK(outer.text == "namespace std {\n  int a;\n\n  namespace views {\n    int b;\n  }\n}");
+}
+
+// The gathered region's runs (issue #209): a change of nested namespace
+// closes the open block and opens the next, in source order, the way
+// [time.syn] re-opens `namespace chrono`; a group header comment is deferred
+// to the declaration it heads, so it lands inside that declaration's block.
+TEST_CASE("header_synopsis - NamespaceRuns opens a block per run and defers comments to the next declaration") {
+    frontend::NamespaceRuns runs;
+    runs.append(ir::CodeText{"int a;", {}}, "");
+    runs.append_comment(ir::CodeText{"// [x], group", {}});
+    runs.append(ir::CodeText{"int b;", {}}, "views");
+    runs.append(ir::CodeText{"int c;", {}}, "views");
+    runs.append(ir::CodeText{"int d;", {}}, "proto");
+    runs.append(ir::CodeText{"int e;", {}}, "");
+    runs.append_comment(ir::CodeText{"// tail", {}});
+    const ir::CodeText code = runs.finish();
+    CHECK(code.text == "int a;\n\n"
+                       "namespace views {\n  // [x], group\n\n  int b;\n\n  int c;\n}\n\n"
+                       "namespace proto {\n  int d;\n}\n\n"
+                       "int e;\n\n"
+                       "// tail");
+}
+
+TEST_CASE("header_synopsis - NamespaceRuns with no nested namespace is the plain concatenation") {
+    frontend::NamespaceRuns runs;
+    runs.append(ir::CodeText{"int a;", {}}, "");
+    runs.append_comment(ir::CodeText{"// [x], group", {}});
+    runs.append(ir::CodeText{"int b;", {}}, "");
+    CHECK(runs.finish().text == "int a;\n\n// [x], group\n\nint b;");
+}
+
+// End to end on the corpus header written for it: the blocks the region
+// opens, the enclosure a nested class takes, and the declarators the
+// itemdecls qualify (issue #209).
+TEST_CASE("build_document renders specified nested namespaces as blocks, enclosures, and qualifiers") {
+    const auto built = frontend::build_document(kCorpus + "/spec_nested_namespace.hpp");
+    REQUIRE(built.has_value());
+
+    const ir::Section* syn = find_section(built->document.nodes, "demo.syn");
+    REQUIRE(syn != nullptr);
+    const auto synopses =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(synopses.size() == 1);
+    const std::string& code = std::get<ir::Synopsis>(synopses.front()).code.text;
+    CHECK(code.starts_with("namespace std {\n"));
+    CHECK(code.contains("\n  namespace views {\n"));
+    CHECK(code.contains("\n  namespace proto {\n"));
+    CHECK(code.contains("\n  namespace ranges {\n"));
+    // The unmarked implementation namespace flattens as it always did.
+    CHECK_FALSE(code.contains("namespace detail"));
+    // A `views::` qualifier written in code survives, fully qualified or not.
+    CHECK(code.contains("sizeof(views::adapt)"));
+    CHECK_FALSE(code.contains("demo::"));
+    // The group header above a nested declaration lands in its block.
+    CHECK(code.contains("  namespace views {\n    // [demo.views], range adaptor objects\n"));
+    // The two `decode`s are in different blocks, not siblings.
+    CHECK(code.contains("    template<encoding E> decoder<E> decode(const char* text);\n  }\n"));
+    CHECK(code.contains("\n  template<class D> D decode(D d);\n"));
+
+    const ir::Section* decoder = find_section(built->document.nodes, "demo.decoder");
+    REQUIRE(decoder != nullptr);
+    const auto class_synopses =
+        decoder->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(class_synopses.size() == 1);
+    CHECK(std::get<ir::Synopsis>(class_synopses.front()).code.text.starts_with("namespace std::proto {\n"));
+
+    const auto signatures_in = [&](std::string_view stable) {
+        const ir::Section* section = find_section(built->document.nodes, stable);
+        REQUIRE(section != nullptr);
+        return section->children |
+               std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+               std::views::transform(
+                   [](const ir::Node& node) { return std::get<ir::SpecItem>(node).decl.signatures.front().text; }) |
+               std::ranges::to<std::vector<std::string>>();
+    };
+    const std::vector<std::string> decode = signatures_in("demo.decode");
+    REQUIRE(decode.size() == 2);
+    CHECK(decode[0].contains(" proto::decode(const char* text);"));
+    CHECK(decode[1] == "template<class D> D decode(D d);");
+    const std::vector<std::string> adapt = signatures_in("demo.views");
+    REQUIRE(adapt.size() == 1);
+    CHECK(adapt.front().contains(" views::adapt;"));
+    // A type stays bare: the grammar has no qualified enum-head to write.
+    const std::vector<std::string> encoding = signatures_in("demo.encoding");
+    REQUIRE(encoding.size() == 1);
+    CHECK(encoding.front().starts_with("enum class encoding"));
+}

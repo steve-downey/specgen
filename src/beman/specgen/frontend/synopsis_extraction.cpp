@@ -860,7 +860,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  std::optional<std::string_view>                  record_tag,
                                  const clang::VarDecl*                            unspecified,
                                  std::optional<clang::SourceRange>                see_below,
-                                 const clang::VarDecl*                            uninitialized) {
+                                 const clang::VarDecl*                            uninitialized,
+                                 std::string_view                                 declarator_qualifier) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -879,22 +880,33 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     std::vector<SynopsisEdit>       edits;
     unsigned                        span_n = 0;
 
+    // The declared name's own token. A TypeAliasTemplateDecl's
+    // getLocation() is the `using` keyword on this Clang, so the rename
+    // reads the templated declaration's location instead — which is the
+    // name token for every templated kind.
+    clang::SourceLocation name_loc = named->getLocation();
+    if (const auto* tmpl = llvm::dyn_cast<clang::TemplateDecl>(named);
+        tmpl != nullptr && tmpl->getTemplatedDecl() != nullptr)
+        name_loc = tmpl->getTemplatedDecl()->getLocation();
+    const unsigned name_begin = sm.getDecomposedLoc(name_loc).second;
+    const unsigned name_end =
+        sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_loc, 0, sm, lang_opts)).second;
+
     const auto marked = expos_set.find(named->getCanonicalDecl());
     if (exposition && marked != expos_set.end()) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, marked->second, marked->second};
-        // The declared name's own token. A TypeAliasTemplateDecl's
-        // getLocation() is the `using` keyword on this Clang, so the rename
-        // reads the templated declaration's location instead — which is the
-        // name token for every templated kind.
-        clang::SourceLocation name_loc = named->getLocation();
-        if (const auto* tmpl = llvm::dyn_cast<clang::TemplateDecl>(named);
-            tmpl != nullptr && tmpl->getTemplatedDecl() != nullptr)
-            name_loc = tmpl->getTemplatedDecl()->getLocation();
-        const unsigned name_begin = sm.getDecomposedLoc(name_loc).second;
-        const unsigned name_end =
-            sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_loc, 0, sm, lang_opts)).second;
         edits.push_back(SynopsisEdit{name_begin, name_end, sentinel});
+    } else if (!declarator_qualifier.empty() && name_begin >= decl_begin && name_end <= decl_end &&
+               name_end > name_begin) {
+        // An itemdecl's declarator takes its specified namespace (design
+        // §3.5, issue #209), the way the draft writes `ranges::copy`; an
+        // exposition-only declaration is a synopsis enclosed in that
+        // namespace instead, so the two never combine.
+        edits.push_back(SynopsisEdit{name_begin,
+                                     name_end,
+                                     std::string(declarator_qualifier) +
+                                         "::" + text.substr(name_begin - decl_begin, name_end - name_begin)});
     }
 
     edits.append_range(

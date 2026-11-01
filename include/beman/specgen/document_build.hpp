@@ -226,6 +226,14 @@ struct SynopsisDecl {
     // class's attached `\verbatim-synopsis`, or a gathered header region --
     // is declarations at namespace scope and gets the enclosure.
     bool exact = false;
+    // The specified namespace below `std` the enclosure names (design §3.5,
+    // issue #209), as a nested-namespace-definition writes it after `std::`:
+    // `whatwg` encloses as `namespace std::whatwg {`, the draft's shape for
+    // `namespace std::filesystem { class path { ... }; }`. Empty for `std`
+    // itself, which is every synopsis's enclosure until a namespace is
+    // marked, and always a gathered header region's: its nested blocks are
+    // inside its code.
+    std::string nested_namespace = {};
 };
 
 // An out-of-line function definition's SpecItem (design §3.3), keyed by its

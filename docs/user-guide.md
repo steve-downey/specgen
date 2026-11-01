@@ -144,7 +144,15 @@ clause describes each member. The definitions supply both the clause order and
 the wording attached to each declaration. specgen takes code spelling from the
 source tokens; it does not reconstruct an interface by printing the AST. The
 header's own namespace is dropped, and each synopsis is enclosed in
-`namespace std { … }`, as the draft writes it.
+`namespace std { … }`, as the draft writes it. A nested namespace that is part
+of the interface, such as `views` or a protocol's own, is marked
+`//! \specified` on its declaration and then renders as the draft writes one:
+a `namespace views { … }` block inside the header synopsis, a
+`namespace std::views { … }` enclosure around a class defined in it, and
+`views::name` on a function's or variable's item declaration. An unmarked
+nested namespace flattens into the one that encloses it, and a qualifier
+naming one is reported as a leak, so an implementation `detail` needs no
+marker.
 
 Render the complete document while editing:
 
@@ -803,6 +811,17 @@ wording follows [structure.specifications].
   with `\seebelow`.
 - `\freestanding` and `\freestanding-deleted` add the corresponding literal
   draft comment to a function declaration in the class synopsis.
+- `\specified`, written as the docblock of a `namespace`, makes that namespace
+  part of the specified interface: declarations in it render inside a
+  `namespace views { … }` block in the header synopsis, a class defined in it
+  encloses as `namespace std::views { … }`, and a function's or variable's item
+  declaration qualifies its name, `views::adapt`, as the draft writes
+  `ranges::copy`. A type's item declaration stays bare, and so does a member
+  of a class in such a namespace. Marking any one declaration of the
+  namespace, in any header the parse reads, is enough. A namespace rooted in
+  `std` needs no marker. A qualifier naming a specified namespace is not a
+  leak. The marker is an error anywhere but on a namespace, and a namespace's
+  docblock carries nothing else, a namespace having no wording of its own.
 - `\verbatim-synopsis` is terminal. All following decorated lines form one
   exact synopsis, free of spans, without C++ parsing or formatting. Written as a
   class definition's own docblock (with no blank line before the class), the
@@ -984,6 +1003,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.5.22 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.6.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

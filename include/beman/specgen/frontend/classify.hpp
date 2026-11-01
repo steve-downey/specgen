@@ -69,6 +69,7 @@ beman::specgen::document_build::DocEvent classify(const RawItem&                
                                                   const SeeBelowMap&                               seebelow_map,
                                                   const FreestandingMap&                           freestanding_map,
                                                   const std::set<std::string>&                     ns_drop_set,
+                                                  const std::set<std::string>&                     specified_set,
                                                   const SkippedRanges&                             skipped,
                                                   const AttachedCommentRanges&                     attached_comments,
                                                   const SourceMarkupMap&                           source_markup);

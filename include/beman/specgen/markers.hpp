@@ -29,6 +29,9 @@ struct Markers {
     bool                       freestanding         = false;
     bool                       freestanding_deleted = false;
     bool                       verbatim_synopsis    = false;
+    // On a namespace: its declarations render inside it rather than
+    // flattened into the enclosing one (design §3.5, issue #209).
+    bool specified = false;
 
     // Entity-level structure.
     bool                       merge     = false;
@@ -53,6 +56,11 @@ struct Markers {
     // element the front end builds from a body that is one `return E;`.
     bool effects_equiv = false;
     bool returns_expr  = false;
+
+    // Whether two docblocks asked for the same things; what lets a reader of
+    // a namespace's docblock ask "anything besides `\specified`?" without
+    // naming every other field.
+    friend bool operator==(const Markers&, const Markers&) = default;
 };
 
 // The marker registry (design §4; decision marker-registry): one row per marker
@@ -128,6 +136,7 @@ inline constexpr MarkerInfo kMarkers[] = {
     {.spelling = "freestanding",         .flag = &Markers::freestanding},
     {.spelling = "freestanding-deleted", .flag = &Markers::freestanding_deleted},
     {.spelling = "verbatim-synopsis",    .flag = &Markers::verbatim_synopsis},
+    {.spelling = "specified",            .flag = &Markers::specified},
     {.spelling = "verbatim-itemdecl"},
     {.spelling = "at",
      .set_arg  = &detail::set_at_anchor,

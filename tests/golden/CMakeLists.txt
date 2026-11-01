@@ -774,6 +774,32 @@ specgen_add_golden(
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities"
 )
 
+# Nested namespaces that are part of the specified interface (design §3.5,
+# issue #209): `//! \specified` on a namespace makes the header synopsis open
+# a `namespace views { ... }` block for it, a class defined in it enclose as
+# `namespace std::proto {`, and a function's or variable's itemdecl qualify
+# its declarator (`proto::decode`). A `std::ranges` specialization renders in
+# its block with no marker, `detail` flattens as before, and a `views::`
+# qualifier written in code survives without being a leak -- so unlike
+# namespace_map this case validates clean, which its `.validate` sibling
+# demands. The distinct case name leaves `nested_namespace` free for the
+# backend renderings below; all consume one checked-in expected.json.
+specgen_add_golden(
+    nested_namespace_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_namespace.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespace"
+)
+
+# `\specified` misplaced (issue #209): on a function, beside another marker
+# on a namespace, and with description text on a namespace -- each an Error
+# naming what the marker accepts, in file order.
+specgen_add_golden(
+    specified_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_specified_diagnostics.hpp"
+)
+
 # Constraints derivation (design §5.1) — a trailing requires-clause
 # with a concept-id, two plain traits, and a parenthesized negation,
 # derived into an itemize (past the sentence threshold) and stripped from
@@ -1692,6 +1718,25 @@ specgen_add_golden(
     namespace_entities
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/namespace_entities/expected.json"
+)
+
+# The nested-namespace IR rendered through every backend (issue #209): the
+# namespace blocks inside the header synopsis, the `namespace std::proto {`
+# enclosure on a class synopsis, and the qualified declarators on itemdecls
+# are text in the IR, so every backend shows them the same way.
+specgen_add_golden(
+    nested_namespace
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespace/expected.json"
+)
+specgen_add_golden(
+    nested_namespace
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespace/expected.json"
+)
+specgen_add_golden(
+    nested_namespace
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespace/expected.json"
 )
 
 # The requires-expression IR rendered through every backend: the multi-line

@@ -1,0 +1,164 @@
+** Header <demo> synopsis [demo.syn]
+:PROPERTIES:
+:CUSTOM_ID: demo.syn
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  // \ref{demo.buffer}, class template buffer
+
+  template<class T> class buffer;
+
+  namespace views {
+    // \ref{demo.views}, range adaptor objects
+
+    inline constexpr @\placeholder{unspecified}@ adapt;
+  }
+
+  namespace proto {
+    // \ref{demo.encoding}, encodings
+
+    enum class encoding { utf8, utf16 };
+
+    // \ref{demo.decoder}, class template decoder
+
+    template<encoding E> class decoder;
+
+    // \ref{demo.decode}, decoding
+
+    template<encoding E> decoder<E> decode(const char* text);
+  }
+
+  // \ref{demo.decode}, decoding
+
+  template<class D> D decode(D d);
+
+  template<class T> inline constexpr bool adapts = sizeof(views::adapt) == sizeof(T);
+
+  template<class T>
+  inline constexpr bool adapts_qualified = sizeof(views::adapt) == sizeof(T);
+
+  namespace ranges {
+    template<class T> inline constexpr bool enable_borrowed_range<buffer<T>> = true;
+  }
+}
+#+end_codeblock
+
+** Class template ~buffer~ [demo.buffer]
+:PROPERTIES:
+:CUSTOM_ID: demo.buffer
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  class buffer {
+  public:
+    // \ref{demo.buffer.obs}, observers
+    constexpr bool empty() const;
+  };
+}
+#+end_codeblock
+
+*** Observers [demo.buffer.obs]
+:PROPERTIES:
+:CUSTOM_ID: demo.buffer.obs
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+constexpr bool empty() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~.
+#+end_pnum
+
+** Range adaptor objects [demo.views]
+:PROPERTIES:
+:CUSTOM_ID: demo.views
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline constexpr @\placeholder{unspecified}@ views::adapt;
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: The name ~views::adapt~ denotes a range adaptor object. Given a subexpression ~E~, the expression ~views::adapt(E)~ is expression-equivalent to ~buffer(E)~.
+#+end_pnum
+
+** Encodings [demo.encoding]
+:PROPERTIES:
+:CUSTOM_ID: demo.encoding
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+enum class encoding { utf8, utf16 };
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: The values name the protocol families a decoder reads.
+#+end_pnum
+
+** Class template ~decoder~ [demo.decoder]
+:PROPERTIES:
+:CUSTOM_ID: demo.decoder
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std::proto {
+  template<encoding E>
+  class decoder {
+  public:
+    // \ref{demo.decoder.obs}, observers
+    constexpr encoding scheme() const;
+  };
+}
+#+end_codeblock
+
+*** Observers [demo.decoder.obs]
+:PROPERTIES:
+:CUSTOM_ID: demo.decoder.obs
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+constexpr encoding scheme() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~E~.
+#+end_pnum
+
+** Decoding [demo.decode]
+:PROPERTIES:
+:CUSTOM_ID: demo.decode
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+template<encoding E> decoder<E> proto::decode(const char* text);
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: A ~decoder<E>~ over ~text~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class D> D decode(D d);
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~d~.
+#+end_pnum

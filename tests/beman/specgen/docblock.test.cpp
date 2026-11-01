@@ -555,3 +555,10 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
             CHECK(!entry.missing_arg_error.empty());
     }
 }
+
+TEST_CASE("docblock - specified is a flag marker") {
+    const auto parsed = parse_docblock("//! \\specified\n");
+    CHECK(parsed.ok());
+    CHECK(parsed.block.markers.specified);
+    CHECK_FALSE(parse_docblock("//! \\omit\n").block.markers.specified);
+}

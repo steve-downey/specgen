@@ -3,10 +3,15 @@
 
 #include <beman/specgen/frontend/directive_sets.hpp>
 
+#include <beman/specgen/diagnostic.hpp>
+#include <beman/specgen/docblock.hpp>
+#include <beman/specgen/document_build.hpp>
 #include <beman/specgen/lower.hpp>
+#include <beman/specgen/markers.hpp>
 #include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
+#include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/record_members.hpp>
 
 #include <clang/AST/ASTConcept.h>
@@ -24,17 +29,21 @@
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Lex/Lexer.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <optional>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -77,19 +86,34 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
 // `std::views::join_with(std::string_view("::"))` expression rather than a
 // third spelling -- a bare `"::"` literal would drag its NUL terminator into
 // the join).
-std::string namespace_path(const clang::Decl* decl) {
-    std::vector<std::string> parts;
+// The named namespaces enclosing `decl`, outermost first.
+std::vector<const clang::NamespaceDecl*> namespace_chain(const clang::Decl* decl) {
+    std::vector<const clang::NamespaceDecl*> chain;
     // substrate generic algorithm: DeclContext parent-chain walk -- an
     // unfold over a linked structure, not a fold over a range that already
     // exists, same shape as qualifier_namespace_name's NestedNameSpecifier
     // walk (step 07).
     for (const clang::DeclContext* ctx = decl->getDeclContext(); ctx != nullptr; ctx = ctx->getParent())
         if (const auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(ctx); ns != nullptr && !ns->isAnonymousNamespace())
-            parts.push_back(ns->getNameAsString());
-    if (parts.empty())
-        return {};
-    std::reverse(parts.begin(), parts.end());
-    return parts | std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
+            chain.push_back(ns);
+    std::reverse(chain.begin(), chain.end());
+    return chain;
+}
+
+std::string join_namespace_names(std::span<const clang::NamespaceDecl* const> chain) {
+    return chain | std::views::transform([](const clang::NamespaceDecl* ns) { return ns->getNameAsString(); }) |
+           std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
+}
+
+std::string namespace_path(const clang::Decl* decl) { return join_namespace_names(namespace_chain(decl)); }
+
+// A namespace's own qualified path, by the same join as a declaration inside
+// it, so the specified set and the chain walk above agree on inline
+// namespaces, which getQualifiedNameAsString may or may not print.
+std::string qualified_namespace_path(const clang::NamespaceDecl* ns) {
+    std::vector<const clang::NamespaceDecl*> chain = namespace_chain(ns);
+    chain.push_back(ns);
+    return join_namespace_names(chain);
 }
 
 } // namespace
@@ -324,6 +348,141 @@ SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const cla
                         std::views::transform(seebelow_members_of) | std::views::join);
 
     return result;
+}
+
+SpecifiedNamespaces build_specified_namespace_set(const std::vector<clang::Decl*>& decls,
+                                                  clang::ASTContext&               ctx,
+                                                  const clang::SourceManager&      sm) {
+    namespace db = beman::specgen::document_build;
+    SpecifiedNamespaces out;
+
+    // Where a docblock's finding is reported: its first markup line, in the
+    // file it is in, the same position docblock_diagnostics puts a line-0
+    // grammar finding.
+    const auto report = [&](const clang::RawComment* rc, std::size_t start, std::string message) {
+        const clang::SourceLocation loc = rc->getBeginLoc().getLocWithOffset(static_cast<int>(start));
+        out.diagnostics.push_back(db::Diagnostic{beman::specgen::Severity::Error,
+                                                 sm.getSpellingLineNumber(loc),
+                                                 std::move(message),
+                                                 diagnostic_file_name(sm, sm.getFileID(loc))});
+    };
+
+    const auto read_namespace = [&](const clang::NamespaceDecl* ns) {
+        const clang::RawComment* rc = attached_raw_comment(ns);
+        if (rc == nullptr)
+            return;
+        const llvm::StringRef            raw   = rc->getRawText(sm);
+        const std::optional<std::size_t> start = docblock_start(raw);
+        if (!start)
+            return;
+        const grammar::ParseResult parsed  = grammar::parse_docblock(raw.substr(*start).str());
+        const lowering::Lowered    lowered = lowering::lower(parsed.block);
+        // A docblock without the marker is not the namespace's at all: a
+        // detached `\\verbatim-itemdecl` block written just above a
+        // `namespace` line is attached to it by Clang and is classify's
+        // standalone node, reported there if anything is wrong with it.
+        if (!lowered.directives.specified)
+            return;
+        out.paths.insert(qualified_namespace_path(ns));
+        out.diagnostics.append_range(docblock_diagnostics(rc, *start, parsed.diags, sm));
+        grammar::Markers rest = lowered.directives;
+        rest.specified        = false;
+        if (rest != grammar::Markers{} || !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl)
+            report(rc, *start, "a namespace accepts only \\specified: it has no wording of its own");
+    };
+
+    // Every namespace in the translation unit, redeclarations included: the
+    // marker may sit on any one of them, in any header this parse read.
+    const auto visit = [&](this const auto& self, const clang::DeclContext* context) -> void {
+        // substrate generic algorithm: recursive descent over the decl tree,
+        // the same shape collect_top_level_decl walks; the recursion is the
+        // algorithm and the loop only feeds it.
+        for (const clang::Decl* child : context->decls()) {
+            if (const auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(child)) {
+                if (!ns->isAnonymousNamespace() && !sm.isInSystemHeader(ns->getLocation()))
+                    read_namespace(ns);
+                self(ns);
+            } else if (const auto* linkage = llvm::dyn_cast<clang::LinkageSpecDecl>(child)) {
+                self(linkage);
+            }
+        }
+    };
+    visit(ctx.getTranslationUnitDecl());
+
+    // The marker off a namespace: silently taking no effect is the failure
+    // mode every misplaced marker here refuses.
+    std::ranges::for_each(
+        decls | std::views::filter([&](const clang::Decl* decl) { return docblock_directives(decl, sm).specified; }),
+        [&](const clang::Decl* decl) {
+            const clang::RawComment* rc = attached_raw_comment(decl);
+            if (const std::optional<std::size_t> start = docblock_start(rc->getRawText(sm)))
+                report(rc, *start, "\\specified applies only to a namespace");
+        });
+    // Two walks, one report: in file order, as a reader meets them.
+    std::ranges::stable_sort(out.diagnostics, [](const db::Diagnostic& a, const db::Diagnostic& b) {
+        return std::tie(a.file, a.line) < std::tie(b.file, b.line);
+    });
+    return out;
+}
+
+RenderedNamespace rendered_namespace(const clang::Decl*           decl,
+                                     const std::set<std::string>& ns_drop_set,
+                                     const std::set<std::string>& specified) {
+    const std::vector<const clang::NamespaceDecl*> chain       = namespace_chain(decl);
+    const auto                                     prefix_path = [&chain](std::size_t count) {
+        return join_namespace_names(std::span(chain).first(count));
+    };
+
+    // The drop-set prefix is prefix-minimal, so at most one prefix matches;
+    // scanning every length rather than stopping at the first keeps that an
+    // invariant of build_namespace_drop_set and not of this function.
+    std::size_t dropped = 0;
+    // substrate generic algorithm: a scan over prefix lengths whose state is
+    // the longest match so far.
+    for (std::size_t count = 1; count <= chain.size(); ++count)
+        if (ns_drop_set.contains(prefix_path(count)))
+            dropped = count;
+
+    const bool        std_rooted = !chain.empty() && chain.front()->getName() == "std";
+    RenderedNamespace out;
+    // substrate generic algorithm: a prefix scan that stops at the first
+    // component the author did not specify; what came before it is the
+    // answer, so this is a take_while whose predicate reads the accumulated
+    // prefix.
+    for (std::size_t index = dropped; index < chain.size(); ++index) {
+        if (!std_rooted && !specified.contains(prefix_path(index + 1)))
+            break;
+        const clang::NamespaceDecl* ns = chain[index];
+        if (!out.qualifier.empty()) {
+            out.qualifier += "::";
+            out.definition += "::";
+        }
+        out.qualifier += ns->getNameAsString();
+        if (ns->isInline())
+            out.definition += "inline ";
+        out.definition += ns->getNameAsString();
+    }
+    return out;
+}
+
+std::string declarator_qualifier(const clang::NamedDecl*      decl,
+                                 const std::set<std::string>& ns_drop_set,
+                                 const std::set<std::string>& specified) {
+    const clang::NamedDecl* declarator = decl;
+    if (const auto* tmpl = llvm::dyn_cast<clang::TemplateDecl>(decl);
+        tmpl != nullptr && tmpl->getTemplatedDecl() != nullptr)
+        declarator = tmpl->getTemplatedDecl();
+    const auto* declared = llvm::dyn_cast<clang::DeclaratorDecl>(declarator);
+    if (declared == nullptr || !llvm::isa<clang::FunctionDecl, clang::VarDecl>(declared) ||
+        llvm::isa<clang::CXXMethodDecl>(declared))
+        return {};
+    // A hidden friend is a namespace function declared in a class body, and
+    // the draft writes its itemdecl bare under the class.
+    if (!declared->getDeclContext()->isFileContext() || !declared->getLexicalDeclContext()->isFileContext())
+        return {};
+    if (static_cast<bool>(declared->getQualifierLoc()))
+        return {};
+    return rendered_namespace(declared, ns_drop_set, specified).qualifier;
 }
 
 FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm) {

@@ -96,11 +96,16 @@ class PaperEntityCollector : public clang::RecursiveASTVisitor<PaperEntityCollec
 //     to be "declared in the main file", which let the identical rendered
 //     `detail::` pass unreported the moment the helper namespace moved into
 //     an included implementation header, disabling the leakage guarantee by
-//     exactly the refactor the tool's own guidance encourages.
+//     exactly the refactor the tool's own guidance encourages;
+//   - a specified namespace is skipped for the same reason (design §3.5,
+//     issue #209): `views::null_term` renders inside `namespace views {`
+//     and the qualifier is how the draft itself names it.
 class ForeignQualifierCollector : public clang::RecursiveASTVisitor<ForeignQualifierCollector> {
   public:
-    ForeignQualifierCollector(const std::set<std::string>& drop, std::map<std::string, std::string>& out)
-        : drop_(drop), out_(out) {}
+    ForeignQualifierCollector(const std::set<std::string>&        drop,
+                              const std::set<std::string>&        specified,
+                              std::map<std::string, std::string>& out)
+        : drop_(drop), specified_(specified), out_(out) {}
 
     bool TraverseNestedNameSpecifierLoc(clang::NestedNameSpecifierLoc nns) {
         if (nns) {
@@ -150,13 +155,15 @@ class ForeignQualifierCollector : public clang::RecursiveASTVisitor<ForeignQuali
                 return;
             const std::string name      = named->getNameAsString();
             const std::string qualified = named->getQualifiedNameAsString();
-            if (!name.empty() && drop_.count(qualified) == 0 && !qualified.starts_with("std::"))
+            if (!name.empty() && drop_.count(qualified) == 0 && !qualified.starts_with("std::") &&
+                specified_.count(qualified) == 0)
                 out_.emplace(name, qualified);
             qualifier = np.Prefix;
         }
     }
 
     const std::set<std::string>&        drop_;
+    const std::set<std::string>&        specified_;
     std::map<std::string, std::string>& out_;
 };
 
@@ -347,11 +354,12 @@ std::optional<std::vector<std::string>> collect_paper_entities(const std::vector
 }
 
 std::vector<beman::specgen::ir::ForeignNamespace> collect_foreign_namespaces(const std::vector<clang::Decl*>& decls,
-                                                                             const std::set<std::string>&     drop) {
+                                                                             const std::set<std::string>&     drop,
+                                                                             const std::set<std::string>& specified) {
     // The map deduplicates and orders by name, so the IR channel is stable
     // whichever decl wrote the qualifier first.
     std::map<std::string, std::string> found;
-    ForeignQualifierCollector          collector(drop, found);
+    ForeignQualifierCollector          collector(drop, specified, found);
     // substrate generic algorithm: a for_each-shaped walk driving
     // RecursiveASTVisitor's side effect (appending to `found`), the same
     // shape build_document's collect_top_level_decl loop has -- not a

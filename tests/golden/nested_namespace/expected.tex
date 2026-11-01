@@ -1,0 +1,144 @@
+\rSec3[demo.syn]{Header <demo> synopsis}
+
+\begin{codeblock}
+namespace std {
+  // \ref{demo.buffer}, class template buffer
+
+  template<class T> class @\libglobal{buffer}@;
+
+  namespace views {
+    // \ref{demo.views}, range adaptor objects
+
+    inline constexpr @\placeholder{unspecified}@ @\libglobal{adapt}@;
+  }
+
+  namespace proto {
+    // \ref{demo.encoding}, encodings
+
+    enum class @\libglobal{encoding}@ { utf8, utf16 };
+
+    // \ref{demo.decoder}, class template decoder
+
+    template<encoding E> class @\libglobal{decoder}@;
+
+    // \ref{demo.decode}, decoding
+
+    template<encoding E> decoder<E> @\libglobal{decode}@(const char* text);
+  }
+
+  // \ref{demo.decode}, decoding
+
+  template<class D> D @\libglobal{decode}@(D d);
+
+  template<class T> inline constexpr bool @\libglobal{adapts}@ = sizeof(views::adapt) == sizeof(T);
+
+  template<class T>
+  inline constexpr bool @\libglobal{adapts_qualified}@ = sizeof(views::adapt) == sizeof(T);
+
+  namespace ranges {
+    template<class T> inline constexpr bool @\libglobal{enable_borrowed_range}@<buffer<T>> = true;
+  }
+}
+\end{codeblock}
+
+\rSec3[demo.buffer]{Class template `buffer`}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{buffer}@ {
+  public:
+    // \ref{demo.buffer.obs}, observers
+    constexpr bool empty() const;
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.buffer.obs]{Observers}
+
+\indexlibrarymember{empty}{buffer}%
+\begin{itemdecl}
+constexpr bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true}.
+\end{itemdescr}
+
+\rSec3[demo.views]{Range adaptor objects}
+
+\indexlibraryglobal{adapt}%
+\begin{itemdecl}
+inline constexpr @\placeholder{unspecified}@ views::adapt;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The name \tcode{views::adapt} denotes a range adaptor object. Given a subexpression \tcode{E}, the expression \tcode{views::adapt(E)} is expression-equivalent to \tcode{buffer(E)}.
+\end{itemdescr}
+
+\rSec3[demo.encoding]{Encodings}
+
+\indexlibraryglobal{encoding}%
+\begin{itemdecl}
+enum class encoding { utf8, utf16 };
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The values name the protocol families a decoder reads.
+\end{itemdescr}
+
+\rSec3[demo.decoder]{Class template `decoder`}
+
+\begin{codeblock}
+namespace std::proto {
+  template<encoding E>
+  class @\libglobal{decoder}@ {
+  public:
+    // \ref{demo.decoder.obs}, observers
+    constexpr encoding scheme() const;
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.decoder.obs]{Observers}
+
+\indexlibrarymember{scheme}{decoder}%
+\begin{itemdecl}
+constexpr encoding scheme() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{E}.
+\end{itemdescr}
+
+\rSec3[demo.decode]{Decoding}
+
+\indexlibraryglobal{decode}%
+\begin{itemdecl}
+template<encoding E> decoder<E> proto::decode(const char* text);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+A \tcode{decoder<E>} over \tcode{text}.
+\end{itemdescr}
+
+\indexlibraryglobal{decode}%
+\begin{itemdecl}
+template<class D> D decode(D d);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{d}.
+\end{itemdescr}

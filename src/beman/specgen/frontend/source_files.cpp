@@ -153,7 +153,13 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
 
     const std::map<const clang::Decl*, std::string> expos_set   = build_expos_set(expos_decls, sm);
     const std::set<std::string>                     ns_drop_set = build_namespace_drop_set(header_decls);
-    const SkippedRanges                             skipped     = collect_skipped_ranges(*parsed.ast);
+    // The specified namespaces too (issue #209), so a function the source
+    // file defines in one spells its itemdecl as the header's parse would.
+    // Its findings are the header's parse's to report, which reads the same
+    // headers.
+    const std::set<std::string> specified_set =
+        build_specified_namespace_set(header_decls, parsed.ast->getASTContext(), sm).paths;
+    const SkippedRanges skipped = collect_skipped_ranges(*parsed.ast);
 
     SourceHarvest harvest;
     harvest.sources    = parse_sources(source.path, *parsed.ast);
@@ -198,8 +204,15 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
             continue;
         }
 
-        AttachedItem attached =
-            attach_function(fn, first, friend_keyword(first), sm, lang_opts, ns_drop_set, expos_set, skipped);
+        AttachedItem attached = attach_function(fn,
+                                                first,
+                                                friend_keyword(first),
+                                                sm,
+                                                lang_opts,
+                                                ns_drop_set,
+                                                expos_set,
+                                                skipped,
+                                                declarator_qualifier(first, ns_drop_set, specified_set));
         // A finding positioned in this parse's main file names no file, which
         // the driver reads as the header; name the source file instead.
         std::ranges::for_each(attached.diagnostics, [&](db::Diagnostic& diagnostic) {

@@ -116,6 +116,60 @@ SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const cla
 // where the comment must be emitted.
 FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm);
 
+// The namespaces below the document's own that are part of the specified
+// interface (design §3.5, issue #209): every namespace some redeclaration of
+// which carries `\specified` as its docblock, by qualified path
+// (`demo::views`). A namespace is neither dropped nor foreign by itself, and
+// nothing in the AST says whether `views` is interface or `detail` is
+// implementation, so the author says. Read across the whole translation
+// unit rather than the document's decls: a project marks a namespace once,
+// in a header every other header includes, and every document in the paper
+// sees it -- the same reach `\expos` has into an included header (issue #36).
+//
+// Two findings ride out with the set. `\specified` on anything but a
+// namespace is an Error, as `\verbatim-synopsis` off a class is; and a
+// namespace's docblock carrying anything else -- another marker, or
+// description text -- is an Error too, a namespace having no wording of its
+// own for the text to be.
+struct SpecifiedNamespaces {
+    std::set<std::string>                                   paths;
+    std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
+};
+SpecifiedNamespaces build_specified_namespace_set(const std::vector<clang::Decl*>& decls,
+                                                  clang::ASTContext&               ctx,
+                                                  const clang::SourceManager&      sm);
+
+// Where a declaration renders, below `std` (design §3.5): the longest prefix
+// of its namespace path, past the drop-set prefix the mapping makes `std`,
+// every component of which is specified. A namespace rooted in `std` itself
+// is specified without a marker -- a `std::ranges` specialization renders
+// inside `namespace ranges {`, which is the standard's own vocabulary, the
+// same guard the leakage checker's qualifier half already applies. An
+// unmarked `detail` under `whatwg` flattens into `whatwg`, exactly as an
+// unmarked `detail` under the document's namespace flattens into `std`.
+//
+// Two spellings of one path: `qualifier` is what an itemdecl's declarator
+// takes (`views`, `literals::chrono_literals`) and `definition` is what a
+// nested-namespace-definition writes (`inline literals::inline
+// chrono_literals`), the draft's own form for both. Both empty at the top.
+struct RenderedNamespace {
+    std::string qualifier;
+    std::string definition;
+};
+RenderedNamespace rendered_namespace(const clang::Decl*           decl,
+                                     const std::set<std::string>& ns_drop_set,
+                                     const std::set<std::string>& specified);
+
+// The qualifier an itemdecl's declarator-id takes, or empty: the rendered
+// namespace of a namespace-scope function or variable (template), the way
+// the draft writes `ranges::copy` and `filesystem::absolute`. A type -- a
+// concept, an alias, an enumeration, a class -- stays bare, as the grammar
+// requires and the draft writes them. A declarator that already writes a
+// qualifier takes no second one: the mapping renders what was written.
+std::string declarator_qualifier(const clang::NamedDecl*      decl,
+                                 const std::set<std::string>& ns_drop_set,
+                                 const std::set<std::string>& specified);
+
 } // namespace beman::specgen::frontend
 
 #endif // BEMAN_SPECGEN_FRONTEND_DIRECTIVE_SETS_HPP
