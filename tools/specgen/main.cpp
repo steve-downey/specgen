@@ -40,6 +40,7 @@
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/crash_handler.hpp>
 #include <beman/specgen/frontend/build_document.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/interleave.hpp>
 #include <beman/specgen/frontend/smoke_check.hpp>
 #include <beman/specgen/frontend/source_file.hpp>
@@ -110,6 +111,13 @@ generate options:
                              supplies that member's wording, as one in the
                              header would. Parsed as its own translation unit,
                              with its own compile flags; may be repeated
+  --std-namespace <name>    map this fully-qualified implementation namespace
+                             directly to std; nested namespaces are preserved.
+                             May be repeated
+  --exposition-namespace <name>
+                            do not render this fully-qualified implementation
+                             namespace as a nested public namespace. May be
+                             repeated; declarations still need \expos or \omit
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
                              rendering wording here. One document per file is
@@ -1028,11 +1036,12 @@ int generate_command(const std::vector<std::string>& args) {
     // --root, accumulated and pairing with `headers` in order, exactly as
     // `render`'s pairs with --from-ir: with several documents each needs its
     // own root fragment name.
-    std::vector<std::string> roots;
-    std::string              compile_commands_dir;
-    WordingOptions           wording;
-    bool                     emit_ir             = false;
-    bool                     no_compile_commands = false;
+    std::vector<std::string>   roots;
+    frontend::NamespaceOptions namespace_options;
+    std::string                compile_commands_dir;
+    WordingOptions             wording;
+    bool                       emit_ir             = false;
+    bool                       no_compile_commands = false;
     // The first wording-only option seen, for the `--emit-ir` conflict below:
     // naming the one the user actually typed beats listing all five. -o is not
     // one of them -- it names where either mode's single output goes.
@@ -1140,6 +1149,16 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
             }
             sources.back().push_back(std::move(source));
+        } else if (arg == "--std-namespace") {
+            std::string name;
+            if (!next(name))
+                return 2;
+            namespace_options.std_namespaces.push_back(std::move(name));
+        } else if (arg == "--exposition-namespace") {
+            std::string name;
+            if (!next(name))
+                return 2;
+            namespace_options.exposition_namespaces.push_back(std::move(name));
         } else if (!arg.empty() && arg.front() != '-') {
             headers.push_back(arg);
             sources.emplace_back();
@@ -1275,7 +1294,8 @@ int generate_command(const std::vector<std::string>& args) {
             [&](std::vector<frontend::DocumentBuild> built,
                 std::size_t index) -> std::expected<std::vector<frontend::DocumentBuild>, std::string> {
                 const std::string& header = headers[index];
-                return frontend::build_document_with_sources(header, resolve_for(header), source_files_for(index))
+                return frontend::build_document_with_sources(
+                           header, resolve_for(header), source_files_for(index), namespace_options)
                     .transform_error([](const frontend::BuildFailure& failure) {
                         return std::format("specgen: {}", failure.message);
                     })

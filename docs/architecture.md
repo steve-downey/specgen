@@ -311,18 +311,24 @@ All rewrites act on identifier tokens **whose AST referent is known**: never tex
 match (exception: dependent member uses of the class's own expos members may fall
 back to name match within the class's fragments only):
 
-- Namespace mapping: `beman::optional` → `std`; drop `std::` qualifiers inside
-  the synopsis/itemdecls (names are unqualified within `namespace std`). The drop set is
-  built from **prefix-minimal** paths, so a nested namespace written out in full
-  (`demo::detail::storage`) renders the same as the abbreviated spelling instead of losing
-  its qualifier.
+- Namespace mapping: an inferred implementation root, or each path named by
+  `--std-namespace`, maps to `std`; drop those qualifiers inside synopses and
+  item declarations. Namespace components below that root are specified API and
+  survive as nested namespace blocks; namespace-scope item declarations carry
+  the corresponding qualifier. `\specified` identifies the first surviving
+  namespace when inference alone is ambiguous. A path named by
+  `--exposition-namespace` contributes no namespace block, but does not make its
+  declarations invisible or disable leakage checking: those entities still need
+  `\expos` or `\omit` as appropriate (issue #209).
 - **Every synopsis is enclosed in `namespace std`.** The draft writes a synopsis at namespace
   scope inside its namespace, body indented two spaces, and the mapping above has already made
-  that namespace `std`. The front end adds the enclosure as the last step before the tree is
-  built, so a gathered header region is enclosed once, as a whole, and spans move with the
-  text they cover. A class's attached `\verbatim-synopsis` stands in for the extracted text and
-  is enclosed like it; a standalone `\verbatim-synopsis` is the author's whole synopsis,
-  namespace included, and is left exactly as written.
+  that namespace `std`. Specified nested namespaces are enclosed inside it; adjacent
+  declarations in the same namespace share one block, including intervening `\ref` headers.
+  The front end adds the outer enclosure as the last step before the tree is built, so a
+  gathered header region is enclosed once as a whole and spans move with the text they cover.
+  A class's attached `\verbatim-synopsis` stands in for the extracted text and is enclosed like
+  it; a standalone `\verbatim-synopsis` is the author's whole synopsis, namespace included,
+  and is left exactly as written.
 - **Qualifier removal follows declaration ownership through a using-declaration.** A
   qualifier written as an implementation namespace is dropped for a use only when the
   referenced declaration is owned by a namespace already in the drop set, such as `std`. The
@@ -511,6 +517,8 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   the declaration's semantic name to the paper-wide validation set. It is
   mutually exclusive with `\omit`, `\merge`, and `\expos` (issue #113,
   decision `paper-visible-names`).
+- `\specified` — on a namespace, preserve that namespace as part of the
+  specified interface below `std` (issue #209).
 - `\describe` — force an itemdecl for `= default` / `= delete` entities.
 - `\also` (or an empty markup block) — overload joins the preceding itemdescr;
   the generator accumulates itemdecls until it reaches a described one.

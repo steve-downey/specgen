@@ -1,0 +1,74 @@
+** Header <nested> synopsis [nested.syn]
+:PROPERTIES:
+:CUSTOM_ID: nested.syn
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  struct @\exposidnc{adaptor}@ {}; // exposition only
+
+  namespace views {
+    // \ref{nested.adaptor}, range adaptor objects
+
+    inline constexpr @\placeholder{unspecified}@ null_term;
+  }
+
+  namespace whatwg {
+    enum class encoding { utf8 };
+
+    // \ref{nested.whatwg}, WHATWG operations
+
+    template<encoding E> inline constexpr bool decode = true;
+
+    struct @\exposidnc{state}@ {}; // exposition only
+  }
+
+  // \ref{nested.decode}, decoding
+
+  template<class D> constexpr bool decode(D);
+}
+#+end_codeblock
+
+*** Range adaptor objects [nested.adaptor]
+:PROPERTIES:
+:CUSTOM_ID: nested.adaptor
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+inline constexpr @\placeholder{unspecified}@ views::null_term;
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Returns a null-terminated view of ~r~.
+#+end_pnum
+
+*** Decoding [nested.decode]
+:PROPERTIES:
+:CUSTOM_ID: nested.decode
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<class D> constexpr bool decode(D);
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~.
+#+end_pnum
+
+*** WHATWG operations [nested.whatwg]
+:PROPERTIES:
+:CUSTOM_ID: nested.whatwg
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<encoding E> inline constexpr bool whatwg::decode = true;
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: ~E~ identifies an encoding.
+#+end_pnum

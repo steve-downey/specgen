@@ -112,7 +112,8 @@ std::string canonical_file_path(const clang::SourceManager& sm, clang::FileID fi
 }
 
 std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&            source,
-                                                               const std::set<std::string>& document_paths) {
+                                                               const std::set<std::string>& document_paths,
+                                                               const NamespaceOptions&      namespace_options) {
     namespace db = beman::specgen::document_build;
 
     ParsedHeader parsed = parse_header(source.path, source.options);
@@ -151,9 +152,9 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
     }
     expos_decls.append_range(header_decls);
 
-    const std::map<const clang::Decl*, std::string> expos_set   = build_expos_set(expos_decls, sm);
-    const std::set<std::string>                     ns_drop_set = build_namespace_drop_set(header_decls);
-    const SkippedRanges                             skipped     = collect_skipped_ranges(*parsed.ast);
+    const std::map<const clang::Decl*, std::string> expos_set = build_expos_set(expos_decls, sm);
+    const std::set<std::string> ns_drop_set = build_namespace_drop_set(header_decls, sm, namespace_options);
+    const SkippedRanges         skipped     = collect_skipped_ranges(*parsed.ast);
 
     SourceHarvest harvest;
     harvest.sources    = parse_sources(source.path, *parsed.ast);

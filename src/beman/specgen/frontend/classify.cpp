@@ -21,6 +21,7 @@
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/document_files.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
+#include <beman/specgen/frontend/header_synopsis.hpp>
 #include <beman/specgen/frontend/inclass_items.hpp>
 #include <beman/specgen/frontend/synopsis_extraction.hpp>
 
@@ -242,6 +243,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const SeeBelowMap&                               seebelow_map,
                       const FreestandingMap&                           freestanding_map,
                       const std::set<std::string>&                     ns_drop_set,
+                      const std::vector<std::string>&                  exposition_namespaces,
                       const SkippedRanges&                             skipped,
                       const AttachedCommentRanges&                     attached_comments,
                       const SourceMarkupMap&                           source_markup) {
@@ -377,7 +379,15 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.offset        = ev.offset;
         out.synopsis.name = namespace_expos->getNameAsString();
         out.synopsis.code = extract_namespace_expos_synopsis(
-            namespace_expos, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below);
+            namespace_expos,
+            sm,
+            lang_opts,
+            ns_drop_set,
+            expos_set,
+            mask.unspecified,
+            see_below,
+            synopsis_indentation(namespace_expos, sm, ns_drop_set, exposition_namespaces));
+        enclose_in_specified_namespaces(out.synopsis.code, namespace_expos, sm, ns_drop_set, exposition_namespaces);
         // Its description renders beside that synopsis, the way a class's own
         // description does (design §4.3): the draft describes exposition-only
         // concepts and aliases in prose -- "the exposition-only concept ... is
@@ -437,10 +447,18 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.name = record->getNameAsString();
         out.diagnostics   = std::move(block.diagnostics);
         out.synopsis.code =
-            block.synopsis
-                ? ir::CodeText{std::move(*block.synopsis), {}}
-                : extract_synopsis(
-                      record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
+            block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
+                           : extract_synopsis(record,
+                                              sm,
+                                              lang_opts,
+                                              omit_set,
+                                              expos_set,
+                                              seebelow_map,
+                                              freestanding_map,
+                                              ns_drop_set,
+                                              nullptr,
+                                              synopsis_indentation(record, sm, ns_drop_set, exposition_namespaces));
+        enclose_in_specified_namespaces(out.synopsis.code, record, sm, ns_drop_set, exposition_namespaces);
         collect_inclass_items(
             record, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // After collection: the roster reads the routed sections
@@ -471,16 +489,19 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.offset        = ev.offset;
         out.synopsis.name = templated->getNameAsString();
         out.diagnostics   = std::move(block.diagnostics);
-        out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
-                                           : extract_synopsis(templated,
-                                                              sm,
-                                                              lang_opts,
-                                                              omit_set,
-                                                              expos_set,
-                                                              seebelow_map,
-                                                              freestanding_map,
-                                                              ns_drop_set,
-                                                              tmpl);
+        out.synopsis.code =
+            block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
+                           : extract_synopsis(templated,
+                                              sm,
+                                              lang_opts,
+                                              omit_set,
+                                              expos_set,
+                                              seebelow_map,
+                                              freestanding_map,
+                                              ns_drop_set,
+                                              tmpl,
+                                              synopsis_indentation(templated, sm, ns_drop_set, exposition_namespaces));
+        enclose_in_specified_namespaces(out.synopsis.code, templated, sm, ns_drop_set, exposition_namespaces);
         collect_inclass_items(
             templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // Build the roster before grouping so every alias offset still

@@ -53,6 +53,14 @@ void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begi
 // outside it.
 void enclose_in_namespace_std(beman::specgen::ir::CodeText& code);
 
+// Preserve the namespace ancestors explicitly marked `\specified`. This is
+// applied before the whole synopsis is enclosed in `namespace std`.
+void enclose_in_specified_namespaces(beman::specgen::ir::CodeText&   code,
+                                     const clang::Decl*              decl,
+                                     const clang::SourceManager&     sm,
+                                     const std::set<std::string>&    namespace_drop_set,
+                                     const std::vector<std::string>& exposition_namespaces = {});
+
 void append_synopsis_code(beman::specgen::ir::CodeText& out, beman::specgen::ir::CodeText part);
 
 // A declaration that ordinary classification intentionally ignores still
@@ -65,7 +73,8 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const std::set<std::string>&                     ns_drop_set,
                                                         const std::map<const clang::Decl*, std::string>& expos_set,
                                                         const clang::VarDecl*             unspecified = nullptr,
-                                                        std::optional<clang::SourceRange> see_below   = std::nullopt);
+                                                        std::optional<clang::SourceRange> see_below   = std::nullopt,
+                                                        const std::vector<std::string>&   exposition_namespaces = {});
 
 beman::specgen::ir::CodeText header_comment_code(std::string text);
 

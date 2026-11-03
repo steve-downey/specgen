@@ -278,3 +278,49 @@ TEST_CASE("a gathered region's routed namespace entity is on the roster") {
     CHECK(std::ranges::none_of(std::get<ir::Synopsis>(synopses.front()).roster,
                                [](const ir::SynopsisEntry& entry) { return entry.name == "limit"; }));
 }
+
+TEST_CASE("specified nested namespaces survive the implementation namespace mapping") {
+    const frontend::NamespaceOptions namespaces{
+        .std_namespaces        = {"demo"},
+        .exposition_namespaces = {"demo::detail", "demo::whatwg::detail"},
+    };
+    const auto built = frontend::build_document(kCorpus + "/spec_nested_namespaces.hpp", {}, namespaces);
+    REQUIRE(built.has_value());
+
+    const ir::Section* syn = find_section(built->document.nodes, "nested.syn");
+    REQUIRE(syn != nullptr);
+    const auto synopses =
+        syn->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Synopsis>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(synopses.size() == 1);
+    const std::string& code = std::get<ir::Synopsis>(synopses.front()).code.text;
+    CHECK(code.contains("namespace std {"));
+    CHECK(code.contains("namespace views {"));
+    CHECK(code.contains("namespace whatwg {"));
+    CHECK_FALSE(code.contains("namespace detail {"));
+    CHECK(code.contains("inline constexpr unspecified null_term;"));
+    CHECK(code.contains("inline constexpr bool decode = true;"));
+
+    const ir::Section* adaptor = find_section(built->document.nodes, "nested.adaptor");
+    REQUIRE(adaptor != nullptr);
+    const auto adaptor_items =
+        adaptor->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(adaptor_items.size() == 1);
+    const ir::SpecItem& item = std::get<ir::SpecItem>(adaptor_items.front());
+    REQUIRE(item.decl.signatures.size() == 1);
+    CHECK(item.decl.signatures.front().text.contains("views::null_term"));
+
+    const ir::Section* whatwg = find_section(built->document.nodes, "nested.whatwg");
+    REQUIRE(whatwg != nullptr);
+    const auto whatwg_items =
+        whatwg->children |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::SpecItem>(node); }) |
+        std::ranges::to<std::vector>();
+    REQUIRE(whatwg_items.size() == 1);
+    const ir::SpecItem& decode = std::get<ir::SpecItem>(whatwg_items.front());
+    REQUIRE(decode.decl.signatures.size() == 1);
+    CHECK(decode.decl.signatures.front().text.contains("whatwg::decode"));
+}

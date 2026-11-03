@@ -130,6 +130,7 @@ function(specgen_add_golden case)
         BASE_HEADING_LEVEL
         BASE_SECTION_DEPTH
         EXTRA_ARGS
+        GENERATE_ARGS
         COMPILE_COMMANDS_DIR
         EXPECTED_DIR
     )
@@ -231,6 +232,9 @@ function(specgen_add_golden case)
     if(ARG_EXTRA_ARGS)
         list(APPEND case_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
     endif()
+    if(ARG_GENERATE_ARGS)
+        list(APPEND case_args "-DGENERATE_ARGS=${ARG_GENERATE_ARGS}")
+    endif()
     if(ARG_COMPILE_COMMANDS_DIR)
         list(
             APPEND case_args
@@ -284,6 +288,9 @@ function(specgen_add_golden case)
         if(ARG_EXTRA_ARGS)
             list(APPEND single_pass_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
         endif()
+        if(ARG_GENERATE_ARGS)
+            list(APPEND single_pass_args "-DGENERATE_ARGS=${ARG_GENERATE_ARGS}")
+        endif()
         if(ARG_SOURCE)
             list(APPEND single_pass_args "-DSOURCES=${_sources_joined}")
         endif()
@@ -329,6 +336,9 @@ function(specgen_add_golden case)
             if(ARG_EXTRA_ARGS)
                 list(APPEND quiet_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
             endif()
+            if(ARG_GENERATE_ARGS)
+                list(APPEND quiet_args "-DGENERATE_ARGS=${ARG_GENERATE_ARGS}")
+            endif()
             if(ARG_SOURCE)
                 list(APPEND quiet_args "-DSOURCES=${_sources_joined}")
             endif()
@@ -365,6 +375,9 @@ function(specgen_add_golden case)
             )
             if(ARG_EXTRA_ARGS)
                 list(APPEND flip_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
+            endif()
+            if(ARG_GENERATE_ARGS)
+                list(APPEND flip_args "-DGENERATE_ARGS=${ARG_GENERATE_ARGS}")
             endif()
             add_test(
                 NAME golden.${case}.eastconst
@@ -683,6 +696,30 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_header_synopsis.hpp"
 )
 
+# Explicit namespace policy preserves public nested namespaces and suppresses
+# implementation namespace scaffolding (issue #209).
+specgen_add_golden(
+    nested_namespaces
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_namespaces.hpp"
+    GENERATE_ARGS
+        "--std-namespace demo --exposition-namespace demo::detail --exposition-namespace demo::whatwg::detail"
+)
+specgen_add_golden(
+    nested_namespaces_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespaces/expected.json"
+)
+specgen_add_golden(
+    nested_namespaces_mpark
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespaces/expected.json"
+)
+specgen_add_golden(
+    nested_namespaces_org
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_namespaces/expected.json"
+)
+
 # An exact Doxygen END fence closes an ordinary section (issue #114), so the
 # exposition-only helper between two class clauses becomes a root node rather
 # than leaking into the preceding clause. The distinct case name leaves
@@ -692,6 +729,7 @@ specgen_add_golden(
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_section_end.hpp"
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/section_end"
+    GENERATE_ARGS "--exposition-namespace demo::detail"
 )
 
 # Normalization (design §3.6) — a class template exercising the
@@ -782,6 +820,7 @@ specgen_add_golden(
     constraints
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_constraints.hpp"
+    GENERATE_ARGS "--exposition-namespace demo::detail"
 )
 
 # A requires-clause whose last line lands exactly on the column limit kept its
@@ -802,6 +841,7 @@ specgen_add_golden(
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_concept_subject.hpp"
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/concept_subject"
+    GENERATE_ARGS "--exposition-namespace demo::detail"
 )
 specgen_add_golden(
     concept_subject
@@ -979,6 +1019,7 @@ specgen_add_golden(
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_variable_mask.hpp"
     EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variable_mask"
+    GENERATE_ARGS "--exposition-namespace demo::detail"
 )
 
 # The targeted `\seebelow` forms have no meaning on a variable, so one is an
@@ -1295,6 +1336,7 @@ specgen_add_golden(
     expos_uses
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_uses.hpp"
+    GENERATE_ARGS "--exposition-namespace demo::detail"
 )
 
 # The design §10 acid test: an optional-shaped header —

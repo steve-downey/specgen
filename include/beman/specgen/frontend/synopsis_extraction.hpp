@@ -61,7 +61,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
                                               const std::set<std::string>&                     ns_drop_set,
-                                              const clang::Decl*                               head_decl = nullptr);
+                                              const clang::Decl*                               head_decl,
+                                              unsigned                                         indent);
 
 // The masks a marked declaration's own spelling takes, applied to one
 // extraction's edit list. Two of them, and they are the same idea told about
@@ -115,10 +116,11 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  bool                                             exposition,
-                                 std::optional<std::string_view>                  record_tag    = std::nullopt,
-                                 const clang::VarDecl*                            unspecified   = nullptr,
-                                 std::optional<clang::SourceRange>                see_below     = std::nullopt,
-                                 const clang::VarDecl*                            uninitialized = nullptr);
+                                 std::optional<std::string_view>                  record_tag      = std::nullopt,
+                                 const clang::VarDecl*                            unspecified     = nullptr,
+                                 std::optional<clang::SourceRange>                see_below       = std::nullopt,
+                                 const clang::VarDecl*                            uninitialized   = nullptr,
+                                 unsigned                                         synopsis_indent = 2);
 
 // A free-standing exposition-only entity is already a complete
 // definition, so it uses the ordinary Synopsis IR rather than inventing an
@@ -139,7 +141,8 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  const clang::VarDecl*                            unspecified = nullptr,
-                                 std::optional<clang::SourceRange>                see_below   = std::nullopt);
+                                 std::optional<clang::SourceRange>                see_below   = std::nullopt,
+                                 unsigned                                         indent      = 2);
 
 } // namespace beman::specgen::frontend
 

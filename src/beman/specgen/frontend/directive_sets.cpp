@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <optional>
@@ -70,26 +71,16 @@ const clang::NamedDecl* as_field_or_method(const clang::Decl* member) {
     return nullptr;
 }
 
-// The namespace path enclosing `decl`, most-enclosing first, joined with
-// "::" ("" if `decl` is not lexically inside any named namespace). Same
-// unfold-then-join shape as qualifier_namespace_name above (this file's
-// second "::"-join call site; reuses its exact
-// `std::views::join_with(std::string_view("::"))` expression rather than a
-// third spelling -- a bare `"::"` literal would drag its NUL terminator into
-// the join).
-std::string namespace_path(const clang::Decl* decl) {
-    std::vector<std::string> parts;
-    // substrate generic algorithm: DeclContext parent-chain walk -- an
-    // unfold over a linked structure, not a fold over a range that already
-    // exists, same shape as qualifier_namespace_name's NestedNameSpecifier
-    // walk (step 07).
+std::vector<const clang::NamespaceDecl*> namespace_ancestry(const clang::Decl* decl) {
+    std::vector<const clang::NamespaceDecl*> namespaces;
+    // substrate generic algorithm: DeclContext parent-chain unfold, retaining
+    // the declarations because the `\specified` marker belongs to each
+    // namespace declaration rather than to its spelling.
     for (const clang::DeclContext* ctx = decl->getDeclContext(); ctx != nullptr; ctx = ctx->getParent())
         if (const auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(ctx); ns != nullptr && !ns->isAnonymousNamespace())
-            parts.push_back(ns->getNameAsString());
-    if (parts.empty())
-        return {};
-    std::reverse(parts.begin(), parts.end());
-    return parts | std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
+            namespaces.push_back(ns);
+    std::ranges::reverse(namespaces);
+    return namespaces;
 }
 
 } // namespace
@@ -264,8 +255,70 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
     return expos;
 }
 
-std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& decls) {
-    std::set<std::string> paths = decls | std::views::transform(namespace_path) |
+std::string rendered_namespace_path(const clang::Decl*              decl,
+                                    const clang::SourceManager&     sm,
+                                    const std::set<std::string>&    namespace_drop_set,
+                                    const std::vector<std::string>& exposition_namespaces) {
+    const auto               namespaces = namespace_ancestry(decl);
+    std::vector<std::string> names =
+        namespaces | std::views::transform([](const clang::NamespaceDecl* ns) { return ns->getNameAsString(); }) |
+        std::ranges::to<std::vector<std::string>>();
+    const auto joined = [](auto&& parts) {
+        return parts | std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
+    };
+    const std::string              full = joined(names);
+    const std::vector<std::size_t> matching_drop =
+        namespace_drop_set | std::views::filter([&](const std::string& path) {
+            return full == path || (full.starts_with(path) && full[path.size()] == ':');
+        }) |
+        std::views::transform([](const std::string& path) { return path.size(); }) |
+        std::ranges::to<std::vector<std::size_t>>();
+    if (matching_drop.empty())
+        return {};
+
+    std::size_t begin = std::ranges::max(matching_drop);
+    if (begin < full.size())
+        begin += 2;
+    std::size_t                    end = full.size();
+    const std::vector<std::size_t> matching_exposition =
+        exposition_namespaces | std::views::filter([&](const std::string& path) {
+            return full == path || (full.starts_with(path) && full[path.size()] == ':');
+        }) |
+        std::views::transform([](const std::string& path) { return path.rfind("::"); }) |
+        std::views::filter([](std::size_t pos) { return pos != std::string::npos; }) |
+        std::ranges::to<std::vector<std::size_t>>();
+    if (!matching_exposition.empty())
+        end = std::min(end, std::ranges::min(matching_exposition));
+    (void)sm;
+    return begin < end ? full.substr(begin, end - begin) : std::string{};
+}
+
+unsigned synopsis_indentation(const clang::Decl*              decl,
+                              const clang::SourceManager&     sm,
+                              const std::set<std::string>&    namespace_drop_set,
+                              const std::vector<std::string>& exposition_namespaces) {
+    const std::string path = rendered_namespace_path(decl, sm, namespace_drop_set, exposition_namespaces);
+    return 2U + (path.empty() ? 0U : 2U * (1U + static_cast<unsigned>(std::ranges::count(path, ':') / 2)));
+}
+
+std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& decls,
+                                               const clang::SourceManager&      sm,
+                                               const NamespaceOptions&          options) {
+    if (!options.std_namespaces.empty()) {
+        std::set<std::string> configured(options.std_namespaces.begin(), options.std_namespaces.end());
+        configured.insert("std");
+        return configured;
+    }
+    const auto implementation_path = [&sm](const clang::Decl* decl) {
+        const auto namespaces = namespace_ancestry(decl);
+        const auto specified  = std::ranges::find_if(namespaces, [&sm](const clang::NamespaceDecl* ns) {
+            return docblock_directives(ns, sm).specified_namespace;
+        });
+        return namespaces | std::views::take(static_cast<std::size_t>(specified - namespaces.begin())) |
+               std::views::transform([](const clang::NamespaceDecl* ns) { return ns->getNameAsString(); }) |
+               std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
+    };
+    std::set<std::string> paths = decls | std::views::transform(implementation_path) |
                                   std::views::filter([](const std::string& path) { return !path.empty(); }) |
                                   std::ranges::to<std::set<std::string>>();
     paths.insert("std");

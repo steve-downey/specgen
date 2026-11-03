@@ -10,6 +10,7 @@
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/qualifiers.hpp>
@@ -123,10 +124,11 @@ void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begi
         out.push_back(RawItem{raw_begin + static_cast<unsigned>(chunk_begin), nullptr, raw.substr(chunk_begin)});
 }
 
-void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
+namespace {
+void enclose_in_namespace(beman::specgen::ir::CodeText& code, std::string_view name) {
     if (code.text.empty())
         return;
-    std::string              text = "namespace std {\n";
+    std::string              text = "namespace " + std::string(name) + " {\n";
     std::vector<std::size_t> moved(code.text.size());
     bool                     line_start = true;
     // substrate generic algorithm: one pass building the indented text and
@@ -149,10 +151,42 @@ void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) {
     });
     code.text = std::move(text);
 }
+} // namespace
+
+void enclose_in_namespace_std(beman::specgen::ir::CodeText& code) { enclose_in_namespace(code, "std"); }
+
+void enclose_in_specified_namespaces(beman::specgen::ir::CodeText&   code,
+                                     const clang::Decl*              decl,
+                                     const clang::SourceManager&     sm,
+                                     const std::set<std::string>&    namespace_drop_set,
+                                     const std::vector<std::string>& exposition_namespaces) {
+    const std::string path = rendered_namespace_path(decl, sm, namespace_drop_set, exposition_namespaces);
+    if (!path.empty())
+        enclose_in_namespace(code, path);
+}
 
 void append_synopsis_code(beman::specgen::ir::CodeText& out, beman::specgen::ir::CodeText part) {
     if (part.text.empty())
         return;
+    const std::size_t header_end = part.text.find('\n');
+    if (part.text.starts_with("namespace ") && header_end != std::string::npos && part.text.ends_with("\n}")) {
+        const std::string_view header(part.text.data(), header_end + 1);
+        const std::size_t      previous = out.text.rfind(header);
+        if (previous != std::string::npos && out.text.ends_with("\n}") &&
+            (previous == 0 || std::string_view(out.text).substr(previous - 2, 2) == "\n\n")) {
+            out.text.pop_back();
+            out.text.push_back('\n');
+            const std::size_t insertion = out.text.size();
+            out.text.append(part.text, header.size(), part.text.size() - header.size() - 1);
+            out.text.push_back('}');
+            out.spans.append_range(part.spans | std::views::transform([insertion, header](ir::Span span) {
+                                       span.begin += insertion - header.size();
+                                       span.end += insertion - header.size();
+                                       return span;
+                                   }));
+            return;
+        }
+    }
     if (!out.text.empty() && !out.text.ends_with("\n\n")) {
         if (!out.text.ends_with('\n'))
             out.text.push_back('\n');
@@ -173,7 +207,8 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const std::set<std::string>&                     ns_drop_set,
                                                         const std::map<const clang::Decl*, std::string>& expos_set,
                                                         const clang::VarDecl*                            unspecified,
-                                                        std::optional<clang::SourceRange>                see_below) {
+                                                        std::optional<clang::SourceRange>                see_below,
+                                                        const std::vector<std::string>& exposition_namespaces) {
     const unsigned        decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
     clang::SourceLocation end_loc    = clang::Lexer::getLocForEndOfToken(decl->getEndLoc(), 0, sm, lang_opts);
     if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(decl->getEndLoc(), sm, lang_opts);
@@ -272,7 +307,10 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
         text.replace(edit.begin - decl_begin, edit.end - edit.begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels, std::nullopt, kNamespaceIndent);
+    ir::CodeText code = format_and_recover(
+        std::move(text), sentinels, std::nullopt, synopsis_indentation(decl, sm, ns_drop_set, exposition_namespaces));
+    enclose_in_specified_namespaces(code, decl, sm, ns_drop_set, exposition_namespaces);
+    return code;
 }
 
 beman::specgen::ir::CodeText header_comment_code(std::string text) {

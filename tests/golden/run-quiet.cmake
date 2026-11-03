@@ -38,10 +38,15 @@ if(EXTRA_ARGS)
     separate_arguments(tail_args NATIVE_COMMAND "${EXTRA_ARGS}")
 endif()
 
+set(generate_options "")
+if(GENERATE_ARGS)
+    separate_arguments(generate_options UNIX_COMMAND "${GENERATE_ARGS}")
+endif()
+
 execute_process(
     COMMAND
         "${SPECGEN}" generate --emit-ir "${INPUT}" ${source_args}
-        --no-compile-commands -o "${ACTUAL}" -- ${tail_args}
+        ${generate_options} --no-compile-commands -o "${ACTUAL}" -- ${tail_args}
     RESULT_VARIABLE result
     ERROR_VARIABLE findings
 )

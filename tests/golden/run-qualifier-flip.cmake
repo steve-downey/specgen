@@ -71,6 +71,10 @@ set(generate_args
     -o
     "${ACTUAL}"
 )
+if(GENERATE_ARGS)
+    separate_arguments(generate_options UNIX_COMMAND "${GENERATE_ARGS}")
+    list(APPEND generate_args ${generate_options})
+endif()
 set(tail_args -I "${header_dir}")
 if(EXTRA_ARGS)
     separate_arguments(extra NATIVE_COMMAND "${EXTRA_ARGS}")

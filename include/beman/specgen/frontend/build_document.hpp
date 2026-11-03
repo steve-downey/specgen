@@ -18,6 +18,7 @@
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/source_file.hpp>
 #include <beman/specgen/ir.hpp>
 
@@ -65,8 +66,8 @@ namespace beman::specgen::frontend {
 // `options` reaches through to the same `parse_header` call
 // collect_interleaved uses; see ParseOptions for the three sources and their
 // precedence.
-std::expected<beman::specgen::document_build::BuildResult, BuildFailure>
-build_document(std::string_view header_path, const ParseOptions& options = {});
+std::expected<beman::specgen::document_build::BuildResult, BuildFailure> build_document(
+    std::string_view header_path, const ParseOptions& options = {}, const NamespaceOptions& namespace_options = {});
 
 // What build_document builds, plus the files it had to read to build it: the
 // header itself first, then every non-system file the preprocessor opened for
@@ -97,8 +98,11 @@ struct DocumentBuild {
 // documented member definition in one becomes the item of the declaration it
 // defines, placed as a definition in the header would be. Their reads join
 // `sources`.
-std::expected<DocumentBuild, BuildFailure> build_document_with_sources(
-    std::string_view header_path, const ParseOptions& options = {}, const std::vector<SourceFile>& source_files = {});
+std::expected<DocumentBuild, BuildFailure>
+build_document_with_sources(std::string_view               header_path,
+                            const ParseOptions&            options           = {},
+                            const std::vector<SourceFile>& source_files      = {},
+                            const NamespaceOptions&        namespace_options = {});
 
 } // namespace beman::specgen::frontend
 

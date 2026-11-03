@@ -6,6 +6,7 @@
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/merged_twins.hpp>
@@ -146,7 +147,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
                                               const std::set<std::string>&                     ns_drop_set,
-                                              const clang::Decl*                               head_decl) {
+                                              const clang::Decl*                               head_decl,
+                                              unsigned                                         indent) {
     const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
     const llvm::StringRef buffer = file_buffer(sm, head->getBeginLoc());
 
@@ -789,7 +791,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     return format_and_recover(drop_blank_lines_before_close(std::move(text)),
                               sentinels,
                               std::string_view(record_tag.data(), record_tag.size()),
-                              kNamespaceIndent);
+                              indent);
 }
 
 void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
@@ -860,7 +862,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  std::optional<std::string_view>                  record_tag,
                                  const clang::VarDecl*                            unspecified,
                                  std::optional<clang::SourceRange>                see_below,
-                                 const clang::VarDecl*                            uninitialized) {
+                                 const clang::VarDecl*                            uninitialized,
+                                 unsigned                                         synopsis_indent) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -901,6 +904,17 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         namespace_qualifier_edits(const_cast<clang::NamedDecl*>(named), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& range) { return range.first >= decl_begin && range.second <= decl_end; }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));
+    if (!exposition && named->getDeclContext()->isNamespace()) {
+        const std::string specified = rendered_namespace_path(named, sm, ns_drop_set);
+        if (!specified.empty()) {
+            clang::SourceLocation name_loc = named->getLocation();
+            if (const auto* tmpl = llvm::dyn_cast<clang::TemplateDecl>(named);
+                tmpl != nullptr && tmpl->getTemplatedDecl() != nullptr)
+                name_loc = tmpl->getTemplatedDecl()->getLocation();
+            const unsigned name_begin = sm.getDecomposedLoc(name_loc).second;
+            edits.push_back(SynopsisEdit{name_begin, name_begin, specified + "::"});
+        }
+    }
     // substrate generic algorithm: the declaration's resolved uses allocate
     // sentinels while scattering name and optional qualifier edits.
     for (const ExposUse& use : expos_uses(const_cast<clang::NamedDecl*>(named), expos_set, sm, lang_opts)) {
@@ -930,7 +944,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     }
     // An exposition-only declaration is a standalone synopsis, indented inside
     // `namespace std {` once formatted; every other caller's is an itemdecl.
-    return format_and_recover(std::move(text), sentinels, record_tag, exposition ? kNamespaceIndent : 0);
+    return format_and_recover(std::move(text), sentinels, record_tag, exposition ? synopsis_indent : 0);
 }
 
 beman::specgen::ir::CodeText
@@ -940,7 +954,8 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
                                  const std::set<std::string>&                     ns_drop_set,
                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                  const clang::VarDecl*                            unspecified,
-                                 std::optional<clang::SourceRange>                see_below) {
+                                 std::optional<clang::SourceRange>                see_below,
+                                 unsigned                                         indent) {
     // An exposition-only class template (issue #23) keeps the draft's
     // template-head line break, the same FormatStyle nudge every record
     // extraction passes; the non-record kinds format as before.
@@ -952,8 +967,17 @@ extract_namespace_expos_synopsis(const clang::NamedDecl*                        
         const llvm::StringRef tag = record->getKindName();
         record_tag                = std::string_view(tag.data(), tag.size());
     }
-    return extract_freestanding_declaration(
-        named, sm, lang_opts, ns_drop_set, expos_set, /*exposition=*/true, record_tag, unspecified, see_below);
+    return extract_freestanding_declaration(named,
+                                            sm,
+                                            lang_opts,
+                                            ns_drop_set,
+                                            expos_set,
+                                            /*exposition=*/true,
+                                            record_tag,
+                                            unspecified,
+                                            see_below,
+                                            nullptr,
+                                            indent);
 }
 
 } // namespace beman::specgen::frontend

@@ -27,6 +27,15 @@
 
 namespace beman::specgen::frontend {
 
+struct NamespaceOptions {
+    // Fully-qualified implementation namespace paths that map directly to
+    // `std`. When empty, the existing prefix-minimal inference applies.
+    std::vector<std::string> std_namespaces;
+    // Fully-qualified namespace paths whose names are implementation detail,
+    // not specified nested namespaces.
+    std::vector<std::string> exposition_namespaces;
+};
+
 // The canonical declarations to drop from every synopsis (design §4.3):
 // members whose markup carries `\omit` or `\merge`. Built as a pre-pass because
 // a class's synopsis is extracted the moment the class is seen — before the
@@ -100,7 +109,23 @@ std::map<const clang::Decl*, std::string> build_expos_set(const std::vector<clan
 // chain is descended into, its `demo` prefix matches, and what is left is
 // `detail::storage` either way. The same narrowing is what lets a real
 // `std::ranges::` qualifier render as the draft writes it, `ranges::`.
-std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& decls);
+// The namespace path enclosing `decl` after the implementation namespace has
+// been mapped to `std`, stopping before an exposition-only namespace. With an
+// inferred implementation namespace, `\specified` identifies the first
+// namespace that must survive even when no declaration sits at the root.
+std::string rendered_namespace_path(const clang::Decl*              decl,
+                                    const clang::SourceManager&     sm,
+                                    const std::set<std::string>&    namespace_drop_set,
+                                    const std::vector<std::string>& exposition_namespaces = {});
+
+unsigned synopsis_indentation(const clang::Decl*              decl,
+                              const clang::SourceManager&     sm,
+                              const std::set<std::string>&    namespace_drop_set,
+                              const std::vector<std::string>& exposition_namespaces = {});
+
+std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& decls,
+                                               const clang::SourceManager&      sm,
+                                               const NamespaceOptions&          options = {});
 
 // The function operands the synopsis/itemdecl renders as `\seebelow`
 // (design §4.3): canonical decls map to the selected operand.

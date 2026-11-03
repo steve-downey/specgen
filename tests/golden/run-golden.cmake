@@ -89,6 +89,10 @@ if(MODE STREQUAL "generate")
         "${ACTUAL}"
         --no-compile-commands
     )
+    if(GENERATE_ARGS)
+        separate_arguments(generate_options UNIX_COMMAND "${GENERATE_ARGS}")
+        list(APPEND generate_args ${generate_options})
+    endif()
     if(SOURCES)
         string(REPLACE "|" ";" _sources "${SOURCES}")
         foreach(_source IN LISTS _sources)

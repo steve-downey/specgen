@@ -28,6 +28,13 @@ generate options:
                              supplies that member's wording, as one in the
                              header would. Parsed as its own translation unit,
                              with its own compile flags; may be repeated
+  --std-namespace <name>    map this fully-qualified implementation namespace
+                             directly to std; nested namespaces are preserved.
+                             May be repeated
+  --exposition-namespace <name>
+                            do not render this fully-qualified implementation
+                             namespace as a nested public namespace. May be
+                             repeated; declarations still need \expos or \omit
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
                              for a later `render --from-ir`, instead of
                              rendering wording here. One document per file is

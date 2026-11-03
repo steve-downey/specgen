@@ -8,6 +8,7 @@
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/merged_twins.hpp>
 #include <beman/specgen/frontend/qualifiers.hpp>
 #include <beman/specgen/frontend/record_members.hpp>
@@ -129,6 +130,13 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
         namespace_qualifier_edits(const_cast<clang::Decl*>(range_decl), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& p) { return p.first >= decl_begin; }) |
         std::views::transform([](const auto& p) { return SynopsisEdit{p.first, p.second, ""}; }));
+    if (in_class->getDeclContext()->isNamespace()) {
+        const std::string specified = rendered_namespace_path(in_class, sm, ns_drop_set);
+        if (!specified.empty()) {
+            const unsigned name_begin = sm.getDecomposedLoc(in_class->getNameInfo().getBeginLoc()).second;
+            edits.push_back(SynopsisEdit{name_begin, name_begin, specified + "::"});
+        }
+    }
     unsigned span_n = sentinels.size();
     if (const auto marked = expos_set.find(in_class->getCanonicalDecl()); marked != expos_set.end()) {
         const clang::SourceRange name_range = in_class->getNameInfo().getSourceRange();
@@ -225,6 +233,13 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
         namespace_qualifier_edits(const_cast<clang::TypeAliasDecl*>(alias), ns_drop_set, sm, lang_opts, expos_set) |
         std::views::filter([&](const auto& range) { return range.first >= decl_begin; }) |
         std::views::transform([](const auto& range) { return SynopsisEdit{range.first, range.second, ""}; }));
+    if (alias->getDeclContext()->isNamespace()) {
+        const std::string specified = rendered_namespace_path(alias, sm, ns_drop_set);
+        if (!specified.empty()) {
+            const unsigned name_begin = sm.getDecomposedLoc(alias->getLocation()).second;
+            edits.push_back(SynopsisEdit{name_begin, name_begin, specified + "::"});
+        }
+    }
 
     unsigned span_n = 0;
     // substrate generic algorithm: one AST-use rewrite may emit two ordered edits.

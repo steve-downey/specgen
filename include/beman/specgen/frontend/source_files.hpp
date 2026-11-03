@@ -26,6 +26,7 @@
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/document_files.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/source_file.hpp>
@@ -73,7 +74,8 @@ struct SourceHarvest {
 // is made of. Any other documented declaration in the source file produces no
 // wording, and says so, rather than being dropped.
 std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&            source,
-                                                               const std::set<std::string>& document_paths);
+                                                               const std::set<std::string>& document_paths,
+                                                               const NamespaceOptions&      namespace_options = {});
 
 // The source files' items, matched to the in-class declarations of the
 // header's parse. Each class definition the document describes is walked,

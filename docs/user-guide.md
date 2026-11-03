@@ -143,8 +143,9 @@ The class body supplies the synopsis, and its `\ref` comments state which
 clause describes each member. The definitions supply both the clause order and
 the wording attached to each declaration. specgen takes code spelling from the
 source tokens; it does not reconstruct an interface by printing the AST. The
-header's own namespace is dropped, and each synopsis is enclosed in
-`namespace std { … }`, as the draft writes it.
+header's implementation namespace is dropped, and each synopsis is enclosed in
+`namespace std { … }`, as the draft writes it. Nested namespaces that are part
+of the specified interface are preserved inside that block.
 
 Render the complete document while editing:
 
@@ -202,6 +203,8 @@ Its options are:
 
 ```text
 specgen generate <header> [--source <file>...]...
+                 [--std-namespace <name>]...
+                 [--exposition-namespace <name>]...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
@@ -219,6 +222,24 @@ exporter. `-o` and `--output` name the destination; without either, or with
 snippet as a check that the front end is linked and working, reports the
 result on standard error, and produces no wording; rendering options are
 rejected in that form.
+
+Namespace policy is inferred when declarations occur directly in the header's
+implementation namespace. Use repeatable `--std-namespace` options when that
+root would otherwise be ambiguous: each fully-qualified implementation path is
+mapped directly to `std`, and namespace components below it are emitted as
+public nested namespaces. For example:
+
+```sh
+specgen generate transcode.hpp \
+  --std-namespace beman::transcoding \
+  --exposition-namespace beman::transcoding::detail
+```
+
+An `--exposition-namespace` path removes only that implementation namespace's
+scaffolding. Its declarations still require the ordinary `\expos` or `\omit`
+markers; the option does not hide an otherwise public declaration or disable
+leakage validation. Both options may be repeated and apply to every header and
+`--source` file in the invocation.
 
 With either paper backend, `--paper` marks the complete fragment as added
 wording and numbers its paragraphs `x`, `x+1`, and so on. The mpark backend
@@ -740,6 +761,10 @@ may follow its own house style. `T const&` and `const T&` both render as
 `const T&`, and `T *p` renders as `T* p`; whichever the library writes, the
 wording follows [structure.specifications].
 
+- `\specified` on a namespace preserves that namespace below `std`. It is the
+  source-local alternative to `--std-namespace` for a header whose declarations
+  do not otherwise establish where the implementation namespace ends.
+
 - `\expos` marks an entity as exposition-only. The default spelling removes trailing
   underscores and changes the remaining underscores to hyphens; `\expos(name)`
   supplies the exact exposition name. Namespace-scope concepts, variable
@@ -984,6 +1009,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.5.21 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.6.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

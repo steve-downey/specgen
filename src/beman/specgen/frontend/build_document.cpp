@@ -102,19 +102,20 @@ namespace db = beman::specgen::document_build;
 
 } // namespace
 
-std::expected<db::BuildResult, BuildFailure> build_document(std::string_view    header_path,
-                                                            const ParseOptions& options) {
+std::expected<db::BuildResult, BuildFailure>
+build_document(std::string_view header_path, const ParseOptions& options, const NamespaceOptions& namespace_options) {
     // A projection of the richer entry point, not a second parse and not a
     // second implementation (see DocumentBuild in build_document.hpp): the callers
     // that want only the document say so by calling this.
-    return build_document_with_sources(header_path, options).transform([](DocumentBuild built) {
+    return build_document_with_sources(header_path, options, {}, namespace_options).transform([](DocumentBuild built) {
         return std::move(built.result);
     });
 }
 
 std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::string_view               header_path,
                                                                        const ParseOptions&            options,
-                                                                       const std::vector<SourceFile>& source_files) {
+                                                                       const std::vector<SourceFile>& source_files,
+                                                                       const NamespaceOptions& namespace_options) {
     namespace ir = beman::specgen::ir;
 
     ParsedHeader parsed = parse_header(header_path, options);
@@ -171,8 +172,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     const std::optional<std::vector<std::string>>   paper_entities   = collect_paper_entities(decls, sm);
     SeeBelowMap                                     seebelow_map     = build_seebelow_map(decls, sm);
     FreestandingMap                                 freestanding_map = build_freestanding_map(decls, sm);
-    const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
-    const SkippedRanges                             skipped          = collect_skipped_ranges(*parsed.ast);
+    const std::set<std::string> ns_drop_set = build_namespace_drop_set(decls, sm, namespace_options);
+    const SkippedRanges         skipped     = collect_skipped_ranges(*parsed.ast);
 
     // The source files' items (issue #149), each built in its own parse and
     // matched here to the declaration it defines. Their markers act on the
@@ -188,13 +189,14 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         source_files,
         SourceHarvest{},
         [&](SourceHarvest found, const SourceFile& source) -> std::expected<SourceHarvest, BuildFailure> {
-            return harvest_source_file(source, document_paths).transform([&](SourceHarvest harvest) {
-                found.items.merge(harvest.items);
-                found.unextracted_uses.append_range(std::move(harvest.unextracted_uses));
-                found.diagnostics.append_range(std::move(harvest.diagnostics));
-                found.sources.append_range(std::move(harvest.sources));
-                return found;
-            });
+            return harvest_source_file(source, document_paths, namespace_options)
+                .transform([&](SourceHarvest harvest) {
+                    found.items.merge(harvest.items);
+                    found.unextracted_uses.append_range(std::move(harvest.unextracted_uses));
+                    found.diagnostics.append_range(std::move(harvest.diagnostics));
+                    found.sources.append_range(std::move(harvest.sources));
+                    return found;
+                });
         });
     if (!harvested)
         return std::unexpected(std::move(harvested.error()));
@@ -299,6 +301,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         seebelow_map,
                         freestanding_map,
                         ns_drop_set,
+                        namespace_options.exposition_namespaces,
                         skipped,
                         attached_comments,
                         source_markup);
@@ -387,6 +390,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         // body; here the fold walks past them in source order, so the last one
         // seen is the one in force.
         std::string current_ref;
+        // A namespace-scope group header belongs beside the declaration after
+        // it. Holding it until that declaration arrives gives it the same
+        // specified namespace enclosure and lets adjacent declarations share
+        // one block even when a `\ref` header separates them.
+        ir::CodeText pending_ref_code;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -395,6 +403,12 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 item.comment_text.resize(close->line_begin);
 
             if (item.decl != nullptr) {
+                if (!pending_ref_code.text.empty()) {
+                    enclose_in_specified_namespaces(
+                        pending_ref_code, item.decl, sm, ns_drop_set, namespace_options.exposition_namespaces);
+                    append_synopsis_code(gathered.synopsis.code, std::move(pending_ref_code));
+                    pending_ref_code = {};
+                }
                 const clang::SourceLocation decl_end_tok =
                     clang::Lexer::getLocForEndOfToken(item.decl->getEndLoc(), 0, sm, lang_opts);
                 consumed_end                              = std::max(consumed_end, doc.offset(sm, decl_end_tok));
@@ -519,10 +533,15 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         std::optional<clang::SourceRange> see_below;
                         if (marked.directives.seebelow && !marked.directives.seebelow_target)
                             see_below = definition_mask_range(item.decl, sm, lang_opts);
-                        append_synopsis_code(
-                            gathered.synopsis.code,
-                            extract_header_declaration(
-                                item.decl, sm, lang_opts, ns_drop_set, expos_set, mask.unspecified, see_below));
+                        append_synopsis_code(gathered.synopsis.code,
+                                             extract_header_declaration(item.decl,
+                                                                        sm,
+                                                                        lang_opts,
+                                                                        ns_drop_set,
+                                                                        expos_set,
+                                                                        mask.unspecified,
+                                                                        see_below,
+                                                                        namespace_options.exposition_namespaces));
                     }
                 }
                 continue;
@@ -560,8 +579,9 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     break;
                 line_begin = newline + 1;
             }
-            append_synopsis_code(gathered.synopsis.code, header_comment_code(std::move(refs)));
+            append_synopsis_code(pending_ref_code, header_comment_code(std::move(refs)));
         }
+        append_synopsis_code(gathered.synopsis.code, std::move(pending_ref_code));
         events.push_back(std::move(gathered));
         events.append_range(std::move(extras));
         i = *close_index + 1;

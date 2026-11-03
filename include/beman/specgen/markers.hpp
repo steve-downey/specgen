@@ -29,6 +29,7 @@ struct Markers {
     bool                       freestanding         = false;
     bool                       freestanding_deleted = false;
     bool                       verbatim_synopsis    = false;
+    bool                       specified_namespace  = false;
 
     // Entity-level structure.
     bool                       merge     = false;
@@ -128,6 +129,7 @@ inline constexpr MarkerInfo kMarkers[] = {
     {.spelling = "freestanding",         .flag = &Markers::freestanding},
     {.spelling = "freestanding-deleted", .flag = &Markers::freestanding_deleted},
     {.spelling = "verbatim-synopsis",    .flag = &Markers::verbatim_synopsis},
+    {.spelling = "specified",            .flag = &Markers::specified_namespace},
     {.spelling = "verbatim-itemdecl"},
     {.spelling = "at",
      .set_arg  = &detail::set_at_anchor,
