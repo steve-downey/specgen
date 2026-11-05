@@ -1,12 +1,13 @@
 # Plan: wording diffs against a baseline
 
-**Status:** PROPOSED, 2026-11-05. Nothing below is implemented. Design §7 reserved the seam
+**Status:** ACCEPTED, 2026-11-05. Nothing below is implemented; every open question was settled with
+the user the same day and the answer is recorded in place under its slug. Design §7 reserved the seam
 ("the seam for future IR-level diff markup (add/rm wording generated from two header revisions;
 out of scope, by hand at first)"), and `--paper` is the by-hand first cut: it marks a whole fragment
 as added. This plan replaces that with a diff, and makes `--paper` the special case of it.
 
-No issue yet; this document is the proposal. The open questions at the end are the taste calls the
-user owns, each with a recommendation first.
+No issue yet; this document is the proposal. The questions at the end were the taste calls the user
+owns; each records the recommendation it was asked with and the decision.
 
 ## Why
 
@@ -207,11 +208,16 @@ subclause's first paragraph, which it does when the baseline covers the subclaus
 `\pnum` has no literal form; inside `addedblock` it numbers on, which is all the draft's macros
 offer.
 
-What to emit for unchanged material is `--diff-context`: `changed` (the default) drops a top-level
-section with no change anywhere in it and renders a changed one whole, unchanged paragraphs
-included, which is the shape LWG reads; `all` renders everything, which a paper showing its
-complete wording with R1's changes marked wants. Eliding unchanged items inside a changed section
-is deferred ([diff-context-items](#diff-context-items)). The editing instruction sentence
+What to emit for unchanged material is `--diff-context`, three levels, all supported: `changed`
+(the default) drops a top-level node with no change anywhere in it and renders a changed one
+whole, unchanged paragraphs included; `all` renders everything, for the paper that has to *show*
+nothing else changed; and `items` goes one step further than `changed`, collapsing each maximal
+run of unchanged children inside a changed section to one ellipsis paragraph, because LWG would
+rather not page through wording that did not move
+([diff-context-default](#diff-context-default), [diff-context-items](#diff-context-items)). The
+ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
+form papers write by hand; a first cut, signed off on the golden. A changed item still renders
+whole under `items`: the unit of elision is a node, not a paragraph. The editing instruction sentence
 ("Modify [gadget.observe] as indicated:") stays the paper's, as it is under `--paper` today
 ([editing-instructions](#editing-instructions)).
 
@@ -251,33 +257,35 @@ given to `render` *beside* a baseline is refused: diffing a diff means nothing.
 
 ## Open questions
 
-Slug-headed so the record can graduate in place. The recommendation is first.
+Slug-headed so the record can graduate in place. Each kept the recommendation it was asked with,
+and records the decision; all were settled on 2026-11-05.
 
 ### baseline-spelling
 
 **Question.** Three flags, or one `--baseline <spec>` with a scheme (`rev:HEAD~3`, `ir:R0.json`)?
-**Status.** OPEN.
+**Status.** DECIDED: three flags.
 **Recommendation.** Three flags. No scheme parsing, and each flag's usage error can say which
 command takes it (`--baseline-rev` is `generate`'s alone).
 
 ### paper-implies-diff
 
 **Question.** Does a baseline flag imply `--paper`, or must both be written?
-**Status.** OPEN.
+**Status.** DECIDED: a baseline implies `--paper`.
 **Recommendation.** Imply it. A diff's only rendering is the marked one, and `--paper` alone keeps
 meaning what it means now: the empty baseline.
 
 ### latex-paper-mode
 
 **Question.** Accept `--paper` on the LaTeX backend?
-**Status.** OPEN.
+**Status.** DECIDED: accepted.
 **Recommendation.** Yes, once it means `addedblock` around the fragment. The refusal existed
 because there was nothing to emit; the draft's own macros are the thing to emit.
 
 ### diff-context-default
 
 **Question.** `changed` or `all` by default?
-**Status.** OPEN.
+**Status.** DECIDED: `changed` is the default and `all` is supported alongside it; see
+[diff-context-items](#diff-context-items) for the third level.
 **Recommendation.** `changed`. A paper modifying one subclause of [optional] should not get
 [optional] back.
 
@@ -285,22 +293,25 @@ because there was nothing to emit; the draft's own macros are the thing to emit.
 
 **Question.** A third level that elides unchanged *items* inside a changed section, with an
 ellipsis paragraph between the survivors?
-**Status.** OPEN, deferred: not in this plan's PRs.
-**Recommendation.** Wait for a paper that needs it. Neither mpark nor the draft macros have an
-elision form, so it would be a convention of specgen's own.
+**Status.** DECIDED: in PR 2, as `--diff-context items`, alongside `changed` and `all`.
+**Recommendation.** The recommendation was to wait for a paper that needs it, since neither mpark
+nor the draft macros have an elision form. The user's answer: LWG prefers not to skip through
+unchanged wording, and it is also sometimes necessary to show that nothing changed, so both ends
+are needed. The ellipsis form is specgen's own convention, written the way papers write it by
+hand; see the rendering section.
 
 ### paired-paragraph-threshold
 
 **Question.** When are two paragraphs the same paragraph edited, rather than one removed and one
 added?
-**Status.** OPEN.
+**Status.** DECIDED: half, as the first cut.
 **Recommendation.** Half their words in common (Jaccard on the word sets), first cut, tuned on the
 corpus pair's goldens and signed off on the wording.
 
 ### cleanup-island-size
 
 **Question.** How short an unchanged run between two changes joins them?
-**Status.** OPEN.
+**Status.** DECIDED: two, as a constant.
 **Recommendation.** Two words, or two code tokens, as a constant; an option only if a paper wants
 otherwise. Same sign-off as above.
 
@@ -308,7 +319,7 @@ otherwise. Same sign-off as above.
 
 **Question.** Emit "Modify [stable.name] as indicated:" before a changed section, or leave the
 instruction to the paper?
-**Status.** OPEN.
+**Status.** DECIDED: the paper's.
 **Recommendation.** Leave it to the paper in this plan, as `--paper` does. The sentence depends on
 whether the section is new, changed, or the paper's own revision, and on the paper's house style.
 Revisit once the marks exist.
@@ -316,8 +327,9 @@ Revisit once the marks exist.
 ### org-forms
 
 **Question.** Which org spellings carry the marks?
-**Status.** DECIDED in principle: wg21org is ours and will support what works best here, within
-org's constraints. The spellings below are the proposal; what the exporters lack is theirs to add.
+**Status.** DECIDED: the spellings below, and the macro for a cross-reference inside a marked run.
+wg21org is ours and will support what works best here, within org's constraints; what the
+exporters lack is theirs to add.
 **Recommendation.** Mirror the forms that exist. A removed section carries `:WG21_CHANGE: rm`
 beside the `add` the backend already writes; a removed node outside a section sits in a
 `removedblock` special block beside `addedblock`, which org's stock LaTeX export already turns
@@ -341,7 +353,7 @@ held in reserve for whatever else turns out not to fit in a description.
 
 **Question.** `read-tree` into a temporary index plus `checkout-index`, `git archive | tar`, or
 `git worktree add --detach`?
-**Status.** OPEN.
+**Status.** DECIDED: the temporary index.
 **Recommendation.** The temporary index. `archive` needs `tar`; a worktree is registered state
 that a crash leaves behind for `git worktree prune`; `git --work-tree=... checkout <rev> -- .`
 rewrites the real index. The plumbing pair touches nothing of the user's.
@@ -349,7 +361,7 @@ rewrites the real index. The plumbing pair touches nothing of the user's.
 ### version-bump-level
 
 **Question.** Patch or minor, per PR?
-**Status.** OPEN.
+**Status.** DECIDED: minor for each feature PR.
 **Recommendation.** Minor for each feature PR below. This plan's own commit is a patch.
 
 ## Steps
@@ -379,14 +391,16 @@ backends, which is the by-hand route §7 described.
    laws; a changed-signature overload pairs; a renamed section is removal plus addition; reordered
    items; a word-level paragraph edit; a code inline and a span stay atomic; the threshold and
    island constants at their boundaries.
-- **Step 5.** Driver: `--baseline-ir` (both commands), `--baseline-header` (`generate`), `--diff-context`,
-   the pairing, `--emit-ir` with a baseline, the refusals. Golden `MODE=diff` in two forms:
+- **Step 5.** Driver: `--baseline-ir` (both commands), `--baseline-header` (`generate`),
+   `--diff-context` with all three levels and the ellipsis paragraph in each backend, the pairing,
+   `--emit-ir` with a baseline, the refusals. Golden `MODE=diff` in two forms:
    generate (`INPUT` plus `BASELINE` corpus headers) and render (`INPUT` plus `BASELINE_IR`),
    each with a `.singlepass` sibling (generate with the header pair equals render with the IR
    pair) and a `.selfdiff` sibling (baseline equal to input renders as the plain render under
    `all`). Corpus pair `tests/corpus/diff/gadget.before.hpp` and `gadget.after.hpp`: a renamed
    member, an added overload, a removed one, a changed constraint (derived wording moving), a
-   reworded *Returns*, an untouched section. Both also registered as ordinary generate goldens.
+   reworded *Returns*, an untouched item inside a changed section, an untouched section. Both
+   also registered as ordinary generate goldens; the diff golden renders at each context level.
    An `examples/cli/` script and capture; a section in `docs/examples.org`.
 
 **PR 3 — the revision.**
