@@ -185,8 +185,8 @@ own, not inventions:
 | prose run | `[...]{.add}`, `[...]{.rm}` | `\added{...}`, `\removed{...}` | `[[insert:][...]]`, `[[delete:][...]]` |
 | code run | `@[...]{.add}@`, `@[...]{.rm}@` | `@\added{...}@`, `@\removed{...}@` | the LaTeX bytes |
 
-The org forms for removal need confirming against the exporters
-([org-removed-forms](#org-removed-forms)). The LaTeX macros are the draft's own
+The org forms are specgen's to choose and wg21org's to support, within what org can express
+([org-forms](#org-forms)). The LaTeX macros are the draft's own
 (`\added`, `\removed`, `addedblock`, `removedblock` in `source/macros.tex`), which is what makes a
 LaTeX paper diff and the draft PR the same vocabulary; and since the org special blocks export to
 the draft's `lstnewenvironment`s, the code-run bytes are shared with LaTeX exactly as
@@ -313,16 +313,29 @@ instruction to the paper?
 whether the section is new, changed, or the paper's own revision, and on the paper's house style.
 Revisit once the marks exist.
 
-### org-removed-forms
+### org-forms
 
-**Question.** What does wg21org accept for removal: `:WG21_CHANGE: rm`? `removedblock`?
-`[[delete:][...]]`?
-**Status.** OPEN.
-**Recommendation.** Confirm against `ox-wg21latex.el` and `ox-wg21html.el` before step 3.
-`AUTHORING.md` documents `[[insert:]]`, `[[delete:]]` and `[[replace:]]` links, and
-`wg21-wording.el` recognizes `\added`, `\removed` and `\replace` escapes inside code blocks; the
-property's accepted values and a `removedblock` are not in the files read for this plan. Whatever
-the exporters do not accept yet is theirs to add, not a reason to invent a form here.
+**Question.** Which org spellings carry the marks?
+**Status.** DECIDED in principle: wg21org is ours and will support what works best here, within
+org's constraints. The spellings below are the proposal; what the exporters lack is theirs to add.
+**Recommendation.** Mirror the forms that exist. A removed section carries `:WG21_CHANGE: rm`
+beside the `add` the backend already writes; a removed node outside a section sits in a
+`removedblock` special block beside `addedblock`, which org's stock LaTeX export already turns
+into the draft's `\begin{removedblock}` and the HTML exporter styles like its twin. A prose run
+is an `[[insert:][...]]` or `[[delete:][...]]` link, the forms `AUTHORING.md` documents. A code
+run is `@\added{...}@` or `@\removed{...}@` inside the special block, which `wg21-wording.el`
+recognizes today, and the bytes are the LaTeX backend's.
+
+The one constraint org imposes is that links do not nest: a link description cannot hold another
+link, and a changed run routinely holds a cross-reference (`see [x]` is a common edit), which the
+org backend renders as a real org link. Two ways out, both wg21org's to settle. A reference
+inside a marked run can be spelled as a macro (`{{{sref(stable.name)}}}`), which org does allow in
+a description and the exporter expands to the same target the link resolves to; or a marked run
+can leave links entirely for the paired export snippets the backend already uses for a spanned
+code inline (`@@latex:\added{@@ ... @@latex:}@@` with its `@@html:<ins>@@` twin), which contain
+nothing and so nest around anything. The macro keeps the mark a single object the exporter can
+see, and the fallback is only needed inside a run; recommend the macro, with the snippet pair
+held in reserve for whatever else turns out not to fit in a description.
 
 ### git-materialization
 
