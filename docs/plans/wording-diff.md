@@ -183,7 +183,7 @@ own, not inventions:
 | node added | `::: add` div | `addedblock` | `addedblock`; `:WG21_CHANGE: add` on a section |
 | node removed | `::: rm` div | `removedblock` | `removedblock`; `:WG21_CHANGE: rm` on a section |
 | prose run | `[...]{.add}`, `[...]{.rm}` | `\added{...}`, `\removed{...}` | `[[insert:][...]]`, `[[delete:][...]]` |
-| code run | `@[...]{.add}@`, `@[...]{.rm}@` | `@\added{...}@`, `@\removed{...}@` | the LaTeX bytes, as every block interior |
+| code run | `@[...]{.add}@`, `@[...]{.rm}@` | `@\added{...}@`, `@\removed{...}@` | the LaTeX bytes |
 
 The org forms for removal need confirming against the exporters
 ([org-removed-forms](#org-removed-forms)). The LaTeX macros are the draft's own
