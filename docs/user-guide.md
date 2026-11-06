@@ -29,8 +29,7 @@ export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
 specgen --version
 ```
 
-`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu). The same tree is also
-published as `specgen-manylinux_2_34_x86_64.tar.gz`, for `tar -xz`.
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu).
 
 The remainder of this section concerns building from source. A source build
 requires GCC 16 with its C++26 libstdc++, CMake 3.30 or later, `uv`, and the
