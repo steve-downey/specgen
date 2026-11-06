@@ -50,9 +50,9 @@ struct RawItem {
 
 // The main-file byte ranges of raw comments some processed declaration
 // consumed as its own docblock (top-level decls and class members alike).
-// classify() consults this for a comment carrying a verbatim marker: attached,
-// the block belongs to its declaration's event, and the comment's own RawItem
-// must not become a second node (issue #4).
+// classify() consults this for every markup comment: attached, the block
+// belongs to its declaration's event, so the comment's own RawItem must not
+// produce a second node or report its findings twice (issues #4, #216).
 using AttachedCommentRanges = std::vector<std::pair<unsigned, unsigned>>;
 
 // The function `decl` declares at namespace scope, when it is a declaration
