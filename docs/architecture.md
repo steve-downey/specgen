@@ -454,7 +454,8 @@ Detached specgen docblocks are parsed too (issue #216). A block consumed by a
 declaration reports through that declaration exactly once; otherwise its parser
 findings retain the block's physical file and line. Detached labelled descriptions
 without a verbatim item declaration are Errors: there is no declaration to describe.
-Detached prose reports an orphan-description Error until section prose is supported. Detached verbatim synopsis and item declaration blocks remain supported.
+Detached prose reports an orphan-description Error until section prose is supported.
+Detached verbatim synopsis and item declaration blocks remain supported.
 
 ### 4.1 Description elements
 
