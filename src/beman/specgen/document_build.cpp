@@ -303,6 +303,19 @@ BuildResult build_tree(std::span<DocEvent> events) {
                                                                  std::move(item.also_target),
                                                                  item.grouping_line});
                 },
+                [&](SectionProse& prose) {
+                    diagnostics.append_range(std::move(prose.diagnostics));
+                    if (stack.size() == 1) {
+                        diagnostics.push_back({Severity::Error,
+                                               prose.line,
+                                               "detached prose requires an open section",
+                                               std::move(prose.file)});
+                        return;
+                    }
+                    // substrate generic algorithm: append each paragraph through the frame's placement sink.
+                    for (ir::FreeParagraph& paragraph : prose.paragraphs)
+                        stack.back().pushed.push_back(GroupCandidate{prose.offset, std::move(paragraph), false});
+                },
                 [&](Ignored& ig) {
                     // \ref group headers, license/SPDX text, trailing
                     // braces, a malformed \rSec, a non-function

@@ -583,6 +583,12 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             db::DocEvent classified = classify_one(item);
             if (auto* ignored = std::get_if<db::Ignored>(&classified))
                 gathered.diagnostics.append_range(std::move(ignored->diagnostics));
+            if (std::holds_alternative<db::SectionProse>(classified)) {
+                // Like class wording, detached prose follows the assembled
+                // synopsis and retains its source order among wording nodes.
+                extras.push_back(std::move(classified));
+                continue;
+            }
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
                 runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));

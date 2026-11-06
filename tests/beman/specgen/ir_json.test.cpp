@@ -369,7 +369,7 @@ TEST_CASE("ir_json - round-trip preserves paper-only entity identities") {
 TEST_CASE("ir_json - round-trip preserves every element kind") {
     Document doc;
     SpecItem item;
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i)
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i)
         item.descr.elements.push_back(body_test::element(static_cast<ElementKind>(i), {{TextInline{"prose"}}}, {}));
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
@@ -378,8 +378,8 @@ TEST_CASE("ir_json - round-trip preserves every element kind") {
     INFO(parse_failure(parsed));
     REQUIRE(parsed.has_value());
     const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
-    REQUIRE(elements.size() == 13);
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i)
+    REQUIRE(elements.size() == 14);
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i)
         CHECK(elements[static_cast<std::size_t>(i)].kind == static_cast<ElementKind>(i));
 }
 

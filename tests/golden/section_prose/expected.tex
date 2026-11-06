@@ -1,0 +1,69 @@
+\rSec3[section]{Section prose}
+
+\rSec4[section.general]{General}
+
+\pnum
+The header provides a \tcode{wrapper} for callable objects.
+
+\pnum
+A separate paragraph refers to \iref{section.class}.
+
+\rSec4[section.class]{Class template wrapper}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  struct @\libglobal{wrapper}@ {};
+}
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+The \tcode{wrapper} class template stores a callable object.
+\end{itemdescr}
+
+\rSec4[section.operations]{Operations}
+
+\indexlibraryglobal{first}%
+\begin{itemdecl}
+inline void first();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Performs the first operation.
+\end{itemdescr}
+
+\pnum
+Wording between items stays between those items.
+
+\indexlibraryglobal{second}%
+\begin{itemdecl}
+inline void second();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Performs the second operation.
+\end{itemdescr}
+
+\rSec5[section.operations.detail]{Details}
+
+\pnum
+A block-form paragraph belongs to the nested section.
+
+\pnum
+This paragraph belongs to the enclosing section again.
+
+\rSec4[section.syn]{Header synopsis}
+
+\begin{codeblock}
+namespace std {
+  struct @\libglobal{section_part}@ {};
+}
+\end{codeblock}
+
+\pnum
+Prose from a followed header appears after the assembled synopsis.

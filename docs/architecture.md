@@ -450,18 +450,22 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
-Detached specgen docblocks are parsed too (issue #216). A block consumed by a
-declaration reports through that declaration exactly once; otherwise its parser
-findings retain the block's physical file and line. Detached labelled descriptions
-without a verbatim item declaration are Errors: there is no declaration to describe.
-Detached prose reports an orphan-description Error until section prose is supported.
-Detached verbatim synopsis and item declaration blocks remain supported.
+Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
+by a declaration reports through that declaration exactly once; otherwise its
+parser findings retain the block's physical file and line. Detached labelled
+descriptions require a declaration or a verbatim item declaration.
+Detached prose-only docblocks become `FreeParagraph` nodes in the open
+section, at the block's source position (issue #217). Outside a section they
+report an Error. Labelled descriptions still require a declaration. Inside a
+bounded header synopsis, detached prose follows the assembled code, alongside
+class wording, preserving source order among wording nodes. Prose retains
+inline references and participates in reference and leakage validation.
 
 ### 4.1 Description elements
 
 Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpects`,
 `\effects`, `\sync`, `\ensures`, `\result`, `\returns`, `\throws`, `\complexity`, `\errors`,
-`\remarks`.
+`\remarks`, `\recommended`.
 
 - `\hardexpects` is **not** `\expects`: it is a distinct description element, serialized as
   `hardexpects`, emitted as the draft's `\hardexpects` macro, and labelled
@@ -501,6 +505,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   exactly *one* `\cell` entry (the `\row` tag's own trailing text is the
   row's first column) before `\endlibtab2`. It follows the same ordering and
   prose continuation rules as `\lib2dtab2`.
+
+`\recommended` renders *Recommended practice*, after `\errors` in canonical
+order. It is accepted on a class description as well as an item description.
 
 All three backends render authored itemizations, prose references, and tables.
 
@@ -848,7 +855,7 @@ have no independent item description.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
-  `Inline`/`Paragraph` for prose; thirteen `ElementKind`s in canonical
+  `Inline`/`Paragraph` for prose; fourteen `ElementKind`s in canonical
   [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying
   one ordered `DescriptionBody`: `BodyParagraph`, `Itemize`, `Table2D`, `Table1D`,
   extracted `EquivalentTo`, authored `AuthoredCode`, `Note`, or `Example` blocks.
@@ -980,7 +987,7 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
 - A description element's *label* ("Preconditions" for `\expects`, "Error conditions" for
   `\errors`) comes from `backend::element_label` (`backend/element_label.hpp`), not from `ir::element_name`, which
   spells the LaTeX macro and is simultaneously the IR's frozen JSON key. The two agree on
-  eight of thirteen kinds, which is exactly enough to make a hand-written table look right
+  eight of fourteen kinds, which is exactly enough to make a hand-written table look right
   and be wrong.
 - mpark's span escape is `$x$` (its shorthand for `@*x*@`) and it is **not**
   backslash-escaped: the framework's scanner has no backslash handling, so a literal `@` or
@@ -1241,7 +1248,7 @@ The build assembles the tool from these components, each following the shared CM
 ([subtree-consumption](decisions/subtree-consumption.md)).
 
 - **Semantic IR** — `include/beman/specgen/ir.hpp`, `src/beman/specgen/ir.cpp`.
-  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the thirteen
+  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the fourteen
   `ElementKind`s in canonical order, `DescriptionElement` + `EquivalentTo`,
   `ItemDecl` (signatures plus semantic entity names)/`ItemDescr`/`SpecItem`, `IndexEntry`,
   `Section`/`Synopsis`/`FreeParagraph`/

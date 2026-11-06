@@ -612,12 +612,13 @@ vocabulary, in canonical output order, is:
 ```text
 \constraints  \mandates  \expects  \hardexpects  \effects  \sync
 \ensures      \result    \returns  \throws       \complexity
-\remarks      \errors
+\remarks      \errors    \recommended
 ```
 
 The display labels include *Preconditions* for `\expects`, *Hardened
 preconditions* for `\hardexpects`, *Postconditions* for `\ensures`, and *Error
-conditions* for `\errors`. Authored order does not determine output order: an
+conditions* for `\errors`, and *Recommended practice* for `\recommended`.
+Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
 error.
@@ -1037,7 +1038,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.12.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.13.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1048,3 +1049,11 @@ bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
 with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer.
+
+### Section prose
+
+A prose-only `//!` or `/*! */` block separated from declarations belongs to
+the current section. Blank decorated lines separate its numbered paragraphs.
+A detached block outside every section reports an error. Inside a bounded
+header synopsis, detached prose follows the assembled synopsis alongside the
+classes' own descriptions. Labelled description elements require a declaration.
