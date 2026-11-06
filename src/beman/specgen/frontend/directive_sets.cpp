@@ -383,6 +383,7 @@ SpecifiedNamespaces build_specified_namespace_set(const std::vector<clang::Decl*
         // standalone node, reported there if anything is wrong with it.
         if (!lowered.directives.specified)
             return;
+        out.marked.push_back(ns);
         out.paths.insert(qualified_namespace_path(ns));
         out.diagnostics.append_range(docblock_diagnostics(rc, *start, parsed.diags, sm));
         grammar::Markers rest = lowered.directives;
