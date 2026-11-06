@@ -28,7 +28,7 @@ namespace beman::specgen::backend {
 // is deliberately not in the LaTeX backend either: that backend never needs a
 // label, because the macro carries it, while every backend that is *not*
 // writing draft LaTeX -- mpark, org -- needs this exact table.
-constexpr std::array<std::pair<ir::ElementKind, std::string_view>, 13> kElementLabels{{
+constexpr std::array<std::pair<ir::ElementKind, std::string_view>, 14> kElementLabels{{
     {ir::ElementKind::Constraints, "Constraints"},
     {ir::ElementKind::Mandates, "Mandates"},
     {ir::ElementKind::Expects, "Preconditions"},
@@ -42,6 +42,7 @@ constexpr std::array<std::pair<ir::ElementKind, std::string_view>, 13> kElementL
     {ir::ElementKind::Complexity, "Complexity"},
     {ir::ElementKind::Remarks, "Remarks"},
     {ir::ElementKind::Errors, "Error conditions"},
+    {ir::ElementKind::Recommended, "Recommended practice"},
 }};
 
 constexpr std::string_view element_label(ir::ElementKind kind) {
