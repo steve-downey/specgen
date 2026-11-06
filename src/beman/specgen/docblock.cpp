@@ -109,9 +109,8 @@ auto block_open() {
 // Consumes the `//`, `///`, or `//!` decoration introducing a line-comment
 // docblock line. The two slashes are mandatory; a following `!` or `/` is an
 // optional third decoration character (so `//!` and `///` both strip to
-// three characters, bare `//` strips to two). Fails without consuming input
-// when the line does not start with `//` at all, so `opt()` at the call site
-// turns "no decoration here" into a clean pass-through rather than an error.
+// three characters, bare `//` strips to two). The caller first checks for
+// both slashes: a failed partial keyword match can consume a single slash.
 auto line_comment_decoration() {
     return parse::sequence_right(parse::keyword("//"), parse::opt(parse::char_p('!') | parse::char_p('/')));
 }
@@ -119,15 +118,17 @@ auto line_comment_decoration() {
 // Strips one physical line's leading whitespace and, if present, its comment
 // decoration (block `*` or line `//`/`///`/`//!`) together with the single
 // space conventionally following it. Lines without decoration pass through
-// unchanged past the leading-whitespace strip — `opt()` makes the decoration
-// itself optional, and once the leading run of spaces/tabs is gone there is
+// unchanged past the leading-whitespace strip. Once that run is gone there is
 // no leading space left for the trailing `opt(char_p(' '))` to remove unless
 // a decoration match just exposed one, so it is safe to run unconditionally
 // in both the block and line-comment cases.
 std::string_view strip_line_decoration(std::string_view line, bool block) {
     parse::cursor cur{line};
     cur = parse::many(parse::satisfy(is_line_ws, "line whitespace"))(cur)->rest;
-    cur = block ? parse::opt(parse::char_p('*'))(cur)->rest : parse::opt(line_comment_decoration())(cur)->rest;
+    if (block)
+        cur = parse::opt(parse::char_p('*'))(cur)->rest;
+    else if (cur.remaining().starts_with("//"))
+        cur = line_comment_decoration()(cur)->rest;
     cur = parse::opt(parse::char_p(' '))(cur)->rest;
     return cur.remaining();
 }
