@@ -63,3 +63,33 @@ TEST_CASE("code_spans - render_code_spans defensively skips a malformed span") {
     const CodeText code{"abc", {{10, 12, SpanKind::SeeBelow, ""}}};
     CHECK(backend::render_code_spans(code, bracket_escape) == "abc");
 }
+
+// --- the wording diff's change runs (docs/plans/wording-diff.md) -----------
+
+namespace {
+std::string plain_escape(const Span& span, std::string_view) { return "<" + span.payload + ">"; }
+std::string wrap_change(Change change, std::string_view text) {
+    return (change == Change::Added ? "+(" : "-(") + std::string(text) + ")";
+}
+} // namespace
+
+TEST_CASE("code_spans - a change run is wrapped, and its spans take the in-run escape") {
+    const CodeText code{
+        "T VAL; U w;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}, {7, 11, Change::Removed}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "+(T <val>;) -(U w;)");
+}
+
+TEST_CASE("code_spans - a run spanning lines is wrapped one line at a time, empty lines left empty") {
+    const CodeText code{"a\n\nb", {}, {{0, 4, Change::Added}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "+(a)\n\n+(b)");
+}
+
+TEST_CASE("code_spans - the spans-only walk leaves a run's text unmarked") {
+    const CodeText code{"T VAL;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}}};
+    CHECK(backend::render_code_spans(code, bracket_escape) == "T [expos:val];");
+}
+
+TEST_CASE("code_spans - a malformed run is skipped and a span straddling a run's end passes through raw") {
+    const CodeText code{"abcdef", {{2, 5, SpanKind::ExposId, "x"}}, {{0, 3, Change::Added}, {9, 12, Change::Added}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "+(abc)def");
+}

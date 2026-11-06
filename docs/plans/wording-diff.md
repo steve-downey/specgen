@@ -1,7 +1,7 @@
 # Plan: wording diffs against a baseline
 
-**Status:** ACCEPTED, 2026-11-05. Nothing below is implemented; every open question was settled with
-the user the same day and the answer is recorded in place under its slug. Design §7 reserved the seam
+**Status:** ACCEPTED, 2026-11-05; every open question was settled with the user the same day and the
+answer is recorded in place under its slug. PR 1 (steps 1–3) is in progress on this branch. Design §7 reserved the seam
 ("the seam for future IR-level diff markup (add/rm wording generated from two header revisions;
 out of scope, by hand at first)"), and `--paper` is the by-hand first cut: it marks a whole fragment
 as added. This plan replaces that with a diff, and makes `--paper` the special case of it.

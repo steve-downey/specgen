@@ -43,6 +43,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
@@ -101,7 +102,45 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
 // escape this function could apply. Neither character is a C++ token, so no
 // corpus header contains either; `mpark.test.cpp` pins the pass-through, since
 // no golden can (the same shape of hole as `write_json_string`'s).
-std::string render_code(const ir::CodeText& code) { return backend::render_code_spans(code, escape_span); }
+// A span inside a changed run of code (the wording diff's): the run has
+// opened the `@...@` already, so the shorthand `$x$` -- which stands for
+// `@*x*@` -- gives way to the `*x*` it abbreviates, and a cross-reference to
+// its bare bracketed form.
+std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) {
+    return foundation::match(span.kind,
+                             foundation::when<ir::SpanKind::ExposId>([&] { return '*' + span.payload + '*'; }),
+                             foundation::when<ir::SpanKind::SeeBelow>([&] { return "*see below*"; }),
+                             foundation::when<ir::SpanKind::ImplDefined>([&] { return "*implementation-defined*"; }),
+                             foundation::when<ir::SpanKind::Placeholder>([&] { return '*' + span.payload + '*'; }),
+                             foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
+                             foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }));
+}
+
+// A changed run of code in the framework's embedded-Markdown form:
+// `@[...]{.add}@` / `@[...]{.rm}@`, the manual's own spelling for an inline
+// change inside a code block.
+std::string wrap_code_run(ir::Change change, std::string_view text) {
+    return foundation::match(
+        change,
+        foundation::when<ir::Change::Same>([&] { return std::string(text); }),
+        foundation::when<ir::Change::Added>([&] { return "@[" + std::string(text) + "]{.add}@"; }),
+        foundation::when<ir::Change::Removed>([&] { return "@[" + std::string(text) + "]{.rm}@"; }));
+}
+
+std::string render_code(const ir::CodeText& code) {
+    return backend::render_code_spans(code, escape_span, escape_span_in_run, wrap_code_run);
+}
+
+// A marked node or element in the framework's editing-instruction div,
+// `::: add` / `::: rm`; an unmarked one as it is. One div closes around a
+// whole marked section, item or element: the mark is on the node, so the div
+// is too.
+std::string wrap_div(ir::Change change, std::string text) {
+    return foundation::match(change,
+                             foundation::when<ir::Change::Same>([&] { return text; }),
+                             foundation::when<ir::Change::Added>([&] { return "::: add\n\n" + text + "\n:::\n"; }),
+                             foundation::when<ir::Change::Removed>([&] { return "::: rm\n\n" + text + "\n:::\n"; }));
+}
 
 std::string render_codeblock(const ir::CodeText& code) { return "```cpp\n" + render_code(code) + "\n```\n"; }
 
@@ -334,19 +373,26 @@ std::string render_item(const ir::SpecItem& item) {
     }
 
     if (item.descr.elements.empty())
-        return out;
+        return wrap_div(item.change, std::move(out));
 
-    const std::vector<std::string> blocks =
+    // Grouped by mark as well as kind, each group in its own div when marked
+    // -- the same rule, for the same reason, as latex.cpp's render_item.
+    const std::vector<std::string> groups =
         item.descr.elements |
-        std::views::chunk_by(
-            [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
-        std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
+        std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
+            return a.kind == b.kind && a.change == b.change;
+        }) |
+        std::views::transform([](auto&& group) {
+            return wrap_div(std::ranges::begin(group)->change,
+                            element_group_blocks(group) | std::views::join_with('\n') |
+                                std::ranges::to<std::string>());
+        }) |
         std::ranges::to<std::vector>();
 
     if (!out.empty())
         out += '\n';
-    out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
-    return out;
+    out += groups | std::views::join_with('\n') | std::ranges::to<std::string>();
+    return wrap_div(item.change, std::move(out));
 }
 
 // --- the direct algebra over backend::backend::RenderF ---------------------
@@ -420,16 +466,19 @@ backend::RenderF<Seeded> project(const Seeded& seeded) {
 // already been resolved by `project`, so every case is a plain
 // RenderF<std::string> -> std::string mapping.
 struct MparkAlgebra {
+    // A marked section (the wording diff's) closes in its div here, where
+    // header and children are first seen together.
     std::string operator()(const backend::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
-            return s.header;
-        return s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>());
+            return wrap_div(s.change, s.header);
+        return wrap_div(s.change,
+                        s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>()));
     }
 
-    std::string operator()(const ir::Synopsis& v) const { return render_codeblock(v.code); }
+    std::string operator()(const ir::Synopsis& v) const { return wrap_div(v.change, render_codeblock(v.code)); }
     std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
     std::string operator()(const ir::FreeParagraph& v) const {
-        return "[#]{.pnum} " + render_paragraph(v.text) + '\n';
+        return wrap_div(v.change, "[#]{.pnum} " + render_paragraph(v.text) + '\n');
     }
 };
 
@@ -485,26 +534,26 @@ std::string wrap_wording(std::string text) { return "::: wording\n\n" + text + "
 // code, showed every paragraph as "x" (issue #57). Nothing can then refer to
 // one of them. Within a div the run was right, which is what made the reset
 // easy to miss.
-std::string renumber_added(const std::string& text) {
+// One line's paragraph-number tokens, numbered on from `para`.
+std::string renumber_line(std::string_view line, unsigned& para) {
     constexpr std::string_view kPara = "[#]{.pnum}";
     constexpr std::string_view kItem = "[#.#]{.pnum}";
 
     std::string out;
-    out.reserve(text.size());
-    unsigned    para = 0;
-    std::size_t pos  = 0;
+    out.reserve(line.size());
+    std::size_t pos = 0;
     // substrate generic algorithm: a position-tracking left-to-right walk
     // performing array substitution, the same primitive
     // backend/code_spans.hpp's render_code_spans is marked for -- and here the
     // replacement depends on how many paragraphs the walk has already passed,
     // which is the walk's own position restated, not a separate accumulator.
-    while (pos < text.size()) {
-        const std::size_t at_para = text.find(kPara, pos);
-        const std::size_t at_item = text.find(kItem, pos);
+    while (pos < line.size()) {
+        const std::size_t at_para = line.find(kPara, pos);
+        const std::size_t at_item = line.find(kItem, pos);
         const std::size_t at      = std::min(at_para, at_item);
         if (at == std::string::npos)
             break;
-        out += text.substr(pos, at - pos);
+        out += line.substr(pos, at - pos);
         // A sublist item belongs to the paragraph that introduced it, which is
         // the one just counted -- `element_blocks` always emits a lead-in
         // `[#]{.pnum}` before any `[#.#]`, so `para` is never 0 here.
@@ -516,7 +565,40 @@ std::string renumber_added(const std::string& text) {
         if (!is_item)
             ++para;
     }
-    out += text.substr(pos);
+    out += line.substr(pos);
+    return out;
+}
+
+// Under the wording diff only an *added* paragraph takes the literal: a
+// retained one keeps `[#]{.pnum}` and its number in the draft, and a removed
+// one keeps it too, since the instruction removes a numbered paragraph. Which
+// paragraphs are added is a property of the rendered text, read back off it:
+// the editing-instruction divs this backend wrote. A line walk keeps the
+// stack of open fenced divs -- `::: add`, `::: rm`, `::: wording` are the
+// only divs this backend writes -- and renumbers while an `add` is open. One
+// ascending run over the whole document, as before (issue #57).
+std::string renumber_added(const std::string& text) {
+    std::vector<std::string_view> open;
+    unsigned                      para = 0;
+    std::string                   out;
+    out.reserve(text.size());
+    const bool             trailing_newline = text.ends_with('\n');
+    const std::string_view body = std::string_view(text).substr(0, text.size() - (trailing_newline ? 1 : 0));
+    // substrate generic algorithm: a line walk whose state is the stack of
+    // open divs and the paragraph count together -- a fold with two
+    // accumulators, written as the loop it is.
+    for (auto&& piece : body | std::views::split('\n')) {
+        const std::string_view line(piece.begin(), piece.end());
+        if (line == "::: add" || line == "::: rm" || line == "::: wording")
+            open.push_back(line);
+        else if (line == ":::" && !open.empty())
+            open.pop_back();
+        const bool added = std::ranges::find(open, std::string_view{"::: add"}) != open.end();
+        out += added ? renumber_line(line, para) : std::string(line);
+        out += '\n';
+    }
+    if (!trailing_newline && !out.empty())
+        out.pop_back();
     return out;
 }
 
@@ -586,42 +668,58 @@ std::string drop_sref_for_new_root(const std::string& text, std::span<const std:
 
 } // namespace
 
-// The editing-instruction div, wrapping the whole fragment. One per
-// fragment rather than one per entity: which *parts* of a fragment are new is
-// a property of the edit being proposed, and the IR holds no record of it --
-// design §7 puts add/rm markup behind a diff of two header revisions and says
-// it is "out of scope now, by hand at first". So paper mode says "all of this
-// is added", which is true of a fragment specifying a new facility, and the
-// including paper still writes the instruction naming where it goes.
-std::string wrap_added(std::string text) { return "::: add\n\n" + text + "\n:::\n"; }
+// A top-level node rendered unmarked, beside the mark it carried: the
+// document render closes the div itself, after the wording div, so that a run
+// of adjacent top-level nodes with one mark shares one editing-instruction
+// div -- a fragment that is wholly new is one `::: add`, outside its wording
+// divs, which is where paper mode has always put it.
+struct RenderedTop {
+    ir::Change  change;
+    std::string text;
+};
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_heading_level};
-    const bool                     paper    = options.paper_mode;
-    const std::vector<std::string> rendered = doc.nodes | std::views::transform([&](const ir::Node& node) {
-                                                  std::string text = render_node_to_string(node, ctx);
-                                                  // A synopsis holds no numbered paragraph, so wrapping one would
-                                                  // put an empty wording div around a code fence. Every other node
-                                                  // kind either is a numbered paragraph or contains them.
-                                                  if (std::holds_alternative<ir::Synopsis>(node))
-                                                      return text;
-                                                  return wrap_wording(std::move(text));
-                                              }) |
-                                              std::ranges::to<std::vector>();
-    std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
-    out                                     = drop_sref_for_new_root(out, options.new_roots);
+    const RenderCtx ctx{options.base_heading_level};
+    // Paper mode is the wording diff with an empty baseline
+    // (docs/plans/wording-diff.md): every top-level node marked added, and
+    // the marks then render exactly as a diff's would.
+    const std::optional<std::vector<ir::Node>> marked =
+        options.paper_mode ? std::optional{ir::all_marked(doc.nodes, ir::Change::Added)} : std::nullopt;
+    const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
+    const std::vector<RenderedTop> rendered =
+        nodes | std::views::transform([&ctx](const ir::Node& node) {
+            std::string text = render_node_to_string(ir::with_change(node, ir::Change::Same), ctx);
+            // A synopsis holds no numbered paragraph, so wrapping one would
+            // put an empty wording div around a code fence. Every other node
+            // kind either is a numbered paragraph or contains them.
+            if (!std::holds_alternative<ir::Synopsis>(node))
+                text = wrap_wording(std::move(text));
+            return RenderedTop{ir::change_of(node), std::move(text)};
+        }) |
+        std::ranges::to<std::vector>();
+    std::string out =
+        rendered |
+        std::views::chunk_by([](const RenderedTop& a, const RenderedTop& b) { return a.change == b.change; }) |
+        std::views::transform([](auto&& chunk) {
+            return wrap_div(std::ranges::begin(chunk)->change,
+                            chunk | std::views::transform(&RenderedTop::text) | std::views::join_with('\n') |
+                                std::ranges::to<std::string>());
+        }) |
+        std::views::join_with('\n') | std::ranges::to<std::string>();
+    out = drop_sref_for_new_root(out, options.new_roots);
     // Renumbered once, over the joined document, so the added-paragraph run
     // ascends across every wording div in it rather than restarting inside
     // each (issue #57). Rendering a fragment renders a document, so this is
     // the one ascending run per subclause the placeholders are for.
-    return paper ? wrap_added(renumber_added(out)) : out;
+    return renumber_added(out);
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {
-    std::string text = drop_sref_for_new_root(render_item(item), options.new_roots);
-    if (!options.paper_mode)
-        return wrap_wording(std::move(text));
-    return wrap_added(wrap_wording(renumber_added(text)));
+    const ir::Change change = options.paper_mode ? ir::Change::Added : item.change;
+    ir::SpecItem     copy   = item;
+    copy.change             = ir::Change::Same;
+    const std::string text  = drop_sref_for_new_root(render_item(copy), options.new_roots);
+    return renumber_added(wrap_div(change, wrap_wording(text)));
 }
 
 } // namespace beman::specgen::backend::mpark

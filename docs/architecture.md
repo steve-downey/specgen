@@ -867,9 +867,21 @@ deliberate.
   ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` (`ir_json.hpp`)
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition. The
-  serialized form decouples the wg21org exporter, enables backend-independent golden tests,
-  and provides the seam for future IR-level diff markup (add/rm wording generated from two
-  header revisions; out of scope, by hand at first).
+  serialized form decouples the wg21org exporter and enables backend-independent golden tests.
+- **Change marks** ([plans/wording-diff.md](plans/wording-diff.md)): the wording diff's
+  record of what a revision added or removed, carried in the IR because a `::: add` div or
+  the draft's `\added` is an editing instruction, semantic to the paper, not typography.
+  `Change` (`Same`, `Added`, `Removed`) sits on every node kind and on a
+  `DescriptionElement`; a mark on a node covers everything beneath it and marks never nest.
+  Prose carries a `ChangedInline`, a marked run of `PlainInline`s (the four unmarked inline
+  kinds, a separate non-recursive variant), so a `\tcode` is marked whole or not at all. Code
+  carries a `ChangeRun` table beside the span table rather than two more `SpanKind`s, because a
+  run contains its spans whole; a run never crosses a line end, the draft's `@...@` escape
+  being line-local. Every mark serializes under a key the schema omits at `Same` (and
+  `changes` when empty), so a document emitted before the marks existed, and every unmarked
+  document after, reads and re-emits byte for byte. `change_of`, `with_change` and
+  `all_marked` reach the mark on a node of any kind; paper mode is `all_marked(..., Added)`,
+  the diff of an empty baseline, until the differ itself lands.
 
 ## 8. Backends (serializers)
 
@@ -898,16 +910,28 @@ There are exactly three backends, and **adding wording to one means adding it to
   description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
   `\ref`/`\iref`; `\tcode` and `\libconcept` inlines; exact `lib2dtab2` tables; all eight
   `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
-  `render_to_string` is the backend's whole surface.
+  A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
+  `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
+  as `@\added{...}@` with the spans inside it in their escaped form (`\exposidnc{x}`,
+  `draft_span_escaped`), the run having opened the escape. Paper mode (`--paper`), once
+  refused here for want of anything to emit, is the empty-baseline diff: adjacent marked
+  top-level nodes share one `addedblock`. `render_to_string` is the backend's whole surface.
 - **mpark/wg21** (`backend/mpark.cpp`): the framework's pandoc markdown. One `::: wording`
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
   `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
-  with caption anchors; index entries dropped. Paper mode (`--paper`) wraps the fragment in an
-  editing-instruction div (`::: add`) and numbers its paragraphs `x`, `x+1`, `x+2` — one
-  ascending run over the whole fragment, across every `::: wording` div in it. The run does
-  *not* restart per div the way `[#]` numbering does: the framework's filter counts `#` across
-  divs and does not count a literal at all, so a per-div restart emitted `x` again at the top
-  of each one (issue #57).
+  with caption anchors; index entries dropped. A change mark (§7) renders as the framework's
+  editing instruction: a marked node or element in a `::: add` / `::: rm` div, a prose run as
+  `[...]{.add}` / `[...]{.rm}`, a code run as `@[...]{.add}@` with the spans inside it in the
+  `*x*` form the `$x$` shorthand abbreviates, since the run has opened the `@...@` already.
+  Only an *added* paragraph takes the `x`, `x+1`, `x+2` literal in place of `[#]{.pnum}`; a
+  retained or removed one keeps `#` and its number in the draft. The literals are one
+  ascending run over the whole fragment, across every `::: wording` div in it, read back off
+  the rendered text by the divs this backend wrote. The run does *not* restart per div the way
+  `[#]` numbering does: the framework's filter counts `#` across divs and does not count a
+  literal at all, so a per-div restart emitted `x` again at the top of each one (issue #57).
+  Paper mode (`--paper`) is the empty-baseline diff: every top-level node marked added, which
+  a run of adjacent marked top-level nodes renders as one `::: add` div outside their wording
+  divs.
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
@@ -919,9 +943,15 @@ There are exactly three backends, and **adding wording to one means adding it to
   bracketed descriptions. Tables are named, captioned native org tables; target-neutral
   `#+ATTR_WG21: :columns ...` proportions become `longtable` widths in LaTeX and `<col>`
   widths in HTML.
-  Paper mode marks each top-level generated clause with `:WG21_CHANGE: add`,
-  wraps rootless material in `addedblock`, and changes the fragment's one
-  paragraph run to `x`, `x+1`, ... labels.
+  A change mark (§7) renders in wg21org's forms: a marked section carries `:WG21_CHANGE: add`
+  or `rm` in its properties, a marked leaf or element sits in an `addedblock` /
+  `removedblock` special block (which org's stock export turns into the draft's environment
+  of that name), a prose run is an `[[insert:][...]]` / `[[delete:][...]]` link whose
+  cross-references are the `{{{sref(name)}}}` macro (org links do not nest), and a code run is
+  the draft's own `@\added{...}@`, the same bytes the LaTeX backend writes. Only a `pnum`
+  under an added section or inside an `addedblock` takes an `x`, `x+1`, ... label, one run
+  over the fragment, read back off the rendered text. Paper mode is the empty-baseline diff:
+  every top-level node marked added.
 
 Shared substrate: `render_code_spans` (`backend/code_spans.hpp`) walks a span table, handing each
 backend's single `escape_span` both the semantic span and the covered source spelling; the
@@ -1102,7 +1132,9 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
   five modes:
   - `MODE=render` — render checked-in `expected.json` through a backend; a `BACKEND` argument
     registers `golden.<case>.<backend>` comparing `expected.md` / `expected.org`, so one
-    input renders to one expected file per backend.
+    input renders to one expected file per backend. `diff_marks` renders one hand-marked IR
+    (§7) through all three, and `paper_mode`, `paper_mode_org` and `paper_mode_latex` pin that
+    `--paper` is the empty-baseline diff byte for byte.
   - `MODE=validate` — stderr compared, exit 1 required unless `EXPECT_EXIT` says otherwise.
   - `MODE=generate` — run the front end over a corpus header; each case also registers a
     `.roundtrip` sibling (emit → parse → emit), a `.validate` sibling running
@@ -1187,7 +1219,8 @@ The build assembles the tool from these components, each following the shared CM
   `Section`/`Synopsis`/`FreeParagraph`/
   `Document`, the coverage roster (`Disposition`, `MemberKind`, `SynopsisEntry`), the
   validator channels (`paper_entities`, `foreign_namespaces`, `foreign_declarations`,
-  `unextracted_uses`), and
+  `unextracted_uses`), the change marks (`Change`, `ChangeRun`, `ChangedInline`,
+  `PlainInline`, `change_of`, `with_change`, `all_marked`), and
   `canonicalize()`.
 - **IR serialization** — `include/beman/specgen/ir_json.hpp`, `src/beman/specgen/ir_json.cpp`.
   JSON round trip: `emit_json` (returns a `std::string`) and `parse_document`/`parse_item`/
@@ -1221,7 +1254,12 @@ The build assembles the tool from these components, each following the shared CM
   below the backends that use them: `code_spans.hpp` (`render_code_spans`), `render_fold.hpp`
   (the `RenderF`/`render_fmap` algebra), `element_label.hpp` (`element_label`), and
   `draft_spans.hpp` (the shared draft span/inline spellings, `draft_span_prose`,
-  `draft_span_codeblock`, `draft_code_inline`).
+  `draft_span_escaped`, `draft_span_codeblock`, `draft_code_inline`, and the draft's change
+  marks, `draft_change_prose`, `draft_change_codeblock`, `draft_change_environment`).
+- **Sequence diff** — `include/beman/specgen/diff/sequence.hpp`, header-only, Tier A.
+  Myers' shortest edit script over any two random-access ranges (`edit_script`) and git's
+  island-joining cleanup (`join_islands`), for the wording diff
+  ([plans/wording-diff.md](plans/wording-diff.md)).
 - **Fragment split** — `include/beman/specgen/fragments.hpp`,
   `src/beman/specgen/fragments.cpp`. `fragments::split` per §8; backend-agnostic, with
   `usable_as_file_name` as the path boundary.

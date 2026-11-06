@@ -435,6 +435,18 @@ struct Section {
     Change            change = Change::Same; // the wording diff's mark on the whole subtree
 };
 
+// The wording diff's mark on a node of any kind, and the node with its mark
+// replaced. A backend's document render reads a top-level node's mark, renders
+// the node unmarked, and closes its own wrapper around the result -- so that
+// adjacent marked nodes can share one wrapper, and so that mpark's wording div
+// sits inside the editing-instruction div as paper mode has always put it.
+Change change_of(const Node&);
+Node   with_change(Node, Change);
+
+// Every node marked `change`: the wording diff of an empty baseline against
+// `nodes` is this with `Change::Added`, which is what paper mode renders.
+std::vector<Node> all_marked(std::vector<Node> nodes, Change change);
+
 // A namespace qualifier that survived the reference-resolved mapping
 // (design §3.5): one resolving to a namespace that is neither `std` nor the
 // header's own, so the rendered text keeps it verbatim — `detail::storage`.

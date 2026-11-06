@@ -39,8 +39,10 @@ endif()
 # through `specgen render --backend latex`, compared against
 # <case>/expected.tex. Runs on every lane.
 #
-# PAPER (render mode, mpark and org): add `--paper`, so the fragment comes
-# out wrapped in an `::: add` div with added-paragraph numbering.
+# PAPER (render mode): add `--paper`, so the fragment comes out marked as
+# added wording in the backend's own form -- an `::: add` div with
+# added-paragraph numbering under mpark, `addedblock` and `WG21_CHANGE` under
+# org, the draft's `addedblock` under latex.
 #
 # BASE_HEADING_LEVEL (render mode, mpark and org) and BASE_SECTION_DEPTH
 # (render mode, latex): pass the matching `--base-<...>` option, moving where a
@@ -455,6 +457,35 @@ specgen_add_golden(
     BACKEND org
     PAPER
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
+)
+# The LaTeX backend, which refused `--paper` until the wording diff gave it
+# the draft's own `addedblock` to emit (docs/plans/wording-diff.md).
+specgen_add_golden(
+    paper_mode_latex
+    PAPER
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
+)
+
+# The wording diff's marks (docs/plans/wording-diff.md), rendered by all three
+# backends from one hand-marked IR: an added and a removed section, item,
+# element and free paragraph; a prose run holding a code inline and a
+# cross-reference; a code run holding an exposition-only span, in a synopsis,
+# a signature and an *Equivalent to* body; and an added paragraph between
+# retained ones, so the numbering shows `#`, `x`, `#`. No `--paper`: the
+# marks are the IR's own, and this pins that they render without it.
+specgen_add_golden(
+    diff_marks
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_marks/input.json"
+)
+specgen_add_golden(
+    diff_marks
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_marks/input.json"
+)
+specgen_add_golden(
+    diff_marks
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_marks/input.json"
 )
 
 # Base level, all three backends over one nested fixture. The option existed in

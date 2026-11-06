@@ -228,15 +228,19 @@ snippet as a check that the front end is linked and working, reports the
 result on standard error, and produces no wording; rendering options are
 rejected in that form.
 
-With either paper backend, `--paper` marks the complete fragment as added
-wording and numbers its paragraphs `x`, `x+1`, and so on. The mpark backend
-uses an editing-instruction `::: add` div; the org backend uses `addedblock`
-around material outside any clause and `WG21_CHANGE=add` on generated clause
-roots. The `latex` backend rejects `--paper`. Under `--split`, each fragment
-is a document in its own right, so each carries its own framing and numbers
-its paragraphs from `x`. Use `--paper` when the whole fragment is an addition;
-omit it when the surrounding paper supplies that framing or when ordinary
-wording blocks are wanted.
+With any backend, `--paper` marks the complete fragment as added wording. The
+mpark backend uses an editing-instruction `::: add` div and numbers the
+paragraphs `x`, `x+1`, and so on; the org backend uses `addedblock` around
+material outside any clause, `WG21_CHANGE=add` on generated clause roots, and
+the same paragraph labels; the `latex` backend uses the draft's own
+`addedblock` environment. Under `--split`, each fragment is a document in its
+own right, so each carries its own framing and numbers its paragraphs from
+`x`. Use `--paper` when the whole fragment is an addition; omit it when the
+surrounding paper supplies that framing or when ordinary wording blocks are
+wanted. A fragment that is partly new is the wording diff's business
+([plans/wording-diff.md](plans/wording-diff.md)): its marks, on nodes,
+elements, runs of prose and runs of code, render in each backend's form of
+the same vocabulary, and `--paper` is the case where everything is new.
 
 Several headers form one paper, with one document per header; see
 [A paper proposing several headers](#a-paper-proposing-several-headers) below.
@@ -1003,6 +1007,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.6.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.7.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

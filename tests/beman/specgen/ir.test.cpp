@@ -106,3 +106,13 @@ TEST_CASE("ir - every node and element is unmarked by default") {
     CHECK(DescriptionElement{}.change == Change::Same);
     CHECK(CodeText{}.changes.empty());
 }
+
+TEST_CASE("ir - change_of, with_change and all_marked reach the mark on a node of any kind") {
+    std::vector<Node> nodes = {Section{"s", "S", {}}, Synopsis{}, SpecItem{}, FreeParagraph{}};
+    for (const Node& node : nodes)
+        CHECK(change_of(node) == Change::Same);
+    for (const Node& node : all_marked(nodes, Change::Removed))
+        CHECK(change_of(node) == Change::Removed);
+    CHECK(change_of(with_change(nodes[0], Change::Added)) == Change::Added);
+    CHECK(std::get<Section>(with_change(nodes[0], Change::Added)).stable_name == "s");
+}

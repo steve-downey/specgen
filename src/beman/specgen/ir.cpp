@@ -9,6 +9,9 @@
 #include <optional>
 #include <string_view>
 #include <utility>
+#include <variant>
+
+#include <beman/specgen/foundation/overloaded.hpp>
 
 namespace beman::specgen::ir {
 
@@ -99,6 +102,53 @@ std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enu
 
 std::string_view      change_name(Change c) { return kChangeNames[c]; }
 std::optional<Change> change_from_name(std::string_view s) { return enumerator_named(kChangeNames, s); }
+
+namespace {
+
+// `change_of`'s dispatch (decision visitation-rules: named struct, Node has
+// four alternatives).
+struct ChangeOf {
+    Change operator()(const Section& s) const { return s.change; }
+    Change operator()(const Synopsis& s) const { return s.change; }
+    Change operator()(const SpecItem& s) const { return s.change; }
+    Change operator()(const FreeParagraph& s) const { return s.change; }
+};
+
+// `with_change`'s dispatch, consuming its argument by move.
+struct WithChange {
+    Change change;
+
+    Node operator()(Section&& s) const {
+        s.change = change;
+        return std::move(s);
+    }
+    Node operator()(Synopsis&& s) const {
+        s.change = change;
+        return std::move(s);
+    }
+    Node operator()(SpecItem&& s) const {
+        s.change = change;
+        return std::move(s);
+    }
+    Node operator()(FreeParagraph&& s) const {
+        s.change = change;
+        return std::move(s);
+    }
+};
+
+} // namespace
+
+Change change_of(const Node& node) { return std::visit(foundation::overloaded{ChangeOf{}}, node); }
+
+Node with_change(Node node, Change change) {
+    return std::visit(foundation::overloaded{WithChange{change}}, std::move(node));
+}
+
+std::vector<Node> all_marked(std::vector<Node> nodes, Change change) {
+    std::ranges::transform(
+        nodes, nodes.begin(), [change](Node& node) { return with_change(std::move(node), change); });
+    return nodes;
+}
 
 void canonicalize(ItemDescr& d) {
     // Within one kind (design §5.2), a derived element sorts ahead of

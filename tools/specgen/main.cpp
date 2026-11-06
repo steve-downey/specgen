@@ -118,8 +118,9 @@ generate options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
-  --paper                   mark the fragment as an addition and number its
-                             paragraphs as added (mpark and org)
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
   --new-root <name>         treat <name> and every stable name beneath it as
                              a clause proposed by this paper (mpark and org),
                              rather than one already in the working draft. May be
@@ -176,8 +177,9 @@ render options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
-  --paper                   mark the fragment as an addition and number its
-                             paragraphs as added (mpark and org)
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
   --new-root <name>         treat <name> and every stable name beneath it as
                              a clause proposed by this paper (mpark and org),
                              rather than one already in the working draft. May be
@@ -257,7 +259,7 @@ struct WordingOptions {
     std::string split_dir;        // --split <dir>
     std::string root;             // --root <name>, with --split
     bool        validate = false; // --validate
-    bool        paper    = false; // --paper (mpark and org)
+    bool        paper    = false; // --paper
     // --new-root <name> (mpark and org), accumulated: the flag repeats, once per
     // header the paper proposes, and every occurrence adds a root (issue #94).
     std::vector<std::string> new_roots;
@@ -414,8 +416,6 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // Every backend design §8 names exists, so this is a plain misspelling.
     if (options.backend != "latex" && options.backend != "mpark" && options.backend != "org")
         return std::format("specgen: unknown backend '{}'; 'latex', 'mpark' and 'org' are available", options.backend);
-    if (options.paper && options.backend == "latex")
-        return std::string("specgen: --paper applies to the mpark and org backends, not 'latex'");
     if (!options.new_roots.empty() && options.backend == "latex")
         return std::format("specgen: --new-root applies to the mpark and org backends, not '{}'", options.backend);
     // The two base-level options measure two different things, so each is a
@@ -542,7 +542,9 @@ std::string render_wording(const ir::Document& fragment, const WordingOptions& o
              .paper_mode         = options.paper,
              .new_roots          = options.new_roots});
     return latex::render_to_string(
-        fragment, {.base_section_depth = options.base_section_depth.value_or(latex::Options{}.base_section_depth)});
+        fragment,
+        {.base_section_depth = options.base_section_depth.value_or(latex::Options{}.base_section_depth),
+         .paper_mode         = options.paper});
 }
 
 // The extension is the only part of design §8's fragment-path scheme
