@@ -177,7 +177,7 @@ struct RenderedBodyBlock {
     bool        inline_label     = false;
 };
 
-struct BodyRenderer {
+struct LeafBodyRenderer {
     // Authored prose retains its paragraph boundary or explicit continuation.
     RenderedBodyBlock operator()(const ir::BodyParagraph& p) const;
     // Itemizations stay in the paragraph they enumerate.
@@ -187,13 +187,14 @@ struct BodyRenderer {
     RenderedBodyBlock operator()(const ir::Table1D& t) const;
     // Extraction retains its semantic introduction and its own paragraph.
     RenderedBodyBlock operator()(const ir::EquivalentTo& e) const;
+    RenderedBodyBlock operator()(const ir::AuthoredCode& code) const;
 };
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::BodyParagraph& p) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const {
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
         list.items |
         std::views::transform([](const ir::Paragraph& p) { return "\\item " + render_paragraph(p) + '\n'; }) |
@@ -201,12 +202,41 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
     return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", false, false};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Table1D& t) const { return {render_flat_table(t), false, false}; }
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
+    return {render_flat_table(t), false, false};
+}
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
     return {"Equivalent to:\n" + render_codeblock(e.code), true, true};
+}
+
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) const {
+    return {render_codeblock(code.code), false, false};
+}
+
+std::string render_informative_body(const ir::InformativeBody& body);
+std::string render_informative_body(const ir::InformativeBody& body) {
+    return body | std::views::transform([](const ir::InformativeBlock& block) {
+               return std::visit(overloaded{LeafBodyRenderer{}}, block).text;
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
+}
+
+struct BodyRenderer : LeafBodyRenderer {
+    using LeafBodyRenderer::operator();
+    RenderedBodyBlock operator()(const ir::Note& note) const;
+    RenderedBodyBlock operator()(const ir::Example& example) const;
+};
+
+RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
+    return {std::format("\\begin{{note}}\n{}\\end{{note}}\n", render_informative_body(note.body)), false, false};
+}
+
+RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
+    return {
+        std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)), false, false};
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);

@@ -299,7 +299,7 @@ struct RenderedBodyBlock {
     bool        inline_label     = false;
 };
 
-struct BodyRenderer {
+struct LeafBodyRenderer {
     std::span<const std::string> new_roots;
     // Authored prose retains its paragraph boundary or explicit continuation.
     RenderedBodyBlock operator()(const ir::BodyParagraph& p) const;
@@ -310,13 +310,14 @@ struct BodyRenderer {
     RenderedBodyBlock operator()(const ir::Table1D& t) const;
     // Extraction retains its semantic introduction and its own paragraph.
     RenderedBodyBlock operator()(const ir::EquivalentTo& e) const;
+    RenderedBodyBlock operator()(const ir::AuthoredCode& code) const;
 };
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::BodyParagraph& p) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const {
     return {render_paragraph(p.text, new_roots) + '\n', !p.continuation, true};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items = list.items | std::views::transform([this](const ir::Paragraph& p) {
                                   return "- " + render_paragraph(p, new_roots) + '\n';
                               }) |
@@ -324,16 +325,44 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
     return {items, false, false};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Table2D& t) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const {
     return {render_table(t, new_roots), false, false};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::Table1D& t) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
     return {render_flat_table(t, new_roots), false, false};
 }
 
-RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
     return {"Equivalent to:\n\n" + render_block("codeblock", e.code), true, true};
+}
+
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) const {
+    return {render_block("codeblock", code.code), false, false};
+}
+
+std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
+std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots) {
+    return body | std::views::transform([new_roots](const ir::InformativeBlock& block) {
+               return std::visit(overloaded{LeafBodyRenderer{new_roots}}, block).text;
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
+}
+
+struct BodyRenderer : LeafBodyRenderer {
+    using LeafBodyRenderer::operator();
+    RenderedBodyBlock operator()(const ir::Note& note) const;
+    RenderedBodyBlock operator()(const ir::Example& example) const;
+};
+
+RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
+    return {std::format("#+begin_note\n{}#+end_note\n", render_informative_body(note.body, new_roots)), false, false};
+}
+
+RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
+    return {std::format("#+begin_wgexample\n{}#+end_wgexample\n", render_informative_body(example.body, new_roots)),
+            false,
+            false};
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
@@ -346,7 +375,7 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
     const std::string label  = kind ? std::format("/{}/", backend::element_label(*kind)) : std::string{};
     auto              blocks = std::ranges::fold_left(
         body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
-            auto       rendered = std::visit(overloaded{BodyRenderer{new_roots}}, block);
+            auto       rendered = std::visit(overloaded{BodyRenderer{{new_roots}}}, block);
             const bool first    = out.empty();
             if (first || rendered.starts_paragraph) {
                 const std::string prefix =

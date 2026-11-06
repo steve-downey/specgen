@@ -169,6 +169,32 @@ struct json_descriptor<EquivalentTo> {
 };
 
 template <>
+struct json_descriptor<ir::AuthoredCode> {
+    static constexpr auto members = std::tuple{field("code", &ir::AuthoredCode::code)};
+};
+
+template <>
+struct json_descriptor<ir::InformativeBlock> {
+    static constexpr auto alts = alternatives("block",
+                                              "informative block",
+                                              alt<ir::BodyParagraph>("paragraph"),
+                                              alt<Itemize>("itemize"),
+                                              alt<Table2D>("table"),
+                                              alt<Table1D>("flat-table"),
+                                              alt<ir::AuthoredCode>("code"));
+};
+
+template <>
+struct json_descriptor<ir::Note> {
+    static constexpr auto members = std::tuple{field("body", &ir::Note::body)};
+};
+
+template <>
+struct json_descriptor<ir::Example> {
+    static constexpr auto members = std::tuple{field("body", &ir::Example::body)};
+};
+
+template <>
 struct json_descriptor<ir::BodyBlock> {
     static constexpr auto alts = alternatives("block",
                                               "description block",
@@ -176,7 +202,10 @@ struct json_descriptor<ir::BodyBlock> {
                                               alt<Itemize>("itemize"),
                                               alt<Table2D>("table"),
                                               alt<Table1D>("flat-table"),
-                                              alt<EquivalentTo>("equivalent"));
+                                              alt<EquivalentTo>("equivalent"),
+                                              alt<ir::AuthoredCode>("code"),
+                                              alt<ir::Note>("note"),
+                                              alt<ir::Example>("example"));
 };
 
 // Temporary migration carrier, never a second representation in semantic IR.

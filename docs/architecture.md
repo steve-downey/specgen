@@ -512,6 +512,17 @@ are decided; an empty description and explicit `\also` retain their grouping
 meaning. Leading prose undergoes the same reference, span, and leakage checks
 as other authored wording.
 
+Notes (`\note` / `\endnote`) and examples (`\example` /
+`\endexample`) contain informative prose, lists, tables, and authored code.
+They cannot nest each other. `\codeblock` / `\endcodeblock` preserves its
+decorated payload verbatim; embedded commands and blank lines are not markup.
+Missing, mismatched, and nested delimiters report positioned findings.
+Informative bodies use a closed, nonrecursive leaf-block vocabulary, traversed
+by leaf visitors. Their paragraphs never advance the enclosing normative count.
+Authored code is distinct from AST-extracted `EquivalentTo` code and receives
+no semantic introduction. Its explicit backend escapes remain source-authored,
+as in the verbatim item declaration contract.
+
 ### 4.2 Extraction elements
 
 - `\effects-equiv` — *Effects: Equivalent to:* with the definition body extracted
@@ -831,7 +842,9 @@ deliberate.
   `Inline`/`Paragraph` for prose; thirteen `ElementKind`s in canonical
   [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying
   one ordered `DescriptionBody`: `BodyParagraph`, `Itemize`, `Table2D`, `Table1D`,
-  or extracted `EquivalentTo` blocks. A paragraph's continuation flag preserves
+  extracted `EquivalentTo`, authored `AuthoredCode`, `Note`, or `Example` blocks.
+  Informative bodies contain a nonrecursive sequence of prose, lists, tables,
+  and authored code. A paragraph's continuation flag preserves
   the enclosing numbered paragraph after a list or table. Validator-only
   `derived`/`conjuncts` evidence remains separate from the rendered body;
   `ItemDecl`/`ItemDescr`/`SpecItem`; `IndexEntry`; `Section`/`Synopsis`/`FreeParagraph`/
@@ -1013,6 +1026,13 @@ driver. Consequences:
   loses) is what a caller reconciles against.
 
 ## 9. Validation
+
+Informative bodies participate in span, table, reference, and leakage checks.
+Their prose is excluded from normative drift evidence and Throws assertions.
+Both the normative and informative block vocabularies are descriptor-driven in
+saved IR. Backend informative-body visitors handle leaf blocks without recursive
+visitation; note and example bodies cannot contain further informative bodies.
+
 
 `render --validate` runs eight checks over an IR document. An Error makes validation skip
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and

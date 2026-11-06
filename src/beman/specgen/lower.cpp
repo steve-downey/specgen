@@ -37,20 +37,25 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
            std::ranges::to<ir::Paragraph>();
 }
 
-struct BodyLowerer {
-    ir::BodyBlock operator()(const grammar::BodyParagraph&) const;
-    ir::BodyBlock operator()(const grammar::Itemize&) const;
-    ir::BodyBlock operator()(const grammar::Table2D&) const;
-    ir::BodyBlock operator()(const grammar::Table1D&) const;
+template <class Block>
+struct LeafBodyLowerer {
+    Block operator()(const grammar::BodyParagraph&) const;
+    Block operator()(const grammar::Itemize&) const;
+    Block operator()(const grammar::Table2D&) const;
+    Block operator()(const grammar::Table1D&) const;
+    Block operator()(const grammar::AuthoredCode&) const;
 };
 
-ir::BodyBlock BodyLowerer::operator()(const grammar::BodyParagraph& p) const {
+template <class Block>
+Block LeafBodyLowerer<Block>::operator()(const grammar::BodyParagraph& p) const {
     return ir::BodyParagraph{lower_paragraph(p.text), p.continuation};
 }
-ir::BodyBlock BodyLowerer::operator()(const grammar::Itemize& list) const {
+template <class Block>
+Block LeafBodyLowerer<Block>::operator()(const grammar::Itemize& list) const {
     return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()};
 }
-ir::BodyBlock BodyLowerer::operator()(const grammar::Table2D& table) const {
+template <class Block>
+Block LeafBodyLowerer<Block>::operator()(const grammar::Table2D& table) const {
     return ir::Table2D{.stable_name = table.stable_name,
                        .caption     = lower_paragraph(table.caption),
                        .column1     = lower_paragraph(table.column1),
@@ -62,7 +67,8 @@ ir::BodyBlock BodyLowerer::operator()(const grammar::Table2D& table) const {
                                       }) |
                                       std::ranges::to<std::vector>()};
 }
-ir::BodyBlock BodyLowerer::operator()(const grammar::Table1D& table) const {
+template <class Block>
+Block LeafBodyLowerer<Block>::operator()(const grammar::Table1D& table) const {
     return ir::Table1D{.stable_name = table.stable_name,
                        .caption     = lower_paragraph(table.caption),
                        .column1     = lower_paragraph(table.column1),
@@ -71,6 +77,32 @@ ir::BodyBlock BodyLowerer::operator()(const grammar::Table1D& table) const {
                                    return ir::Table1DRow{lower_paragraph(row.cell1), lower_paragraph(row.cell2)};
                                       }) |
                                       std::ranges::to<std::vector>()};
+}
+
+template <class Block>
+Block LeafBodyLowerer<Block>::operator()(const grammar::AuthoredCode& code) const {
+    return ir::AuthoredCode{code.code};
+}
+
+ir::InformativeBody lower_informative_body(const grammar::InformativeBody&);
+ir::InformativeBody lower_informative_body(const grammar::InformativeBody& body) {
+    return body | std::views::transform([](const grammar::InformativeBlock& block) {
+               return std::visit(overloaded{LeafBodyLowerer<ir::InformativeBlock>{}}, block);
+           }) |
+           std::ranges::to<ir::InformativeBody>();
+}
+
+struct BodyLowerer : LeafBodyLowerer<ir::BodyBlock> {
+    using LeafBodyLowerer<ir::BodyBlock>::operator();
+    ir::BodyBlock operator()(const grammar::Note&) const;
+    ir::BodyBlock operator()(const grammar::Example&) const;
+};
+
+ir::BodyBlock BodyLowerer::operator()(const grammar::Note& note) const {
+    return ir::Note{lower_informative_body(note.body)};
+}
+ir::BodyBlock BodyLowerer::operator()(const grammar::Example& example) const {
+    return ir::Example{lower_informative_body(example.body)};
 }
 
 ir::DescriptionElement lower_element(const grammar::Element& element) {

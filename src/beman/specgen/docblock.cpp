@@ -12,6 +12,7 @@
 #include <beman/specgen/markers.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <array>
 #include <cctype>
 #include <cstddef>
@@ -404,14 +405,43 @@ ParseResult parse_docblock(std::string_view raw) {
     ir::ElementKind last_kind = ir::ElementKind::Effects;
 
     auto current_element = [&]() -> Element* { return block.elements.empty() ? nullptr : &block.elements.back(); };
+    InformativeBody*         informative = nullptr;
+    std::string_view         informative_name;
+    int                      informative_line = 0;
+    bool                     in_code          = false;
+    int                      code_line        = 0;
+    std::vector<std::string> code_lines;
 
+    auto current_body = [&]() -> DescriptionBody& {
+        return current_element() == nullptr ? block.leading : current_element()->body;
+    };
+    auto append_block = [&]<class T>(T value) {
+        if constexpr (std::constructible_from<InformativeBlock, T>) {
+            if (informative != nullptr) {
+                informative->emplace_back(std::move(value));
+                return;
+            }
+        }
+        current_body().emplace_back(std::move(value));
+    };
     auto current_table = [&]() -> Table2D* {
-        auto* e = current_element();
-        return e == nullptr || e->body.empty() ? nullptr : std::get_if<Table2D>(&e->body.back());
+        if (informative != nullptr)
+            return informative->empty() ? nullptr : std::get_if<Table2D>(&informative->back());
+        auto& body = current_body();
+        return body.empty() ? nullptr : std::get_if<Table2D>(&body.back());
     };
     auto current_flat_table = [&]() -> Table1D* {
-        auto* e = current_element();
-        return e == nullptr || e->body.empty() ? nullptr : std::get_if<Table1D>(&e->body.back());
+        if (informative != nullptr)
+            return informative->empty() ? nullptr : std::get_if<Table1D>(&informative->back());
+        auto& body = current_body();
+        return body.empty() ? nullptr : std::get_if<Table1D>(&body.back());
+    };
+    auto finish_code = [&] {
+        append_block(
+            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}}});
+        code_lines.clear();
+        in_code           = false;
+        continuation_next = true;
     };
 
     auto flush_paragraph = [&] {
@@ -422,12 +452,7 @@ ParseResult parse_docblock(std::string_view raw) {
         std::string_view content = trim(joined);
         if (content.empty())
             return;
-        if (Element* e = current_element()) {
-            e->body.push_back(
-                BodyParagraph{parse_inlines(content, para_line, diags), std::exchange(continuation_next, false)});
-        } else {
-            block.leading.push_back(BodyParagraph{parse_inlines(content, para_line, diags)});
-        }
+        append_block(BodyParagraph{parse_inlines(content, para_line, diags), std::exchange(continuation_next, false)});
     };
 
     auto flush_item = [&] {
@@ -441,10 +466,17 @@ ParseResult parse_docblock(std::string_view raw) {
             diags.push_back({Severity::Error, item_line, "\\item requires content"});
             return;
         }
-        auto& body = current_element()->body;
-        if (body.empty() || !std::holds_alternative<Itemize>(body.back()))
-            body.push_back(Itemize{});
-        std::get<Itemize>(body.back()).items.push_back(parse_inlines(content, item_line, diags));
+        ProseParagraph parsed = parse_inlines(content, item_line, diags);
+        if (informative != nullptr) {
+            if (informative->empty() || !std::holds_alternative<Itemize>(informative->back()))
+                informative->push_back(Itemize{});
+            std::get<Itemize>(informative->back()).items.push_back(std::move(parsed));
+        } else {
+            auto& body = current_body();
+            if (body.empty() || !std::holds_alternative<Itemize>(body.back()))
+                body.push_back(Itemize{});
+            std::get<Itemize>(body.back()).items.push_back(std::move(parsed));
+        }
     };
 
     auto flush_table_part = [&] {
@@ -459,8 +491,7 @@ ParseResult parse_docblock(std::string_view raw) {
             table_part = TablePart::None;
             return;
         }
-        Element* element = current_element();
-        if (element != nullptr && table_kind == TableKind::TwoD && current_table()) {
+        if (table_kind == TableKind::TwoD && current_table()) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
             auto&          table     = *current_table();
             foundation::match(
@@ -472,7 +503,7 @@ ParseResult parse_docblock(std::string_view raw) {
                 foundation::when<TablePart::Cell1>([&] { table.rows.back().cell1 = std::move(paragraph); }),
                 foundation::when<TablePart::Cell2>([&] { table.rows.back().cell2 = std::move(paragraph); }),
                 foundation::when<TablePart::None>([] { std::unreachable(); }));
-        } else if (element != nullptr && table_kind == TableKind::Flat && current_flat_table()) {
+        } else if (table_kind == TableKind::Flat && current_flat_table()) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
             auto&          table     = *current_flat_table();
             foundation::match(
@@ -593,6 +624,14 @@ ParseResult parse_docblock(std::string_view raw) {
     for (auto [i, line] : lines | std::views::enumerate) {
         const int lineno = static_cast<int>(i) + 1;
 
+        if (in_code) {
+            if (trim(line) == "\\endcodeblock")
+                finish_code();
+            else
+                code_lines.emplace_back(line);
+            continue;
+        }
+
         if (is_blank(line)) {
             if (in_table)
                 continue;
@@ -646,7 +685,7 @@ ParseResult parse_docblock(std::string_view raw) {
                                                  table_cells)});
                 ++table_rows;
                 table_cells = 0;
-                if (Element* element = current_element(); element != nullptr) {
+                if (current_element() != nullptr || informative != nullptr) {
                     if (table_kind == TableKind::TwoD && current_table())
                         current_table()->rows.emplace_back();
                     else if (table_kind == TableKind::Flat && current_flat_table())
@@ -687,7 +726,7 @@ ParseResult parse_docblock(std::string_view raw) {
                 finish_table(lineno, false);
                 continue;
             }
-            if (ir::element_from_name(name)) {
+            if (ir::element_from_name(name) || name == "endnote" || name == "endexample") {
                 finish_table(lineno, true);
                 // Process the new element below after closing the malformed table.
             } else {
@@ -702,9 +741,79 @@ ParseResult parse_docblock(std::string_view raw) {
             std::string_view name  = *tag->value;
             std::string_view after = tag->rest.remaining();
 
+            if (informative != nullptr && find_marker(name) != nullptr) {
+                diags.push_back({Severity::Error,
+                                 lineno,
+                                 "structural and extraction markers are not allowed inside informative blocks"});
+                continue;
+            }
+
+            if (name == "note" || name == "example") {
+                flush_item();
+                flush_paragraph();
+                in_itemize = false;
+                if (informative != nullptr) {
+                    diags.push_back({Severity::Error, lineno, "notes and examples cannot nest"});
+                    continue;
+                }
+                if (name == "note") {
+                    append_block(Note{});
+                    informative = &std::get<Note>(current_body().back()).body;
+                } else {
+                    append_block(Example{});
+                    informative = &std::get<Example>(current_body().back()).body;
+                }
+                informative_name = name == "note" ? "note" : "example";
+                informative_line = lineno;
+                const auto lead  = trim(after);
+                if (!lead.empty()) {
+                    para_line = lineno;
+                    para_lines.emplace_back(lead);
+                }
+                continue;
+            }
+            if (name == "endnote" || name == "endexample") {
+                flush_item();
+                flush_paragraph();
+                if (informative == nullptr)
+                    diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside its block", name)});
+                else if (name != std::format("end{}", informative_name))
+                    diags.push_back({Severity::Error,
+                                     lineno,
+                                     std::format("expected \\end{}, found \\{}", informative_name, name)});
+                if (!trim(after).empty())
+                    diags.push_back(
+                        {Severity::Warning, lineno, std::format("trailing text after \\{} ignored", name)});
+                informative       = nullptr;
+                informative_name  = {};
+                in_itemize        = false;
+                continuation_next = true;
+                continue;
+            }
+            if (name == "codeblock") {
+                flush_item();
+                flush_paragraph();
+                in_itemize = false;
+                in_code    = true;
+                code_line  = lineno;
+                if (!trim(after).empty())
+                    diags.push_back({Severity::Warning, lineno, "trailing text after \\codeblock ignored"});
+                continue;
+            }
+            if (name == "endcodeblock") {
+                diags.push_back({Severity::Error, lineno, "\\endcodeblock appears outside its block"});
+                continue;
+            }
             if (auto kind = ir::element_from_name(name)) {
                 flush_item();
                 flush_paragraph();
+                if (informative != nullptr) {
+                    diags.push_back({Severity::Error,
+                                     lineno,
+                                     std::format("missing \\end{} before element tag", informative_name)});
+                    informative      = nullptr;
+                    informative_name = {};
+                }
                 if (std::ranges::any_of(block.elements, [kind](const Element& e) { return e.kind == *kind; }))
                     diags.push_back(
                         {Severity::Warning, lineno, "duplicate \\" + std::string(name) + " element; both kept"});
@@ -732,14 +841,14 @@ ParseResult parse_docblock(std::string_view raw) {
                 const TableKind        kind     = name == "lib2dtab2" ? TableKind::TwoD : TableKind::Flat;
                 const std::string_view open_tag = table_open_name(kind);
                 const TableHead        head     = parse_table_head(after, lineno, diags, open_tag);
-                if (current_element() == nullptr)
+                if (current_element() == nullptr && informative == nullptr)
                     diags.push_back(
                         {Severity::Error, lineno, std::format("\\{} requires a preceding element tag", open_tag)});
                 else {
                     if (kind == TableKind::TwoD)
-                        current_element()->body.push_back(Table2D{.stable_name = head.stable_name});
+                        append_block(Table2D{.stable_name = head.stable_name});
                     else
-                        current_element()->body.push_back(Table1D{.stable_name = head.stable_name});
+                        append_block(Table1D{.stable_name = head.stable_name});
                 }
                 in_table        = true;
                 table_kind      = kind;
@@ -755,7 +864,7 @@ ParseResult parse_docblock(std::string_view raw) {
                 diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside a table", name)});
             } else if (name == "item") {
                 flush_paragraph();
-                if (current_element() == nullptr) {
+                if (current_element() == nullptr && informative == nullptr) {
                     diags.push_back({Severity::Error, lineno, "\\item requires a preceding element tag"});
                     continue;
                 }
@@ -821,6 +930,12 @@ ParseResult parse_docblock(std::string_view raw) {
             para_line = lineno;
         para_lines.emplace_back(stripped);
     }
+    if (in_code) {
+        diags.push_back({Severity::Error, code_line, "missing \\endcodeblock"});
+        finish_code();
+    }
+    if (informative != nullptr)
+        diags.push_back({Severity::Error, informative_line, std::format("missing \\end{}", informative_name)});
     if (in_table)
         finish_table(lines.empty() ? 0 : static_cast<int>(lines.size()), true);
     flush_item();

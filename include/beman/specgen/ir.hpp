@@ -177,7 +177,22 @@ struct BodyParagraph {
     Paragraph text;
     bool      continuation = false;
 };
-using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D, EquivalentTo>;
+struct AuthoredCode {
+    CodeText code;
+};
+
+// Informative bodies have no recursive informative position: notes and
+// examples contain prose, code, lists, and tables, but cannot nest each other.
+using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
+using InformativeBody  = std::vector<InformativeBlock>;
+struct Note {
+    InformativeBody body;
+};
+struct Example {
+    InformativeBody body;
+};
+
+using BodyBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, EquivalentTo, AuthoredCode, Note, Example>;
 using DescriptionBody = std::vector<BodyBlock>;
 
 struct DescriptionElement {
@@ -190,8 +205,8 @@ struct DescriptionElement {
 
 // Views of all wording sites, in authored order. Code returned here is block
 // code; inline code is reached through the returned paragraphs.
-std::vector<const Paragraph*> body_paragraphs(const DescriptionBody&);
-std::vector<const CodeText*>  body_code(const DescriptionBody&);
+std::vector<const Paragraph*> body_paragraphs(const DescriptionBody&, bool include_informative = true);
+std::vector<const CodeText*>  body_code(const DescriptionBody&, bool include_informative = true);
 // Adjacent lists in a merged same-kind description form one itemization.
 DescriptionBody coalesce_itemizations(DescriptionBody);
 

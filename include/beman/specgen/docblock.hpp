@@ -86,7 +86,18 @@ struct Itemize {
     std::vector<ProseParagraph> items;
 };
 
-using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D>;
+struct AuthoredCode {
+    ir::CodeText code;
+};
+using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
+using InformativeBody  = std::vector<InformativeBlock>;
+struct Note {
+    InformativeBody body;
+};
+struct Example {
+    InformativeBody body;
+};
+using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode, Note, Example>;
 using DescriptionBody = std::vector<BodyBlock>;
 
 struct Element {

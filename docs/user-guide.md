@@ -684,6 +684,27 @@ two data cells. `\libtab2` is the ordinary two-column form: each `\row` is its
 first data cell, followed by one `\cell`. Both require two column headings and
 at least one row. Both preserve their position among the element's prose and lists.
 
+### Notes, examples, and authored code
+
+Use `\note` / `\endnote` and `\example` / `\endexample` inside a
+leading description or a labelled element. Their bodies accept ordinary
+paragraphs, backticks, `\iref`, lists, tables, and code blocks. Notes and
+examples cannot nest. Their paragraphs do not advance the surrounding wording's
+paragraph counter. Prose after a closed block continues the enclosing paragraph;
+a subsequent blank decorated line starts a new paragraph.
+
+`\codeblock` / `\endcodeblock` preserves the decorated payload lines,
+including indentation and blank lines. Tags inside the payload are literal;
+only a line containing `\endcodeblock` closes it. Authored code has no
+attached C++ AST and is not introduced as “Equivalent to”. Like verbatim item
+declarations, its payload preserves explicit backend escapes as authored.
+
+The LaTeX backend writes the draft's note, example, and codeblock environments.
+Mpark uses note/example divs and fenced C++ blocks. Org uses `note`, `wgexample`,
+and `codeblock` special blocks; `wgexample` requires the corresponding wg21org
+exporter support. Informative text still undergoes span and leakage validation,
+but it does not satisfy a normative drift obligation or assert a Throws guarantee.
+
 ## Extraction markers
 
 - `\effects-equiv` extracts a function body as an *Effects: Equivalent to:*
@@ -1009,7 +1030,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.10.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.11.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1018,4 +1039,5 @@ revision is reported as `unknown`.
 Newly emitted item nodes use `item-v3` for leading and ordered description
 bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
 with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
-wording cannot disappear through unknown-field skipping. Regenerate saved IR when moving to the new writer.
+wording cannot disappear through unknown-field skipping. Regenerate saved IR
+when moving to the new writer.

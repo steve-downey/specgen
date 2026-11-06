@@ -23,6 +23,7 @@ foreach(
     ir_json
     docblock
     resume_body
+    description_blocks
     markers
     rsec
     section_markers

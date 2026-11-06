@@ -99,21 +99,21 @@ std::string_view          member_kind_name(MemberKind k) { return kMemberKindNam
 std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enumerator_named(kMemberKindNames, s); }
 
 namespace {
-struct BlockParagraphs {
+struct LeafParagraphs {
     std::vector<const Paragraph*> operator()(const BodyParagraph& p) const;
     std::vector<const Paragraph*> operator()(const Itemize& list) const;
     std::vector<const Paragraph*> operator()(const Table2D& t) const;
     std::vector<const Paragraph*> operator()(const Table1D& t) const;
-    std::vector<const Paragraph*> operator()(const EquivalentTo&) const;
+    std::vector<const Paragraph*> operator()(const AuthoredCode&) const;
 };
 
-std::vector<const Paragraph*> BlockParagraphs::operator()(const BodyParagraph& p) const { return {&p.text}; }
+std::vector<const Paragraph*> LeafParagraphs::operator()(const BodyParagraph& p) const { return {&p.text}; }
 
-std::vector<const Paragraph*> BlockParagraphs::operator()(const Itemize& list) const {
+std::vector<const Paragraph*> LeafParagraphs::operator()(const Itemize& list) const {
     return list.items | std::views::transform([](const Paragraph& p) { return &p; }) | std::ranges::to<std::vector>();
 }
 
-std::vector<const Paragraph*> BlockParagraphs::operator()(const Table2D& t) const {
+std::vector<const Paragraph*> LeafParagraphs::operator()(const Table2D& t) const {
     std::vector<const Paragraph*> result{&t.caption, &t.column1, &t.column2};
     result.append_range(t.rows | std::views::transform([](const Table2DRow& row) {
                             return std::array{&row.header, &row.cell1, &row.cell2};
@@ -122,7 +122,7 @@ std::vector<const Paragraph*> BlockParagraphs::operator()(const Table2D& t) cons
     return result;
 }
 
-std::vector<const Paragraph*> BlockParagraphs::operator()(const Table1D& t) const {
+std::vector<const Paragraph*> LeafParagraphs::operator()(const Table1D& t) const {
     std::vector<const Paragraph*> result{&t.caption, &t.column1, &t.column2};
     result.append_range(
         t.rows | std::views::transform([](const Table1DRow& row) { return std::array{&row.cell1, &row.cell2}; }) |
@@ -130,22 +130,79 @@ std::vector<const Paragraph*> BlockParagraphs::operator()(const Table1D& t) cons
     return result;
 }
 
+std::vector<const Paragraph*> LeafParagraphs::operator()(const AuthoredCode&) const { return {}; }
+
+std::vector<const Paragraph*> informative_paragraphs(const InformativeBody& body);
+std::vector<const CodeText*>  informative_code(const InformativeBody& body);
+
+struct BlockParagraphs : LeafParagraphs {
+    using LeafParagraphs::operator();
+    bool                          include_informative;
+    std::vector<const Paragraph*> operator()(const EquivalentTo&) const;
+    std::vector<const Paragraph*> operator()(const Note& note) const;
+    std::vector<const Paragraph*> operator()(const Example& example) const;
+};
 std::vector<const Paragraph*> BlockParagraphs::operator()(const EquivalentTo&) const { return {}; }
+std::vector<const Paragraph*> BlockParagraphs::operator()(const Note& note) const {
+    return include_informative ? informative_paragraphs(note.body) : std::vector<const Paragraph*>{};
+}
+std::vector<const Paragraph*> BlockParagraphs::operator()(const Example& example) const {
+    return include_informative ? informative_paragraphs(example.body) : std::vector<const Paragraph*>{};
+}
 
-} // namespace
+struct LeafCode {
+    std::vector<const CodeText*> operator()(const BodyParagraph&) const;
+    std::vector<const CodeText*> operator()(const Itemize&) const;
+    std::vector<const CodeText*> operator()(const Table2D&) const;
+    std::vector<const CodeText*> operator()(const Table1D&) const;
+    std::vector<const CodeText*> operator()(const AuthoredCode& code) const;
+};
+std::vector<const CodeText*> LeafCode::operator()(const BodyParagraph&) const { return {}; }
+std::vector<const CodeText*> LeafCode::operator()(const Itemize&) const { return {}; }
+std::vector<const CodeText*> LeafCode::operator()(const Table2D&) const { return {}; }
+std::vector<const CodeText*> LeafCode::operator()(const Table1D&) const { return {}; }
+std::vector<const CodeText*> LeafCode::operator()(const AuthoredCode& code) const { return {&code.code}; }
 
-std::vector<const Paragraph*> body_paragraphs(const DescriptionBody& body) {
-    return body | std::views::transform([](const BodyBlock& block) {
-               return std::visit(foundation::overloaded{BlockParagraphs{}}, block);
+struct BlockCode : LeafCode {
+    using LeafCode::operator();
+    bool                         include_informative;
+    std::vector<const CodeText*> operator()(const EquivalentTo& code) const;
+    std::vector<const CodeText*> operator()(const Note& note) const;
+    std::vector<const CodeText*> operator()(const Example& example) const;
+};
+std::vector<const CodeText*> BlockCode::operator()(const EquivalentTo& code) const { return {&code.code}; }
+std::vector<const CodeText*> BlockCode::operator()(const Note& note) const {
+    return include_informative ? informative_code(note.body) : std::vector<const CodeText*>{};
+}
+std::vector<const CodeText*> BlockCode::operator()(const Example& example) const {
+    return include_informative ? informative_code(example.body) : std::vector<const CodeText*>{};
+}
+
+std::vector<const Paragraph*> informative_paragraphs(const InformativeBody& body) {
+    return body | std::views::transform([](const InformativeBlock& block) {
+               return std::visit(foundation::overloaded{LeafParagraphs{}}, block);
            }) |
            std::views::join | std::ranges::to<std::vector>();
 }
+std::vector<const CodeText*> informative_code(const InformativeBody& body) {
+    return body | std::views::transform([](const InformativeBlock& block) {
+               return std::visit(foundation::overloaded{LeafCode{}}, block);
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+} // namespace
 
-std::vector<const CodeText*> body_code(const DescriptionBody& body) {
-    return body |
-           std::views::filter([](const BodyBlock& block) { return std::holds_alternative<EquivalentTo>(block); }) |
-           std::views::transform([](const BodyBlock& block) { return &std::get<EquivalentTo>(block).code; }) |
-           std::ranges::to<std::vector>();
+std::vector<const Paragraph*> body_paragraphs(const DescriptionBody& body, bool include_informative) {
+    return body | std::views::transform([include_informative](const BodyBlock& block) {
+               return std::visit(foundation::overloaded{BlockParagraphs{{}, include_informative}}, block);
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+std::vector<const CodeText*> body_code(const DescriptionBody& body, bool include_informative) {
+    return body | std::views::transform([include_informative](const BodyBlock& block) {
+               return std::visit(foundation::overloaded{BlockCode{{}, include_informative}}, block);
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
 }
 
 DescriptionBody coalesce_itemizations(DescriptionBody body) {

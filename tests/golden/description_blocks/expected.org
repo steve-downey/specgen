@@ -1,0 +1,55 @@
+** Description blocks [blocks.general]
+:PROPERTIES:
+:CUSTOM_ID: blocks.general
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void run();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Performs the operation.
+
+#+begin_note
+An explanation with ~int~ and ([[https://eel.is/c++draft/blocks.general][@@html:[blocks.general]@@@@latex:{[}blocks.general{]}@@]]).
+
+A second informative paragraph.
+
+- The informative list is unnumbered.
+#+end_note
+
+#+begin_wgexample
+The following code illustrates an operation:
+
+#+begin_codeblock
+  run();
+
+// Commands in a code payload remain literal.
+// \effects is part of this comment.
+#+end_codeblock
+
+The example continues after its code.
+#+end_wgexample
+
+This continues the normative paragraph.
+#+end_pnum
+
+#+begin_pnum
+This is a separate normative paragraph.
+#+end_pnum
+
+#+begin_itemdecl
+inline int value();
+#+end_itemdecl
+
+#+begin_pnum
+The result is equal to:
+
+#+begin_codeblock
+1 + 2
+#+end_codeblock
+
+Otherwise, the result is zero.
+#+end_pnum

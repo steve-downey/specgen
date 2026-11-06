@@ -35,6 +35,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <variant>
 
 namespace beman::specgen::frontend {
 
@@ -137,7 +138,9 @@ bool has_unextracted_body(const clang::FunctionDecl* fn, const clang::SourceMana
     if (suppresses_generated_entity(lowered.directives))
         return false;
     return std::ranges::none_of(lowered.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
-        return !beman::specgen::ir::body_code(element.body).empty();
+        return std::ranges::any_of(element.body, [](const beman::specgen::ir::BodyBlock& block) {
+            return std::holds_alternative<beman::specgen::ir::EquivalentTo>(block);
+        });
     });
 }
 

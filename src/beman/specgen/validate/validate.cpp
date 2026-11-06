@@ -650,9 +650,11 @@ bool paragraph_has_content(const ir::Paragraph& paragraph) {
     });
 }
 
-Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block);
+template <class Block>
+Diagnostics check_leaf_table_block(const std::string& label, const Block& block);
 
-Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block) {
+template <class Block>
+Diagnostics check_leaf_table_block(const std::string& label, const Block& block) {
     Diagnostics out;
 
     if (const auto* t = std::get_if<ir::Table2D>(&block)) {
@@ -718,6 +720,22 @@ Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& blo
             diagnostics_monoid));
     }
 
+    return out;
+}
+
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block);
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block) {
+    auto       out               = check_leaf_table_block(label, block);
+    const auto check_informative = [&](const ir::InformativeBody& body) {
+        return foundation::mconcat_map(
+            body,
+            [&](const ir::InformativeBlock& leaf) { return check_leaf_table_block(label, leaf); },
+            diagnostics_monoid);
+    };
+    if (const auto* note = std::get_if<ir::Note>(&block))
+        out.append_range(check_informative(note->body));
+    if (const auto* example = std::get_if<ir::Example>(&block))
+        out.append_range(check_informative(example->body));
     return out;
 }
 
@@ -954,7 +972,7 @@ std::optional<ConjunctPolarity> find_subject(const ir::Paragraph& paragraph, con
 // its itemized conditions -- the same two places check_element_leakage
 // (above) reads wording from.
 std::vector<const ir::Paragraph*> element_paragraphs(const ir::DescriptionElement& element) {
-    return ir::body_paragraphs(element.body);
+    return ir::body_paragraphs(element.body, false);
 }
 
 // One derived/authored pair sharing a kind (design §5.2): for every derived
@@ -1205,11 +1223,13 @@ std::string paragraph_text(const ir::Paragraph& paragraph) {
 // An element carrying itemized conditions or an "Equivalent to:" body is
 // saying more than that by construction.
 bool reads_as_nothing(const ir::DescriptionElement& element) {
-    if (std::ranges::any_of(element.body,
-                            [](const ir::BodyBlock& b) { return !std::holds_alternative<ir::BodyParagraph>(b); }))
+    if (std::ranges::any_of(element.body, [](const ir::BodyBlock& b) {
+            return !std::holds_alternative<ir::BodyParagraph>(b) && !std::holds_alternative<ir::Note>(b) &&
+                   !std::holds_alternative<ir::Example>(b);
+        }))
         return false;
     const std::string joined = foundation::mconcat_map(
-        ir::body_paragraphs(element.body),
+        ir::body_paragraphs(element.body, false),
         [](const ir::Paragraph* p) { return paragraph_text(*p); },
         foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
     // Trailing punctuation and whitespace come off together: "Nothing.",
@@ -1268,6 +1288,8 @@ Diagnostics check_noexcept_throws(const ir::SpecItem& item) {
             if (element.body.empty())
                 return {}; // says nothing at all; nothing to contradict
             const std::string context = std::string(ir::element_name(element.kind));
+            if (ir::body_paragraphs(element.body, false).empty() && ir::body_code(element.body, false).empty())
+                return Diagnostics{};
             if (reads_as_nothing(element))
                 return {{Severity::Warning,
                          context,
