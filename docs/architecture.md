@@ -1034,7 +1034,6 @@ Both the normative and informative block vocabularies are descriptor-driven in
 saved IR. Backend informative-body visitors handle leaf blocks without recursive
 visitation; note and example bodies cannot contain further informative bodies.
 
-
 `render --validate` runs eight checks over an IR document. An Error makes validation skip
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
