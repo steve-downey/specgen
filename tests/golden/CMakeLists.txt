@@ -2107,6 +2107,12 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_end/expected.json"
 )
 
+specgen_add_golden(
+    detached_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"
+)
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens
