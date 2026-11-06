@@ -17,7 +17,7 @@ TEST_CASE("ir - HeaderIsIdempotent") {
 }
 
 TEST_CASE("ir - element names round-trip") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         auto kind = static_cast<ElementKind>(i);
         auto name = element_name(kind);
         CHECK(name != "?");

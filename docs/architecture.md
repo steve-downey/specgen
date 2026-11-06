@@ -461,7 +461,7 @@ is supported. Detached verbatim synopsis and item declaration blocks remain supp
 
 Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpects`,
 `\effects`, `\sync`, `\ensures`, `\result`, `\returns`, `\throws`, `\complexity`, `\errors`,
-`\remarks`.
+`\remarks`, `\recommended`.
 
 - `\hardexpects` is **not** `\expects`: it is a distinct description element, serialized as
   `hardexpects`, emitted as the draft's `\hardexpects` macro, and labelled
@@ -501,6 +501,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   exactly *one* `\cell` entry (the `\row` tag's own trailing text is the
   row's first column) before `\endlibtab2`. It follows the same ordering and
   prose continuation rules as `\lib2dtab2`.
+
+`\recommended` renders *Recommended practice*, after `\errors` in canonical
+order. It is accepted on a class description as well as an item description.
 
 All three backends render authored itemizations, prose references, and tables.
 
@@ -820,7 +823,7 @@ deliberate.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
-  `Inline`/`Paragraph` for prose; thirteen `ElementKind`s in canonical
+  `Inline`/`Paragraph` for prose; fourteen `ElementKind`s in canonical
   [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying
   one ordered `DescriptionBody`: `BodyParagraph`, `Itemize`, `Table2D`, `Table1D`,
   or extracted `EquivalentTo` blocks. A paragraph's continuation flag preserves
@@ -944,7 +947,7 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
 - A description element's *label* ("Preconditions" for `\expects`, "Error conditions" for
   `\errors`) comes from `backend::element_label` (`backend/element_label.hpp`), not from `ir::element_name`, which
   spells the LaTeX macro and is simultaneously the IR's frozen JSON key. The two agree on
-  eight of thirteen kinds, which is exactly enough to make a hand-written table look right
+  eight of fourteen kinds, which is exactly enough to make a hand-written table look right
   and be wrong.
 - mpark's span escape is `$x$` (its shorthand for `@*x*@`) and it is **not**
   backslash-escaped: the framework's scanner has no backslash handling, so a literal `@` or
@@ -1199,7 +1202,7 @@ The build assembles the tool from these components, each following the shared CM
 ([subtree-consumption](decisions/subtree-consumption.md)).
 
 - **Semantic IR** — `include/beman/specgen/ir.hpp`, `src/beman/specgen/ir.cpp`.
-  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the thirteen
+  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the fourteen
   `ElementKind`s in canonical order, `DescriptionElement` + `EquivalentTo`,
   `ItemDecl` (signatures plus semantic entity names)/`ItemDescr`/`SpecItem`, `IndexEntry`,
   `Section`/`Synopsis`/`FreeParagraph`/

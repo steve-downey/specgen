@@ -1,0 +1,39 @@
+\rSec3[recommended.class]{Class template wrapper}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{wrapper}@ {};
+}
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+\recommended
+Implementations should avoid allocating memory for small values.
+\end{itemdescr}
+
+\rSec3[recommended.reset]{Reset}
+
+\indexlibraryglobal{reset}%
+\begin{itemdecl}
+inline void reset();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Discards the stored value.
+
+\pnum
+\remarks
+The wrapper may be reused.
+
+\pnum
+\errors
+An error condition is reported by the caller.
+
+\pnum
+\recommended
+Implementations should reuse allocated storage.
+\end{itemdescr}
