@@ -39,7 +39,8 @@ inline constexpr auto kElementNames =
                                    foundation::is<ElementKind::Throws>("throws"sv),
                                    foundation::is<ElementKind::Complexity>("complexity"sv),
                                    foundation::is<ElementKind::Remarks>("remarks"sv),
-                                   foundation::is<ElementKind::Errors>("errors"sv));
+                                   foundation::is<ElementKind::Errors>("errors"sv),
+                                   foundation::is<ElementKind::Recommended>("recommended"sv));
 
 inline constexpr auto kDispositionNames =
     foundation::table<Disposition>(foundation::is<Disposition::Described>("described"sv),
