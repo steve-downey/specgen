@@ -450,6 +450,13 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Detached specgen docblocks are parsed too (issue #216). A block consumed by a
+declaration reports through that declaration exactly once; otherwise its parser
+findings retain the block's physical file and line. Detached labelled descriptions
+without a verbatim item declaration are Errors: there is no declaration to describe.
+Detached prose reports the grammar's prose-before-element Error until section prose
+is supported. Detached verbatim synopsis and item declaration blocks remain supported.
+
 ### 4.1 Description elements
 
 Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpects`,
