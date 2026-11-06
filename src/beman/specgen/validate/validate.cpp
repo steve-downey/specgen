@@ -612,12 +612,21 @@ Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsi
 // become `\tcode`. `RefInline` and `ConceptRef` name a stable name and a
 // library concept respectively, neither of which is a class-body
 // declaration, so neither is a leakage site.
+// A changed run (the wording diff's mark) is looked inside: what it holds is
+// prose of this document, marked or not.
 std::vector<const ir::CodeText*> paragraph_code(const ir::Paragraph& paragraph) {
-    return paragraph | std::views::transform([](const ir::Inline& inl) {
-               const auto* code = std::get_if<ir::CodeInline>(&inl);
-               return code != nullptr ? &code->code : nullptr;
+    const auto plain_code = [](const ir::PlainInline& inl) -> const ir::CodeText* {
+        const auto* code = std::get_if<ir::CodeInline>(&inl);
+        return code != nullptr ? &code->code : nullptr;
+    };
+    return paragraph | std::views::transform([&](const ir::Inline& inl) -> std::vector<const ir::CodeText*> {
+               if (const auto* run = std::get_if<ir::ChangedInline>(&inl))
+                   return run->inlines | std::views::transform(plain_code) | std::ranges::to<std::vector>();
+               if (const auto* code = std::get_if<ir::CodeInline>(&inl))
+                   return {&code->code};
+               return {};
            }) |
-           std::views::filter([](const ir::CodeText* code) { return code != nullptr; }) |
+           std::views::join | std::views::filter([](const ir::CodeText* code) { return code != nullptr; }) |
            std::ranges::to<std::vector>();
 }
 
@@ -654,19 +663,28 @@ std::vector<const ir::Paragraph*> table_paragraphs(const ir::Table1D& table) {
     return out;
 }
 
-bool paragraph_has_content(const ir::Paragraph& paragraph) {
-    const auto has_non_whitespace = [](std::string_view text) {
+// Whether one inline says anything. Five alternatives (decision
+// visitation-rules' >3 rule), so a named visitor. The changed-run case visits
+// `PlainInline`, a different and non-recursive variant, with this same
+// visitor: a run cannot hold a run, so this is dispatch, not recursion.
+struct InlineHasContent {
+    static bool has_non_whitespace(std::string_view text) {
         return std::ranges::any_of(text, [](char ch) { return ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r'; });
-    };
-    return std::ranges::any_of(paragraph, [&](const ir::Inline& inl) {
-        return std::visit(overloaded{
-                              [&](const ir::TextInline& text) { return has_non_whitespace(text.text); },
-                              [&](const ir::CodeInline& code) { return has_non_whitespace(code.code.text); },
-                              [&](const ir::RefInline& ref) { return has_non_whitespace(ref.stable_name); },
-                              [&](const ir::ConceptRef& ref) { return has_non_whitespace(ref.name); },
-                          },
-                          inl);
-    });
+    }
+
+    bool operator()(const ir::TextInline& text) const { return has_non_whitespace(text.text); }
+    bool operator()(const ir::CodeInline& code) const { return has_non_whitespace(code.code.text); }
+    bool operator()(const ir::RefInline& ref) const { return has_non_whitespace(ref.stable_name); }
+    bool operator()(const ir::ConceptRef& ref) const { return has_non_whitespace(ref.name); }
+    bool operator()(const ir::ChangedInline& run) const {
+        return std::ranges::any_of(
+            run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
+    }
+};
+
+bool paragraph_has_content(const ir::Paragraph& paragraph) {
+    return std::ranges::any_of(paragraph,
+                               [](const ir::Inline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
 }
 
 Diagnostics check_table_structure(const ir::DescriptionElement& element) {
@@ -1256,18 +1274,26 @@ bool every_signature_is_noexcept(const std::vector<ir::CodeText>& signatures) {
 // The text of a paragraph, with every inline flattened to what it names.
 // Only ever compared against "Nothing" below, so the markup distinctions the
 // backends draw between these four do not matter here.
+// Five alternatives, so a named visitor; the changed-run case dispatches the
+// non-recursive `PlainInline` with this same visitor, as InlineHasContent
+// does, and flattens the run's text into the paragraph's.
+struct InlineText {
+    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    std::string operator()(const ir::CodeInline& v) const { return v.code.text; }
+    std::string operator()(const ir::RefInline& v) const { return v.stable_name; }
+    std::string operator()(const ir::ConceptRef& v) const { return v.name; }
+    std::string operator()(const ir::ChangedInline& run) const {
+        return foundation::mconcat_map(
+            run.inlines,
+            [](const ir::PlainInline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
+            foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
+    }
+};
+
 std::string paragraph_text(const ir::Paragraph& paragraph) {
     return foundation::mconcat_map(
         paragraph,
-        [](const ir::Inline& piece) {
-            return std::visit(overloaded{
-                                  [](const ir::TextInline& v) { return v.text; },
-                                  [](const ir::CodeInline& v) { return v.code.text; },
-                                  [](const ir::RefInline& v) { return v.stable_name; },
-                                  [](const ir::ConceptRef& v) { return v.name; },
-                              },
-                              piece);
-        },
+        [](const ir::Inline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
         foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
 }
 

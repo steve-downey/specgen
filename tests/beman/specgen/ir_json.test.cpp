@@ -452,3 +452,85 @@ TEST_CASE("ir_json - item and code parse entry points") {
     CHECK(code->spans[0].kind == SpanKind::ExposId);
     CHECK(code->spans[0].payload == "val");
 }
+
+// --- change marks (docs/plans/wording-diff.md) -----------------------------
+
+namespace {
+
+// One of everything a mark can sit on, unmarked: the shape every pre-diff
+// golden has, which the marks must leave byte-identical.
+Document unmarked_document() {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "gadget", .code = {"class gadget;", {}}, .roster = {}});
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.paragraphs.push_back({TextInline{"Does "}, CodeInline{{"f", {}}}, TextInline{"."}});
+    item.descr.elements.push_back(std::move(effects));
+    doc.nodes.push_back(Section{"gadget.f", "F", {item, FreeParagraph{{TextInline{"Free."}}}}});
+    return doc;
+}
+
+} // namespace
+
+TEST_CASE("ir_json - an unmarked document emits no change keys at all") {
+    const std::string json = emit_json(unmarked_document());
+    CHECK(json.find("\"change\"") == std::string::npos);
+    CHECK(json.find("\"changes\"") == std::string::npos);
+    CHECK(json.find("\"changed\"") == std::string::npos);
+}
+
+TEST_CASE("ir_json - change marks round-trip on every node, element, code text and prose run") {
+    Document doc                            = unmarked_document();
+    std::get<Synopsis>(doc.nodes[0]).change = Change::Removed;
+    auto& section                           = std::get<Section>(doc.nodes[1]);
+    section.change                          = Change::Added;
+    auto& item                              = std::get<SpecItem>(section.children[0]);
+    item.change                             = Change::Added;
+    item.decl.signatures[0].changes.push_back({0, 4, Change::Removed});
+    auto& effects  = item.descr.elements[0];
+    effects.change = Change::Removed;
+    effects.paragraphs[0].push_back(ChangedInline{
+        Change::Added,
+        {TextInline{" See "}, RefInline{"gadget.g"}, TextInline{" and "}, CodeInline{{"g", {}}}, ConceptRef{"C"}}});
+    std::get<FreeParagraph>(section.children[1]).change = Change::Removed;
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("\"change\":\"added\"") != std::string::npos);
+    CHECK(json.find("\"change\":\"removed\"") != std::string::npos);
+    CHECK(json.find("\"changes\":[{\"begin\":0,\"end\":4,\"change\":\"removed\"}]") != std::string::npos);
+    CHECK(json.find("{\"t\":\"changed\",\"change\":\"added\",\"inlines\":[{\"t\":\"text\",\"text\":\" See \"},"
+                    "{\"t\":\"ref\",\"stable\":\"gadget.g\"}") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(std::get<Synopsis>(back->nodes[0]).change == Change::Removed);
+    const auto& section_back = std::get<Section>(back->nodes[1]);
+    CHECK(section_back.change == Change::Added);
+    const auto& item_back = std::get<SpecItem>(section_back.children[0]);
+    CHECK(item_back.change == Change::Added);
+    CHECK(item_back.decl.signatures[0].changes == std::vector<ChangeRun>{{0, 4, Change::Removed}});
+    CHECK(item_back.descr.elements[0].change == Change::Removed);
+    const auto* run = std::get_if<ChangedInline>(&item_back.descr.elements[0].paragraphs[0].back());
+    REQUIRE(run != nullptr);
+    CHECK(run->change == Change::Added);
+    REQUIRE(run->inlines.size() == 5);
+    CHECK(std::get<RefInline>(run->inlines[1]).stable_name == "gadget.g");
+    CHECK(std::get<ConceptRef>(run->inlines[4]).name == "C");
+    CHECK(std::get<FreeParagraph>(section_back.children[1]).change == Change::Removed);
+    CHECK(emit_json(*back) == json);
+}
+
+TEST_CASE("ir_json - an absent change key parses as unmarked, and an unknown mark is an error") {
+    const auto plain = parse_item(R"({"type":"item","decl":{"signatures":[{"text":"void f();","spans":[]}],)"
+                                  R"("index":[],"entities":[]},"descr":{"elements":[]}})");
+    REQUIRE(plain.has_value());
+    CHECK(plain->change == Change::Same);
+    CHECK(plain->decl.signatures[0].changes.empty());
+
+    const auto bogus = parse_item(R"({"type":"item","decl":{"signatures":[],"index":[],"entities":[]},)"
+                                  R"("descr":{"elements":[]},"change":"modified"})");
+    REQUIRE(!bogus.has_value());
+    CHECK(bogus.error().message.find("unknown change 'modified'") != std::string::npos);
+}

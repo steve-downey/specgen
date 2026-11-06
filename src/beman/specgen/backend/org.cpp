@@ -219,7 +219,42 @@ struct PieceRenderer {
     // links; org has only the code font to offer, which is what `~...~` gives
     // -- the same trade the mpark backend makes with backticks.
     std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
+
+    // A changed run of prose (the wording diff's mark): wg21org's
+    // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
+    // after `RunPieceRenderer` below, which renders the run's contents.
+    std::string operator()(const ir::ChangedInline& run) const;
 };
+
+// The contents of a changed run, which is a link's description, where org
+// allows every inline but another link. A cross-reference inside a run is
+// therefore the `{{{sref(name)}}}` macro rather than the link PieceRenderer
+// writes, and wg21org expands the macro to the same target the link resolves
+// to (docs/plans/wording-diff.md, org-forms). The other three cases are
+// PieceRenderer's own: an export snippet and `~code~` are both allowed in a
+// description. Four alternatives of the non-recursive `PlainInline`, so a
+// named visitor of its own.
+struct RunPieceRenderer {
+    std::string operator()(const ir::TextInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::CodeInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::RefInline& v) const { return "{{{sref(" + v.stable_name + ")}}}"; }
+    std::string operator()(const ir::ConceptRef& v) const { return PieceRenderer{}(v); }
+};
+
+std::string render_run(const std::vector<ir::PlainInline>& inlines) {
+    return inlines | std::views::transform([](const ir::PlainInline& piece) {
+               return std::visit(overloaded{RunPieceRenderer{}}, piece);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
+    const std::string inner = render_run(run.inlines);
+    return foundation::match(run.change,
+                             foundation::when<ir::Change::Same>([&] { return inner; }),
+                             foundation::when<ir::Change::Added>([&] { return "[[insert:][" + inner + "]]"; }),
+                             foundation::when<ir::Change::Removed>([&] { return "[[delete:][" + inner + "]]"; }));
+}
 
 std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
     return para | std::views::transform([new_roots](const ir::Inline& piece) {
@@ -481,7 +516,7 @@ struct SeededProjector {
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children), s.change};
     }
 
     // The three leaves render independently of outline level, so they pass

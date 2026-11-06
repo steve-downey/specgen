@@ -134,7 +134,29 @@ struct PieceRenderer {
     // links; markdown has only the code font to offer, which is what
     // backticks give.
     std::string operator()(const ir::ConceptRef& v) const { return '`' + v.name + '`'; }
+
+    // A changed run of prose (the wording diff's mark): the framework's
+    // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would
+    // be unmarked. Defined after `render_run` below, which dispatches the
+    // run's `PlainInline`s -- a different, non-recursive variant -- through
+    // this same visitor's other four cases.
+    std::string operator()(const ir::ChangedInline& run) const;
 };
+
+std::string render_run(const std::vector<ir::PlainInline>& inlines) {
+    return inlines | std::views::transform([](const ir::PlainInline& piece) {
+               return std::visit(overloaded{PieceRenderer{}}, piece);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
+    const std::string inner = render_run(run.inlines);
+    return foundation::match(run.change,
+                             foundation::when<ir::Change::Same>([&] { return inner; }),
+                             foundation::when<ir::Change::Added>([&] { return '[' + inner + "]{.add}"; }),
+                             foundation::when<ir::Change::Removed>([&] { return '[' + inner + "]{.rm}"; }));
+}
 
 std::string render_paragraph(const ir::Paragraph& para) {
     return para | std::views::transform([](const ir::Inline& piece) {
@@ -378,7 +400,7 @@ struct SeededProjector {
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children), s.change};
     }
 
     // The three leaves render independently of heading level, so they pass

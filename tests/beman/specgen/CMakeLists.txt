@@ -50,6 +50,7 @@ foreach(
 endforeach()
 
 add_subdirectory(backend)
+add_subdirectory(diff)
 add_subdirectory(foundation)
 add_subdirectory(json)
 add_subdirectory(parse)

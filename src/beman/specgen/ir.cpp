@@ -60,6 +60,10 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::Ref>("ref"sv),
                                 foundation::is<SpanKind::LibraryIndex>("library-index"sv));
 
+inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
+                                                               foundation::is<Change::Added>("added"sv),
+                                                               foundation::is<Change::Removed>("removed"sv));
+
 inline constexpr auto kIndexKindNames =
     foundation::table<IndexKind>(foundation::is<IndexKind::Global>("global"sv),
                                  foundation::is<IndexKind::Constructor>("ctor"sv),
@@ -92,6 +96,9 @@ std::optional<Disposition> disposition_from_name(std::string_view s) { return en
 
 std::string_view          member_kind_name(MemberKind k) { return kMemberKindNames[k]; }
 std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enumerator_named(kMemberKindNames, s); }
+
+std::string_view      change_name(Change c) { return kChangeNames[c]; }
+std::optional<Change> change_from_name(std::string_view s) { return enumerator_named(kChangeNames, s); }
 
 void canonicalize(ItemDescr& d) {
     // Within one kind (design §5.2), a derived element sorts ahead of

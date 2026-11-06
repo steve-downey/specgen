@@ -83,3 +83,26 @@ TEST_CASE("ir - member kind names round-trip") {
     }
     CHECK(!member_kind_from_name("bogus").has_value());
 }
+
+TEST_CASE("ir - change names round-trip") {
+    for (const Change change : {Change::Same, Change::Added, Change::Removed}) {
+        const auto name = change_name(change);
+        CHECK(name != "?");
+        const auto back = change_from_name(name);
+        REQUIRE(back.has_value());
+        CHECK(*back == change);
+    }
+    CHECK(change_name(Change::Same) == "same");
+    CHECK(change_name(Change::Added) == "added");
+    CHECK(change_name(Change::Removed) == "removed");
+    CHECK(!change_from_name("modified").has_value());
+}
+
+TEST_CASE("ir - every node and element is unmarked by default") {
+    CHECK(Section{}.change == Change::Same);
+    CHECK(Synopsis{}.change == Change::Same);
+    CHECK(SpecItem{}.change == Change::Same);
+    CHECK(FreeParagraph{}.change == Change::Same);
+    CHECK(DescriptionElement{}.change == Change::Same);
+    CHECK(CodeText{}.changes.empty());
+}

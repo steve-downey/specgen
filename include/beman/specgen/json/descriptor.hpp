@@ -112,6 +112,45 @@ optional_projected_field(std::string_view name, std::optional<Wrapper> C::* memb
     return OptionalProjectedField<C, Wrapper, Inner>{name, member, inner};
 }
 
+/// One JSON key <-> a data member that is *omitted* when it holds its
+/// value-initialized default, and left at that default when the key is
+/// absent. For a field added to a frozen schema after the fact (the wording
+/// diff's marks): every document emitted before the field existed, and every
+/// unmarked document after, serializes byte for byte as it always did.
+template <typename C, typename T>
+struct DefaultedField {
+    std::string_view name;
+    T C::* member;
+};
+
+template <typename C, typename T>
+constexpr DefaultedField<C, T> defaulted_field(std::string_view name, T C::* member) {
+    return DefaultedField<C, T>{name, member};
+}
+
+/// The enum twin of `defaulted_field`: omitted at `default_value`, which is
+/// named rather than value-initialized so the table says which enumerator is
+/// the silent one.
+template <typename C, typename E>
+struct DefaultedEnumField {
+    std::string_view name;
+    E C::* member;
+    E      default_value;
+    std::string_view (*to_name)(E);
+    std::optional<E> (*from_name)(std::string_view);
+    std::string_view label;
+};
+
+template <typename C, typename E>
+constexpr DefaultedEnumField<C, E> defaulted_enum_field(std::string_view name,
+                                                        E C::* member,
+                                                        E      default_value,
+                                                        std::string_view (*to_name)(E),
+                                                        std::optional<E> (*from_name)(std::string_view),
+                                                        std::string_view label) {
+    return DefaultedEnumField<C, E>{name, member, default_value, to_name, from_name, label};
+}
+
 /// One alternative of a tagged variant: the tag string it serializes under.
 template <typename T>
 struct Alt {
@@ -193,6 +232,18 @@ template <typename C, typename T>
 void emit_member(const C& value, json_object& obj, const OptionalField<C, T>& f) {
     if (const auto& wrapped = value.*f.member)
         emit_value(*wrapped, obj.key(f.name));
+}
+
+template <typename C, typename T>
+void emit_member(const C& value, json_object& obj, const DefaultedField<C, T>& f) {
+    if (!(value.*f.member == T{}))
+        emit_value(value.*f.member, obj.key(f.name));
+}
+
+template <typename C, typename E>
+void emit_member(const C& value, json_object& obj, const DefaultedEnumField<C, E>& f) {
+    if (value.*f.member != f.default_value)
+        write_json_string(f.to_name(value.*f.member), obj.key(f.name));
 }
 
 template <typename T, typename Members>
@@ -299,6 +350,23 @@ bool parse_member(Reader& r, C& out, const OptionalField<C, T>& f) {
     return true;
 }
 
+template <typename C, typename T>
+bool parse_member(Reader& r, C& out, const DefaultedField<C, T>& f) {
+    return parse_value(r, out.*f.member);
+}
+
+template <typename C, typename E>
+bool parse_member(Reader& r, C& out, const DefaultedEnumField<C, E>& f) {
+    std::string name;
+    if (!r.parse_string(name))
+        return false;
+    if (auto value = f.from_name(name)) {
+        out.*f.member = *value;
+        return true;
+    }
+    return r.fail("unknown " + std::string(f.label) + " '" + name + "'");
+}
+
 /// Tries every field's name against @p key; nullopt means none matched (the
 /// caller should skip the value), else the bool is that field's parse result.
 template <typename C, typename Members>
@@ -325,6 +393,33 @@ bool parse_json_described(Reader& r, T& out, const Members& members) {
     });
 }
 
+/// One alternative's share of a key while a tagged variant is scanned. The
+/// first alternative whose table has the key reads the value from @p r and
+/// records its bytes; every later alternative with the same key re-reads
+/// those bytes into its own staged value. A key shared across alternatives
+/// (the wording diff's `change`, on every node kind) therefore lands in
+/// whichever alternative the tag turns out to select, wherever the tag
+/// appears in the object.
+template <typename T>
+void parse_variant_member(Reader&              r,
+                          T&                   staged,
+                          std::string_view     key,
+                          std::string_view     slice,
+                          std::optional<bool>& result,
+                          std::string_view&    value_text) {
+    if (!result.has_value()) {
+        result = try_dispatch(r, staged, key, json_descriptor<T>::members);
+        if (result == true)
+            value_text = slice.substr(0, slice.size() - r.remaining().size());
+        return;
+    }
+    if (*result != true)
+        return;
+    Reader again(value_text);
+    if (const auto re = try_dispatch(again, staged, key, json_descriptor<T>::members); re.has_value() && !*re)
+        result = r.fail(again.message());
+}
+
 /// Parses a tagged variant: every alternative's fields are staged into a
 /// same-shaped tuple as the object is scanned once; only once the whole
 /// object is consumed does the tag string pick which staged alternative
@@ -339,16 +434,11 @@ bool parse_variant(Reader& r, std::variant<Ts...>& out) {
     const bool        ok = r.object([&](std::string_view key) {
         if (key == desc.tag_key)
             return r.parse_string(tag);
-        std::optional<bool> result;
-        std::apply(
-            [&](auto&... values) {
-                ((!result.has_value()
-                      ? void(result = try_dispatch(
-                                 r, values, key, json_descriptor<std::decay_t<decltype(values)>>::members))
-                      : void()),
-                 ...);
-            },
-            staged);
+        const std::string_view slice = r.remaining();
+        std::optional<bool>    result;
+        std::string_view       value_text;
+        std::apply([&](auto&... values) { (parse_variant_member(r, values, key, slice, result, value_text), ...); },
+                   staged);
         if (result.has_value())
             return *result;
         return r.skip_value();

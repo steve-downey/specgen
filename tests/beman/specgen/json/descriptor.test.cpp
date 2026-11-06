@@ -9,6 +9,7 @@
 #include <optional>
 #include <string>
 #include <tuple>
+#include <variant>
 
 using namespace beman::specgen::json;
 
@@ -179,4 +180,119 @@ TEST_CASE("json_descriptor - vector<T> emits and parses as a JSON array") {
     std::vector<std::size_t> out;
     REQUIRE(parse_value(r, out));
     CHECK(out == std::vector<std::size_t>{4, 5});
+}
+
+// --- defaulted fields (docs/plans/wording-diff.md) ------------------------
+
+namespace {
+
+struct Tagged {
+    std::string              name;
+    std::vector<std::string> tags;
+};
+
+enum class Colour { Plain, Red };
+
+std::string_view colour_name(Colour c) { return c == Colour::Red ? "red" : "plain"; }
+
+std::optional<Colour> colour_from_name(std::string_view name) {
+    if (name == "red")
+        return Colour::Red;
+    if (name == "plain")
+        return Colour::Plain;
+    return std::nullopt;
+}
+
+struct Coloured {
+    std::string name;
+    Colour      colour = Colour::Plain;
+};
+
+} // namespace
+
+TEST_CASE("json_descriptor - a defaulted field is omitted at its default and read back as it when absent") {
+    constexpr auto members = std::tuple{field("name", &Tagged::name), defaulted_field("tags", &Tagged::tags)};
+
+    std::string json;
+    emit_json_described(Tagged{"w", {}}, json, members);
+    CHECK(json == R"({"name":"w"})");
+
+    json.clear();
+    emit_json_described(Tagged{"w", {"a", "b"}}, json, members);
+    CHECK(json == R"({"name":"w","tags":["a","b"]})");
+
+    Reader r(R"({"name":"w"})");
+    Tagged out{"stale", {"stale"}};
+    REQUIRE(parse_json_described(r, out, members));
+    CHECK(out.name == "w");
+    CHECK(out.tags.empty());
+
+    Reader r2(json);
+    REQUIRE(parse_json_described(r2, out, members));
+    CHECK(out.tags == std::vector<std::string>{"a", "b"});
+}
+
+TEST_CASE("json_descriptor - a defaulted enum field is omitted at the named default") {
+    constexpr auto members = std::tuple{
+        field("name", &Coloured::name),
+        defaulted_enum_field("colour", &Coloured::colour, Colour::Plain, colour_name, colour_from_name, "colour"),
+    };
+
+    std::string json;
+    emit_json_described(Coloured{"w", Colour::Plain}, json, members);
+    CHECK(json == R"({"name":"w"})");
+
+    json.clear();
+    emit_json_described(Coloured{"w", Colour::Red}, json, members);
+    CHECK(json == R"({"name":"w","colour":"red"})");
+
+    Reader   r(json);
+    Coloured out;
+    REQUIRE(parse_json_described(r, out, members));
+    CHECK(out.colour == Colour::Red);
+
+    Reader r2(R"({"name":"w","colour":"mauve"})");
+    CHECK(!parse_json_described(r2, out, members));
+}
+
+namespace {
+
+// Two alternatives sharing a key name, as every node kind shares `change`.
+struct Apple {
+    std::string name;
+    std::string grade;
+};
+struct Pear {
+    std::string size;
+    std::string grade;
+};
+using Fruit = std::variant<Apple, Pear>;
+
+} // namespace
+
+template <>
+struct beman::specgen::json::json_descriptor<Apple> {
+    static constexpr auto members = std::tuple{field("name", &Apple::name), field("grade", &Apple::grade)};
+};
+template <>
+struct beman::specgen::json::json_descriptor<Pear> {
+    static constexpr auto members = std::tuple{field("size", &Pear::size), field("grade", &Pear::grade)};
+};
+template <>
+struct beman::specgen::json::json_descriptor<Fruit> {
+    static constexpr auto alts = alternatives("kind", "fruit", alt<Apple>("apple"), alt<Pear>("pear"));
+};
+
+TEST_CASE("json_descriptor - a key shared by several alternatives reaches the one the tag selects") {
+    for (const char* json :
+         {R"({"kind":"pear","size":"big","grade":"A"})", R"({"grade":"A","size":"big","kind":"pear"})"}) {
+        CAPTURE(json);
+        Reader r(json);
+        Fruit  out;
+        REQUIRE(parse_value(r, out));
+        const auto* pear = std::get_if<Pear>(&out);
+        REQUIRE(pear != nullptr);
+        CHECK(pear->size == "big");
+        CHECK(pear->grade == "A");
+    }
 }

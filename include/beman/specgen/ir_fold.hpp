@@ -51,6 +51,7 @@ struct SectionF {
     std::string    stable_name;
     std::string    title;
     std::vector<A> children;
+    Change         change = Change::Same; // the wording diff's mark, carried like the name
 };
 
 template <typename A>
@@ -73,6 +74,7 @@ struct NodeProjector {
             s.title,
             s.children | std::views::transform([](const Node& child) { return Handle(child); }) |
                 std::ranges::to<std::vector>(),
+            s.change,
         };
     }
 
@@ -93,7 +95,7 @@ struct NodeProjector {
 /// `node_project`'s dual.
 struct NodeEmbedder {
     Node operator()(SectionF<Node>&& s) const {
-        return Section{std::move(s.stable_name), std::move(s.title), std::move(s.children)};
+        return Section{std::move(s.stable_name), std::move(s.title), std::move(s.children), s.change};
     }
     Node operator()(Synopsis&& v) const { return v; }
     Node operator()(SpecItem&& v) const { return v; }
@@ -115,6 +117,7 @@ struct NodeFMapper {
             s.title,
             s.children | std::views::transform([this](const A& child) { return fn(child); }) |
                 std::ranges::to<std::vector>(),
+            s.change,
         };
     }
 
