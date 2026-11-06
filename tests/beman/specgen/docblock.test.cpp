@@ -592,3 +592,8 @@ TEST_CASE("docblock - specified is a flag marker") {
     CHECK(parsed.block.markers.specified);
     CHECK_FALSE(parse_docblock("//! \\omit\n").block.markers.specified);
 }
+
+TEST_CASE("docblock - a slash that is not a line decoration passes through") {
+    CHECK(strip_comment_decorations("//! \\effects A path follows.\n/path\n/*! another comment */") ==
+          "\\effects A path follows.\n/path\n/*! another comment */");
+}

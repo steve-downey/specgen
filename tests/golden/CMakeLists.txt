@@ -2108,6 +2108,12 @@ specgen_add_golden(
 )
 
 specgen_add_golden(
+    detached_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"
+)
+
+specgen_add_golden(
     resume_description_generate
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_resume_description.hpp"

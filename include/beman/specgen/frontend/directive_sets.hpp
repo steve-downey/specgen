@@ -132,6 +132,8 @@ FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, c
 // description text -- is an Error too, a namespace having no wording of its
 // own for the text to be.
 struct SpecifiedNamespaces {
+    // Namespace docblocks consumed here must not be diagnosed as detached.
+    std::vector<const clang::NamespaceDecl*>                marked;
     std::set<std::string>                                   paths;
     std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
 };
