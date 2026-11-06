@@ -2,10 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/foundation/overloaded.hpp>
+#include <ranges>
+#include <variant>
+#include <vector>
 
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -92,6 +97,69 @@ std::optional<Disposition> disposition_from_name(std::string_view s) { return en
 
 std::string_view          member_kind_name(MemberKind k) { return kMemberKindNames[k]; }
 std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enumerator_named(kMemberKindNames, s); }
+
+namespace {
+struct BlockParagraphs {
+    std::vector<const Paragraph*> operator()(const BodyParagraph& p) const;
+    std::vector<const Paragraph*> operator()(const Itemize& list) const;
+    std::vector<const Paragraph*> operator()(const Table2D& t) const;
+    std::vector<const Paragraph*> operator()(const Table1D& t) const;
+    std::vector<const Paragraph*> operator()(const EquivalentTo&) const;
+};
+
+std::vector<const Paragraph*> BlockParagraphs::operator()(const BodyParagraph& p) const { return {&p.text}; }
+
+std::vector<const Paragraph*> BlockParagraphs::operator()(const Itemize& list) const {
+    return list.items | std::views::transform([](const Paragraph& p) { return &p; }) | std::ranges::to<std::vector>();
+}
+
+std::vector<const Paragraph*> BlockParagraphs::operator()(const Table2D& t) const {
+    std::vector<const Paragraph*> result{&t.caption, &t.column1, &t.column2};
+    result.append_range(t.rows | std::views::transform([](const Table2DRow& row) {
+                            return std::array{&row.header, &row.cell1, &row.cell2};
+                        }) |
+                        std::views::join);
+    return result;
+}
+
+std::vector<const Paragraph*> BlockParagraphs::operator()(const Table1D& t) const {
+    std::vector<const Paragraph*> result{&t.caption, &t.column1, &t.column2};
+    result.append_range(
+        t.rows | std::views::transform([](const Table1DRow& row) { return std::array{&row.cell1, &row.cell2}; }) |
+        std::views::join);
+    return result;
+}
+
+std::vector<const Paragraph*> BlockParagraphs::operator()(const EquivalentTo&) const { return {}; }
+
+} // namespace
+
+std::vector<const Paragraph*> body_paragraphs(const DescriptionBody& body) {
+    return body | std::views::transform([](const BodyBlock& block) {
+               return std::visit(foundation::overloaded{BlockParagraphs{}}, block);
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+
+std::vector<const CodeText*> body_code(const DescriptionBody& body) {
+    return body |
+           std::views::filter([](const BodyBlock& block) { return std::holds_alternative<EquivalentTo>(block); }) |
+           std::views::transform([](const BodyBlock& block) { return &std::get<EquivalentTo>(block).code; }) |
+           std::ranges::to<std::vector>();
+}
+
+DescriptionBody coalesce_itemizations(DescriptionBody body) {
+    return std::ranges::fold_left(
+        std::move(body) | std::views::as_rvalue, DescriptionBody{}, [](DescriptionBody out, BodyBlock block) {
+            auto* next = std::get_if<Itemize>(&block);
+            auto* last = out.empty() ? nullptr : std::get_if<Itemize>(&out.back());
+            if (next != nullptr && last != nullptr)
+                last->items.append_range(std::move(next->items) | std::views::as_rvalue);
+            else
+                out.push_back(std::move(block));
+            return out;
+        });
+}
 
 void canonicalize(ItemDescr& d) {
     // Within one kind (design §5.2), a derived element sorts ahead of

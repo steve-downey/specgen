@@ -117,11 +117,12 @@ template <typename T>
 struct Alt {
     using type = T;
     std::string_view tag;
+    std::string_view legacy_tag = {};
 };
 
 template <typename T>
-constexpr Alt<T> alt(std::string_view tag) {
-    return Alt<T>{tag};
+constexpr Alt<T> alt(std::string_view tag, std::string_view legacy_tag = {}) {
+    return Alt<T>{tag, legacy_tag};
 }
 
 /// A tagged-variant descriptor: the tag key, an error-message label, alts.
@@ -240,6 +241,8 @@ void emit_value(const T& value, std::string& out) {
         std::format_to(std::back_inserter(out), "{}", value);
     } else if constexpr (std::is_same_v<T, bool>) {
         out += value ? "true" : "false";
+    } else if constexpr (requires { typename json_descriptor<T>::representation; }) {
+        emit_value(json_descriptor<T>::to_representation(value), out);
     } else if constexpr (HasAlts<T>) {
         emit_variant(value, out);
     } else {
@@ -325,48 +328,41 @@ bool parse_json_described(Reader& r, T& out, const Members& members) {
     });
 }
 
-/// Parses a tagged variant: every alternative's fields are staged into a
-/// same-shaped tuple as the object is scanned once; only once the whole
-/// object is consumed does the tag string pick which staged alternative
-/// moves into @p out -- so the tag key may appear before or after the
-/// fields it selects among.
+/// Resolve the tag on a cheap Reader copy before reading the selected payload.
+/// Alternatives may share field names with different shapes (e.g. table rows),
+/// and the tag may occur after those fields. Staging into the first matching
+/// alternative would silently lose fields from every later alternative.
 template <typename... Ts>
 bool parse_variant(Reader& r, std::variant<Ts...>& out) {
-    using Variant          = std::variant<Ts...>;
-    const auto&       desc = json_descriptor<Variant>::alts;
-    std::string       tag;
-    std::tuple<Ts...> staged{};
-    const bool        ok = r.object([&](std::string_view key) {
-        if (key == desc.tag_key)
-            return r.parse_string(tag);
-        std::optional<bool> result;
-        std::apply(
-            [&](auto&... values) {
-                ((!result.has_value()
-                      ? void(result = try_dispatch(
-                                 r, values, key, json_descriptor<std::decay_t<decltype(values)>>::members))
-                      : void()),
-                 ...);
-            },
-            staged);
-        if (result.has_value())
-            return *result;
-        return r.skip_value();
-    });
-    if (!ok)
+    using Variant    = std::variant<Ts...>;
+    const auto& desc = json_descriptor<Variant>::alts;
+    std::string tag;
+    Reader      probe = r;
+    if (!probe.object([&](std::string_view key) {
+            return key == desc.tag_key ? probe.parse_string(tag) : probe.skip_value();
+        })) {
+        r = std::move(probe);
         return false;
-    bool constructed = false;
+    }
+    std::optional<bool> parsed;
     std::apply(
-        [&](auto&... values) {
-            ((!constructed && tag == tag_for<std::decay_t<decltype(values)>>(desc.alts)
-                  ? (out = std::move(values), constructed = true)
-                  : false),
-             ...);
+        [&](const auto&... a) {
+            (
+                [&] {
+                    if (parsed.has_value() || (tag != a.tag && (a.legacy_tag.empty() || tag != a.legacy_tag)))
+                        return;
+                    using T = typename std::decay_t<decltype(a)>::type;
+                    T value;
+                    parsed = parse_json_described(r, value, json_descriptor<T>::members);
+                    if (*parsed)
+                        out = std::move(value);
+                }(),
+                ...);
         },
-        staged);
-    if (!constructed)
-        return r.fail("unknown " + std::string(desc.label) + " '" + tag + "'");
-    return true;
+        desc.alts);
+    if (!parsed.has_value())
+        return r.fail(std::format("unknown {} '{}'", desc.label, tag));
+    return *parsed;
 }
 
 template <typename T>
@@ -377,6 +373,9 @@ bool parse_value(Reader& r, T& out) {
         return r.parse_uint(out);
     } else if constexpr (std::is_same_v<T, bool>) {
         return r.parse_bool(out);
+    } else if constexpr (requires { typename json_descriptor<T>::representation; }) {
+        typename json_descriptor<T>::representation wire;
+        return parse_value(r, wire) && json_descriptor<T>::from_representation(r, std::move(wire), out);
     } else if constexpr (HasAlts<T>) {
         return parse_variant(r, out);
     } else {

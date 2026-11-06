@@ -4,6 +4,8 @@
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/lower.hpp> // Re-inclusion verification
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -42,8 +44,8 @@ TEST_CASE("lower - value_or shape: mandates prose + effects-equiv placeholder") 
     // Canonical order puts Mandates before Effects regardless of authoring.
     const auto& mandates = out.descr.elements[0];
     CHECK(mandates.kind == ir::ElementKind::Mandates);
-    REQUIRE(mandates.paragraphs.size() == 1);
-    const auto& p = mandates.paragraphs[0];
+    REQUIRE(body_test::paragraph_count(mandates) == 1);
+    const auto& p = body_test::paragraph(mandates, 0);
     REQUIRE(p.size() == 4);
     CHECK(code_of(p[0]) == "is_copy_constructible_v<T>");
     CHECK(text_of(p[1]) == " is ");
@@ -51,16 +53,16 @@ TEST_CASE("lower - value_or shape: mandates prose + effects-equiv placeholder") 
     CHECK(text_of(p[3]) == ".");
     // Spans stay empty here; resolution is the front end's job.
     CHECK(std::get<ir::CodeInline>(p[0]).code.spans.empty());
-    CHECK(!mandates.equivalent.has_value());
+    CHECK(!(body_test::first<beman::specgen::ir::EquivalentTo>(mandates) != nullptr));
 
     // The extraction marker becomes an Effects element holding an empty
     // EquivalentTo — the slot the front end fills from the definition body.
     const auto& effects = out.descr.elements[1];
     CHECK(effects.kind == ir::ElementKind::Effects);
-    CHECK(effects.paragraphs.empty());
-    REQUIRE(effects.equivalent.has_value());
-    CHECK(effects.equivalent->code.text.empty());
-    CHECK(effects.equivalent->code.spans.empty());
+    CHECK((body_test::paragraph_count(effects) == 0));
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(effects) != nullptr));
+    CHECK(body_test::first<beman::specgen::ir::EquivalentTo>(effects)->code.text.empty());
+    CHECK(body_test::first<beman::specgen::ir::EquivalentTo>(effects)->code.spans.empty());
 
     CHECK(out.directives.effects_equiv);
     CHECK(!out.directives.returns_expr);
@@ -79,9 +81,10 @@ TEST_CASE("lower - emplace shape: several elements, canonical order enforced") {
     CHECK(out.descr.elements[2].kind == ir::ElementKind::Returns);
     CHECK(out.descr.elements[3].kind == ir::ElementKind::Throws);
 
-    REQUIRE(out.descr.elements[1].paragraphs.size() == 1);
-    REQUIRE(out.descr.elements[1].paragraphs[0].size() == 1);
-    CHECK(text_of(out.descr.elements[1].paragraphs[0][0]) == "Destroys the contained value if there is one.");
+    REQUIRE(body_test::paragraph_count(out.descr.elements[1]) == 1);
+    REQUIRE(body_test::paragraph(out.descr.elements[1], 0).size() == 1);
+    CHECK(text_of(body_test::paragraph(out.descr.elements[1], 0)[0]) ==
+          "Destroys the contained value if there is one.");
 }
 
 TEST_CASE("lower - hardened preconditions remain distinct and precede effects") {
@@ -98,9 +101,9 @@ TEST_CASE("lower - multi-paragraph prose survives") {
                           "//!\n"
                           "//! Second paragraph.\n");
     REQUIRE(out.descr.elements.size() == 1);
-    REQUIRE(out.descr.elements[0].paragraphs.size() == 2);
-    CHECK(text_of(out.descr.elements[0].paragraphs[0][0]) == "First paragraph.");
-    CHECK(text_of(out.descr.elements[0].paragraphs[1][0]) == "Second paragraph.");
+    REQUIRE(body_test::paragraph_count(out.descr.elements[0]) == 2);
+    CHECK(text_of(body_test::paragraph(out.descr.elements[0], 0)[0]) == "First paragraph.");
+    CHECK(text_of(body_test::paragraph(out.descr.elements[0], 1)[0]) == "Second paragraph.");
 }
 
 TEST_CASE("lower - authored items and references become semantic IR") {
@@ -109,17 +112,18 @@ TEST_CASE("lower - authored items and references become semantic IR") {
                           "//! \\item `B` follows \\iref{external.requirements}.\n");
     REQUIRE(out.descr.elements.size() == 1);
     const ir::DescriptionElement& constraints = out.descr.elements.front();
-    REQUIRE(constraints.paragraphs.size() == 1);
-    CHECK(text_of(constraints.paragraphs.front().front()) == "All of:");
-    REQUIRE(constraints.itemize.has_value());
-    REQUIRE(constraints.itemize->items.size() == 2);
-    CHECK(code_of(constraints.itemize->items.at(0).at(0)) == "A");
-    CHECK(text_of(constraints.itemize->items.at(0).back()) == ",");
-    REQUIRE(constraints.itemize->items.at(1).size() == 4);
-    CHECK(code_of(constraints.itemize->items.at(1).at(0)) == "B");
-    CHECK(text_of(constraints.itemize->items.at(1).at(1)) == " follows ");
-    CHECK(std::get<ir::RefInline>(constraints.itemize->items.at(1).at(2)).stable_name == "external.requirements");
-    CHECK(text_of(constraints.itemize->items.at(1).at(3)) == ".");
+    REQUIRE(body_test::paragraph_count(constraints) == 1);
+    CHECK(text_of(body_test::paragraph(constraints).front()) == "All of:");
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(constraints) != nullptr));
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.size() == 2);
+    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).at(0)) == "A");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).back()) == ",");
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).size() == 4);
+    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(0)) == "B");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(1)) == " follows ");
+    CHECK(std::get<ir::RefInline>(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(2))
+              .stable_name == "external.requirements");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(3)) == ".");
 }
 
 TEST_CASE("lower - authored two-dimensional tables become semantic IR") {
@@ -132,8 +136,8 @@ TEST_CASE("lower - authored two-dimensional tables become semantic IR") {
                           "//! \\cell initialize from `*rhs`.\n"
                           "//! \\endlib2dtab2\n");
     REQUIRE(out.descr.elements.size() == 1);
-    const auto& table = out.descr.elements.front().table;
-    REQUIRE(table.has_value());
+    const auto& table = body_test::first<beman::specgen::ir::Table2D>(out.descr.elements.front());
+    REQUIRE((table != nullptr));
     CHECK(table->stable_name == "optional.assign.copy");
     CHECK(text_of(table->caption.front()) == "Assignment effects");
     CHECK(code_of(table->column1.front()) == "*this");
@@ -151,8 +155,8 @@ TEST_CASE("lower - authored flat two-column tables become semantic IR") {
                           "//! \\cell the input holds an invalid `byte`.\n"
                           "//! \\endlibtab2\n");
     REQUIRE(out.descr.elements.size() == 1);
-    const auto& table = out.descr.elements.front().flat_table;
-    REQUIRE(table.has_value());
+    const auto& table = body_test::first<beman::specgen::ir::Table1D>(out.descr.elements.front());
+    REQUIRE((table != nullptr));
     CHECK(table->stable_name == "demo.errors.tab");
     CHECK(text_of(table->caption.front()) == "Enum class errors");
     CHECK(text_of(table->column1.front()) == "Constant");

@@ -1003,6 +1003,13 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.6.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.8.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
+
+### Saved IR compatibility
+
+Newly emitted item nodes use `item-v2` and ordered description bodies. Updated
+renderers still read the earlier `item` nodes and paragraph/list/table slots.
+Older renderers reject `item-v2`, so saved wording cannot disappear through
+unknown-field skipping. Regenerate saved IR when moving to the new writer.

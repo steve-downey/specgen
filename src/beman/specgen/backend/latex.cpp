@@ -168,122 +168,76 @@ std::string render_index(const ir::IndexEntry& entry) {
             [&] { return std::format("\\indexlibrarymisc{{{}}}{{{}}}%\n", entry.name, entry.parent); }));
 }
 
-// One DescriptionElement's \pnum blocks, in emission order. Each entry is
-// one already-terminated \pnum unit; the caller joins these -- and every
-// other element's blocks -- with a blank-line separator (decision
-// backend-direct-algebra:
-// separation is a property of the join, not a `bool& first` thread spanning
-// the whole itemdescr).
-//
-// The element macro name (\constraints, \mandates, ...) is ElementKind's own
-// spelling; it appears exactly once, on whichever block is emitted first.
-std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
-                                        const std::vector<ir::Table2D>& tables,
-                                        const std::vector<ir::Table1D>& flat_tables) {
-    std::vector<std::string> blocks;
-    const std::string        macro = "\\" + std::string(ir::element_name(element.kind)) + '\n';
+// One block's rendering and paragraph-boundary policy. Lists and tables
+// belong to the preceding numbered paragraph; an extracted body starts one.
+struct RenderedBodyBlock {
+    std::string text;
+    bool        starts_paragraph = false;
+    bool        inline_label     = false;
+};
 
-    if (!element.paragraphs.empty()) {
-        // The first paragraph's block carries the macro; the rest are bare
-        // \pnum units -- named by position (front / drop(1)), not by a
-        // pointer-identity test inside a loop.
-        blocks.push_back("\\pnum\n" + macro + render_paragraph(element.paragraphs.front()) + '\n');
-        blocks.append_range(element.paragraphs | std::views::drop(1) |
-                            std::views::transform(
-                                [](const ir::Paragraph& para) { return "\\pnum\n" + render_paragraph(para) + '\n'; }));
-    }
+struct BodyRenderer {
+    // Authored prose retains its paragraph boundary or explicit continuation.
+    RenderedBodyBlock operator()(const ir::BodyParagraph& p) const;
+    // Itemizations stay in the paragraph they enumerate.
+    RenderedBodyBlock operator()(const ir::Itemize& list) const;
+    // Every authored table remains in its source position.
+    RenderedBodyBlock operator()(const ir::Table2D& t) const;
+    RenderedBodyBlock operator()(const ir::Table1D& t) const;
+    // Extraction retains its semantic introduction and its own paragraph.
+    RenderedBodyBlock operator()(const ir::EquivalentTo& e) const;
+};
 
-    if (element.itemize) {
-        const std::string items        = element.itemize->items | std::views::transform([](const ir::Paragraph& item) {
-                                      return "\\item " + render_paragraph(item) + '\n';
-                                         }) |
-                                         std::views::join | std::ranges::to<std::string>();
-        const std::string itemize_text = "\\begin{itemize}\n" + items + "\\end{itemize}\n";
+RenderedBodyBlock BodyRenderer::operator()(const ir::BodyParagraph& p) const {
+    return {render_paragraph(p.text) + '\n', !p.continuation, true};
+}
 
-        // A list belongs to the numbered paragraph it enumerates: it follows
-        // the lead-in prose (folded into that paragraph's own block, no new
-        // \pnum) when one exists, or opens its own \pnum block -- with the
-        // macro, since it is then the element's only content -- when it is
-        // the whole content.
-        if (blocks.empty())
-            blocks.push_back("\\pnum\n" + macro + itemize_text);
-        else
-            blocks.back() += itemize_text;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
+    const std::string items =
+        list.items |
+        std::views::transform([](const ir::Paragraph& p) { return "\\item " + render_paragraph(p) + '\n'; }) |
+        std::views::join | std::ranges::to<std::string>();
+    return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", false, false};
+}
 
-    const std::string rendered_tables =
-        tables | std::views::transform(render_table) | std::views::join | std::ranges::to<std::string>();
-    if (!rendered_tables.empty()) {
-        if (blocks.empty())
-            blocks.push_back("\\pnum\n" + macro + rendered_tables);
-        else
-            blocks.back() += rendered_tables;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
 
-    const std::string rendered_flat_tables =
-        flat_tables | std::views::transform(render_flat_table) | std::views::join | std::ranges::to<std::string>();
-    if (!rendered_flat_tables.empty()) {
-        if (blocks.empty())
-            blocks.push_back("\\pnum\n" + macro + rendered_flat_tables);
-        else
-            blocks.back() += rendered_flat_tables;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Table1D& t) const { return {render_flat_table(t), false, false}; }
 
-    if (element.equivalent) {
-        // The macro is written once per element, by whichever block comes
-        // first; "Equivalent to:" always opens a fresh \pnum of its own.
-        const bool needs_macro = blocks.empty();
-        blocks.push_back("\\pnum\n" + (needs_macro ? macro : std::string{}) + "Equivalent to:\n" +
-                         render_codeblock(element.equivalent->code));
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
+    return {"Equivalent to:\n" + render_codeblock(e.code), true, true};
+}
 
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element) {
+    const std::string label  = std::format("\\{}\n", ir::element_name(element.kind));
+    auto              blocks = std::ranges::fold_left(
+        element.body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
+            auto       rendered = std::visit(overloaded{BodyRenderer{}}, block);
+            const bool first    = out.empty();
+            if (first || rendered.starts_paragraph) {
+                out.push_back("\\pnum\n" + (first ? label : std::string{}) + rendered.text);
+            } else {
+                out.back() += rendered.text;
+            }
+            return out;
+        });
     return blocks;
 }
 
-// (design §5.2): an authored `\mandates`/`\constraints` element and
-// code's derived twin are one description in the draft's eyes, not two --
-// `ir::canonicalize` (ir.cpp) already sorts the derived one first within its
-// kind ("derived conjuncts first, authored prose appended"), so folding a
-// run of same-kind elements into one before `element_blocks` sees it is
-// enough to get a single macro emission with the derived conjuncts leading
-// and the authored prose appended, with no `element_blocks` change at all.
-// A run of length 1 -- every kind but Constraints/Mandates, and either of
-// those without an authored/derived pair -- copies its one element through
-// unchanged.
+// Canonicalization orders derived evidence before authored wording. Merge
+// complete bodies so a list, continuation, or table never crosses its prose.
 ir::DescriptionElement merge_element_group(std::ranges::range auto&& group) {
     ir::DescriptionElement out;
     out.kind = std::ranges::begin(group)->kind;
-
-    out.paragraphs = group |
-                     std::views::transform([](const ir::DescriptionElement& e) -> const std::vector<ir::Paragraph>& {
-                         return e.paragraphs;
-                     }) |
-                     std::views::join | std::ranges::to<std::vector>();
-
-    std::vector<ir::Paragraph> items =
-        group | std::views::filter([](const auto& e) { return e.itemize.has_value(); }) |
-        std::views::transform([](const auto& e) -> const std::vector<ir::Paragraph>& { return e.itemize->items; }) |
-        std::views::join | std::ranges::to<std::vector>();
-    if (!items.empty())
-        out.itemize = ir::Itemize{std::move(items)};
-
-    const auto with_equivalent = std::ranges::find_if(group, [](const auto& e) { return e.equivalent.has_value(); });
-    if (with_equivalent != std::ranges::end(group))
-        out.equivalent = with_equivalent->equivalent;
-
+    out.body = ir::coalesce_itemizations(
+        group |
+        std::views::transform([](const ir::DescriptionElement& e) -> const ir::DescriptionBody& { return e.body; }) |
+        std::views::join | std::ranges::to<ir::DescriptionBody>());
     return out;
 }
 
 std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
-    const std::vector<ir::Table2D> tables =
-        group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
-        std::views::transform([](const auto& e) -> const ir::Table2D& { return *e.table; }) |
-        std::ranges::to<std::vector>();
-    const std::vector<ir::Table1D> flat_tables =
-        group | std::views::filter([](const auto& e) { return e.flat_table.has_value(); }) |
-        std::views::transform([](const auto& e) -> const ir::Table1D& { return *e.flat_table; }) |
-        std::ranges::to<std::vector>();
-    return element_blocks(merge_element_group(group), tables, flat_tables);
+    return element_blocks(merge_element_group(group));
 }
 
 std::string render_item(const ir::SpecItem& item) {

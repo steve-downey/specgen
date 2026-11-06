@@ -11,6 +11,10 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <optional>
+#include <ranges>
+#include <utility>
+#include <vector>
 #include <variant>
 
 namespace beman::specgen::ir {
@@ -149,18 +153,103 @@ struct json_descriptor<Table1D> {
 };
 
 template <>
-struct json_descriptor<DescriptionElement> {
+struct json_descriptor<ir::BodyParagraph> {
+    static constexpr auto members =
+        std::tuple{field("text", &ir::BodyParagraph::text), field("continuation", &ir::BodyParagraph::continuation)};
+};
+
+template <>
+struct json_descriptor<Itemize> {
+    static constexpr auto members = std::tuple{field("items", &Itemize::items)};
+};
+
+template <>
+struct json_descriptor<EquivalentTo> {
+    static constexpr auto members = std::tuple{field("code", &EquivalentTo::code)};
+};
+
+template <>
+struct json_descriptor<ir::BodyBlock> {
+    static constexpr auto alts = alternatives("block",
+                                              "description block",
+                                              alt<ir::BodyParagraph>("paragraph"),
+                                              alt<Itemize>("itemize"),
+                                              alt<Table2D>("table"),
+                                              alt<Table1D>("flat-table"),
+                                              alt<EquivalentTo>("equivalent"));
+};
+
+// Temporary migration carrier, never a second representation in semantic IR.
+// Optional legacy fields are read but never emitted by to_representation.
+struct ElementWire {
+    ir::ElementKind                           kind = ir::ElementKind::Effects;
+    std::optional<ir::DescriptionBody>        body;
+    std::optional<std::vector<ir::Paragraph>> paragraphs;
+    std::optional<Itemize>                    itemize;
+    std::optional<Table2D>                    table;
+    std::optional<Table1D>                    flat_table;
+    std::optional<EquivalentTo>               equivalent;
+    bool                                      derived = false;
+    std::vector<ir::Paragraph>                conjuncts;
+};
+
+template <>
+struct json_descriptor<ElementWire> {
     static constexpr auto members = std::tuple{
-        enum_field("kind", &DescriptionElement::kind, element_name, element_from_name, "element kind"),
-        field("paragraphs", &DescriptionElement::paragraphs),
-        optional_projected_field("itemize", &DescriptionElement::itemize, &Itemize::items),
-        optional_field("table", &DescriptionElement::table),
-        optional_field("flat_table", &DescriptionElement::flat_table),
-        optional_projected_field("equivalent", &DescriptionElement::equivalent, &EquivalentTo::code),
-        field("derived", &DescriptionElement::derived),
-        field("conjuncts", &DescriptionElement::conjuncts),
+        enum_field("kind", &ElementWire::kind, element_name, element_from_name, "element kind"),
+        optional_field("body", &ElementWire::body),
+        optional_field("paragraphs", &ElementWire::paragraphs),
+        optional_projected_field("itemize", &ElementWire::itemize, &Itemize::items),
+        optional_field("table", &ElementWire::table),
+        optional_field("flat_table", &ElementWire::flat_table),
+        optional_projected_field("equivalent", &ElementWire::equivalent, &EquivalentTo::code),
+        field("derived", &ElementWire::derived),
+        field("conjuncts", &ElementWire::conjuncts),
     };
 };
+
+template <>
+struct json_descriptor<DescriptionElement> {
+    using representation = ElementWire;
+    static representation to_representation(const DescriptionElement&);
+    static bool           from_representation(Reader&, representation, DescriptionElement&);
+};
+
+ElementWire json_descriptor<DescriptionElement>::to_representation(const DescriptionElement& e) {
+    ElementWire w;
+    w.kind      = e.kind;
+    w.body      = e.body;
+    w.derived   = e.derived;
+    w.conjuncts = e.conjuncts;
+    return w;
+}
+
+bool json_descriptor<DescriptionElement>::from_representation(Reader& r, ElementWire w, DescriptionElement& e) {
+    if (w.body && (w.paragraphs || w.itemize || w.table || w.flat_table || w.equivalent))
+        return r.fail("description mixes ordered body and legacy fields");
+    e           = DescriptionElement{};
+    e.kind      = w.kind;
+    e.derived   = w.derived;
+    e.conjuncts = std::move(w.conjuncts);
+    if (w.body) {
+        e.body = std::move(*w.body);
+    } else {
+        if (w.paragraphs)
+            e.body = std::move(*w.paragraphs) | std::views::as_rvalue |
+                     std::views::transform(
+                         [](ir::Paragraph p) -> ir::BodyBlock { return ir::BodyParagraph{std::move(p)}; }) |
+                     std::ranges::to<ir::DescriptionBody>();
+        if (w.itemize)
+            e.body.push_back(std::move(*w.itemize));
+        if (w.table)
+            e.body.push_back(std::move(*w.table));
+        if (w.flat_table)
+            e.body.push_back(std::move(*w.flat_table));
+        if (w.equivalent)
+            e.body.push_back(std::move(*w.equivalent));
+    }
+    return true;
+}
 
 template <>
 struct json_descriptor<ItemDescr> {
@@ -242,7 +331,7 @@ struct json_descriptor<Node> {
                                               "node type",
                                               alt<Section>("section"),
                                               alt<Synopsis>("synopsis"),
-                                              alt<SpecItem>("item"),
+                                              alt<SpecItem>("item-v2", "item"),
                                               alt<FreeParagraph>("para"));
 };
 

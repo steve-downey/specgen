@@ -30,7 +30,6 @@
 
 #include <algorithm>
 #include <functional>
-#include <optional>
 #include <ranges>
 #include <set>
 #include <string>
@@ -138,7 +137,7 @@ bool has_unextracted_body(const clang::FunctionDecl* fn, const clang::SourceMana
     if (suppresses_generated_entity(lowered.directives))
         return false;
     return std::ranges::none_of(lowered.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
-        return element.equivalent.has_value();
+        return !beman::specgen::ir::body_code(element.body).empty();
     });
 }
 

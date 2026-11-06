@@ -54,6 +54,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <variant>
 
 namespace beman::specgen::frontend {
 
@@ -334,7 +335,10 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     namespace ir = beman::specgen::ir;
 
     const auto is_empty_slot = [](const ir::DescriptionElement& el) {
-        return el.equivalent.has_value() && el.equivalent->code.text.empty();
+        return std::ranges::any_of(el.body, [](const ir::BodyBlock& b) {
+            const auto* e = std::get_if<ir::EquivalentTo>(&b);
+            return e != nullptr && e->code.text.empty();
+        });
     };
     if (std::none_of(descr.elements.begin(), descr.elements.end(), is_empty_slot))
         return;
@@ -360,7 +364,10 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     // revisited. Anything that reorders this -- re-reading the filtered range,
     // or caching an iterator across the assignment -- loses that guarantee.
     for (ir::DescriptionElement& el : descr.elements | std::views::filter(is_empty_slot))
-        el.equivalent->code = code;
+        for (auto& block : el.body) { // substrate generic algorithm: fill each extraction placeholder.
+            if (auto* e = std::get_if<ir::EquivalentTo>(&block); e != nullptr && e->code.text.empty())
+                e->code = code;
+        }
 }
 
 // The Returns element `\returns-expr` asks for (design §4.2, issue #143):
@@ -395,9 +402,9 @@ derive_returns_expr(const clang::FunctionDecl*                       fn,
 
     ir::DescriptionElement element;
     element.kind = ir::ElementKind::Returns;
-    element.paragraphs.push_back(ir::Paragraph{
+    element.body.push_back(ir::BodyParagraph{ir::Paragraph{
         ir::CodeInline{expr_code_rewritten(only->getRetValue(), sm, lang_opts, ns_drop_set, expos_set, expos_names)},
-        ir::TextInline{"."}});
+        ir::TextInline{"."}}});
     return element;
 }
 

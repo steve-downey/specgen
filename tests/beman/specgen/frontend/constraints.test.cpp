@@ -24,6 +24,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -72,9 +74,10 @@ TEST_CASE("build_document - a qualifier naming an imported standard declaration 
     const auto* item = std::get_if<ir::SpecItem>(&observers.children.front());
     REQUIRE(item != nullptr);
     REQUIRE(item->descr.elements.size() == 1);
-    REQUIRE(item->descr.elements.front().equivalent.has_value());
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(item->descr.elements.front()) != nullptr));
 
-    const std::string& code = item->descr.elements.front().equivalent->code.text;
+    const std::string& code =
+        body_test::first<beman::specgen::ir::EquivalentTo>(item->descr.elements.front())->code.text;
     CHECK(contains(code, "imported_trait_v<T>"));
     CHECK_FALSE(contains(code, "detail::imported_trait_v"));
     CHECK_FALSE(contains(code, "imported_detail::"));
@@ -165,14 +168,18 @@ TEST_CASE("build_document - spec_constraints.hpp derives Constraints from a trai
     CHECK(item->descr.elements[1].kind == ir::ElementKind::Effects);
 
     const ir::DescriptionElement& constraints = item->descr.elements[0];
-    CHECK(constraints.paragraphs.empty());
-    REQUIRE(constraints.itemize.has_value());
-    REQUIRE(constraints.itemize->items.size() == 4);
+    CHECK((body_test::paragraph_count(constraints) == 0));
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(constraints) != nullptr));
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.size() == 4);
 
-    const std::string concept_item  = paragraph_text(constraints.itemize->items[0]);
-    const std::string trait_item    = paragraph_text(constraints.itemize->items[1]);
-    const std::string negation_item = paragraph_text(constraints.itemize->items[2]);
-    const std::string trait2_item   = paragraph_text(constraints.itemize->items[3]);
+    const std::string concept_item =
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[0]);
+    const std::string trait_item =
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[1]);
+    const std::string negation_item =
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[2]);
+    const std::string trait2_item =
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[3]);
 
     // Concept-id uses the WG21 "`X` models C" form (the concept name renders
     // as a ConceptRef → \libconcept{}), not "`C<X>` is satisfied".
@@ -195,8 +202,8 @@ TEST_CASE("build_document - spec_constraints.hpp derives Constraints from a trai
     const ir::DescriptionElement& authored_constraints = authored_item->descr.elements[0];
     CHECK(authored_constraints.kind == ir::ElementKind::Constraints);
     CHECK_FALSE(authored_constraints.derived);
-    REQUIRE(authored_constraints.paragraphs.size() == 1);
-    CHECK(contains(paragraph_text(authored_constraints.paragraphs[0]), "U is not void"));
+    REQUIRE(body_test::paragraph_count(authored_constraints) == 1);
+    CHECK(contains(paragraph_text(body_test::paragraph(authored_constraints, 0)), "U is not void"));
     REQUIRE(authored_constraints.conjuncts.size() == 2);
     CHECK(contains(paragraph_text(authored_constraints.conjuncts[0]), "is-compatible<T, U> is satisfied"));
     CHECK(contains(paragraph_text(authored_constraints.conjuncts[1]), "is-allowed<U> is true"));
@@ -259,15 +266,16 @@ TEST_CASE("build_document - a requires-clause derives the same wording from eith
     // pair renders as a joined sentence rather than the itemize above.
     const ir::DescriptionElement& head_constraints     = head->descr.elements[0];
     const ir::DescriptionElement& trailing_constraints = trailing->descr.elements[0];
-    CHECK_FALSE(head_constraints.itemize.has_value());
-    REQUIRE(head_constraints.paragraphs.size() == 1);
-    CHECK(paragraph_text(head_constraints.paragraphs[0]) ==
+    CHECK_FALSE((body_test::first<beman::specgen::ir::Itemize>(head_constraints) != nullptr));
+    REQUIRE(body_test::paragraph_count(head_constraints) == 1);
+    CHECK(paragraph_text(body_test::paragraph(head_constraints, 0)) ==
           "is_constructible_v<T, U> is true and is_same_v<U, int> is false.");
 
     // The invariant the issue asks for, stated against the other position
     // rather than against a transcription of it.
-    REQUIRE(trailing_constraints.paragraphs.size() == 1);
-    CHECK(paragraph_text(head_constraints.paragraphs[0]) == paragraph_text(trailing_constraints.paragraphs[0]));
+    REQUIRE(body_test::paragraph_count(trailing_constraints) == 1);
+    CHECK(paragraph_text(body_test::paragraph(head_constraints, 0)) ==
+          paragraph_text(body_test::paragraph(trailing_constraints, 0)));
     REQUIRE(head_constraints.conjuncts.size() == trailing_constraints.conjuncts.size());
     CHECK(std::ranges::equal(head_constraints.conjuncts,
                              trailing_constraints.conjuncts,

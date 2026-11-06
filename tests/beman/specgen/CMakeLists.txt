@@ -13,6 +13,9 @@ unset(_specgen_compile_options)
 list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
 include(Catch)
 
+# Shared assertions inspect ordered description bodies without copying wording.
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+
 foreach(
     component
     ir

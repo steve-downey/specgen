@@ -469,8 +469,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   render as `\exposid`, the leakage checker runs inside prose.
 - `\item` starts an authored item on the current element; nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
-  Once a list starts, another `\item` or element tag must follow, because the IR
-  places an element's prose before its one itemization.
+  The grammar currently requires another `\item` or element tag after a list.
+  The ordered semantic body can also represent a prose continuation (§7).
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
@@ -480,8 +480,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   `\endlib2dtab2`. Non-tag lines continue the active caption, header, or cell.
   The table is terminal within its element. One table is allowed per element
   kind in a docblock; duplicate rows belong in that table rather than in a
-  duplicate same-kind element. Semantic IR retains one optional table per
-  element, and backend same-kind folds preserve every table if diagnostic or
+  duplicate same-kind element. Semantic IR retains tables as ordered body
+  blocks, and backend same-kind folds preserve every table if diagnostic or
   hand-authored IR nevertheless contains more than one. Table prose participates in expos
   rewriting, leakage, drift, and *Throws:* validation like every other authored paragraph.
 - `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
@@ -498,8 +498,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   duplicate rows joining the existing table, expos/leakage/drift/*Throws:*
   participation -- it follows `\lib2dtab2`'s rules exactly; the two table
   kinds do not count against each other's "one table per element kind" limit.
-  Semantic IR keeps a separate optional flat table alongside the
-  two-dimensional one, so an element can in principle carry both.
+  Semantic IR distinguishes both table shapes as ordered body blocks;
+  an element can carry both without imposing an order on them.
 
 All three backends render authored itemizations, prose references, and tables.
 
@@ -820,8 +820,11 @@ deliberate.
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
   `Inline`/`Paragraph` for prose; thirteen `ElementKind`s in canonical
-  [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying prose,
-  one optional trailing `Itemize`, one optional table, and an optional `EquivalentTo` body;
+  [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying
+  one ordered `DescriptionBody`: `BodyParagraph`, `Itemize`, `Table2D`, `Table1D`,
+  or extracted `EquivalentTo` blocks. A paragraph's continuation flag preserves
+  the enclosing numbered paragraph after a list or table. Validator-only
+  `derived`/`conjuncts` evidence remains separate from the rendered body;
   `ItemDecl`/`ItemDescr`/`SpecItem`; `IndexEntry`; `Section`/`Synopsis`/`FreeParagraph`/
   `Document`; and `canonicalize()`. Nodes share a common traversal substrate
   ([node-base-functor](decisions/node-base-functor.md),
@@ -866,12 +869,20 @@ deliberate.
 - **Serializable** (`--emit-ir`): one JSON schema for emit and parse
   ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` (`ir_json.hpp`)
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
-  invariant holding over every node, span, index, element kind, and disposition. The
+  invariant holding over every node, span, index, element kind, and disposition.
+  Legacy description slots normalize to ordered bodies when read. New item nodes
+  use `item-v2`, so older readers reject the changed contract visibly rather than
+  skipping body content (decision [ordered-description-bodies](decisions/ordered-description-bodies.md)).
+  The
   serialized form decouples the wg21org exporter, enables backend-independent golden tests,
   and provides the seam for future IR-level diff markup (add/rm wording generated from two
   header revisions; out of scope, by hand at first).
 
 ## 8. Backends (serializers)
+
+Same-kind element merging concatenates complete bodies in stable order, coalescing
+adjacent itemizations while preserving every table and paragraph boundary. Each
+backend renders blocks in that order and writes an element's label only once.
 
 All backends emit **standalone fragments for transclusion**; the including
 document owns framing. Fragment paths derive from stable names
@@ -1004,7 +1015,9 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    including those folded into a gathered synopsis. A documented one produces wording and an
    undocumented one is an implementation helper (§3.3), so neither has a roster entry
    (issue #141).
-2. **Leakage checker**: every name token in rendered output must resolve to a std-visible
+2. **Leakage checker**: ordered-body paragraph and code collectors cover every body block.
+   Every table is structurally checked, including repeated tables in same-kind elements.
+   Every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
    body. Four clauses at two severities:
    - **Error** if the leak lands in wording text: an itemdecl, an *Equivalent to:* body, or
@@ -1096,6 +1109,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
 ## 10. Testing strategy
 
 - **Grammar unit tests**: parser over strings, no clang.
+- **IR migration tests**: legacy item/description fields normalize into ordered
+  bodies; new bodies round-trip; mixed legacy/new bodies fail. Tagged variants
+  resolve their tag before reading fields, so late tags and overlapping table
+  field names preserve their selected payload.
 - **Golden files per backend**; IR goldens via `--emit-ir`. The golden harness
   ([golden-test-harness](decisions/golden-test-harness.md), `tests/golden/`,
   `run-golden.cmake`) registers each case as ctest → driver → `cmake -E compare_files`, in

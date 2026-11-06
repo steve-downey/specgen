@@ -5,6 +5,7 @@
 
 #include <beman/specgen/frontend/record_members.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/span_sentinels.hpp>
 
 #include <clang/AST/ASTContext.h>
@@ -21,7 +22,6 @@
 #include <cctype>
 #include <cstddef>
 #include <map>
-#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -139,70 +139,91 @@ std::string apply_ref_sentinels(std::string text, unsigned& span_n, std::map<std
     return out;
 }
 
-void rewrite_prose_expos(beman::specgen::ir::ItemDescr& descr, const std::map<std::string, std::string>& spellings) {
-    namespace ir = beman::specgen::ir;
+namespace {
+namespace ir = beman::specgen::ir;
+
+struct ProseExposRewriter {
+    const std::map<std::string, std::string>& spellings;
+    ir::Paragraph                             paragraph(ir::Paragraph) const;
+    // A paragraph, list, and both table shapes carry semantic prose inlines.
+    ir::BodyBlock operator()(ir::BodyParagraph) const;
+    ir::BodyBlock operator()(ir::Itemize) const;
+    ir::BodyBlock operator()(ir::Table2D) const;
+    ir::BodyBlock operator()(ir::Table1D) const;
+    // Extracted code has already been resolved against its AST.
+    ir::BodyBlock operator()(ir::EquivalentTo) const;
+};
+
+ir::Paragraph ProseExposRewriter::paragraph(ir::Paragraph p) const {
+    return std::move(p) | std::views::as_rvalue | std::views::transform([this](ir::Inline piece) {
+               auto* code = std::get_if<ir::CodeInline>(&piece);
+               if (code != nullptr && code->code.spans.empty()) {
+                   const auto it = spellings.find(code->code.text);
+                   if (it != spellings.end()) {
+                       code->code.text  = it->second;
+                       code->code.spans = {ir::Span{0, code->code.text.size(), ir::SpanKind::ExposId, it->second}};
+                   }
+               }
+               return piece;
+           }) |
+           std::ranges::to<ir::Paragraph>();
+}
+
+ir::BodyBlock ProseExposRewriter::operator()(ir::BodyParagraph p) const {
+    p.text = paragraph(std::move(p.text));
+    return p;
+}
+
+ir::BodyBlock ProseExposRewriter::operator()(ir::Itemize list) const {
+    list.items = std::move(list.items) | std::views::as_rvalue |
+                 std::views::transform([this](ir::Paragraph p) { return paragraph(std::move(p)); }) |
+                 std::ranges::to<std::vector>();
+    return list;
+}
+
+ir::BodyBlock ProseExposRewriter::operator()(ir::Table2D table) const {
+    table.caption = paragraph(std::move(table.caption));
+    table.column1 = paragraph(std::move(table.column1));
+    table.column2 = paragraph(std::move(table.column2));
+    table.rows    = std::move(table.rows) | std::views::as_rvalue | std::views::transform([this](ir::Table2DRow row) {
+                     row.header = paragraph(std::move(row.header));
+                     row.cell1  = paragraph(std::move(row.cell1));
+                     row.cell2  = paragraph(std::move(row.cell2));
+                     return row;
+                    }) |
+                    std::ranges::to<std::vector>();
+    return table;
+}
+
+ir::BodyBlock ProseExposRewriter::operator()(ir::Table1D table) const {
+    table.caption = paragraph(std::move(table.caption));
+    table.column1 = paragraph(std::move(table.column1));
+    table.column2 = paragraph(std::move(table.column2));
+    table.rows    = std::move(table.rows) | std::views::as_rvalue | std::views::transform([this](ir::Table1DRow row) {
+                     row.cell1 = paragraph(std::move(row.cell1));
+                     row.cell2 = paragraph(std::move(row.cell2));
+                     return row;
+                    }) |
+                    std::ranges::to<std::vector>();
+    return table;
+}
+
+ir::BodyBlock ProseExposRewriter::operator()(ir::EquivalentTo e) const { return e; }
+} // namespace
+
+void rewrite_prose_expos(ir::ItemDescr& descr, const std::map<std::string, std::string>& spellings) {
     if (spellings.empty())
         return;
-    // Each level rebuilds a fresh container via transform rather than
-    // mutating the one it was handed -- a write at the current position is an
-    // append. `ir::Inline`/`ir::Paragraph`/`ir::DescriptionElement` are all
-    // cheap to move (variant-of-strings, vector-of-that), so the rebuild
-    // costs nothing a reference mutation wouldn't already pay for the string
-    // copies inside it.
-    const auto fix_inline = [&](ir::Inline piece) {
-        auto* code = std::get_if<ir::CodeInline>(&piece);
-        if (code == nullptr || !code->code.spans.empty())
-            return piece;
-        const auto it = spellings.find(code->code.text);
-        if (it == spellings.end())
-            return piece;
-        code->code.text  = it->second;
-        code->code.spans = {ir::Span{0, code->code.text.size(), ir::SpanKind::ExposId, it->second}};
-        return piece;
-    };
-    const auto fix_paragraph = [&](ir::Paragraph para) {
-        return std::move(para) | std::views::as_rvalue | std::views::transform(fix_inline) |
-               std::ranges::to<ir::Paragraph>();
-    };
-    // Shared by both arms below (prose paragraphs and itemize items) so the
-    // walk over a `vector<Paragraph>` exists exactly once.
-    const auto fix_paragraphs = [&](std::vector<ir::Paragraph> paras) {
-        return std::move(paras) | std::views::as_rvalue | std::views::transform(fix_paragraph) |
-               std::ranges::to<std::vector<ir::Paragraph>>();
-    };
-    const auto fix_element = [&](ir::DescriptionElement el) {
-        el.paragraphs = fix_paragraphs(std::move(el.paragraphs));
-        if (el.itemize)
-            el.itemize->items = fix_paragraphs(std::move(el.itemize->items));
-        if (el.table) {
-            el.table->caption = fix_paragraph(std::move(el.table->caption));
-            el.table->column1 = fix_paragraph(std::move(el.table->column1));
-            el.table->column2 = fix_paragraph(std::move(el.table->column2));
-            el.table->rows    = std::move(el.table->rows) | std::views::as_rvalue |
-                                std::views::transform([&](ir::Table2DRow row) {
-                                 row.header = fix_paragraph(std::move(row.header));
-                                 row.cell1  = fix_paragraph(std::move(row.cell1));
-                                 row.cell2  = fix_paragraph(std::move(row.cell2));
-                                 return row;
-                                }) |
-                                std::ranges::to<std::vector<ir::Table2DRow>>();
-        }
-        if (el.flat_table) {
-            el.flat_table->caption = fix_paragraph(std::move(el.flat_table->caption));
-            el.flat_table->column1 = fix_paragraph(std::move(el.flat_table->column1));
-            el.flat_table->column2 = fix_paragraph(std::move(el.flat_table->column2));
-            el.flat_table->rows    = std::move(el.flat_table->rows) | std::views::as_rvalue |
-                                     std::views::transform([&](ir::Table1DRow row) {
-                                      row.cell1 = fix_paragraph(std::move(row.cell1));
-                                      row.cell2 = fix_paragraph(std::move(row.cell2));
-                                      return row;
-                                     }) |
-                                     std::ranges::to<std::vector<ir::Table1DRow>>();
-        }
-        return el;
-    };
-    descr.elements = std::move(descr.elements) | std::views::as_rvalue | std::views::transform(fix_element) |
-                     std::ranges::to<std::vector<ir::DescriptionElement>>();
+    const ProseExposRewriter rewrite{spellings};
+    descr.elements =
+        std::move(descr.elements) | std::views::as_rvalue | std::views::transform([&](ir::DescriptionElement e) {
+            e.body = std::move(e.body) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
+                         return std::visit(foundation::overloaded{rewrite}, std::move(b));
+                     }) |
+                     std::ranges::to<ir::DescriptionBody>();
+            return e;
+        }) |
+        std::ranges::to<std::vector>();
 }
 
 } // namespace beman::specgen::frontend

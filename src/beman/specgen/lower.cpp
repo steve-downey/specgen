@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 namespace beman::specgen::lowering {
 
@@ -38,13 +39,16 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
 
 ir::DescriptionElement lower_element(const grammar::Element& element) {
     ir::DescriptionElement lowered;
-    lowered.kind       = element.kind;
-    lowered.paragraphs = element.paragraphs | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>();
+    lowered.kind = element.kind;
+    lowered.body =
+        element.paragraphs |
+        std::views::transform([](const auto& p) -> ir::BodyBlock { return ir::BodyParagraph{lower_paragraph(p)}; }) |
+        std::ranges::to<std::vector>();
     if (!element.items.empty())
-        lowered.itemize =
-            ir::Itemize{element.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()};
+        lowered.body.push_back(
+            ir::Itemize{element.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()});
     if (element.table) {
-        lowered.table = ir::Table2D{
+        lowered.body.push_back(ir::Table2D{
             .stable_name = element.table->stable_name,
             .caption     = lower_paragraph(element.table->caption),
             .column1     = lower_paragraph(element.table->column1),
@@ -55,10 +59,10 @@ ir::DescriptionElement lower_element(const grammar::Element& element) {
                                               .cell2  = lower_paragraph(row.cell2)};
                            }) |
                            std::ranges::to<std::vector>(),
-        };
+        });
     }
     if (element.flat_table) {
-        lowered.flat_table = ir::Table1D{
+        lowered.body.push_back(ir::Table1D{
             .stable_name = element.flat_table->stable_name,
             .caption     = lower_paragraph(element.flat_table->caption),
             .column1     = lower_paragraph(element.flat_table->column1),
@@ -68,7 +72,7 @@ ir::DescriptionElement lower_element(const grammar::Element& element) {
                                               .cell2 = lower_paragraph(row.cell2)};
                            }) |
                            std::ranges::to<std::vector>(),
-        };
+        });
     }
     return lowered;
 }
@@ -77,8 +81,8 @@ ir::DescriptionElement lower_element(const grammar::Element& element) {
 // code is a placeholder; the front end fills the code from the definition body.
 void append_extraction(ir::ItemDescr& descr, ir::ElementKind kind) {
     ir::DescriptionElement element;
-    element.kind       = kind;
-    element.equivalent = ir::EquivalentTo{};
+    element.kind = kind;
+    element.body.push_back(ir::EquivalentTo{});
     descr.elements.push_back(std::move(element));
 }
 

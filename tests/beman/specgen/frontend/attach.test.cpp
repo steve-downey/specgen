@@ -15,6 +15,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -76,9 +78,9 @@ TEST_CASE("build_document - documented namespace free-function definitions becom
     // is renamed to the itemdecl's name (issue #160).
     REQUIRE(inspect->descr.elements.size() == 1);
     CHECK(inspect->descr.elements.front().kind == ir::ElementKind::Returns);
-    CHECK_FALSE(inspect->descr.elements.front().equivalent.has_value());
-    REQUIRE(inspect->descr.elements.front().paragraphs.size() == 1);
-    const auto* returned = std::get_if<ir::CodeInline>(&inspect->descr.elements.front().paragraphs.front().at(0));
+    CHECK_FALSE((body_test::first<beman::specgen::ir::EquivalentTo>(inspect->descr.elements.front()) != nullptr));
+    REQUIRE(body_test::paragraph_count(inspect->descr.elements.front()) == 1);
+    const auto* returned = std::get_if<ir::CodeInline>(&body_test::paragraph(inspect->descr.elements.front()).at(0));
     REQUIRE(returned != nullptr);
     CHECK(returned->code.text == "declared_value");
     REQUIRE(inspect->decl.index.size() == 1);
@@ -260,13 +262,15 @@ TEST_CASE("build_document - spec_attach.hpp attaches itemdecl/itemdescr to each 
         return out;
     };
 
-    REQUIRE(top_nonconst->descr.elements[0].paragraphs.size() == 1);
-    CHECK(contains(paragraph_text(top_nonconst->descr.elements[0].paragraphs[0]), "A reference to the top element."));
+    REQUIRE(body_test::paragraph_count(top_nonconst->descr.elements[0]) == 1);
+    CHECK(contains(paragraph_text(body_test::paragraph(top_nonconst->descr.elements[0], 0)),
+                   "A reference to the top element."));
 
-    REQUIRE(top_const->descr.elements[0].paragraphs.size() == 1);
-    CHECK(contains(paragraph_text(top_const->descr.elements[0].paragraphs[0]), "A reference to the top element."));
+    REQUIRE(body_test::paragraph_count(top_const->descr.elements[0]) == 1);
+    CHECK(contains(paragraph_text(body_test::paragraph(top_const->descr.elements[0], 0)),
+                   "A reference to the top element."));
 
-    REQUIRE(push->descr.elements[0].paragraphs.size() == 1);
-    CHECK(contains(paragraph_text(push->descr.elements[0].paragraphs[0]), "Adds"));
-    CHECK(contains(paragraph_text(push->descr.elements[0].paragraphs[0]), "to the stack."));
+    REQUIRE(body_test::paragraph_count(push->descr.elements[0]) == 1);
+    CHECK(contains(paragraph_text(body_test::paragraph(push->descr.elements[0], 0)), "Adds"));
+    CHECK(contains(paragraph_text(body_test::paragraph(push->descr.elements[0], 0)), "to the stack."));
 }

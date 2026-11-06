@@ -176,122 +176,77 @@ std::string render_flat_table(const ir::Table1D& table) {
 
 // --- items --------------------------------------------------------------
 
-// One DescriptionElement's numbered paragraphs, in emission order -- the
-// counterpart of latex.cpp's element_blocks, block for block. Each entry is
-// one already-terminated `[#]{.pnum}` unit; the caller joins these, and every
-// other element's, with a blank-line separator.
-//
-// The element's label ("*Effects*: ") comes from backend::element_label and
-// appears exactly once, on whichever block is emitted first -- the same rule
-// the LaTeX backend applies to its `\effects` macro.
-std::vector<std::string> element_blocks(const ir::DescriptionElement&   element,
-                                        const std::vector<ir::Table2D>& tables,
-                                        const std::vector<ir::Table1D>& flat_tables) {
-    std::vector<std::string> blocks;
-    const std::string        label = std::format("*{}*: ", backend::element_label(element.kind));
+// One block's rendering and paragraph-boundary policy. Lists and tables
+// belong to the preceding numbered paragraph; an extracted body starts one.
+struct RenderedBodyBlock {
+    std::string text;
+    bool        starts_paragraph = false;
+    bool        inline_label     = false;
+};
 
-    if (!element.paragraphs.empty()) {
-        blocks.push_back("[#]{.pnum} " + label + render_paragraph(element.paragraphs.front()) + '\n');
-        blocks.append_range(element.paragraphs | std::views::drop(1) |
-                            std::views::transform([](const ir::Paragraph& para) {
-                                return "[#]{.pnum} " + render_paragraph(para) + '\n';
-                            }));
-    }
+struct BodyRenderer {
+    // Authored prose retains its paragraph boundary or explicit continuation.
+    RenderedBodyBlock operator()(const ir::BodyParagraph& p) const;
+    // Itemizations stay in the paragraph they enumerate.
+    RenderedBodyBlock operator()(const ir::Itemize& list) const;
+    // Every authored table remains in its source position.
+    RenderedBodyBlock operator()(const ir::Table2D& t) const;
+    RenderedBodyBlock operator()(const ir::Table1D& t) const;
+    // Extraction retains its semantic introduction and its own paragraph.
+    RenderedBodyBlock operator()(const ir::EquivalentTo& e) const;
+};
 
-    if (element.itemize) {
-        // A bulleted sublist of a numbered paragraph is numbered (6.1), (6.2)
-        // in the draft, which is exactly what `[#.#]{.pnum}` produces inside a
-        // `::: wording` div. The blank line before the list is required:
-        // without it pandoc reads the first bullet as a lazy continuation of
-        // the lead-in paragraph.
-        const std::string items = element.itemize->items | std::views::transform([](const ir::Paragraph& item) {
-                                      return "- [#.#]{.pnum} " + render_paragraph(item) + '\n';
-                                  }) |
-                                  std::views::join | std::ranges::to<std::string>();
+RenderedBodyBlock BodyRenderer::operator()(const ir::BodyParagraph& p) const {
+    return {render_paragraph(p.text) + '\n', !p.continuation, true};
+}
 
-        // Same placement rule as the LaTeX backend: the list belongs to the
-        // paragraph it enumerates, so it follows the lead-in prose when there
-        // is one and opens its own numbered paragraph -- carrying the label,
-        // since it is then the element's only content -- when there is not.
-        if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:", backend::element_label(element.kind)) + "\n\n" +
-                             items);
-        else
-            blocks.back() += '\n' + items;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Itemize& list) const {
+    const std::string items =
+        list.items |
+        std::views::transform([](const ir::Paragraph& p) { return "- [#.#]{.pnum} " + render_paragraph(p) + '\n'; }) |
+        std::views::join | std::ranges::to<std::string>();
+    return {items, false, false};
+}
 
-    const std::string rendered_tables =
-        tables | std::views::transform(render_table) | std::views::join_with('\n') | std::ranges::to<std::string>();
-    if (!rendered_tables.empty()) {
-        if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", backend::element_label(element.kind)) +
-                             rendered_tables);
-        else
-            blocks.back() += '\n' + rendered_tables;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
 
-    const std::string rendered_flat_tables = flat_tables | std::views::transform(render_flat_table) |
-                                             std::views::join_with('\n') | std::ranges::to<std::string>();
-    if (!rendered_flat_tables.empty()) {
-        if (blocks.empty())
-            blocks.push_back("[#]{.pnum} " + std::format("*{}*:\n\n", backend::element_label(element.kind)) +
-                             rendered_flat_tables);
-        else
-            blocks.back() += '\n' + rendered_flat_tables;
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::Table1D& t) const { return {render_flat_table(t), false, false}; }
 
-    if (element.equivalent) {
-        const bool needs_label = blocks.empty();
-        blocks.push_back("[#]{.pnum} " + (needs_label ? label : std::string{}) + "Equivalent to:\n\n" +
-                         render_codeblock(element.equivalent->code));
-    }
+RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
+    return {"Equivalent to:\n\n" + render_codeblock(e.code), true, true};
+}
 
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element) {
+    const std::string label  = std::format("*{}*", backend::element_label(element.kind));
+    auto              blocks = std::ranges::fold_left(
+        element.body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
+            auto       rendered = std::visit(overloaded{BodyRenderer{}}, block);
+            const bool first    = out.empty();
+            if (first || rendered.starts_paragraph) {
+                const std::string prefix = first ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
+                out.push_back("[#]{.pnum} " + prefix + rendered.text);
+            } else {
+                out.back() += '\n' + rendered.text;
+            }
+            return out;
+        });
     return blocks;
 }
 
-// (design §5.2): an authored `\mandates`/`\constraints` and code's
-// derived twin are one description, so a run of same-kind elements folds into
-// one before rendering and the label is emitted once. Behaviourally identical
-// to latex.cpp's merge_element_group; kept as its own copy rather than hoisted
-// into a shared backend component because it is three lines of ranges over a type both
-// backends already see, and a shared helper here would be the wrong seam --
-// what the two backends share is the *substrate* (RenderF, render_code_spans),
-// not their item-assembly policy, which is where a third backend is most
-// likely to differ.
+// Canonicalization orders derived evidence before authored wording. Merge
+// complete bodies so a list, continuation, or table never crosses its prose.
 ir::DescriptionElement merge_element_group(std::ranges::range auto&& group) {
     ir::DescriptionElement out;
     out.kind = std::ranges::begin(group)->kind;
-
-    out.paragraphs = group |
-                     std::views::transform([](const ir::DescriptionElement& e) -> const std::vector<ir::Paragraph>& {
-                         return e.paragraphs;
-                     }) |
-                     std::views::join | std::ranges::to<std::vector>();
-
-    std::vector<ir::Paragraph> items =
-        group | std::views::filter([](const auto& e) { return e.itemize.has_value(); }) |
-        std::views::transform([](const auto& e) -> const std::vector<ir::Paragraph>& { return e.itemize->items; }) |
-        std::views::join | std::ranges::to<std::vector>();
-    if (!items.empty())
-        out.itemize = ir::Itemize{std::move(items)};
-
-    const auto with_equivalent = std::ranges::find_if(group, [](const auto& e) { return e.equivalent.has_value(); });
-    if (with_equivalent != std::ranges::end(group))
-        out.equivalent = with_equivalent->equivalent;
-
+    out.body = ir::coalesce_itemizations(
+        group |
+        std::views::transform([](const ir::DescriptionElement& e) -> const ir::DescriptionBody& { return e.body; }) |
+        std::views::join | std::ranges::to<ir::DescriptionBody>());
     return out;
 }
 
 std::vector<std::string> element_group_blocks(std::ranges::range auto&& group) {
-    const std::vector<ir::Table2D> tables =
-        group | std::views::filter([](const auto& e) { return e.table.has_value(); }) |
-        std::views::transform([](const auto& e) -> const ir::Table2D& { return *e.table; }) |
-        std::ranges::to<std::vector>();
-    const std::vector<ir::Table1D> flat_tables =
-        group | std::views::filter([](const auto& e) { return e.flat_table.has_value(); }) |
-        std::views::transform([](const auto& e) -> const ir::Table1D& { return *e.flat_table; }) |
-        std::ranges::to<std::vector>();
-    return element_blocks(merge_element_group(group), tables, flat_tables);
+    return element_blocks(merge_element_group(group));
 }
 
 std::string render_item(const ir::SpecItem& item) {

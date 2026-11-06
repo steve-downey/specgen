@@ -217,7 +217,7 @@ TEST_CASE("ir_fold - a fold_with algebra over NodeF reproduces the descriptor en
         "{\"type\":\"synopsis\",\"name\":\"\",\"code\":{\"text\":\"int x;\",\"spans\":[]},\"roster\":[]},"
         "{\"type\":\"para\",\"content\":[{\"t\":\"text\",\"text\":\"hello\"}]}"
         "]},"
-        "{\"type\":\"item\",\"decl\":{\"signatures\":[],\"index\":[],\"entities\":[]},\"descr\":{\"elements\":[]}}"
+        "{\"type\":\"item-v2\",\"decl\":{\"signatures\":[],\"index\":[],\"entities\":[]},\"descr\":{\"elements\":[]}}"
         "]}";
 
     // The fold reproduces the schema spelled out above...
