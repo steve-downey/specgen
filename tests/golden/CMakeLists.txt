@@ -2107,6 +2107,28 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_end/expected.json"
 )
 
+specgen_add_golden(
+    resume_description_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_resume_description.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resume_description"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

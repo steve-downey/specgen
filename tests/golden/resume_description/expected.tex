@@ -1,0 +1,56 @@
+\rSec3[resume.assign]{Assignment}
+
+\indexlibraryglobal{assign}%
+\begin{itemdecl}
+inline void assign();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+The stored value is one of:
+\begin{itemize}
+\item the argument, if a value was supplied; this continuation belongs to the first item.
+\item the previous value, otherwise.
+\end{itemize}
+Otherwise, the object is unchanged.
+
+\pnum
+A separate postcondition paragraph.
+\begin{itemize}
+\item One further guarantee.
+\end{itemize}
+This continues the further guarantee.
+
+\pnum
+\remarks
+A following element remains separate.
+\end{itemdescr}
+
+\rSec3[resume.tables]{Tables}
+
+\indexlibraryglobal{apply}%
+\begin{itemdecl}
+inline void apply();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+The following table applies.
+\begin{libtab2}{Flat table}{resume.flat}{lp{4.5in}}{Condition}{Effect}
+
+A &
+B \\
+\end{libtab2}
+Prose after the flat table.
+\begin{lib2dtab2}{Cross table}{resume.cross}
+{First}
+{Second}
+
+\rowhdr{Row} &
+C &
+D \\
+\end{lib2dtab2}
+Prose after the cross table.
+\end{itemdescr}

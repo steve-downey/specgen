@@ -469,8 +469,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   render as `\exposid`, the leakage checker runs inside prose.
 - `\item` starts an authored item on the current element; nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
-  The grammar currently requires another `\item` or element tag after a list.
-  The ordered semantic body can also represent a prose continuation (§7).
+  Another `\item` after the blank continues that list; prose after the blank
+  resumes the same numbered paragraph. A later `\item` starts another list.
+  A further blank in resumed prose starts a new numbered paragraph.
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
@@ -478,12 +479,10 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   current element. Exactly two `\column` entries precede one or more `\row`
   entries, and each row has exactly two `\cell` entries before
   `\endlib2dtab2`. Non-tag lines continue the active caption, header, or cell.
-  The table is terminal within its element. One table is allowed per element
-  kind in a docblock; duplicate rows belong in that table rather than in a
-  duplicate same-kind element. Semantic IR retains tables as ordered body
-  blocks, and backend same-kind folds preserve every table if diagnostic or
-  hand-authored IR nevertheless contains more than one. Table prose participates in expos
-  rewriting, leakage, drift, and *Throws:* validation like every other authored paragraph.
+  After the explicit terminator, prose resumes the element in its authored
+  position without another paragraph number. Several tables may occur in one
+  element. Table prose participates in expos rewriting, leakage, drift, and
+  *Throws:* validation like every other authored paragraph.
 - `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
   current element (issue #74) -- the shape [fs.enum.file.type] and its
   neighbours use for an enumeration's meanings, one row per enumerator, with
@@ -493,13 +492,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   `\libtab2` shares `\column`/`\row`/`\cell` with `\lib2dtab2`: exactly two
   `\column` entries precede one or more `\row` entries, but each row has
   exactly *one* `\cell` entry (the `\row` tag's own trailing text is the
-  row's first column) before `\endlibtab2`. In every other respect --
-  terminal within its element, one table of a given kind per element kind,
-  duplicate rows joining the existing table, expos/leakage/drift/*Throws:*
-  participation -- it follows `\lib2dtab2`'s rules exactly; the two table
-  kinds do not count against each other's "one table per element kind" limit.
-  Semantic IR distinguishes both table shapes as ordered body blocks;
-  an element can carry both without imposing an order on them.
+  row's first column) before `\endlibtab2`. It follows the same ordering and
+  prose continuation rules as `\lib2dtab2`.
 
 All three backends render authored itemizations, prose references, and tables.
 

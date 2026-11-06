@@ -37,44 +37,50 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
            std::ranges::to<ir::Paragraph>();
 }
 
+struct BodyLowerer {
+    ir::BodyBlock operator()(const grammar::BodyParagraph&) const;
+    ir::BodyBlock operator()(const grammar::Itemize&) const;
+    ir::BodyBlock operator()(const grammar::Table2D&) const;
+    ir::BodyBlock operator()(const grammar::Table1D&) const;
+};
+
+ir::BodyBlock BodyLowerer::operator()(const grammar::BodyParagraph& p) const {
+    return ir::BodyParagraph{lower_paragraph(p.text), p.continuation};
+}
+ir::BodyBlock BodyLowerer::operator()(const grammar::Itemize& list) const {
+    return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()};
+}
+ir::BodyBlock BodyLowerer::operator()(const grammar::Table2D& table) const {
+    return ir::Table2D{.stable_name = table.stable_name,
+                       .caption     = lower_paragraph(table.caption),
+                       .column1     = lower_paragraph(table.column1),
+                       .column2     = lower_paragraph(table.column2),
+                       .rows        = table.rows | std::views::transform([](const grammar::Table2DRow& row) {
+                                   return ir::Table2DRow{lower_paragraph(row.header),
+                                                         lower_paragraph(row.cell1),
+                                                         lower_paragraph(row.cell2)};
+                                      }) |
+                                      std::ranges::to<std::vector>()};
+}
+ir::BodyBlock BodyLowerer::operator()(const grammar::Table1D& table) const {
+    return ir::Table1D{.stable_name = table.stable_name,
+                       .caption     = lower_paragraph(table.caption),
+                       .column1     = lower_paragraph(table.column1),
+                       .column2     = lower_paragraph(table.column2),
+                       .rows        = table.rows | std::views::transform([](const grammar::Table1DRow& row) {
+                                   return ir::Table1DRow{lower_paragraph(row.cell1), lower_paragraph(row.cell2)};
+                                      }) |
+                                      std::ranges::to<std::vector>()};
+}
+
 ir::DescriptionElement lower_element(const grammar::Element& element) {
-    ir::DescriptionElement lowered;
-    lowered.kind = element.kind;
-    lowered.body =
-        element.paragraphs |
-        std::views::transform([](const auto& p) -> ir::BodyBlock { return ir::BodyParagraph{lower_paragraph(p)}; }) |
-        std::ranges::to<std::vector>();
-    if (!element.items.empty())
-        lowered.body.push_back(
-            ir::Itemize{element.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()});
-    if (element.table) {
-        lowered.body.push_back(ir::Table2D{
-            .stable_name = element.table->stable_name,
-            .caption     = lower_paragraph(element.table->caption),
-            .column1     = lower_paragraph(element.table->column1),
-            .column2     = lower_paragraph(element.table->column2),
-            .rows        = element.table->rows | std::views::transform([](const grammar::Table2DRow& row) {
-                        return ir::Table2DRow{.header = lower_paragraph(row.header),
-                                              .cell1  = lower_paragraph(row.cell1),
-                                              .cell2  = lower_paragraph(row.cell2)};
-                           }) |
-                           std::ranges::to<std::vector>(),
-        });
-    }
-    if (element.flat_table) {
-        lowered.body.push_back(ir::Table1D{
-            .stable_name = element.flat_table->stable_name,
-            .caption     = lower_paragraph(element.flat_table->caption),
-            .column1     = lower_paragraph(element.flat_table->column1),
-            .column2     = lower_paragraph(element.flat_table->column2),
-            .rows        = element.flat_table->rows | std::views::transform([](const grammar::Table1DRow& row) {
-                        return ir::Table1DRow{.cell1 = lower_paragraph(row.cell1),
-                                              .cell2 = lower_paragraph(row.cell2)};
-                           }) |
-                           std::ranges::to<std::vector>(),
-        });
-    }
-    return lowered;
+    return ir::DescriptionElement{.kind    = element.kind,
+                                  .body    = element.body | std::views::transform([](const grammar::BodyBlock& block) {
+                                              return std::visit(overloaded{BodyLowerer{}}, block);
+                                             }) |
+                                             std::ranges::to<ir::DescriptionBody>(),
+                                  .derived = false,
+                                  .conjuncts = {}};
 }
 
 // An extraction marker contributes an element whose prose is empty and whose

@@ -385,10 +385,10 @@ ParseResult parse_docblock(std::string_view raw) {
     bool                     in_itemize = false;
     bool                     item_open  = false;
     using detail::TablePart;
-    bool                     in_table       = false;
-    bool                     table_terminal = false;
-    TableKind                table_kind     = TableKind::None;
-    TablePart                table_part     = TablePart::None;
+    bool                     in_table          = false;
+    bool                     continuation_next = false;
+    TableKind                table_kind        = TableKind::None;
+    TablePart                table_part        = TablePart::None;
     std::vector<std::string> table_lines;
     int                      table_part_line = 0;
     std::size_t              table_columns   = 0;
@@ -405,6 +405,15 @@ ParseResult parse_docblock(std::string_view raw) {
 
     auto current_element = [&]() -> Element* { return block.elements.empty() ? nullptr : &block.elements.back(); };
 
+    auto current_table = [&]() -> Table2D* {
+        auto* e = current_element();
+        return e == nullptr || e->body.empty() ? nullptr : std::get_if<Table2D>(&e->body.back());
+    };
+    auto current_flat_table = [&]() -> Table1D* {
+        auto* e = current_element();
+        return e == nullptr || e->body.empty() ? nullptr : std::get_if<Table1D>(&e->body.back());
+    };
+
     auto flush_paragraph = [&] {
         if (para_lines.empty())
             return;
@@ -414,7 +423,8 @@ ParseResult parse_docblock(std::string_view raw) {
         if (content.empty())
             return;
         if (Element* e = current_element()) {
-            e->paragraphs.push_back(parse_inlines(content, para_line, diags));
+            e->body.push_back(
+                BodyParagraph{parse_inlines(content, para_line, diags), std::exchange(continuation_next, false)});
         } else if (!std::exchange(prose_before_tag_reported, true)) {
             diags.push_back({Severity::Error, para_line, "prose before first element tag"});
         }
@@ -431,7 +441,10 @@ ParseResult parse_docblock(std::string_view raw) {
             diags.push_back({Severity::Error, item_line, "\\item requires content"});
             return;
         }
-        current_element()->items.push_back(parse_inlines(content, item_line, diags));
+        auto& body = current_element()->body;
+        if (body.empty() || !std::holds_alternative<Itemize>(body.back()))
+            body.push_back(Itemize{});
+        std::get<Itemize>(body.back()).items.push_back(parse_inlines(content, item_line, diags));
     };
 
     auto flush_table_part = [&] {
@@ -447,9 +460,9 @@ ParseResult parse_docblock(std::string_view raw) {
             return;
         }
         Element* element = current_element();
-        if (element != nullptr && table_kind == TableKind::TwoD && element->table) {
+        if (element != nullptr && table_kind == TableKind::TwoD && current_table()) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
-            auto&          table     = *element->table;
+            auto&          table     = *current_table();
             foundation::match(
                 table_part,
                 foundation::when<TablePart::Caption>([&] { table.caption = std::move(paragraph); }),
@@ -459,9 +472,9 @@ ParseResult parse_docblock(std::string_view raw) {
                 foundation::when<TablePart::Cell1>([&] { table.rows.back().cell1 = std::move(paragraph); }),
                 foundation::when<TablePart::Cell2>([&] { table.rows.back().cell2 = std::move(paragraph); }),
                 foundation::when<TablePart::None>([] { std::unreachable(); }));
-        } else if (element != nullptr && table_kind == TableKind::Flat && element->flat_table) {
+        } else if (element != nullptr && table_kind == TableKind::Flat && current_flat_table()) {
             ProseParagraph paragraph = parse_inlines(content, table_part_line, diags);
-            auto&          table     = *element->flat_table;
+            auto&          table     = *current_flat_table();
             foundation::match(
                 table_part,
                 foundation::when<TablePart::Caption>([&] { table.caption = std::move(paragraph); }),
@@ -498,9 +511,9 @@ ParseResult parse_docblock(std::string_view raw) {
                                          cell_arity_word(arity),
                                          cell_noun(arity),
                                          table_cells)});
-        in_table       = false;
-        table_terminal = true;
-        table_part     = TablePart::None;
+        in_table          = false;
+        continuation_next = true;
+        table_part        = TablePart::None;
     };
 
     auto handle_marker = [&](const MarkerInfo& info, std::string_view after, int lineno) {
@@ -634,10 +647,10 @@ ParseResult parse_docblock(std::string_view raw) {
                 ++table_rows;
                 table_cells = 0;
                 if (Element* element = current_element(); element != nullptr) {
-                    if (table_kind == TableKind::TwoD && element->table)
-                        element->table->rows.emplace_back();
-                    else if (table_kind == TableKind::Flat && element->flat_table)
-                        element->flat_table->rows.emplace_back();
+                    if (table_kind == TableKind::TwoD && current_table())
+                        current_table()->rows.emplace_back();
+                    else if (table_kind == TableKind::Flat && current_flat_table())
+                        current_flat_table()->rows.emplace_back();
                 }
                 table_part      = TablePart::RowHeader;
                 table_part_line = lineno;
@@ -704,9 +717,9 @@ ParseResult parse_docblock(std::string_view raw) {
                     last_rank = ir::canonical_rank(*kind);
                     last_kind = *kind;
                 }
-                block.elements.push_back(Element{.kind = *kind, .line = lineno});
+                block.elements.push_back(Element{.kind = *kind, .body = {}, .line = lineno});
                 in_itemize            = false;
-                table_terminal        = false;
+                continuation_next     = false;
                 table_kind            = TableKind::None;
                 std::string_view lead = trim(after);
                 if (!lead.empty()) {
@@ -718,32 +731,15 @@ ParseResult parse_docblock(std::string_view raw) {
                 flush_paragraph();
                 const TableKind        kind     = name == "lib2dtab2" ? TableKind::TwoD : TableKind::Flat;
                 const std::string_view open_tag = table_open_name(kind);
-                if (table_terminal) {
-                    diags.push_back({Severity::Error,
-                                     lineno,
-                                     std::format("an element can carry only one terminal \\{}", open_tag)});
-                    continue;
-                }
-                const TableHead head = parse_table_head(after, lineno, diags, open_tag);
+                const TableHead        head     = parse_table_head(after, lineno, diags, open_tag);
                 if (current_element() == nullptr)
                     diags.push_back(
                         {Severity::Error, lineno, std::format("\\{} requires a preceding element tag", open_tag)});
                 else {
-                    const ir::ElementKind ek        = current_element()->kind;
-                    const bool            duplicate = std::ranges::any_of(
-                        block.elements | std::views::take(block.elements.size() - 1), [&](const Element& element) {
-                            return element.kind == ek && (kind == TableKind::TwoD ? element.table.has_value()
-                                                                                  : element.flat_table.has_value());
-                        });
-                    if (duplicate)
-                        diags.push_back(
-                            {Severity::Error,
-                             lineno,
-                             std::format("an element kind can carry only one \\{}; combine the rows", open_tag)});
                     if (kind == TableKind::TwoD)
-                        current_element()->table = Table2D{.stable_name = head.stable_name};
+                        current_element()->body.push_back(Table2D{.stable_name = head.stable_name});
                     else
-                        current_element()->flat_table = Table1D{.stable_name = head.stable_name};
+                        current_element()->body.push_back(Table1D{.stable_name = head.stable_name});
                 }
                 in_table        = true;
                 table_kind      = kind;
@@ -757,11 +753,6 @@ ParseResult parse_docblock(std::string_view raw) {
             } else if (name == "endlib2dtab2" || name == "endlibtab2" || name == "column" || name == "row" ||
                        name == "cell") {
                 diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside a table", name)});
-            } else if (table_terminal) {
-                diags.push_back({Severity::Error,
-                                 lineno,
-                                 std::format("a \\{} is terminal within its element; start a new element tag",
-                                             table_open_name(table_kind))});
             } else if (name == "item") {
                 flush_paragraph();
                 if (current_element() == nullptr) {
@@ -792,9 +783,6 @@ ParseResult parse_docblock(std::string_view raw) {
             } else if (const MarkerInfo* info = find_marker(name)) {
                 flush_item();
                 flush_paragraph();
-                // A marker carries no description content, so it does not
-                // reopen paragraph mode after a list. Only a new element can
-                // do that without moving prose ahead of the itemize in IR.
                 handle_marker(*info, after, lineno);
             } else if (name == "returns-equiv") {
                 // The marker's old name, which said "equivalent to" about an
@@ -821,23 +809,12 @@ ParseResult parse_docblock(std::string_view raw) {
             continue;
         }
 
-        if (table_terminal) {
-            diags.push_back({Severity::Error,
-                             lineno,
-                             std::format("prose after \\{} cannot be represented; start a new element tag",
-                                         table_open_name(table_kind))});
-            continue;
-        }
-
-        if (in_itemize) {
-            if (!item_open) {
-                diags.push_back(
-                    {Severity::Error, lineno, "prose after \\item cannot be represented; start another \\item"});
-                continue;
-            }
+        if (in_itemize && item_open) {
             item_lines.emplace_back(stripped);
             continue;
         }
+        if (std::exchange(in_itemize, false))
+            continuation_next = true;
 
         // Prose line: accumulate into the pending paragraph.
         if (para_lines.empty())

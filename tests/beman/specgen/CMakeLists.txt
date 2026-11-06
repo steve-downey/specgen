@@ -22,6 +22,7 @@ foreach(
     ir_fold
     ir_json
     docblock
+    resume_body
     markers
     rsec
     section_markers

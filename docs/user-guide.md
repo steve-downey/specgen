@@ -627,7 +627,7 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
-An element may end in one authored itemization:
+An element may contain authored itemizations:
 
 ```cpp
 //! \constraints All of the following are true:
@@ -635,11 +635,12 @@ An element may end in one authored itemization:
 //! \item `T` meets the requirements in \iref{some.requirements}.
 ```
 
-Each nonblank line that follows an item continues that item. After the first
-`\item`, only another `\item` or a new element may follow; no further prose can
-be placed after the list within the same element.
+Each nonblank line that follows an item continues that item. A blank decorated
+line closes the item. Another `\item` then continues the list; prose resumes
+the element in the same numbered paragraph. A later `\item` starts a new list.
+A further blank within resumed prose starts a new numbered paragraph.
 
-An element may instead end in one two-column table:
+An element may also contain two-column tables:
 
 ```cpp
 //! \effects See the following table.
@@ -655,7 +656,7 @@ An element may instead end in one two-column table:
 The table requires exactly two `\column` entries, one or more `\row` entries,
 and exactly two `\cell` entries per row. Lines without a tag continue the
 active caption, column heading, row heading, or cell. `\endlib2dtab2` is
-required, and the table ends its element.
+required. Prose after it resumes the element in the same numbered paragraph.
 
 `\libtab2` produces a flat two-column table, such as an enumeration's meanings.
 Here the text on `\row` is the first column, and each row has one `\cell` for
@@ -676,7 +677,7 @@ the second:
 `\lib2dtab2` is a cross-product table: each `\row` is a row heading followed by
 two data cells. `\libtab2` is the ordinary two-column form: each `\row` is its
 first data cell, followed by one `\cell`. Both require two column headings and
-at least one row, and both end their element.
+at least one row. Both preserve their position among the element's prose and lists.
 
 ## Extraction markers
 
@@ -1003,7 +1004,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.8.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.9.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

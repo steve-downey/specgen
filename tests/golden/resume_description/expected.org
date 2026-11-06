@@ -1,0 +1,64 @@
+** Assignment [resume.assign]
+:PROPERTIES:
+:CUSTOM_ID: resume.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void assign();
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: The stored value is one of:
+
+- the argument, if a value was supplied; this continuation belongs to the first item.
+- the previous value, otherwise.
+
+Otherwise, the object is unchanged.
+#+end_pnum
+
+#+begin_pnum
+A separate postcondition paragraph.
+
+- One further guarantee.
+
+This continues the further guarantee.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A following element remains separate.
+#+end_pnum
+
+** Tables [resume.tables]
+:PROPERTIES:
+:CUSTOM_ID: resume.tables
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void apply();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: The following table applies.
+
+#+name: resume.flat
+#+caption: Flat table
+#+ATTR_WG21: :columns 25 67
+| Condition | Effect |
+|-
+| A | B |
+
+Prose after the flat table.
+
+#+name: resume.cross
+#+caption: Cross table
+#+ATTR_WG21: :columns 18 36 36
+| | First | Second |
+|-
+| Row | C | D |
+
+Prose after the cross table.
+#+end_pnum

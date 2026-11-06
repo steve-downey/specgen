@@ -77,13 +77,22 @@ struct Table1D {
     std::vector<Table1DRow> rows    = {};
 };
 
+struct BodyParagraph {
+    ProseParagraph text;
+    bool           continuation = false;
+};
+
+struct Itemize {
+    std::vector<ProseParagraph> items;
+};
+
+using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D>;
+using DescriptionBody = std::vector<BodyBlock>;
+
 struct Element {
-    ir::ElementKind             kind       = ir::ElementKind::Effects;
-    std::vector<ProseParagraph> paragraphs = {};
-    std::vector<ProseParagraph> items      = {}; // authored \item entries, in source order
-    std::optional<Table2D>      table      = {};
-    std::optional<Table1D>      flat_table = {};
-    int                         line       = 0; // line of the tag
+    ir::ElementKind kind = ir::ElementKind::Effects;
+    DescriptionBody body;
+    int             line = 0;
 };
 
 struct Docblock {
