@@ -103,6 +103,11 @@ std::string exposid_name(std::string_view identifier) {
 Lowered lower(const grammar::Docblock& block) {
     Lowered out;
 
+    out.descr.leading = block.leading | std::views::transform([](const grammar::BodyBlock& block) {
+                            return std::visit(overloaded{BodyLowerer{}}, block);
+                        }) |
+                        std::ranges::to<ir::DescriptionBody>();
+
     out.descr.elements = block.elements | std::views::transform(lower_element) | std::ranges::to<std::vector>();
 
     // The grammar rejects \effects with \effects-equiv, so this cannot collide

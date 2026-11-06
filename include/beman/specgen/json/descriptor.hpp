@@ -26,6 +26,8 @@
 #include <beman/specgen/json/reader.hpp>
 #include <beman/specgen/json/writer.hpp>
 
+#include <algorithm>
+#include <span>
 #include <cstddef>
 #include <format>
 #include <iterator>
@@ -116,13 +118,13 @@ optional_projected_field(std::string_view name, std::optional<Wrapper> C::* memb
 template <typename T>
 struct Alt {
     using type = T;
-    std::string_view tag;
-    std::string_view legacy_tag = {};
+    std::string_view                  tag;
+    std::span<const std::string_view> legacy_tags = {};
 };
 
 template <typename T>
-constexpr Alt<T> alt(std::string_view tag, std::string_view legacy_tag = {}) {
-    return Alt<T>{tag, legacy_tag};
+constexpr Alt<T> alt(std::string_view tag, std::span<const std::string_view> legacy_tags = {}) {
+    return Alt<T>{tag, legacy_tags};
 }
 
 /// A tagged-variant descriptor: the tag key, an error-message label, alts.
@@ -349,7 +351,8 @@ bool parse_variant(Reader& r, std::variant<Ts...>& out) {
         [&](const auto&... a) {
             (
                 [&] {
-                    if (parsed.has_value() || (tag != a.tag && (a.legacy_tag.empty() || tag != a.legacy_tag)))
+                    if (parsed.has_value() ||
+                        (tag != a.tag && std::ranges::find(a.legacy_tags, tag) == a.legacy_tags.end()))
                         return;
                     using T = typename std::decay_t<decltype(a)>::type;
                     T value;

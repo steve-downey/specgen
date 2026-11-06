@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <utility>
@@ -208,10 +209,12 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
     return {"Equivalent to:\n" + render_codeblock(e.code), true, true};
 }
 
-std::vector<std::string> element_blocks(const ir::DescriptionElement& element) {
-    const std::string label  = std::format("\\{}\n", ir::element_name(element.kind));
+std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);
+
+std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind) {
+    const std::string label  = kind ? std::format("\\{}\n", ir::element_name(*kind)) : std::string{};
     auto              blocks = std::ranges::fold_left(
-        element.body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
+        body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
             auto       rendered = std::visit(overloaded{BodyRenderer{}}, block);
             const bool first    = out.empty();
             if (first || rendered.starts_paragraph) {
@@ -222,6 +225,11 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement& element) {
             return out;
         });
     return blocks;
+}
+
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element);
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element) {
+    return body_blocks(element.body, element.kind);
 }
 
 // Canonicalization orders derived evidence before authored wording. Merge
@@ -256,15 +264,16 @@ std::string render_item(const ir::SpecItem& item) {
         out += "\\end{itemdecl}\n";
     }
 
-    if (item.descr.elements.empty())
+    if (!beman::specgen::ir::has_description(item.descr))
         return out;
 
-    const std::vector<std::string> blocks =
-        item.descr.elements |
-        std::views::chunk_by(
-            [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
-        std::views::transform([](auto&& group) { return element_group_blocks(group); }) | std::views::join |
-        std::ranges::to<std::vector>();
+    std::vector<std::string> blocks = body_blocks(item.descr.leading, std::nullopt);
+    blocks.append_range(item.descr.elements |
+                        std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
+                            return a.kind == b.kind;
+                        }) |
+                        std::views::transform([](auto&& group) { return element_group_blocks(group); }) |
+                        std::views::join);
 
     if (!out.empty())
         out += '\n';

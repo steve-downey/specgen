@@ -253,7 +253,8 @@ bool json_descriptor<DescriptionElement>::from_representation(Reader& r, Element
 
 template <>
 struct json_descriptor<ItemDescr> {
-    static constexpr auto members = std::tuple{field("elements", &ItemDescr::elements)};
+    static constexpr auto members =
+        std::tuple{field("elements", &ItemDescr::elements), field("leading", &ItemDescr::leading)};
 };
 
 template <>
@@ -327,12 +328,13 @@ struct json_descriptor<FreeParagraph> {
 
 template <>
 struct json_descriptor<Node> {
-    static constexpr auto alts = alternatives("type",
-                                              "node type",
-                                              alt<Section>("section"),
-                                              alt<Synopsis>("synopsis"),
-                                              alt<SpecItem>("item-v2", "item"),
-                                              alt<FreeParagraph>("para"));
+    static constexpr std::string_view item_aliases[] = {"item", "item-v2"};
+    static constexpr auto             alts           = alternatives("type",
+                                                                    "node type",
+                                                                    alt<Section>("section"),
+                                                                    alt<Synopsis>("synopsis"),
+                                                                    alt<SpecItem>("item-v3", item_aliases),
+                                                                    alt<FreeParagraph>("para"));
 };
 
 template <>

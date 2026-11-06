@@ -15,6 +15,7 @@ foreach(
     aliases
     class_at
     class_description
+    leading_description
     constraints
     conditional_equiv
     equiv

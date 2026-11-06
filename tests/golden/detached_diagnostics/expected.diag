@@ -1,0 +1,6 @@
+spec_detached_diagnostics.hpp:11: error: a detached description has no declaration; attach its markup to the declaration it describes
+spec_detached_diagnostics.hpp:15: error: a detached description has no declaration; attach its markup to the declaration it describes
+spec_detached_diagnostics.hpp:18: error: unknown tag \unknown-detached
+spec_detached_diagnostics.hpp:22: error: a detached description has no declaration; attach its markup to the declaration it describes
+spec_detached_diagnostics.hpp:26: error: unknown tag \unknown-attached
+part.hpp:9: error: a detached description has no declaration; attach its markup to the declaration it describes

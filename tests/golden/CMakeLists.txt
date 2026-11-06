@@ -2108,6 +2108,12 @@ specgen_add_golden(
 )
 
 specgen_add_golden(
+    detached_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"
+)
+
+specgen_add_golden(
     resume_description_generate
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_resume_description.hpp"
@@ -2127,6 +2133,28 @@ specgen_add_golden(
     resume_description
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+
+specgen_add_golden(
+    leading_description_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_leading_description.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/leading_description"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
 )
 
 # Regeneration is wholesale and lands in the diff, never silent.

@@ -450,6 +450,12 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Detached specgen docblocks are parsed too (issue #216). A block consumed by a
+declaration reports through that declaration exactly once; otherwise its parser
+findings retain the block's physical file and line. Detached labelled descriptions
+without a verbatim item declaration are Errors: there is no declaration to describe.
+Detached prose reports an orphan-description Error until section prose is supported. Detached verbatim synopsis and item declaration blocks remain supported.
+
 ### 4.1 Description elements
 
 Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpects`,
@@ -496,6 +502,15 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   prose continuation rules as `\lib2dtab2`.
 
 All three backends render authored itemizations, prose references, and tables.
+
+An item description may begin with unlabelled paragraphs, or contain only
+those paragraphs (issue #211). They precede the labelled elements, receive
+normal paragraph numbers, and have no fabricated label. This applies to a
+class's own description and a standalone verbatim item declaration too.
+Prose-only descriptions request wording when grouping, routing, and coverage
+are decided; an empty description and explicit `\also` retain their grouping
+meaning. Leading prose undergoes the same reference, span, and leakage checks
+as other authored wording.
 
 ### 4.2 Extraction elements
 
@@ -865,12 +880,18 @@ deliberate.
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition.
   Legacy description slots normalize to ordered bodies when read. New item nodes
-  use `item-v2`, so older readers reject the changed contract visibly rather than
+  use `item-v3`, so older readers reject the changed contract visibly rather than
   skipping body content (decision [ordered-description-bodies](decisions/ordered-description-bodies.md)).
   The
   serialized form decouples the wg21org exporter, enables backend-independent golden tests,
   and provides the seam for future IR-level diff markup (add/rm wording generated from two
   header revisions; out of scope, by hand at first).
+
+Item descriptions carry an ordered `leading` body followed by their canonical
+labelled elements. Item nodes emit `item-v3`; readers accept both `item-v2`
+and legacy `item`. The new discriminator prevents a body-only reader from
+silently ignoring leading wording. The semantic content predicate is
+`ir::has_description`, shared by rendering, grouping, routing, and coverage.
 
 ## 8. Backends (serializers)
 

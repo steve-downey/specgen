@@ -112,7 +112,7 @@ beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached
     // decided in push order, not the placement-key-sorted order the tree
     // ends up in).
     const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
-    const bool wants_join     = !named_grouping && (attached.directives.also || attached.item.descr.elements.empty());
+    const bool wants_join = !named_grouping && (attached.directives.also || !ir::has_description(attached.item.descr));
 
     return db::ItemDecl{doc.offset_in(attached.file, attached.inclass_offset),
                         wants_join,
@@ -249,8 +249,7 @@ db::DocEvent classify(const RawItem&                                   ev,
     namespace ir = beman::specgen::ir;
 
     if (ev.decl == nullptr) {
-        if (ev.comment_text.find("\\verbatim-synopsis") != std::string::npos ||
-            ev.comment_text.find("\\verbatim-itemdecl") != std::string::npos) {
+        if (!rsec_tag_recognized(ev.comment_text)) {
             const std::optional<std::size_t> start = docblock_start(ev.comment_text);
             if (start) {
                 const std::string_view markup = std::string_view(ev.comment_text).substr(*start);
@@ -264,18 +263,20 @@ db::DocEvent classify(const RawItem&                                   ev,
                 // own, so for that pairing the standalone node still speaks,
                 // exactly as it does for a detached block whose entity is
                 // never declared (spec_verbatim_record_merge.hpp).
-                if ((parsed.block.verbatim_itemdecl || parsed.block.markers.verbatim_synopsis) &&
-                    is_attached_comment(ev.offset, attached_comments) &&
-                    !suppresses_generated_entity(parsed.block.markers))
+                const bool verbatim = parsed.block.verbatim_itemdecl || parsed.block.markers.verbatim_synopsis;
+                if (is_attached_comment(ev.offset, attached_comments) &&
+                    (!verbatim || !suppresses_generated_entity(parsed.block.markers)))
                     return db::Ignored{};
-                const unsigned first_line = document_line(sm, doc, ev.offset) +
-                                            static_cast<unsigned>(std::ranges::count(
-                                                std::string_view(ev.comment_text).substr(0, *start), '\n'));
+                const auto [file, local]          = doc.locate(ev.offset);
+                const std::string diagnostic_file = diagnostic_file_name(sm, file);
+                const unsigned    first_line      = document_line(sm, doc, ev.offset) +
+                                                    static_cast<unsigned>(std::ranges::count(
+                                                        std::string_view(ev.comment_text).substr(0, *start), '\n'));
                 std::vector<db::Diagnostic> diagnostics =
-                    parsed.diags | std::views::transform([first_line](const grammar::Diagnostic& diagnostic) {
+                    parsed.diags | std::views::transform([&](const grammar::Diagnostic& diagnostic) {
                         const unsigned line =
                             diagnostic.line > 0 ? first_line + static_cast<unsigned>(diagnostic.line) - 1 : first_line;
-                        return db::Diagnostic{diagnostic.severity, line, diagnostic.message};
+                        return db::Diagnostic{diagnostic.severity, line, diagnostic.message, diagnostic_file};
                     }) |
                     std::ranges::to<std::vector<db::Diagnostic>>();
 
@@ -294,6 +295,14 @@ db::DocEvent classify(const RawItem&                                   ev,
                     out.diagnostics   = std::move(diagnostics);
                     return out;
                 }
+                if (ir::has_description(lowering::lower(parsed.block).descr) &&
+                    !suppresses_generated_entity(parsed.block.markers))
+                    diagnostics.push_back({beman::specgen::Severity::Error,
+                                           first_line,
+                                           "a detached description has no declaration; attach its markup to the "
+                                           "declaration it describes",
+                                           diagnostic_file});
+                return db::Ignored{std::move(diagnostics)};
             }
         }
 

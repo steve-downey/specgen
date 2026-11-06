@@ -622,6 +622,11 @@ element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
 error.
 
+Prose before the first element tag is an unlabelled description. It may be
+the entire description, or lead into labelled requirements. Blank decorated
+lines separate its numbered paragraphs. Classes can carry the same prose;
+`\at` routes their description independently of the synopsis.
+
 Text after a tag begins the element's first paragraph. A blank decorated line
 separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
@@ -1004,13 +1009,13 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.9.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.10.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
 ### Saved IR compatibility
 
-Newly emitted item nodes use `item-v2` and ordered description bodies. Updated
-renderers still read the earlier `item` nodes and paragraph/list/table slots.
-Older renderers reject `item-v2`, so saved wording cannot disappear through
-unknown-field skipping. Regenerate saved IR when moving to the new writer.
+Newly emitted item nodes use `item-v3` for leading and ordered description
+bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
+with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
+wording cannot disappear through unknown-field skipping. Regenerate saved IR when moving to the new writer.

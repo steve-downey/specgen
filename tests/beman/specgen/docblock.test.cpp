@@ -145,11 +145,16 @@ TEST_CASE("docblock - effects and effects-equiv conflict") {
     CHECK(has_diag(r, Severity::Error, "mutually exclusive"));
 }
 
-TEST_CASE("docblock - prose before first tag is an error") {
-    auto r = parse_docblock("//! Some stray prose.\n//! \\effects Fine.\n");
-    CHECK(!r.ok());
-    CHECK(has_diag(r, Severity::Error, "prose before first element tag"));
-    CHECK(r.block.elements.size() == 1); // element still parsed
+TEST_CASE("docblock - prose before first tag is a leading description") {
+    const auto r = parse_docblock("//! Leading prose.\n//! \\effects Fine.\n");
+    CHECK(r.ok());
+    CHECK(r.diags.empty());
+    REQUIRE(r.block.leading.size() == 1);
+    const auto& leading = std::get<BodyParagraph>(r.block.leading.front());
+    REQUIRE(leading.text.size() == 1);
+    CHECK(std::get<InlineText>(leading.text.front()).text == "Leading prose.");
+    REQUIRE(r.block.elements.size() == 1);
+    CHECK(r.block.elements.front().kind == ir::ElementKind::Effects);
 }
 
 TEST_CASE("docblock - lone also marker") {
@@ -591,4 +596,9 @@ TEST_CASE("docblock - specified is a flag marker") {
     CHECK(parsed.ok());
     CHECK(parsed.block.markers.specified);
     CHECK_FALSE(parse_docblock("//! \\omit\n").block.markers.specified);
+}
+
+TEST_CASE("docblock - a slash that is not a line decoration passes through") {
+    CHECK(strip_comment_decorations("//! \\effects A path follows.\n/path\n/*! another comment */") ==
+          "\\effects A path follows.\n/path\n/*! another comment */");
 }

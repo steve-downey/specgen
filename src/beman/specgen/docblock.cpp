@@ -109,9 +109,8 @@ auto block_open() {
 // Consumes the `//`, `///`, or `//!` decoration introducing a line-comment
 // docblock line. The two slashes are mandatory; a following `!` or `/` is an
 // optional third decoration character (so `//!` and `///` both strip to
-// three characters, bare `//` strips to two). Fails without consuming input
-// when the line does not start with `//` at all, so `opt()` at the call site
-// turns "no decoration here" into a clean pass-through rather than an error.
+// three characters, bare `//` strips to two). The caller first checks for
+// both slashes: a failed partial keyword match can consume a single slash.
 auto line_comment_decoration() {
     return parse::sequence_right(parse::keyword("//"), parse::opt(parse::char_p('!') | parse::char_p('/')));
 }
@@ -119,15 +118,17 @@ auto line_comment_decoration() {
 // Strips one physical line's leading whitespace and, if present, its comment
 // decoration (block `*` or line `//`/`///`/`//!`) together with the single
 // space conventionally following it. Lines without decoration pass through
-// unchanged past the leading-whitespace strip — `opt()` makes the decoration
-// itself optional, and once the leading run of spaces/tabs is gone there is
+// unchanged past the leading-whitespace strip. Once that run is gone there is
 // no leading space left for the trailing `opt(char_p(' '))` to remove unless
 // a decoration match just exposed one, so it is safe to run unconditionally
 // in both the block and line-comment cases.
 std::string_view strip_line_decoration(std::string_view line, bool block) {
     parse::cursor cur{line};
     cur = parse::many(parse::satisfy(is_line_ws, "line whitespace"))(cur)->rest;
-    cur = block ? parse::opt(parse::char_p('*'))(cur)->rest : parse::opt(line_comment_decoration())(cur)->rest;
+    if (block)
+        cur = parse::opt(parse::char_p('*'))(cur)->rest;
+    else if (cur.remaining().starts_with("//"))
+        cur = line_comment_decoration()(cur)->rest;
     cur = parse::opt(parse::char_p(' '))(cur)->rest;
     return cur.remaining();
 }
@@ -400,8 +401,7 @@ ParseResult parse_docblock(std::string_view raw) {
     // appears after \remarks" says which of the two lines to move, where "out
     // of canonical order" left the reader to work it out. Only meaningful
     // once last_rank > -1, which is the same condition the note fires under.
-    ir::ElementKind last_kind                 = ir::ElementKind::Effects;
-    bool            prose_before_tag_reported = false;
+    ir::ElementKind last_kind = ir::ElementKind::Effects;
 
     auto current_element = [&]() -> Element* { return block.elements.empty() ? nullptr : &block.elements.back(); };
 
@@ -425,8 +425,8 @@ ParseResult parse_docblock(std::string_view raw) {
         if (Element* e = current_element()) {
             e->body.push_back(
                 BodyParagraph{parse_inlines(content, para_line, diags), std::exchange(continuation_next, false)});
-        } else if (!std::exchange(prose_before_tag_reported, true)) {
-            diags.push_back({Severity::Error, para_line, "prose before first element tag"});
+        } else {
+            block.leading.push_back(BodyParagraph{parse_inlines(content, para_line, diags)});
         }
     };
 
@@ -582,7 +582,7 @@ ParseResult parse_docblock(std::string_view raw) {
 
     // substrate generic algorithm: multi-way stateful sequencing across
     // lines, not a fold. It threads five pieces of state (para_lines,
-    // para_line, last_rank, prose_before_tag_reported, block.elements) and
+    // para_line, last_rank, block.leading, block.elements) and
     // calls flush_paragraph() from several different branches depending on
     // what kind of line was just read; a fold whose accumulator bundles all
     // five and whose combining function contains the same branching is the
@@ -835,8 +835,9 @@ ParseResult parse_docblock(std::string_view raw) {
         diags.push_back({Severity::Error, 0, "\\effects and \\effects-equiv are mutually exclusive"});
     if (block.markers.returns_expr && has_element(ir::ElementKind::Returns))
         diags.push_back({Severity::Error, 0, "\\returns and \\returns-expr are mutually exclusive"});
-    if (block.markers.also && !block.elements.empty())
-        diags.push_back({Severity::Warning, 0, "\\also block should carry no elements; they are ignored by grouping"});
+    if (block.markers.also && (!block.leading.empty() || !block.elements.empty()))
+        diags.push_back(
+            {Severity::Warning, 0, "\\also block should carry no description; they are ignored by grouping"});
     if (block.markers.group_id && block.markers.also)
         diags.push_back({Severity::Error, 0, "\\group and \\also are mutually exclusive"});
     if (block.markers.impdef && block.markers.seebelow)

@@ -57,6 +57,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <string>
@@ -335,15 +336,21 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::EquivalentTo& e) const {
     return {"Equivalent to:\n\n" + render_block("codeblock", e.code), true, true};
 }
 
-std::vector<std::string> element_blocks(const ir::DescriptionElement& element,
-                                        std::span<const std::string>  new_roots) {
-    const std::string label  = std::format("/{}/", backend::element_label(element.kind));
+std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
+                                     std::optional<ir::ElementKind> kind,
+                                     std::span<const std::string>   new_roots);
+
+std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
+                                     std::optional<ir::ElementKind> kind,
+                                     std::span<const std::string>   new_roots) {
+    const std::string label  = kind ? std::format("/{}/", backend::element_label(*kind)) : std::string{};
     auto              blocks = std::ranges::fold_left(
-        element.body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
+        body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
             auto       rendered = std::visit(overloaded{BodyRenderer{new_roots}}, block);
             const bool first    = out.empty();
             if (first || rendered.starts_paragraph) {
-                const std::string prefix = first ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
+                const std::string prefix =
+                    first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
                 out.push_back(prefix + rendered.text);
             } else {
                 out.back() += '\n' + rendered.text;
@@ -352,6 +359,12 @@ std::vector<std::string> element_blocks(const ir::DescriptionElement& element,
         });
     std::ranges::transform(blocks, blocks.begin(), [](std::string b) { return wrap_pnum(std::move(b)); });
     return blocks;
+}
+
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element, std::span<const std::string> new_roots);
+std::vector<std::string> element_blocks(const ir::DescriptionElement& element,
+                                        std::span<const std::string>  new_roots) {
+    return body_blocks(element.body, element.kind, new_roots);
 }
 
 // Canonicalization orders derived evidence before authored wording. Merge
@@ -390,15 +403,16 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
         out += "#+end_itemdecl\n";
     }
 
-    if (item.descr.elements.empty())
+    if (!beman::specgen::ir::has_description(item.descr))
         return out;
 
-    const std::vector<std::string> blocks =
+    std::vector<std::string> blocks = body_blocks(item.descr.leading, std::nullopt, new_roots);
+    blocks.append_range(
         item.descr.elements |
         std::views::chunk_by(
             [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
         std::views::transform([new_roots](auto&& group) { return element_group_blocks(group, new_roots); }) |
-        std::views::join | std::ranges::to<std::vector>();
+        std::views::join | std::ranges::to<std::vector>());
 
     if (!out.empty())
         out += '\n';

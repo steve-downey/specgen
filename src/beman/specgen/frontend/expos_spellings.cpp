@@ -215,6 +215,10 @@ void rewrite_prose_expos(ir::ItemDescr& descr, const std::map<std::string, std::
     if (spellings.empty())
         return;
     const ProseExposRewriter rewrite{spellings};
+    descr.leading = std::move(descr.leading) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
+                        return std::visit(foundation::overloaded{rewrite}, std::move(b));
+                    }) |
+                    std::ranges::to<ir::DescriptionBody>();
     descr.elements =
         std::move(descr.elements) | std::views::as_rvalue | std::views::transform([&](ir::DescriptionElement e) {
             e.body = std::move(e.body) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {

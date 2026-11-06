@@ -223,9 +223,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
 
     // The docblock ranges some declaration consumed — top-level decls and
     // class members alike, since every comment in the file becomes a RawItem
-    // below. classify() consults this for a comment carrying a verbatim
-    // marker: attached, the declaration's own event substitutes the authored
-    // text, and the comment's standalone node was the duplication (issue #4).
+    // below. classify() leaves attached markup to its declaration's event,
+    // avoiding duplicate nodes and diagnostics (issues #4, #216).
     AttachedCommentRanges attached_comments;
     const auto            note_attached_docblock = [&](const clang::Decl* decl) {
         const clang::RawComment* rc = attached_raw_comment(decl);
@@ -236,18 +235,35 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         if (begin_file == end_file && doc.contains(begin_file))
             attached_comments.emplace_back(doc.offset_in(begin_file, begin), doc.offset_in(end_file, end));
     };
-    // substrate generic algorithm: a for_each-shaped walk driving
-    // note_attached_docblock's side effect, over the same decls-plus-members
-    // shape the build_omit_set pre-pass walks.
-    for (const clang::Decl* decl : decls) {
+    AttachedCommentRanges body_ranges;
+    const auto            note_declaration = [&](const clang::Decl* decl) {
         note_attached_docblock(decl);
+        const clang::FunctionDecl* fn = member_function_or_template(decl);
+        if (fn == nullptr)
+            return;
+        // A FriendDecl's template owns its markup even when Clang cannot
+        // attach that comment to the friend wrapper (requires-expressions).
+        note_attached_docblock(fn);
+        if (fn->getBody() == nullptr)
+            return;
+        const clang::Stmt* body        = fn->getBody();
+        const auto [begin_file, begin] = sm.getDecomposedLoc(body->getBeginLoc());
+        const auto [end_file, end]     = sm.getDecomposedLoc(body->getEndLoc());
+        if (begin_file == end_file && doc.contains(begin_file))
+            body_ranges.emplace_back(doc.offset_in(begin_file, begin), doc.offset_in(end_file, end));
+    };
+    // substrate generic algorithm: record ownership for each processed declaration.
+    for (const clang::Decl* decl : decls) {
+        note_declaration(decl);
         if (const clang::CXXRecordDecl* record = as_record_decl(decl);
             record != nullptr && record->isThisDeclarationADefinition())
-            // substrate generic algorithm: the same side-effecting walk, one
-            // level down — a class's members feed the same collector.
+            // substrate generic algorithm: class members feed the same ownership collector.
             for (const RealRecordMember& member : real_record_members(record))
-                note_attached_docblock(member.decl);
+                note_declaration(member.decl);
     }
+    // substrate generic algorithm: namespace markup is consumed by the specified pre-pass.
+    for (const clang::NamespaceDecl* ns : specified.marked)
+        note_attached_docblock(ns);
 
     std::vector<RawItem> raw_items;
     raw_items.reserve(decls.size());
@@ -259,8 +275,16 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             // substrate generic algorithm: one RawComment expands to one or
             // more RawItems, so this is a flat-map into the existing event
             // buffer.
-            for (const auto& [offset, comment] : *comments)
-                append_structure_comment_items(raw_items, doc.offset_in(file, offset), comment->getRawText(sm).str());
+            for (const auto& [offset, comment] : *comments) {
+                const unsigned position = doc.offset_in(file, offset);
+                // Body comments are deliberately stripped by extraction, not
+                // document wording awaiting an owner (design §1).
+                if (std::ranges::any_of(body_ranges, [position](const auto& r) {
+                        return position >= r.first && position <= r.second;
+                    }))
+                    continue;
+                append_structure_comment_items(raw_items, position, comment->getRawText(sm).str());
+            }
         }
     };
     collect_comments(doc.main());
@@ -451,7 +475,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // gathered node's own pending list to the section it named
                     // (issue #98). build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
-                    if (synopsis->general || !synopsis->descr.elements.empty()) {
+                    if (synopsis->general || beman::specgen::ir::has_description(synopsis->descr)) {
                         db::SynopsisDecl class_extra;
                         class_extra.offset  = synopsis->offset;
                         class_extra.general = std::move(synopsis->general);
@@ -484,7 +508,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // is. A declaration with nothing to say contributes
                         // only its declaration, exactly as before: a masked
                         // customization point object is the common case.
-                        if (!item_decl->item.descr.elements.empty()) {
+                        if (beman::specgen::ir::has_description(item_decl->item.descr)) {
                             // An out-of-line member definition belongs to its
                             // class's group, not to whatever namespace-scope
                             // header was last seen (issue #77): in the house
@@ -557,6 +581,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 continue;
 
             db::DocEvent classified = classify_one(item);
+            if (auto* ignored = std::get_if<db::Ignored>(&classified))
+                gathered.diagnostics.append_range(std::move(ignored->diagnostics));
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
                 runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));

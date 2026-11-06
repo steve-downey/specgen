@@ -97,6 +97,7 @@ struct Element {
 
 struct Docblock {
     std::vector<Element>       elements;
+    DescriptionBody            leading = {};
     Markers                    markers;
     std::optional<std::string> verbatim_synopsis;
     // Terminal exact-text override for one itemdecl code block. Multiple

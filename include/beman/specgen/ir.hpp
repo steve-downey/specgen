@@ -237,7 +237,11 @@ struct ItemDecl {
 
 struct ItemDescr {
     std::vector<DescriptionElement> elements;
+    DescriptionBody                 leading = {};
 };
+
+// One content predicate for rendering, routing, grouping, and coverage.
+bool has_description(const ItemDescr&);
 
 // Stable-sort elements into canonical order (authored order is irrelevant).
 void canonicalize(ItemDescr&);

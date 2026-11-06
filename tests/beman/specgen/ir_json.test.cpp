@@ -51,7 +51,7 @@ TEST_CASE("ir_json - JSON emission of a value_or-shaped item") {
 
     const std::string json = emit_json(item);
 
-    CHECK(json.find("\"type\":\"item-v2\"") != std::string::npos);
+    CHECK(json.find("\"type\":\"item-v3\"") != std::string::npos);
     CHECK(json.find("\"kind\":\"mandates\"") != std::string::npos);
     CHECK(json.find("\"equivalent\"") != std::string::npos);
     CHECK(json.find("\"exposid\"") != std::string::npos);
@@ -136,8 +136,6 @@ TEST_CASE("ir_json - document structure emission") {
 
 namespace {
 
-std::string to_json(const Document& doc) { return emit_json(doc); }
-
 // A failed parse rendered for Catch2's INFO. With the error carried inside
 // the result (decision expected-error-taxonomy) rather than written through an
 // out-param, there is no `ParseError error;` to declare ahead of the call and
@@ -151,12 +149,12 @@ std::string parse_failure(const std::expected<T, ParseError>& result) {
 // The round-trip invariant: re-emitting a parsed document reproduces the
 // bytes it was parsed from.
 void check_round_trip(const Document& doc) {
-    const std::string once   = to_json(doc);
+    const std::string once   = emit_json(doc);
     const auto        parsed = parse_document(once);
     INFO(parse_failure(parsed));
     INFO("json: " << once);
     REQUIRE(parsed.has_value());
-    CHECK(to_json(*parsed) == once);
+    CHECK(emit_json(*parsed) == once);
 }
 
 // A document exercising every node kind, span kind, and index kind.
@@ -255,7 +253,7 @@ TEST_CASE("ir_json - round-trip: an element's itemize, with and without lead-in 
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
     REQUIRE((body_test::first<beman::specgen::ir::Itemize>(elements[0]) != nullptr));
@@ -273,7 +271,7 @@ TEST_CASE("ir_json - round-trip preserves every disposition") {
     doc.nodes.push_back(std::move(syn));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& roster = std::get<Synopsis>(parsed->nodes.at(0)).roster;
     REQUIRE(roster.size() == static_cast<std::size_t>(Disposition::Undocumented) + 1);
@@ -309,7 +307,7 @@ TEST_CASE("ir_json - round-trip preserves a roster entry's member kind") {
     doc.nodes.push_back(std::move(syn));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& roster = std::get<Synopsis>(parsed->nodes.at(0)).roster;
     REQUIRE(roster.size() == 2);
@@ -330,7 +328,7 @@ TEST_CASE("ir_json - round-trip preserves the document-level validator channels"
     doc.unextracted_uses     = {{"widget::widget", "hard_reset"}, {"widget::reset", "clone"}};
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->foreign_namespaces.size() == 1);
     CHECK(parsed->foreign_namespaces.at(0).qualified == "demo::detail");
@@ -351,7 +349,7 @@ TEST_CASE("ir_json - round-trip preserves itemdecl entity identities") {
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& entities = std::get<SpecItem>(parsed->nodes.at(0)).decl.entities;
     REQUIRE(entities.size() == 1);
@@ -376,7 +374,7 @@ TEST_CASE("ir_json - round-trip preserves every element kind") {
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     INFO(parse_failure(parsed));
     REQUIRE(parsed.has_value());
     const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
@@ -471,7 +469,7 @@ TEST_CASE("ir_json - legacy description slots migrate in rendering order") {
     CHECK(std::holds_alternative<Itemize>(body[1]));
     CHECK(std::holds_alternative<EquivalentTo>(body[2]));
     const auto emitted = emit_json(*parsed);
-    CHECK(emitted.find("item-v2") != std::string::npos);
+    CHECK(emitted.find("item-v3") != std::string::npos);
     CHECK(emitted.find("paragraphs") == std::string::npos);
     CHECK(parse_item(emitted).has_value());
 }
@@ -492,4 +490,17 @@ TEST_CASE("ir_json - a late block tag selects the correct overlapping table shap
     REQUIRE(table.rows.size() == 1);
     CHECK(std::get<TextInline>(table.rows.front().cell1.front()).text == "left");
     CHECK(std::get<TextInline>(table.rows.front().cell2.front()).text == "right");
+}
+
+TEST_CASE("ir_json - leading descriptions round-trip and accept earlier item tags") {
+    const auto item = parse_item(R"({"type":"item-v3","descr":{"elements":[],"leading":[
+      {"block":"paragraph","text":[{"t":"text","text":"Leading wording."}]}]}})");
+    REQUIRE(item.has_value());
+    REQUIRE(item->descr.leading.size() == 1);
+    CHECK(emit_json(*item).find("item-v3") != std::string::npos);
+    const auto copy = parse_item(emit_json(*item));
+    REQUIRE(copy.has_value());
+    CHECK(emit_json(*copy) == emit_json(*item));
+    CHECK(parse_item(R"({"type":"item-v2","descr":{"elements":[]}})").has_value());
+    CHECK(parse_item(R"({"type":"item","descr":{"elements":[]}})").has_value());
 }

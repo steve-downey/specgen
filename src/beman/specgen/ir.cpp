@@ -161,6 +161,8 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
         });
 }
 
+bool has_description(const ItemDescr& d) { return !d.leading.empty() || !d.elements.empty(); }
+
 void canonicalize(ItemDescr& d) {
     // Within one kind (design §5.2), a derived element sorts ahead of
     // an authored one ("derived conjuncts first, authored prose appended"),

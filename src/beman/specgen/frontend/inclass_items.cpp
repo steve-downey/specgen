@@ -76,10 +76,10 @@ declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManage
     const grammar::ParseResult parsed  = grammar::parse_docblock(raw.substr(*start).str());
     const lowering::Lowered    lowered = lowering::lower(parsed.block);
     const grammar::Markers&    markers = lowered.directives;
-    const bool asks_for_wording = !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl ||
-                                  markers.verbatim_synopsis || markers.describe || markers.also || markers.group_id ||
-                                  markers.constraints_in_decl || markers.impdef || markers.at_anchor ||
-                                  markers.effects_equiv || markers.returns_expr;
+    const bool asks_for_wording = beman::specgen::ir::has_description(lowered.descr) ||
+                                  parsed.block.verbatim_itemdecl || markers.verbatim_synopsis || markers.describe ||
+                                  markers.also || markers.group_id || markers.constraints_in_decl || markers.impdef ||
+                                  markers.at_anchor || markers.effects_equiv || markers.returns_expr;
 
     std::vector<beman::specgen::document_build::Diagnostic> out = docblock_diagnostics(rc, *start, parsed.diags, sm);
     if (asks_for_wording)
@@ -295,6 +295,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // specify, and on a deleted overload a standalone item for it is
         // actively misleading (issue #121).
         const bool has_authored_element =
+            !attached.item.descr.leading.empty() ||
             std::ranges::any_of(attached.item.descr.elements, [](const auto& element) { return !element.derived; });
         if ((is_defaulted_or_deleted || is_bare_pure_virtual) && !has_authored_element &&
             !attached.directives.describe)

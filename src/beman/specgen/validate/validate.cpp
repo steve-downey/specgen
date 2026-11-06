@@ -650,14 +650,14 @@ bool paragraph_has_content(const ir::Paragraph& paragraph) {
     });
 }
 
-Diagnostics check_table_block(ir::ElementKind kind, const ir::BodyBlock& block);
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block);
 
-Diagnostics check_table_block(ir::ElementKind kind, const ir::BodyBlock& block) {
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block) {
     Diagnostics out;
 
     if (const auto* t = std::get_if<ir::Table2D>(&block)) {
         const ir::Table2D& table   = *t;
-        const std::string  context = std::string(ir::element_name(kind)) + "/table";
+        const std::string  context = label + "/table";
         const auto         require = [&](bool condition, std::string message) {
             if (!condition)
                 out.push_back({Severity::Error, context, std::move(message)});
@@ -689,7 +689,7 @@ Diagnostics check_table_block(ir::ElementKind kind, const ir::BodyBlock& block) 
 
     if (const auto* t = std::get_if<ir::Table1D>(&block)) {
         const ir::Table1D& table   = *t;
-        const std::string  context = std::string(ir::element_name(kind)) + "/flat_table";
+        const std::string  context = label + "/flat_table";
         const auto         require = [&](bool condition, std::string message) {
             if (!condition)
                 out.push_back({Severity::Error, context, std::move(message)});
@@ -723,32 +723,45 @@ Diagnostics check_table_block(ir::ElementKind kind, const ir::BodyBlock& block) 
 
 Diagnostics check_table_structure(const ir::DescriptionElement& element) {
     return foundation::mconcat_map(
-        element.body, [&](const ir::BodyBlock& b) { return check_table_block(element.kind, b); }, diagnostics_monoid);
+        element.body,
+        [&](const ir::BodyBlock& b) { return check_table_block(std::string(ir::element_name(element.kind)), b); },
+        diagnostics_monoid);
 }
 
-Diagnostics check_element_spans(const ir::DescriptionElement& element) {
-    const std::string context(ir::element_name(element.kind));
+Diagnostics check_body_spans(const ir::DescriptionBody& body, const std::string& context);
+Diagnostics check_body_spans(const ir::DescriptionBody& body, const std::string& context) {
     return diagnostics_monoid.combine(foundation::mconcat_map(
-                                          ir::body_paragraphs(element.body),
+                                          ir::body_paragraphs(body),
                                           [&](const ir::Paragraph* p) { return check_paragraph_spans(context, *p); },
                                           diagnostics_monoid),
                                       foundation::mconcat_map(
-                                          ir::body_code(element.body),
+                                          ir::body_code(body),
                                           [&](const ir::CodeText* c) { return check_spans(context + "-equiv", *c); },
                                           diagnostics_monoid));
 }
 
-Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible) {
-    const std::string context(ir::element_name(element.kind));
+Diagnostics
+check_body_leakage(const ir::DescriptionBody& body, const std::string& context, const NameVisibility& visible);
+Diagnostics
+check_body_leakage(const ir::DescriptionBody& body, const std::string& context, const NameVisibility& visible) {
     return diagnostics_monoid.combine(
         foundation::mconcat_map(
-            ir::body_paragraphs(element.body),
+            ir::body_paragraphs(body),
             [&](const ir::Paragraph* p) { return check_paragraph_leakage(context, *p, visible); },
             diagnostics_monoid),
         foundation::mconcat_map(
-            ir::body_code(element.body),
+            ir::body_code(body),
             [&](const ir::CodeText* c) { return check_leakage(context + "-equiv", *c, visible); },
             diagnostics_monoid));
+}
+
+Diagnostics check_element_spans(const ir::DescriptionElement& element);
+Diagnostics check_element_spans(const ir::DescriptionElement& element) {
+    return check_body_spans(element.body, std::string(ir::element_name(element.kind)));
+}
+Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible);
+Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible) {
+    return check_body_leakage(element.body, std::string(ir::element_name(element.kind)), visible);
 }
 
 // --- a helper named only by a body the tool never renders (design §9) --------
@@ -776,15 +789,17 @@ std::set<std::string> paragraph_names(const ir::Paragraph& paragraph) {
         paragraph_code(paragraph), [](const ir::CodeText* code) { return code_names(*code); }, names_monoid);
 }
 
-std::set<std::string> element_names(const ir::DescriptionElement& element) {
+std::set<std::string> body_names(const ir::DescriptionBody& body);
+std::set<std::string> body_names(const ir::DescriptionBody& body) {
     return names_monoid.combine(
         foundation::mconcat_map(
-            ir::body_paragraphs(element.body),
-            [](const ir::Paragraph* p) { return paragraph_names(*p); },
-            names_monoid),
+            ir::body_paragraphs(body), [](const ir::Paragraph* p) { return paragraph_names(*p); }, names_monoid),
         foundation::mconcat_map(
-            ir::body_code(element.body), [](const ir::CodeText* c) { return code_names(*c); }, names_monoid));
+            ir::body_code(body), [](const ir::CodeText* c) { return code_names(*c); }, names_monoid));
 }
+
+std::set<std::string> element_names(const ir::DescriptionElement& element);
+std::set<std::string> element_names(const ir::DescriptionElement& element) { return body_names(element.body); }
 
 std::set<std::string> wording_names_layer(const ir::NodeF<std::set<std::string>>& layer) {
     return std::visit(
@@ -794,8 +809,10 @@ std::set<std::string> wording_names_layer(const ir::NodeF<std::set<std::string>>
             // emptiness is a decision rather than a fact.
             [](const ir::Synopsis&) { return std::set<std::string>{}; },
             [](const ir::SpecItem& v) {
-                return names_monoid.combine(foundation::mconcat_map(v.decl.signatures, code_names, names_monoid),
-                                            foundation::mconcat_map(v.descr.elements, element_names, names_monoid));
+                return names_monoid.combine(
+                    foundation::mconcat_map(v.decl.signatures, code_names, names_monoid),
+                    names_monoid.combine(body_names(v.descr.leading),
+                                         foundation::mconcat_map(v.descr.elements, element_names, names_monoid)));
             },
             [](const ir::FreeParagraph& v) { return paragraph_names(v.text); },
         },
@@ -1331,7 +1348,7 @@ Diagnostics check_nonempty(const std::string& context, const ir::CodeText& code)
 // motivated the check above, in the shape that produces no blank box to
 // notice it by, so it is an Error here rather than an absence.
 Diagnostics check_item_nonempty(const ir::SpecItem& item) {
-    if (!item.decl.signatures.empty() || !item.descr.elements.empty())
+    if (!item.decl.signatures.empty() || beman::specgen::ir::has_description(item.descr))
         return {};
     return {Diagnostic{Severity::Error, "item", "the item has neither a declaration nor a description"}};
 }
@@ -1418,6 +1435,18 @@ struct ValidationAlgebra {
                     check_element_leakage(element, visible));
             },
             diagnostics_monoid);
+
+        descr_findings = diagnostics_monoid.combine(
+            std::move(descr_findings),
+            diagnostics_monoid.combine(check_body_spans(v.descr.leading, "description"),
+                                       check_body_leakage(v.descr.leading, "description", visible)));
+
+        descr_findings = diagnostics_monoid.combine(
+            std::move(descr_findings),
+            foundation::mconcat_map(
+                v.descr.leading,
+                [](const ir::BodyBlock& block) { return check_table_block("description", block); },
+                diagnostics_monoid));
 
         Diagnostics drift_findings = check_mandates_constraints_drift(v.descr.elements);
 

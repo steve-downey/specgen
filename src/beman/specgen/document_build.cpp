@@ -279,7 +279,7 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // description-only ir::SpecItem -- no signatures,
                     // so group_items neither joins it to anything nor
                     // lets a following \also item join onto it.
-                    if (!syn.descr.elements.empty())
+                    if (beman::specgen::ir::has_description(syn.descr))
                         stack.back().pushed.push_back(
                             GroupCandidate{syn.offset, ir::SpecItem{{}, std::move(syn.descr)}, false});
                     // substrate generic algorithm: distributes each
