@@ -29,8 +29,7 @@ export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
 specgen --version
 ```
 
-`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu). The same tree is also
-published as `specgen-manylinux_2_34_x86_64.tar.gz`, for `tar -xz`.
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu).
 
 The remainder of this section concerns building from source. A source build
 requires GCC 16 with its C++26 libstdc++, CMake 3.30 or later, `uv`, and the
@@ -612,12 +611,13 @@ vocabulary, in canonical output order, is:
 ```text
 \constraints  \mandates  \expects  \hardexpects  \effects  \sync
 \ensures      \result    \returns  \throws       \complexity
-\remarks      \errors
+\remarks      \errors    \recommended
 ```
 
 The display labels include *Preconditions* for `\expects`, *Hardened
 preconditions* for `\hardexpects`, *Postconditions* for `\ensures`, and *Error
-conditions* for `\errors`. Authored order does not determine output order: an
+conditions* for `\errors`, and *Recommended practice* for `\recommended`.
+Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
 error.

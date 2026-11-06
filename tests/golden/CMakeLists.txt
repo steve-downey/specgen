@@ -2108,6 +2108,23 @@ specgen_add_golden(
 )
 
 specgen_add_golden(
+    recommended
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_recommended.hpp"
+)
+specgen_add_golden(recommended BACKEND latex INPUT "${CMAKE_CURRENT_SOURCE_DIR}/recommended/expected.json")
+specgen_add_golden(
+    recommended
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/recommended/expected.json"
+)
+specgen_add_golden(
+    recommended
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/recommended/expected.json"
+)
+
+specgen_add_golden(
     detached_diagnostics
     MODE diagnose
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"

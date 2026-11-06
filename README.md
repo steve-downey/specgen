@@ -51,8 +51,7 @@ curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specg
 specgen-*-manylinux_2_34_x86_64/bin/specgen --version
 ```
 
-`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu); the same tree is also published as
-`specgen-manylinux_2_34_x86_64.tar.gz` for `tar -xz`.
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu).
 
 Keep the unpacked directory together; `lib/clang/` beside `bin/` holds Clang's builtin headers.
 `specgen` does not carry a C++ standard library: a header that includes one is parsed against the host's,
