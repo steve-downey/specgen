@@ -94,6 +94,22 @@ TEST_CASE("docblock - unknown tag is an error") {
     CHECK(has_diag(r, Severity::Error, "unknown tag \\bogus"));
 }
 
+TEST_CASE("docblock - recommended follows errors and reports ordering and duplicates") {
+    const auto ordered = parse_docblock("//! \\errors An error condition.\n"
+                                        "//! \\recommended Implementations should avoid allocation.\n");
+    REQUIRE(ordered.ok());
+    REQUIRE(ordered.diags.empty());
+    REQUIRE(ordered.block.elements.size() == 2);
+    CHECK(ordered.block.elements.back().kind == ir::ElementKind::Recommended);
+
+    const auto unordered = parse_docblock("//! \\recommended Avoid allocation.\n"
+                                          "//! \\remarks An observation.\n"
+                                          "//! \\recommended Avoid another allocation.\n");
+    CHECK(unordered.ok());
+    CHECK(has_diag(unordered, Severity::Note, "\\remarks appears after \\recommended"));
+    CHECK(has_diag(unordered, Severity::Warning, "duplicate"));
+}
+
 TEST_CASE("docblock - expos with explicit name") {
     auto r = parse_docblock("//! \\expos(val)\n");
     CHECK(r.ok());

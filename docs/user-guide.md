@@ -612,12 +612,13 @@ vocabulary, in canonical output order, is:
 ```text
 \constraints  \mandates  \expects  \hardexpects  \effects  \sync
 \ensures      \result    \returns  \throws       \complexity
-\remarks      \errors
+\remarks      \errors    \recommended
 ```
 
 The display labels include *Preconditions* for `\expects`, *Hardened
 preconditions* for `\hardexpects`, *Postconditions* for `\ensures`, and *Error
-conditions* for `\errors`. Authored order does not determine output order: an
+conditions* for `\errors`, and *Recommended practice* for `\recommended`.
+Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
 error.
@@ -1003,6 +1004,6 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.6.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.7.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.

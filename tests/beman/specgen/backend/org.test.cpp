@@ -260,7 +260,7 @@ TEST_CASE("org - a concept reference is code font") {
 // --- elements ---------------------------------------------------------------
 
 TEST_CASE("org - every element kind renders as its draft label, in italics") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         const auto         kind = static_cast<ElementKind>(i);
         SpecItem           item;
         DescriptionElement element;
