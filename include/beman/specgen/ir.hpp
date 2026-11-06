@@ -97,7 +97,8 @@ enum class ElementKind {
     Throws,
     Complexity,
     Remarks,
-    Errors, // Error conditions
+    Errors,      // Error conditions
+    Recommended, // Recommended practice
 };
 
 } // namespace beman::specgen::ir
@@ -117,6 +118,7 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::ElementKind::Complexity,
     beman::specgen::ir::ElementKind::Remarks,
     beman::specgen::ir::ElementKind::Errors,
+    beman::specgen::ir::ElementKind::Recommended,
 };
 
 namespace beman::specgen::ir {

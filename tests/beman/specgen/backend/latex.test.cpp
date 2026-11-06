@@ -154,7 +154,7 @@ TEST_CASE("latex - a partially-spanned code inline keeps its tcode wrapper") {
 }
 
 TEST_CASE("latex - every element kind renders as the draft macro of that name") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         const auto kind = static_cast<ElementKind>(i);
         SpecItem   item;
         item.decl.signatures.push_back({"int f();", {}});

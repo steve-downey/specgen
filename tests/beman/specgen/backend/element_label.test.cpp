@@ -20,6 +20,7 @@ TEST_CASE("element_label - element_label spells the labels that differ from the 
     CHECK(backend::element_label(ElementKind::Ensures) == "Postconditions");
     CHECK(backend::element_label(ElementKind::Sync) == "Synchronization");
     CHECK(backend::element_label(ElementKind::Errors) == "Error conditions");
+    CHECK(backend::element_label(ElementKind::Recommended) == "Recommended practice");
 }
 
 TEST_CASE("element_label - every element kind has a label") {

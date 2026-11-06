@@ -157,8 +157,6 @@ jobs:
           path: |
             dist/specgen-manylinux_2_34_x86_64.tar.xz
             dist/specgen-manylinux_2_34_x86_64.tar.xz.sha256
-            dist/specgen-manylinux_2_34_x86_64.tar.gz
-            dist/specgen-manylinux_2_34_x86_64.tar.gz.sha256
             dist/specgen.debug.xz
 
   # The archive as a user gets it, on stock images with that distribution's own
@@ -188,7 +186,7 @@ jobs:
               apt-get update -q
               DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends g++ xz-utils
           else
-              dnf install -y -q --setopt=install_weak_deps=False gcc-c++ diffutils tar gzip xz
+              dnf install -y -q --setopt=install_weak_deps=False gcc-c++ diffutils tar xz
           fi
 
       - name: Checkout
@@ -202,18 +200,12 @@ jobs:
           name: specgen-manylinux_2_34_x86_64
           path: dist
 
-      # Both archives, checked and unpacked; the .tar.gz into its own
-      # directory, and required to hold the same tree as the .tar.xz the
-      # smoke test then runs.
+      # Check the download before unpacking the tree used by the smoke test.
       - name: Unpack
         working-directory: dist
         run: |
           sha256sum -c specgen-manylinux_2_34_x86_64.tar.xz.sha256
-          sha256sum -c specgen-manylinux_2_34_x86_64.tar.gz.sha256
           tar -xJf specgen-manylinux_2_34_x86_64.tar.xz
-          mkdir gz
-          tar -C gz -xzf specgen-manylinux_2_34_x86_64.tar.gz
-          diff -r specgen-*-manylinux_2_34_x86_64 gz/specgen-*-manylinux_2_34_x86_64
 
       - name: Smoke
         run: tools/release/smoke.sh dist/specgen-*/bin/specgen "$GITHUB_SHA"
@@ -250,8 +242,7 @@ jobs:
               echo
               echo "\`specgen-manylinux_2_34_x86_64.tar.xz\` runs on x86_64 Linux with glibc 2.34 or newer"
               echo "(Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9, or later) and needs the host's g++ for"
-              echo "the C++ standard library headers. The \`.tar.gz\` holds the same tree, for links made"
-              echo "before the \`.tar.xz\` existed. \`specgen.debug.xz\` resolves a crash report's offsets."
+              echo "the C++ standard library headers. \`specgen.debug.xz\` resolves a crash report's offsets."
           } > notes.md
           gh release create "$tag" dist/* \
               --repo "$GITHUB_REPOSITORY" \

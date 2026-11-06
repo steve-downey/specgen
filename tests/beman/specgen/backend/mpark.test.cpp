@@ -178,7 +178,7 @@ TEST_CASE("mpark - a concept reference is code font") {
 }
 
 TEST_CASE("mpark - every element kind renders as its draft label") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         const auto kind = static_cast<ElementKind>(i);
         SpecItem   item;
         item.decl.signatures.push_back({"int f();", {}});
