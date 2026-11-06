@@ -1,0 +1,44 @@
+** Class template wrapper [recommended.class]
+:PROPERTIES:
+:CUSTOM_ID: recommended.class
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  class wrapper {};
+}
+#+end_codeblock
+
+#+begin_pnum
+/Recommended practice/: Implementations should avoid allocating memory for small values.
+#+end_pnum
+
+** Reset [recommended.reset]
+:PROPERTIES:
+:CUSTOM_ID: recommended.reset
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void reset();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Discards the stored value.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The wrapper may be reused.
+#+end_pnum
+
+#+begin_pnum
+/Error conditions/: An error condition is reported by the caller.
+#+end_pnum
+
+#+begin_pnum
+/Recommended practice/: Implementations should reuse allocated storage.
+#+end_pnum
