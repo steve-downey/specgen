@@ -111,17 +111,23 @@ unsigned cv_run_begin(llvm::StringRef buffer, unsigned begin, unsigned floor) {
     }
 }
 
-// Drop `variable`'s initializer from one extraction, a copy-init's `=` with
-// it. A dominant edit, so a qualifier drop or expos-use rewrite inside the
-// initializer loses to it. Both the declared-type mask below and a static data
-// member's bare `\seebelow` (issue #148) drop the initializer; only the former
-// masks the type as well.
-void add_initializer_drop(std::vector<SynopsisEdit>&  edits,
+// Replace an initializer as one dominant edit, including a copy-init's `=`.
+// Masks dominate qualifier and exposition edits inside implementation text.
+void add_initializer_edit(std::vector<SynopsisEdit>&  edits,
                           const clang::VarDecl*       variable,
                           llvm::StringRef             buffer,
                           unsigned                    decl_begin,
                           const clang::SourceManager& sm,
-                          const clang::LangOptions&   lang_opts) {
+                          const clang::LangOptions&   lang_opts,
+                          std::string                 replacement = {});
+
+void add_initializer_edit(std::vector<SynopsisEdit>&  edits,
+                          const clang::VarDecl*       variable,
+                          llvm::StringRef             buffer,
+                          unsigned                    decl_begin,
+                          const clang::SourceManager& sm,
+                          const clang::LangOptions&   lang_opts,
+                          std::string                 replacement) {
     const clang::Expr* init = variable->getInit();
     if (init == nullptr || !init->getSourceRange().isValid())
         return;
@@ -133,7 +139,7 @@ void add_initializer_drop(std::vector<SynopsisEdit>&  edits,
     if (equal != llvm::StringRef::npos && buffer[equal] == '=')
         init_begin = static_cast<unsigned>(equal);
     if (init_begin >= decl_begin && init_end > init_begin)
-        add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, ""});
+        add_dominant_edit(edits, SynopsisEdit{init_begin, init_end, std::move(replacement)});
 }
 
 } // namespace
@@ -526,6 +532,12 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                 if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(member))
                     named = var_tmpl->getTemplatedDecl();
                 add_exposid(named, it->second);
+                if (docblock_directives(member, sm).seebelow) {
+                    const std::string sentinel = span_sentinel(span_n++);
+                    sentinels[sentinel]        = SpanInfo{ir::SpanKind::SeeBelow, "SEEBELOW", ""};
+                    add_initializer_edit(
+                        edits, llvm::cast<clang::VarDecl>(named), buffer, class_begin, sm, lang_opts, "= " + sentinel);
+                }
                 mark_survivor();
                 continue;
             }
@@ -830,7 +842,7 @@ void add_declaration_masks(std::vector<SynopsisEdit>&        edits,
         // writes the declaration alone. (see_below below is the same idea for
         // the kinds whose definition, rather than whose declared type, is the
         // implementation.)
-        add_initializer_drop(edits, unspecified, buffer, decl_begin, sm, lang_opts);
+        add_initializer_edit(edits, unspecified, buffer, decl_begin, sm, lang_opts);
     }
 
     // The definition, masked whole: an alias's RHS or a concept's
@@ -861,7 +873,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const clang::VarDecl*                            unspecified,
                                  std::optional<clang::SourceRange>                see_below,
                                  const clang::VarDecl*                            uninitialized,
-                                 std::string_view                                 declarator_qualifier) {
+                                 std::string_view                                 declarator_qualifier,
+                                 const clang::VarDecl*                            initialized_below) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -893,7 +906,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
         sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(name_loc, 0, sm, lang_opts)).second;
 
     const auto marked = expos_set.find(named->getCanonicalDecl());
-    if (exposition && marked != expos_set.end()) {
+    if (marked != expos_set.end()) {
         const std::string sentinel = span_sentinel(span_n++);
         sentinels[sentinel]        = SpanInfo{beman::specgen::ir::SpanKind::ExposId, marked->second, marked->second};
         edits.push_back(SynopsisEdit{name_begin, name_end, sentinel});
@@ -928,7 +941,12 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     add_declaration_masks(
         edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
     if (uninitialized != nullptr)
-        add_initializer_drop(edits, uninitialized, buffer, decl_begin, sm, lang_opts);
+        add_initializer_edit(edits, uninitialized, buffer, decl_begin, sm, lang_opts);
+    if (initialized_below != nullptr) {
+        const std::string sentinel = span_sentinel(span_n++);
+        sentinels[sentinel]        = SpanInfo{ir::SpanKind::SeeBelow, "SEEBELOW", ""};
+        add_initializer_edit(edits, initialized_below, buffer, decl_begin, sm, lang_opts, "= " + sentinel);
+    }
 
     sort_back_to_front(edits);
     unsigned applied_begin = decl_end + 1;

@@ -1106,6 +1106,35 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_members/expected.json"
 )
 
+# Authored descriptions on exposition-only static members become routed items.
+specgen_add_golden(
+    expos_static_items_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_items.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+
+specgen_add_golden(
+    expos_static_missing
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_missing.hpp"
+)
+
 # Members declared in a header and defined in a source file named with
 # `--source` take their wording from those definitions (issue #149), body
 # derivations and synopsis markers included.

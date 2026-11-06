@@ -764,7 +764,8 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
     const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
     if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
         variable = var_tmpl->getTemplatedDecl();
-    const bool drops_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
+    const bool exposition        = expos_set.contains(decl->getCanonicalDecl());
+    const bool masks_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
 
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
@@ -779,9 +780,13 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
                                              std::nullopt,
                                              nullptr,
                                              std::nullopt,
-                                             drops_initializer ? variable : nullptr));
+                                             masks_initializer && !exposition ? variable : nullptr,
+                                             {},
+                                             masks_initializer && exposition ? variable : nullptr));
     attached.item.decl.entities.push_back(decl->getNameAsString());
-    attached.item.decl.index.push_back({ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
+    if (!exposition)
+        attached.item.decl.index.push_back(
+            {ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
     rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set));
     return attached;
 }

@@ -830,6 +830,14 @@ function *declaration*, whose markup belongs at the definition — is an Error f
 rather than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is
 deliberate.
 
+Exposition-only static members, including static member templates, can carry
+an authored description (issue #215). They route through their class's `\ref`
+group or an explicit `\at`, retaining their semantic entity in the roster.
+Their item declarations use the exposition name and have no normative library
+index. Bare `\seebelow` writes `= see below` in both the synopsis and item;
+marker-only exposition stays in the synopsis. Non-static data members still
+have no independent item description.
+
 ## 7. Intermediate representation
 
 - Node vocabulary = wording ontology: Section (stable name, title, depth),

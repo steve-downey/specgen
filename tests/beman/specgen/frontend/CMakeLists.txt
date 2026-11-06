@@ -20,6 +20,7 @@ foreach(
     conditional_equiv
     equiv
     expos_uses
+    expos_static_items
     header_synopsis
     index
     mandates

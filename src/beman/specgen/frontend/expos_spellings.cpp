@@ -160,10 +160,10 @@ ir::Paragraph ProseLeafRewriter<Block>::paragraph(ir::Paragraph p) const {
     return std::move(p) | std::views::as_rvalue | std::views::transform([this](ir::Inline piece) {
                auto* code = std::get_if<ir::CodeInline>(&piece);
                if (code != nullptr && code->code.spans.empty()) {
-                   const auto it = spellings.find(code->code.text);
-                   if (it != spellings.end()) {
-                       code->code.text  = it->second;
-                       code->code.spans = {ir::Span{0, code->code.text.size(), ir::SpanKind::ExposId, it->second}};
+                   const auto name = code->code.text.substr(0, code->code.text.find('<'));
+                   if (const auto it = spellings.find(name); it != spellings.end()) {
+                       code->code.text.replace(0, name.size(), it->second);
+                       code->code.spans = {ir::Span{0, it->second.size(), ir::SpanKind::ExposId, it->second}};
                    }
                }
                return piece;

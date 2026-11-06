@@ -869,6 +869,13 @@ wording follows [structure.specifications].
 `\verbatim-synopsis` written as the docblock of anything other than a class or
 class-template definition is an error.
 
+A static member marked `\expos` can carry its own description, including a
+static member template. Route it with the class's `\ref` group or `\at`.
+Its item declaration uses the exposition name; bare `\seebelow` writes
+`= see below` in both the synopsis and item declaration. A marker-only
+exposition member stays in the synopsis. Non-static data members are described
+by their class.
+
 ## Validation and diagnostics
 
 Run `generate --validate` as part of the normal authoring loop. Validation
@@ -1030,7 +1037,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.11.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.12.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

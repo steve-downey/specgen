@@ -55,7 +55,7 @@ namespace {
 
 // The findings for a class-body docblock that can produce no wording of its
 // own: the bodyless declaration of a member defined elsewhere, or a non-static
-// or exposition-only data member. Markers that act on the declaration --
+// data member. Markers that act on the declaration --
 // `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are
 // what such a docblock is for, and stay silent. A description element, or a marker only a
 // definition's wording can carry out, asks for wording this docblock cannot
@@ -209,15 +209,16 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 friend_begin = friend_decl->getBeginLoc();
         }
         if (fn == nullptr) {
-            // A documented static data member is an item of its own, routed
-            // like an alias (issue #148), unless it is `\expos`: exposition
-            // renders in the synopsis alone.
-            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm) &&
-                !expos_set.contains(member->getCanonicalDecl())) {
+            // Documented static data members route like aliases (issues #148,
+            // #215). Marker-only exposition stays in the synopsis.
+            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm)) {
                 AttachedItem attached = attach_static_member(
                     llvm::cast<clang::NamedDecl>(member), record, sm, lang_opts, ns_drop_set, expos_set);
                 diagnostics.append_range(std::move(attached.diagnostics));
                 if (suppresses_generated_entity(attached.directives))
+                    continue;
+                if (expos_set.contains(member->getCanonicalDecl()) &&
+                    !beman::specgen::ir::has_description(attached.item.descr) && !attached.verbatim_itemdecl)
                     continue;
                 const std::string section =
                     attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
