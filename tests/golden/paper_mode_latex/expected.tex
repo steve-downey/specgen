@@ -1,0 +1,45 @@
+\begin{addedblock}
+\begin{codeblock}
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+};
+\end{codeblock}
+
+\rSec3[gadget.observe]{Observers}
+
+\begin{itemdecl}
+constexpr bool ready() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_copy_constructible_v<T>} is \tcode{true},
+\item \tcode{is_move_constructible_v<T>} is \tcode{true}.
+\end{itemize}
+
+\pnum
+\returns
+\tcode{true} if and only if the gadget is ready.
+
+\pnum
+A second paragraph, so the added numbering has to advance.
+\end{itemdescr}
+
+\pnum
+A free paragraph closing the subclause.
+
+\rSec3[gadget.mod]{Modifiers}
+
+\begin{itemdecl}
+constexpr void reset() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Resets the gadget.
+\end{itemdescr}
+\end{addedblock}

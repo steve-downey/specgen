@@ -868,7 +868,8 @@ deliberate.
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition. The
   serialized form decouples the wg21org exporter and enables backend-independent golden tests.
-- **Change marks** ([plans/wording-diff.md](plans/wording-diff.md)): the wording diff's
+- **Change marks** ([ir-level-diff](decisions/ir-level-diff.md),
+  [plans/wording-diff.md](plans/wording-diff.md)): the wording diff's
   record of what a revision added or removed, carried in the IR because a `::: add` div or
   the draft's `\added` is an editing instruction, semantic to the paper, not typography.
   `Change` (`Same`, `Added`, `Removed`) sits on every node kind and on a

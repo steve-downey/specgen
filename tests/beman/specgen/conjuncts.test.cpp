@@ -34,14 +34,32 @@ std::vector<Paragraph> traits(std::size_t n) {
 // A paragraph read back as text, code in backquotes, so a case can state the
 // conjunction it expects as the sentence it is. How a backend lays the
 // paragraph out is that backend's test's business.
+std::string plain_prose(const PlainInline& piece) {
+    return std::visit(overloaded{
+                          [](const TextInline& v) { return v.text; },
+                          [](const CodeInline& v) { return '`' + v.code.text + '`'; },
+                          [](const RefInline& v) { return "[" + v.stable_name + "]"; },
+                          [](const ConceptRef& v) { return v.name; },
+                      },
+                      piece);
+}
+
 std::string prose(const Paragraph& paragraph) {
     std::string out;
     for (const Inline& piece : paragraph)
         out += std::visit(overloaded{
-                              [](const TextInline& v) { return v.text; },
-                              [](const CodeInline& v) { return '`' + v.code.text + '`'; },
-                              [](const RefInline& v) { return "[" + v.stable_name + "]"; },
-                              [](const ConceptRef& v) { return v.name; },
+                              [](const TextInline& v) { return plain_prose(v); },
+                              [](const CodeInline& v) { return plain_prose(v); },
+                              [](const RefInline& v) { return plain_prose(v); },
+                              [](const ConceptRef& v) { return plain_prose(v); },
+                              // A changed run (the wording diff's mark) flattens to its contents;
+                              // no conjunct carries one, so the mark itself is not shown.
+                              [](const ChangedInline& v) {
+                                  std::string run;
+                                  for (const PlainInline& inner : v.inlines)
+                                      run += plain_prose(inner);
+                                  return run;
+                              },
                           },
                           piece);
     return out;

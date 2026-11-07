@@ -10,6 +10,7 @@
 #include <string_view>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include <beman/specgen/foundation/overloaded.hpp>
 
