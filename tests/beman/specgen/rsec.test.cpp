@@ -182,3 +182,21 @@ TEST_CASE("rsec_tag_recognized - false for a comment that is not a \\rSec at all
     CHECK_FALSE(grammar::rsec_tag_recognized("// SPDX-License-Identifier: Apache-2.0"));
     CHECK_FALSE(grammar::rsec_tag_recognized("\\rSec2[foo]{Title}")); // no decoration
 }
+
+TEST_CASE("parse_rsec - nested title macros and escaped braces preserve the outer boundary") {
+    const auto parsed =
+        grammar::parse_rsec(R"(// \rSec3[gadget.class]{Class \tcode{gadget<\exposid{T}>} and \{braces\}} tail)");
+    REQUIRE(parsed);
+    CHECK(parsed->value.title == R"(Class \tcode{gadget<\exposid{T}>} and \{braces\})");
+    CHECK(parsed->rest.remaining() == " tail");
+}
+
+TEST_CASE("parse_rsec - an inner close does not finish a wrapped title") {
+    const auto parsed = grammar::parse_rsec("// \\rSec3[gadget.class]{Class \\tcode{gadget}\n// constructors}");
+    REQUIRE(parsed);
+    CHECK(parsed->value.title == R"(Class \tcode{gadget} constructors)");
+    const std::string malformed = R"(// \rSec3[gadget.class]{Class \tcode{gadget})";
+    const auto        missing   = grammar::parse_rsec(malformed);
+    REQUIRE_FALSE(missing);
+    CHECK(missing.error().where.offset == malformed.size());
+}

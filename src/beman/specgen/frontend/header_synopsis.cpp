@@ -88,8 +88,9 @@ void append_structure_comment_items(std::vector<RawItem>& out, unsigned raw_begi
             // unterminated and draws the malformed-\rSec warning as before.
             const auto title_open = [&raw, line_begin](std::size_t end) {
                 const std::string_view text(raw.data() + line_begin, end - line_begin);
-                const std::size_t      open = text.find('{');
-                return open != std::string_view::npos && text.find('}', open) == std::string_view::npos;
+                const auto             parsed = grammar::parse_rsec(text);
+                return text.find('{') != std::string_view::npos && !parsed &&
+                       parsed.error().where.offset == text.size();
             };
             // substrate generic algorithm: the same offset-preserving line
             // scan as the outer loop, consuming continuations until the

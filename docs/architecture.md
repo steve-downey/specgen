@@ -171,6 +171,9 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   immediately following plain `//` lines — never a `///`/`//!` line or another `\rSec` — and
   the wrapped lines join back into one title with single spaces; an unclosed title is still a
   malformed-marker Warning.
+  Title braces balance through nested macros and ignore escaped literal braces.
+  Draft titles retain authored markup; mpark and org render `\tcode{...}` in
+  their native inline-code syntax, alongside the existing backtick spelling.
 - An **unrecognized draft-style section heading reports a Warning**. A draft-form line such as
   `// 22.5.3.3 Destructor[optional.dtor]` cannot open a section (it carries no `\rSec` depth),
   but it is reported instead of silently filing every following declaration into the

@@ -48,6 +48,7 @@
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
+#include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -234,14 +235,6 @@ std::string render_table_cell(const ir::Paragraph& paragraph, std::span<const st
                return ch == '|' ? std::string{"\\vert{}"} : std::string(1, ch);
            }) |
            std::views::join | std::ranges::to<std::string>();
-}
-
-// Section titles use the source markup's backticks for code names.  They are
-// not Paragraphs, so PieceRenderer never sees them; translate that one piece
-// of inline markup explicitly for an org heading.
-std::string render_section_title(std::string title) {
-    std::ranges::replace(title, '`', '~');
-    return title;
 }
 
 std::string render_table(const ir::Table2D& table, std::span<const std::string> new_roots) {
@@ -484,9 +477,10 @@ struct SeededProjector {
         const std::string stars(static_cast<std::size_t>(std::max(ctx.level, 1)), '*');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header = s.title.empty()
-                                 ? std::format("{} [{}]\n", stars, s.stable_name)
-                                 : std::format("{} {} [{}]\n", stars, render_section_title(s.title), s.stable_name);
+        std::string header =
+            s.title.empty()
+                ? std::format("{} [{}]\n", stars, s.stable_name)
+                : std::format("{} {} [{}]\n", stars, backend::render_section_title(s.title, '~'), s.stable_name);
         header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
                               s.stable_name,
                               ctx.wording_root ? ":WG21_WORDING: t\n" : "",

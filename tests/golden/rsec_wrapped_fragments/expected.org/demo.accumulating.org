@@ -1,0 +1,14 @@
+** Accumulating applicative instance for ~expected~ with error accumulation across the whole applicative chain [demo.accumulating]
+:PROPERTIES:
+:CUSTOM_ID: demo.accumulating
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline int accumulate_probe(int value);
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: The accumulated value unchanged.
+#+end_pnum

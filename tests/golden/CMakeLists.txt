@@ -901,6 +901,21 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_rsec_wrapped.hpp"
 )
 
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        rsec_wrapped
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/rsec_wrapped/expected.json"
+    )
+    specgen_add_golden(
+        rsec_wrapped_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/rsec_wrapped/expected.json"
+    )
+endforeach()
+
 # Private-member elision leaves neither a stray leading `public:` (a
 # struct's default access is already public) nor a silent invisible-name
 # use: the surviving `using type = raw;` names the elided private alias,
