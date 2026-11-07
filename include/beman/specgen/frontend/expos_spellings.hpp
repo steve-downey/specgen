@@ -61,6 +61,8 @@ apply_ref_sentinels(std::string text, unsigned& span_n, std::map<std::string, sp
 // "backticked spans are reference-resolved: expos names render as \exposid").
 // A `` `value_` `` in prose becomes an ExposId span carrying the exposid name,
 // so the backend emits \exposid{value} rather than \tcode{value_}.
+// The leading template name in `value_<T>` also matches; template arguments and
+// surrounding code stay intact. Authored code blocks remain verbatim.
 void rewrite_prose_expos(beman::specgen::ir::ItemDescr& descr, const std::map<std::string, std::string>& spellings);
 
 } // namespace beman::specgen::frontend

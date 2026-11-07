@@ -3,6 +3,8 @@
 
 #include <beman/specgen/frontend/directive_sets.hpp>
 
+#include <beman/specgen/ir.hpp>
+
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
@@ -388,7 +390,8 @@ SpecifiedNamespaces build_specified_namespace_set(const std::vector<clang::Decl*
         out.diagnostics.append_range(docblock_diagnostics(rc, *start, parsed.diags, sm));
         grammar::Markers rest = lowered.directives;
         rest.specified        = false;
-        if (rest != grammar::Markers{} || !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl)
+        if (rest != grammar::Markers{} || beman::specgen::ir::has_description(lowered.descr) ||
+            parsed.block.verbatim_itemdecl)
             report(rc, *start, "a namespace accepts only \\specified: it has no wording of its own");
     };
 

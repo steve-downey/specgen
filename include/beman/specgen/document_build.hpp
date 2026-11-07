@@ -293,10 +293,20 @@ struct Ignored {
     std::vector<Diagnostic> diagnostics;
 };
 
+// Detached prose belongs to the open section at its physical source position.
+// It has no declaration and never participates in overload grouping.
+struct SectionProse {
+    unsigned                                       offset = 0;
+    std::vector<beman::specgen::ir::FreeParagraph> paragraphs;
+    std::vector<Diagnostic>                        diagnostics;
+    unsigned                                       line = 0;
+    std::string                                    file;
+};
+
 // classify()'s output (decision document-build-stages): a closed variant naming no
 // clang:: type, which is what lets build_tree and group_items below be
 // clang-free.
-using DocEvent = std::variant<SectionOpen, SectionClose, SynopsisDecl, ItemDecl, Ignored>;
+using DocEvent = std::variant<SectionOpen, SectionClose, SynopsisDecl, ItemDecl, SectionProse, Ignored>;
 
 // One node awaiting placement in the frame currently being built, carrying
 // exactly what group_items and the placement-key sort each need: `key` is

@@ -4,6 +4,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -35,8 +37,8 @@ TEST_CASE("build_document - Mandates prologue retains aliases and consumes only 
     REQUIRE(mandates.conjuncts.size() == 1);
     CHECK(std::get<ir::CodeInline>(mandates.conjuncts[0][0]).code.text == "is_trivial_v<T>");
 
-    REQUIRE(reset.descr.elements[1].equivalent.has_value());
-    const std::string& code = reset.descr.elements[1].equivalent->code.text;
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(reset.descr.elements[1]) != nullptr));
+    const std::string& code = body_test::first<beman::specgen::ir::EquivalentTo>(reset.descr.elements[1])->code.text;
     CHECK(code.starts_with("using value_type = T;"));
     CHECK_FALSE(code.contains("static_assert(is_trivial_v<T>)"));
     CHECK(code.contains("static_assert(sizeof(value_type) > 0);"));
@@ -57,8 +59,8 @@ TEST_CASE("build_document - Equivalent-to extraction strips only documentation c
     REQUIRE(observe->children.size() == 2);
 
     const auto& reset = std::get<ir::SpecItem>(observe->children[1]);
-    REQUIRE(reset.descr.elements[1].equivalent.has_value());
-    const std::string& code = reset.descr.elements[1].equivalent->code.text;
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(reset.descr.elements[1]) != nullptr));
+    const std::string& code = body_test::first<beman::specgen::ir::EquivalentTo>(reset.descr.elements[1])->code.text;
     CHECK_FALSE(code.contains("Whole-line Doxygen"));
     CHECK_FALSE(code.contains("Whole-line specgen"));
     CHECK_FALSE(code.contains("Trailing Doxygen"));

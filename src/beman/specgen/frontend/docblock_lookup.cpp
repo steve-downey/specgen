@@ -24,6 +24,8 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <algorithm>
+#include <variant>
 
 namespace beman::specgen::frontend {
 
@@ -176,7 +178,10 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
     if (parsed.block.markers.effects_equiv || parsed.block.markers.returns_expr) {
         reject("an extraction marker applies to a function definition, not to a class definition");
         std::erase_if(out.descr.elements, [](const beman::specgen::ir::DescriptionElement& element) {
-            return element.equivalent && element.equivalent->code.text.empty();
+            return std::ranges::any_of(element.body, [](const beman::specgen::ir::BodyBlock& b) {
+                const auto* e = std::get_if<beman::specgen::ir::EquivalentTo>(&b);
+                return e != nullptr && e->code.text.empty();
+            });
         });
     }
     if (parsed.block.markers.verbatim_synopsis)

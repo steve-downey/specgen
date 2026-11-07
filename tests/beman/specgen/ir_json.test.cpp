@@ -6,6 +6,8 @@
 
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -35,7 +37,7 @@ TEST_CASE("ir_json - JSON emission of a value_or-shaped item") {
     p.push_back(TextInline{" is "});
     p.push_back(CodeInline{{"true", {}}});
     p.push_back(TextInline{"."});
-    mand.paragraphs.push_back(std::move(p));
+    mand.body.push_back(beman::specgen::ir::BodyParagraph{std::move(p)});
     item.descr.elements.push_back(std::move(mand));
 
     DescriptionElement eff;
@@ -44,12 +46,12 @@ TEST_CASE("ir_json - JSON emission of a value_or-shaped item") {
     body.text = "return has_value() ? **this : static_cast<T>(std::forward<U>(u));";
     // pretend has_value were exposition-only, to exercise span emission
     body.spans.push_back({7, 16, SpanKind::ExposId, "has-value"});
-    eff.equivalent = EquivalentTo{std::move(body)};
+    eff.body.push_back(EquivalentTo{std::move(body)});
     item.descr.elements.push_back(std::move(eff));
 
     const std::string json = emit_json(item);
 
-    CHECK(json.find("\"type\":\"item\"") != std::string::npos);
+    CHECK(json.find("\"type\":\"item-v3\"") != std::string::npos);
     CHECK(json.find("\"kind\":\"mandates\"") != std::string::npos);
     CHECK(json.find("\"equivalent\"") != std::string::npos);
     CHECK(json.find("\"exposid\"") != std::string::npos);
@@ -63,8 +65,8 @@ TEST_CASE("ir_json - two-dimensional tables round-trip through JSON") {
     item.decl.signatures.push_back({"optional& operator=(const optional& rhs);", {}});
 
     DescriptionElement effects;
-    effects.kind  = ElementKind::Effects;
-    effects.table = Table2D{
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(Table2D{
         .stable_name = "optional.assign.copy",
         .caption     = {CodeInline{{"optional::operator=(const optional&)", {}}}, TextInline{" effects"}},
         .column1     = {CodeInline{{"*this", {}}}, TextInline{" contains a value"}},
@@ -72,7 +74,7 @@ TEST_CASE("ir_json - two-dimensional tables round-trip through JSON") {
         .rows        = {{.header = {CodeInline{{"rhs", {}}}, TextInline{" contains a value"}},
                          .cell1  = {TextInline{"assigns the contained value"}},
                          .cell2  = {TextInline{"direct-non-list-initializes the contained value"}}}},
-    };
+    });
     item.descr.elements.push_back(std::move(effects));
 
     const std::string json = emit_json(item);
@@ -80,8 +82,8 @@ TEST_CASE("ir_json - two-dimensional tables round-trip through JSON") {
     CHECK(json.find("\"stable\":\"optional.assign.copy\"") != std::string::npos);
     const auto parsed = parse_item(json);
     REQUIRE(parsed.has_value());
-    const auto& table = parsed->descr.elements.front().table;
-    REQUIRE(table.has_value());
+    const auto& table = body_test::first<beman::specgen::ir::Table2D>(parsed->descr.elements.front());
+    REQUIRE((table != nullptr));
     CHECK(table->stable_name == "optional.assign.copy");
     REQUIRE(table->rows.size() == 1);
     CHECK(std::get<TextInline>(table->rows.front().cell2.front()).text.starts_with("direct-non-list"));
@@ -93,24 +95,24 @@ TEST_CASE("ir_json - flat two-column tables round-trip through JSON") {
     item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
 
     DescriptionElement remarks;
-    remarks.kind       = ElementKind::Remarks;
-    remarks.flat_table = Table1D{
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(Table1D{
         .stable_name = "demo.errors.tab",
         .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
         .column1     = {TextInline{"Constant"}},
         .column2     = {TextInline{"Meaning"}},
         .rows        = {{.cell1 = {CodeInline{{"invalid_byte", {}}}},
                          .cell2 = {TextInline{"the input holds an invalid byte"}}}},
-    };
+    });
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string json = emit_json(item);
-    CHECK(json.find("\"flat_table\"") != std::string::npos);
+    CHECK(json.find("\"flat-table\"") != std::string::npos);
     CHECK(json.find("\"stable\":\"demo.errors.tab\"") != std::string::npos);
     const auto parsed = parse_item(json);
     REQUIRE(parsed.has_value());
-    const auto& table = parsed->descr.elements.front().flat_table;
-    REQUIRE(table.has_value());
+    const auto& table = body_test::first<beman::specgen::ir::Table1D>(parsed->descr.elements.front());
+    REQUIRE((table != nullptr));
     CHECK(table->stable_name == "demo.errors.tab");
     REQUIRE(table->rows.size() == 1);
     CHECK(std::get<CodeInline>(table->rows.front().cell1.front()).code.text == "invalid_byte");
@@ -134,8 +136,6 @@ TEST_CASE("ir_json - document structure emission") {
 
 namespace {
 
-std::string to_json(const Document& doc) { return emit_json(doc); }
-
 // A failed parse rendered for Catch2's INFO. With the error carried inside
 // the result (decision expected-error-taxonomy) rather than written through an
 // out-param, there is no `ParseError error;` to declare ahead of the call and
@@ -149,12 +149,12 @@ std::string parse_failure(const std::expected<T, ParseError>& result) {
 // The round-trip invariant: re-emitting a parsed document reproduces the
 // bytes it was parsed from.
 void check_round_trip(const Document& doc) {
-    const std::string once   = to_json(doc);
+    const std::string once   = emit_json(doc);
     const auto        parsed = parse_document(once);
     INFO(parse_failure(parsed));
     INFO("json: " << once);
     REQUIRE(parsed.has_value());
-    CHECK(to_json(*parsed) == once);
+    CHECK(emit_json(*parsed) == once);
 }
 
 // A document exercising every node kind, span kind, and index kind.
@@ -187,17 +187,20 @@ Document kitchen_sink() {
 
     DescriptionElement mandates;
     mandates.kind = ElementKind::Mandates;
-    mandates.paragraphs.push_back({CodeInline{{"is_copy_constructible_v<T>", {{0, 2, SpanKind::Placeholder, "X"}}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   RefInline{"optional.general"}});
-    mandates.paragraphs.push_back({CodeInline{{"U", {}}}, TextInline{" models "}, ConceptRef{"copyable"}});
-    mandates.paragraphs.push_back({TextInline{"A second paragraph."}});
+    mandates.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{{"is_copy_constructible_v<T>", {{0, 2, SpanKind::Placeholder, "X"}}}},
+                                      TextInline{" is "},
+                                      CodeInline{{"true", {}}},
+                                      RefInline{"optional.general"}}});
+    mandates.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{{"U", {}}}, TextInline{" models "}, ConceptRef{"copyable"}}});
+    mandates.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"A second paragraph."}}});
     item.descr.elements.push_back(std::move(mandates));
 
     DescriptionElement effects;
-    effects.kind       = ElementKind::Effects;
-    effects.equivalent = EquivalentTo{{"return has_value() ? *this : nullopt;", {{7, 16, SpanKind::Ref, "x.y"}}}};
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(EquivalentTo{{"return has_value() ? *this : nullopt;", {{7, 16, SpanKind::Ref, "x.y"}}}});
     item.descr.elements.push_back(std::move(effects));
 
     sec.children.push_back(std::move(item));
@@ -235,13 +238,14 @@ TEST_CASE("ir_json - round-trip: strings needing escapes") {
 TEST_CASE("ir_json - round-trip: an element's itemize, with and without lead-in prose") {
     DescriptionElement mandates;
     mandates.kind = ElementKind::Mandates;
-    mandates.itemize =
+    mandates.body.push_back(
         Itemize{{{CodeInline{{"A", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{","}},
-                 {CodeInline{{"B", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{"."}}}};
+                 {CodeInline{{"B", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{"."}}}});
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.paragraphs.push_back({TextInline{"All of the following are true:"}});
-    constraints.itemize = Itemize{{{TextInline{"one."}}}};
+    constraints.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"All of the following are true:"}}});
+    constraints.body.push_back(Itemize{{{TextInline{"one."}}}});
 
     SpecItem item;
     item.descr.elements = {std::move(mandates), std::move(constraints)};
@@ -249,13 +253,13 @@ TEST_CASE("ir_json - round-trip: an element's itemize, with and without lead-in 
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
-    REQUIRE(elements[0].itemize.has_value());
-    CHECK(elements[0].itemize->items.size() == 2);
-    REQUIRE(elements[1].itemize.has_value());
-    CHECK(elements[1].paragraphs.size() == 1);
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(elements[0]) != nullptr));
+    CHECK(body_test::first<beman::specgen::ir::Itemize>(elements[0])->items.size() == 2);
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(elements[1]) != nullptr));
+    CHECK(body_test::paragraph_count(elements[1]) == 1);
 }
 
 TEST_CASE("ir_json - round-trip preserves every disposition") {
@@ -267,7 +271,7 @@ TEST_CASE("ir_json - round-trip preserves every disposition") {
     doc.nodes.push_back(std::move(syn));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& roster = std::get<Synopsis>(parsed->nodes.at(0)).roster;
     REQUIRE(roster.size() == static_cast<std::size_t>(Disposition::Undocumented) + 1);
@@ -303,7 +307,7 @@ TEST_CASE("ir_json - round-trip preserves a roster entry's member kind") {
     doc.nodes.push_back(std::move(syn));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& roster = std::get<Synopsis>(parsed->nodes.at(0)).roster;
     REQUIRE(roster.size() == 2);
@@ -324,7 +328,7 @@ TEST_CASE("ir_json - round-trip preserves the document-level validator channels"
     doc.unextracted_uses     = {{"widget::widget", "hard_reset"}, {"widget::reset", "clone"}};
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->foreign_namespaces.size() == 1);
     CHECK(parsed->foreign_namespaces.at(0).qualified == "demo::detail");
@@ -345,7 +349,7 @@ TEST_CASE("ir_json - round-trip preserves itemdecl entity identities") {
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     REQUIRE(parsed.has_value());
     const auto& entities = std::get<SpecItem>(parsed->nodes.at(0)).decl.entities;
     REQUIRE(entities.size() == 1);
@@ -366,11 +370,11 @@ TEST_CASE("ir_json - round-trip preserves every element kind") {
     Document doc;
     SpecItem item;
     for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i)
-        item.descr.elements.push_back({static_cast<ElementKind>(i), {{TextInline{"prose"}}}, {}});
+        item.descr.elements.push_back(body_test::element(static_cast<ElementKind>(i), {{TextInline{"prose"}}}, {}));
     doc.nodes.push_back(std::move(item));
     check_round_trip(doc);
 
-    const auto parsed = parse_document(to_json(doc));
+    const auto parsed = parse_document(emit_json(doc));
     INFO(parse_failure(parsed));
     REQUIRE(parsed.has_value());
     const auto& elements = std::get<SpecItem>(parsed->nodes[0]).descr.elements;
@@ -434,7 +438,7 @@ TEST_CASE("ir_json - parse reports a useful error offset") {
 TEST_CASE("ir_json - item and code parse entry points") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back({ElementKind::Returns, {{TextInline{"Nothing."}}}, {}});
+    item.descr.elements.push_back(body_test::element(ElementKind::Returns, {{TextInline{"Nothing."}}}, {}));
     const auto parsed = parse_item(emit_json(item));
     REQUIRE(parsed.has_value());
     REQUIRE(parsed->decl.signatures.size() == 1);
@@ -451,4 +455,52 @@ TEST_CASE("ir_json - item and code parse entry points") {
     REQUIRE(code->spans.size() == 1);
     CHECK(code->spans[0].kind == SpanKind::ExposId);
     CHECK(code->spans[0].payload == "val");
+}
+
+TEST_CASE("ir_json - legacy description slots migrate in rendering order") {
+    const auto parsed = parse_item(R"({"type":"item","descr":{"elements":[{
+        "kind":"effects","equivalent":{"text":"work();","spans":[]},
+        "itemize":[[{"t":"text","text":"a condition"}]],
+        "paragraphs":[[{"t":"text","text":"A lead-in."}]]}]}})");
+    REQUIRE(parsed.has_value());
+    const auto& body = parsed->descr.elements.front().body;
+    REQUIRE(body.size() == 3);
+    CHECK(std::holds_alternative<BodyParagraph>(body[0]));
+    CHECK(std::holds_alternative<Itemize>(body[1]));
+    CHECK(std::holds_alternative<EquivalentTo>(body[2]));
+    const auto emitted = emit_json(*parsed);
+    CHECK(emitted.find("item-v3") != std::string::npos);
+    CHECK(emitted.find("paragraphs") == std::string::npos);
+    CHECK(parse_item(emitted).has_value());
+}
+
+TEST_CASE("ir_json - mixed legacy and ordered bodies are rejected") {
+    const auto parsed = parse_item(R"({"type":"item-v2","descr":{"elements":[{
+        "kind":"effects","body":[],"paragraphs":[]}]}})");
+    REQUIRE_FALSE(parsed.has_value());
+    CHECK(parsed.error().message.find("mixes ordered body and legacy") != std::string::npos);
+}
+
+TEST_CASE("ir_json - a late block tag selects the correct overlapping table shape") {
+    const auto parsed = parse_item(R"({"type":"item-v2","descr":{"elements":[{
+        "kind":"remarks","body":[{"stable":"t","rows":[{"cell1":[{"t":"text","text":"left"}],
+        "cell2":[{"t":"text","text":"right"}]}],"block":"flat-table"}]}]}})");
+    REQUIRE(parsed.has_value());
+    const auto& table = std::get<Table1D>(parsed->descr.elements.front().body.front());
+    REQUIRE(table.rows.size() == 1);
+    CHECK(std::get<TextInline>(table.rows.front().cell1.front()).text == "left");
+    CHECK(std::get<TextInline>(table.rows.front().cell2.front()).text == "right");
+}
+
+TEST_CASE("ir_json - leading descriptions round-trip and accept earlier item tags") {
+    const auto item = parse_item(R"({"type":"item-v3","descr":{"elements":[],"leading":[
+      {"block":"paragraph","text":[{"t":"text","text":"Leading wording."}]}]}})");
+    REQUIRE(item.has_value());
+    REQUIRE(item->descr.leading.size() == 1);
+    CHECK(emit_json(*item).find("item-v3") != std::string::npos);
+    const auto copy = parse_item(emit_json(*item));
+    REQUIRE(copy.has_value());
+    CHECK(emit_json(*copy) == emit_json(*item));
+    CHECK(parse_item(R"({"type":"item-v2","descr":{"elements":[]}})").has_value());
+    CHECK(parse_item(R"({"type":"item","descr":{"elements":[]}})").has_value());
 }

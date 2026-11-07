@@ -54,6 +54,7 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+#include <variant>
 
 namespace beman::specgen::frontend {
 
@@ -334,7 +335,10 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     namespace ir = beman::specgen::ir;
 
     const auto is_empty_slot = [](const ir::DescriptionElement& el) {
-        return el.equivalent.has_value() && el.equivalent->code.text.empty();
+        return std::ranges::any_of(el.body, [](const ir::BodyBlock& b) {
+            const auto* e = std::get_if<ir::EquivalentTo>(&b);
+            return e != nullptr && e->code.text.empty();
+        });
     };
     if (std::none_of(descr.elements.begin(), descr.elements.end(), is_empty_slot))
         return;
@@ -360,7 +364,10 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     // revisited. Anything that reorders this -- re-reading the filtered range,
     // or caching an iterator across the assignment -- loses that guarantee.
     for (ir::DescriptionElement& el : descr.elements | std::views::filter(is_empty_slot))
-        el.equivalent->code = code;
+        for (auto& block : el.body) { // substrate generic algorithm: fill each extraction placeholder.
+            if (auto* e = std::get_if<ir::EquivalentTo>(&block); e != nullptr && e->code.text.empty())
+                e->code = code;
+        }
 }
 
 // The Returns element `\returns-expr` asks for (design §4.2, issue #143):
@@ -395,9 +402,9 @@ derive_returns_expr(const clang::FunctionDecl*                       fn,
 
     ir::DescriptionElement element;
     element.kind = ir::ElementKind::Returns;
-    element.paragraphs.push_back(ir::Paragraph{
+    element.body.push_back(ir::BodyParagraph{ir::Paragraph{
         ir::CodeInline{expr_code_rewritten(only->getRetValue(), sm, lang_opts, ns_drop_set, expos_set, expos_names)},
-        ir::TextInline{"."}});
+        ir::TextInline{"."}}});
     return element;
 }
 
@@ -757,7 +764,8 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
     const clang::VarDecl* variable = llvm::dyn_cast<clang::VarDecl>(decl);
     if (const auto* var_tmpl = llvm::dyn_cast<clang::VarTemplateDecl>(decl))
         variable = var_tmpl->getTemplatedDecl();
-    const bool drops_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
+    const bool exposition        = expos_set.contains(decl->getCanonicalDecl());
+    const bool masks_initializer = attached.directives.seebelow && !attached.directives.seebelow_target;
 
     if (attached.verbatim_itemdecl)
         attached.item.decl.signatures.push_back(ir::CodeText{*attached.verbatim_itemdecl, {}});
@@ -772,9 +780,13 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
                                              std::nullopt,
                                              nullptr,
                                              std::nullopt,
-                                             drops_initializer ? variable : nullptr));
+                                             masks_initializer && !exposition ? variable : nullptr,
+                                             {},
+                                             masks_initializer && exposition ? variable : nullptr));
     attached.item.decl.entities.push_back(decl->getNameAsString());
-    attached.item.decl.index.push_back({ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
+    if (!exposition)
+        attached.item.decl.index.push_back(
+            {ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
     rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set));
     return attached;
 }

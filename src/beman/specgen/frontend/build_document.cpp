@@ -475,7 +475,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // gathered node's own pending list to the section it named
                     // (issue #98). build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
-                    if (synopsis->general || !synopsis->descr.elements.empty()) {
+                    if (synopsis->general || beman::specgen::ir::has_description(synopsis->descr)) {
                         db::SynopsisDecl class_extra;
                         class_extra.offset  = synopsis->offset;
                         class_extra.general = std::move(synopsis->general);
@@ -508,7 +508,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // is. A declaration with nothing to say contributes
                         // only its declaration, exactly as before: a masked
                         // customization point object is the common case.
-                        if (!item_decl->item.descr.elements.empty()) {
+                        if (beman::specgen::ir::has_description(item_decl->item.descr)) {
                             // An out-of-line member definition belongs to its
                             // class's group, not to whatever namespace-scope
                             // header was last seen (issue #77): in the house
@@ -583,6 +583,12 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             db::DocEvent classified = classify_one(item);
             if (auto* ignored = std::get_if<db::Ignored>(&classified))
                 gathered.diagnostics.append_range(std::move(ignored->diagnostics));
+            if (std::holds_alternative<db::SectionProse>(classified)) {
+                // Like class wording, detached prose follows the assembled
+                // synopsis and retains its source order among wording nodes.
+                extras.push_back(std::move(classified));
+                continue;
+            }
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
                 runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));

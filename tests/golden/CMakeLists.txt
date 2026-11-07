@@ -1106,6 +1106,35 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_members/expected.json"
 )
 
+# Authored descriptions on exposition-only static members become routed items.
+specgen_add_golden(
+    expos_static_items_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_items.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+specgen_add_golden(
+    expos_static_items
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_static_items/expected.json"
+)
+
+specgen_add_golden(
+    expos_static_missing
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_missing.hpp"
+)
+
 # Members declared in a header and defined in a source file named with
 # `--source` take their wording from those definitions (issue #149), body
 # derivations and synopsis markers included.
@@ -2129,6 +2158,108 @@ specgen_add_golden(
     MODE diagnose
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"
 )
+
+specgen_add_golden(
+    resume_description_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_resume_description.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resume_description"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+specgen_add_golden(
+    resume_description
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/resume_description/expected.json"
+)
+
+specgen_add_golden(
+    leading_description_generate
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_leading_description.hpp"
+    EXPECTED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/leading_description"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
+)
+specgen_add_golden(
+    leading_description
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/leading_description/expected.json"
+)
+
+specgen_add_golden(
+    description_blocks
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_description_blocks.hpp"
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        description_blocks
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/description_blocks/expected.json"
+    )
+endforeach()
+
+specgen_add_golden(
+    section_prose
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_section_prose.hpp"
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        section_prose
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_prose/expected.json"
+    )
+    specgen_add_golden(
+        section_prose_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/section_prose/expected.json"
+    )
+endforeach()
+specgen_add_golden(
+    section_prose_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_section_prose_diagnostics.hpp"
+)
+
+specgen_add_golden(
+    callable_wrapper
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_callable_wrapper.hpp"
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        callable_wrapper
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/callable_wrapper/expected.json"
+    )
+    specgen_add_golden(
+        callable_wrapper_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/callable_wrapper/expected.json"
+    )
+endforeach()
 
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(

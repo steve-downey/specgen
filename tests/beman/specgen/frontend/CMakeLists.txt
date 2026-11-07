@@ -15,10 +15,12 @@ foreach(
     aliases
     class_at
     class_description
+    leading_description
     constraints
     conditional_equiv
     equiv
     expos_uses
+    expos_static_items
     header_synopsis
     index
     mandates

@@ -19,6 +19,8 @@
 #include <beman/specgen/document_build.hpp> // Re-inclusion verification
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <span>
@@ -37,7 +39,7 @@ ir::SpecItem make_item(std::string sig_text, bool with_descr) {
     ir::SpecItem item;
     item.decl.signatures.push_back(ir::CodeText{std::move(sig_text), {}});
     if (with_descr)
-        item.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Effects, {}, {}, {}});
+        item.descr.elements.push_back(body_test::element(ir::ElementKind::Effects, {}, {}));
     return item;
 }
 
@@ -222,7 +224,7 @@ TEST_CASE("build_tree - a class's own description follows its synopsis and the d
     synopsis.offset        = 10;
     synopsis.synopsis.code = ir::CodeText{"template <class T> class widget;", {}};
     synopsis.general       = ir::FreeParagraph{{ir::TextInline{"A program that instantiates ..."}}};
-    synopsis.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+    synopsis.descr.elements.push_back(body_test::element(ir::ElementKind::Remarks, {}, {}));
 
     auto doc = build({std::move(synopsis)});
 
@@ -257,7 +259,7 @@ TEST_CASE("build_tree - a SynopsisDecl with no code contributes its wording and 
     db::SynopsisDecl synopsis;
     synopsis.offset  = 10;
     synopsis.general = ir::FreeParagraph{{ir::TextInline{"A program that instantiates it is ill-formed."}}};
-    synopsis.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+    synopsis.descr.elements.push_back(body_test::element(ir::ElementKind::Remarks, {}, {}));
 
     auto doc = build({std::move(synopsis)});
 
@@ -276,7 +278,7 @@ TEST_CASE("group_items - a description-only item is neither a group primary nor 
     // empty-descr member would append its signature to it and the class's
     // wording would come out labelled as that member's.
     ir::SpecItem class_descr;
-    class_descr.descr.elements.push_back(ir::DescriptionElement{ir::ElementKind::Remarks, {}, {}, {}});
+    class_descr.descr.elements.push_back(body_test::element(ir::ElementKind::Remarks, {}, {}));
 
     auto doc = build({
         db::ItemDecl{10, false, std::move(class_descr)},
@@ -689,4 +691,43 @@ TEST_CASE("build_tree - a SynopsisDecl's member diagnostics survive a pending it
 
     REQUIRE(result.diagnostics.size() == 1);
     CHECK(result.diagnostics[0].message == "unknown tag \\effect");
+}
+
+TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjacent grouping") {
+    std::vector<db::DocEvent> events{
+        db::SectionOpen{1, 3, "demo.general", "General"},
+        db::ItemDecl{2, false, make_item("before();", true)},
+        db::SectionProse{3,
+                         {ir::FreeParagraph{{ir::TextInline{"First paragraph."}}},
+                          ir::FreeParagraph{{ir::TextInline{"Second paragraph."}}}},
+                         {},
+                         10,
+                         "part.hpp"},
+        db::ItemDecl{4, true, make_item("after();", false)},
+    };
+    const auto result = db::build_tree(events);
+    CHECK(result.diagnostics.empty());
+    REQUIRE(result.document.nodes.size() == 1);
+    const auto& children = std::get<ir::Section>(result.document.nodes.front()).children;
+    REQUIRE(children.size() == 4);
+    CHECK(std::holds_alternative<ir::SpecItem>(children[0]));
+    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[1]).text.front()).text == "First paragraph.");
+    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[2]).text.front()).text == "Second paragraph.");
+    CHECK(std::get<ir::SpecItem>(children[3]).decl.signatures.front().text == "after();");
+}
+
+TEST_CASE("build_tree - detached prose after a section fence reports its source") {
+    std::vector<db::DocEvent> events{
+        db::SectionOpen{1, 3, "demo.general", "General"},
+        db::SectionClose{"demo.general", 3, "part.hpp"},
+        db::SectionProse{4, {ir::FreeParagraph{{ir::TextInline{"Unplaced prose."}}}}, {}, 12, "part.hpp"},
+    };
+    const auto result = db::build_tree(events);
+    REQUIRE(result.diagnostics.size() == 1);
+    CHECK(result.diagnostics.front().severity == Severity::Error);
+    CHECK(result.diagnostics.front().line == 12);
+    CHECK(result.diagnostics.front().file == "part.hpp");
+    CHECK(result.diagnostics.front().message == "detached prose requires an open section");
+    REQUIRE(result.document.nodes.size() == 1);
+    CHECK(std::get<ir::Section>(result.document.nodes.front()).children.empty());
 }

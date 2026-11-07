@@ -52,6 +52,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -112,7 +113,7 @@ beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached
     // decided in push order, not the placement-key-sorted order the tree
     // ends up in).
     const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
-    const bool wants_join     = !named_grouping && (attached.directives.also || attached.item.descr.elements.empty());
+    const bool wants_join = !named_grouping && (attached.directives.also || !ir::has_description(attached.item.descr));
 
     return db::ItemDecl{doc.offset_in(attached.file, attached.inclass_offset),
                         wants_join,
@@ -295,7 +296,22 @@ db::DocEvent classify(const RawItem&                                   ev,
                     out.diagnostics   = std::move(diagnostics);
                     return out;
                 }
-                if (!parsed.block.elements.empty() && !suppresses_generated_entity(parsed.block.markers))
+                if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
+                    parsed.block.markers == grammar::Markers{} &&
+                    std::ranges::all_of(parsed.block.leading, [](const grammar::BodyBlock& block) {
+                        return std::holds_alternative<grammar::BodyParagraph>(block);
+                    })) {
+                    auto lowered    = lowering::lower(parsed.block);
+                    auto paragraphs = lowered.descr.leading | std::views::as_rvalue |
+                                      std::views::transform([](ir::BodyBlock&& block) {
+                                          return ir::FreeParagraph{std::move(std::get<ir::BodyParagraph>(block).text)};
+                                      }) |
+                                      std::ranges::to<std::vector>();
+                    return db::SectionProse{
+                        ev.offset, std::move(paragraphs), std::move(diagnostics), first_line, diagnostic_file};
+                }
+                if (ir::has_description(lowering::lower(parsed.block).descr) &&
+                    !suppresses_generated_entity(parsed.block.markers))
                     diagnostics.push_back({beman::specgen::Severity::Error,
                                            first_line,
                                            "a detached description has no declaration; attach its markup to the "

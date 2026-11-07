@@ -4,6 +4,8 @@
 #include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/backend/latex.hpp> // Re-inclusion verification
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -27,20 +29,21 @@ TEST_CASE("latex - value_or golden") {
 
     DescriptionElement mandates;
     mandates.kind = ElementKind::Mandates;
-    mandates.paragraphs.push_back({CodeInline{{"is_copy_constructible_v<T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{" and "},
-                                   CodeInline{{"is_convertible_v<U, T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{"."}});
+    mandates.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{CodeInline{{"is_copy_constructible_v<T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{" and "},
+                                                                        CodeInline{{"is_convertible_v<U, T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(mandates));
 
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.equivalent =
-        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}};
+    effects.body.push_back(
+        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string expected =
@@ -73,11 +76,12 @@ TEST_CASE("latex - spans become macros, in codeblock and in tcode") {
 
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"The type is "},
-                                  CodeInline{{"SB", {{0, 2, SpanKind::SeeBelow, ""}}}},
-                                  TextInline{", see "},
-                                  RefInline{"optional.general"},
-                                  TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The type is "},
+                                      CodeInline{{"SB", {{0, 2, SpanKind::SeeBelow, ""}}}},
+                                      TextInline{", see "},
+                                      RefInline{"optional.general"},
+                                      TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
@@ -128,7 +132,8 @@ TEST_CASE("latex - a RefInline in prose is still iref") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(latex::render_to_string(item).find("See \\iref{optional.general}.") != std::string::npos);
@@ -140,8 +145,8 @@ TEST_CASE("latex - a partially-spanned code inline keeps its tcode wrapper") {
     remarks.kind = ElementKind::Remarks;
     // Only "VAL" is exposition-only; the surrounding member access is not, so
     // the inline still needs \tcode around the whole thing.
-    remarks.paragraphs.push_back(
-        {TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
@@ -153,7 +158,7 @@ TEST_CASE("latex - every element kind renders as the draft macro of that name") 
         const auto kind = static_cast<ElementKind>(i);
         SpecItem   item;
         item.decl.signatures.push_back({"int f();", {}});
-        item.descr.elements.push_back({kind, {{TextInline{"Prose."}}}, {}});
+        item.descr.elements.push_back(body_test::element(kind, {{TextInline{"Prose."}}}, {}));
 
         const std::string out      = latex::render_to_string(item);
         const std::string expected = "\\" + std::string(element_name(kind)) + "\n";
@@ -165,7 +170,8 @@ TEST_CASE("latex - every element kind renders as the draft macro of that name") 
 TEST_CASE("latex - multi-paragraph element repeats pnum but not the macro") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}}, {}));
 
     const std::string expected =
         R"(\begin{itemdecl}
@@ -187,8 +193,8 @@ Second.
 TEST_CASE("latex - an itemize with no lead-in prose follows the label") {
     SpecItem           item;
     DescriptionElement mandates;
-    mandates.kind    = ElementKind::Mandates;
-    mandates.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    mandates.kind = ElementKind::Mandates;
+    mandates.body.push_back(Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}});
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(mandates));
 
@@ -211,8 +217,9 @@ TEST_CASE("latex - an itemize with lead-in prose stays in that paragraph's pnum"
     SpecItem           item;
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.paragraphs.push_back({TextInline{"All of the following are true:"}});
-    constraints.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    constraints.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"All of the following are true:"}}});
+    constraints.body.push_back(Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}});
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(constraints));
 
@@ -231,11 +238,11 @@ All of the following are true:
 TEST_CASE("latex - same-kind authored itemizes concatenate") {
     SpecItem           item;
     DescriptionElement first;
-    first.kind    = ElementKind::Constraints;
-    first.itemize = Itemize{{{TextInline{"one,"}}}};
+    first.kind = ElementKind::Constraints;
+    first.body.push_back(Itemize{{{TextInline{"one,"}}}});
     DescriptionElement second;
-    second.kind         = ElementKind::Constraints;
-    second.itemize      = Itemize{{{TextInline{"two."}}}};
+    second.kind = ElementKind::Constraints;
+    second.body.push_back(Itemize{{{TextInline{"two."}}}});
     item.descr.elements = {std::move(first), std::move(second)};
 
     const std::string out = latex::render_to_string(item);
@@ -244,9 +251,9 @@ TEST_CASE("latex - same-kind authored itemizes concatenate") {
 
 TEST_CASE("latex - an authored two-dimensional table uses lib2dtab2") {
     DescriptionElement effects;
-    effects.kind       = ElementKind::Effects;
-    effects.paragraphs = {{TextInline{"See the following table."}}};
-    effects.table      = Table2D{
+    effects.kind = ElementKind::Effects;
+    effects.body = body_test::prose({{TextInline{"See the following table."}}});
+    effects.body.push_back(Table2D{
         .stable_name = "optional.assign.copy",
         .caption     = {CodeInline{{"optional::operator=(const optional&)", {}}}, TextInline{" effects"}},
         .column1     = {CodeInline{{"*this", {}}}, TextInline{" has a value"}},
@@ -257,12 +264,13 @@ TEST_CASE("latex - an authored two-dimensional table uses lib2dtab2") {
                         Table2DRow{.header = {CodeInline{{"rhs", {}}}, TextInline{" has no value"}},
                                    .cell1  = {TextInline{"destroys the value"}},
                                    .cell2  = {TextInline{"no effect"}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"optional& operator=(const optional& rhs);", {}});
     DescriptionElement second = effects;
-    second.paragraphs.clear();
-    second.table->stable_name = "optional.assign.second";
+    std::erase_if(second.body,
+                  [](const auto& b) { return std::holds_alternative<beman::specgen::ir::BodyParagraph>(b); });
+    body_test::first<beman::specgen::ir::Table2D>(second)->stable_name = "optional.assign.second";
     item.descr.elements.push_back(std::move(effects));
     item.descr.elements.push_back(std::move(second));
 
@@ -289,9 +297,9 @@ TEST_CASE("latex - an authored two-dimensional table uses lib2dtab2") {
 
 TEST_CASE("latex - an authored flat two-column table uses libtab2") {
     DescriptionElement remarks;
-    remarks.kind       = ElementKind::Remarks;
-    remarks.paragraphs = {{TextInline{"The enumerators have the meanings in the table."}}};
-    remarks.flat_table = Table1D{
+    remarks.kind = ElementKind::Remarks;
+    remarks.body = body_test::prose({{TextInline{"The enumerators have the meanings in the table."}}});
+    remarks.body.push_back(Table1D{
         .stable_name = "demo.errors.tab",
         .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
         .column1     = {TextInline{"Constant"}},
@@ -300,7 +308,7 @@ TEST_CASE("latex - an authored flat two-column table uses libtab2") {
                                    .cell2 = {TextInline{"the input holds an invalid byte."}}},
                         Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}},
                                    .cell2 = {TextInline{"the input ends mid-sequence."}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
     item.descr.elements.push_back(std::move(remarks));
@@ -322,7 +330,8 @@ TEST_CASE("latex - grouped overloads share one itemdecl block") {
     SpecItem item;
     item.decl.signatures.push_back({"constexpr optional() noexcept;", {}});
     item.decl.signatures.push_back({"constexpr optional(nullopt_t) noexcept;", {}});
-    item.descr.elements.push_back({ElementKind::Ensures, {{TextInline{"*this does not contain a value."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Ensures, {{TextInline{"*this does not contain a value."}}}, {}));
 
     const std::string out = latex::render_to_string(item);
     CHECK(out.find("\\begin{itemdecl}\nconstexpr optional() noexcept;\nconstexpr "
@@ -342,7 +351,8 @@ TEST_CASE("latex - a description with no declaration emits no itemdecl") {
     // empty `itemdecl` environment would be the blank box design §9 rejects
     // on a synopsis.
     SpecItem item;
-    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}));
 
     const std::string out = latex::render_to_string(item);
     CHECK(out.find("itemdecl") == std::string::npos);
@@ -450,4 +460,45 @@ TEST_CASE("latex - a nested section descends from a non-default base") {
 \rSec4[optional.observe.deep.deeper]{Deeper still}
 )";
     CHECK(latex::render_to_string(doc, {.base_section_depth = 2}) == expected);
+}
+
+TEST_CASE("latex - merged bodies preserve list continuations and table positions") {
+    SpecItem           item;
+    DescriptionElement first;
+    first.kind = ElementKind::Effects;
+    first.body = {
+        BodyParagraph{{TextInline{"Before the list."}}},
+        Itemize{{{TextInline{"List entry."}}}},
+        BodyParagraph{{TextInline{"After the list."}}, true},
+        Table1D{.stable_name = "first.table",
+                .caption     = {TextInline{"First table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"one"}}, {TextInline{"two"}}}}},
+    };
+    DescriptionElement second;
+    second.kind = ElementKind::Effects;
+    second.body = {
+        BodyParagraph{{TextInline{"Before the second table."}}},
+        Table1D{.stable_name = "second.table",
+                .caption     = {TextInline{"Second table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"three"}}, {TextInline{"four"}}}}},
+    };
+    item.descr.elements     = {std::move(first), std::move(second)};
+    const auto out          = latex::render_to_string(item);
+    const auto lead         = out.find("Before the list.");
+    const auto entry        = out.find("List entry.");
+    const auto continuation = out.find("After the list.");
+    const auto table        = out.find("First table.");
+    const auto next         = out.find("Before the second table.");
+    const auto last         = out.find("Second table.");
+    REQUIRE(last != std::string::npos);
+    CHECK(lead < entry);
+    CHECK(entry < continuation);
+    CHECK(continuation < table);
+    CHECK(table < next);
+    CHECK(next < last);
+    CHECK(out.find("\\end{itemize}\nAfter the list.") != std::string::npos);
 }

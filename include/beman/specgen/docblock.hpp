@@ -77,17 +77,38 @@ struct Table1D {
     std::vector<Table1DRow> rows    = {};
 };
 
+struct BodyParagraph {
+    ProseParagraph text;
+    bool           continuation = false;
+};
+
+struct Itemize {
+    std::vector<ProseParagraph> items;
+};
+
+struct AuthoredCode {
+    ir::CodeText code;
+};
+using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
+using InformativeBody  = std::vector<InformativeBlock>;
+struct Note {
+    InformativeBody body;
+};
+struct Example {
+    InformativeBody body;
+};
+using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode, Note, Example>;
+using DescriptionBody = std::vector<BodyBlock>;
+
 struct Element {
-    ir::ElementKind             kind       = ir::ElementKind::Effects;
-    std::vector<ProseParagraph> paragraphs = {};
-    std::vector<ProseParagraph> items      = {}; // authored \item entries, in source order
-    std::optional<Table2D>      table      = {};
-    std::optional<Table1D>      flat_table = {};
-    int                         line       = 0; // line of the tag
+    ir::ElementKind kind = ir::ElementKind::Effects;
+    DescriptionBody body;
+    int             line = 0;
 };
 
 struct Docblock {
     std::vector<Element>       elements;
+    DescriptionBody            leading = {};
     Markers                    markers;
     std::optional<std::string> verbatim_synopsis;
     // Terminal exact-text override for one itemdecl code block. Multiple

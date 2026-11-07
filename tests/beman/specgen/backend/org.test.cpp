@@ -14,6 +14,8 @@
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -43,20 +45,21 @@ TEST_CASE("org - value_or golden") {
 
     DescriptionElement mandates;
     mandates.kind = ElementKind::Mandates;
-    mandates.paragraphs.push_back({CodeInline{{"is_copy_constructible_v<T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{" and "},
-                                   CodeInline{{"is_convertible_v<U, T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{"."}});
+    mandates.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{CodeInline{{"is_copy_constructible_v<T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{" and "},
+                                                                        CodeInline{{"is_convertible_v<U, T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(mandates));
 
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.equivalent =
-        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}};
+    effects.body.push_back(
+        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string expected = framed(
@@ -149,7 +152,8 @@ TEST_CASE("org - a span-free code inline is org's own code markup") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"Returns "}, CodeInline{{"has_value()", {}}}, TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Returns "}, CodeInline{{"has_value()", {}}}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = org::render_to_string(item);
@@ -166,7 +170,8 @@ TEST_CASE("org - a whole-span code inline becomes a latex export snippet") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({CodeInline{{"VAL", {{0, 3, SpanKind::ExposId, "val"}}}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{{"VAL", {{0, 3, SpanKind::ExposId, "val"}}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = org::render_to_string(item);
@@ -182,8 +187,8 @@ TEST_CASE("org - a partially-spanned code inline keeps its tcode wrapper") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back(
-        {TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(org::render_to_string(item).find(
@@ -198,7 +203,8 @@ TEST_CASE("org - a code inline containing a tilde falls back to a snippet") {
     SpecItem           item;
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.paragraphs.push_back({TextInline{"Calls "}, CodeInline{{"~optional()", {}}}, TextInline{"."}});
+    effects.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Calls "}, CodeInline{{"~optional()", {}}}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string out = org::render_to_string(item);
@@ -212,7 +218,8 @@ TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(org::render_to_string(item).find(
@@ -228,15 +235,16 @@ TEST_CASE("org - a RefInline links to the draft or a proposed clause") {
 TEST_CASE("org - stable references do not rewrite code or authored text") {
     SpecItem           item;
     DescriptionElement effects;
-    effects.kind       = ElementKind::Effects;
-    effects.equivalent = EquivalentTo{{"std::apply([](auto... xs) { return (... + xs); }, t[0]);", {}}};
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(EquivalentTo{{"std::apply([](auto... xs) { return (... + xs); }, t[0]);", {}}});
     item.descr.elements.push_back(std::move(effects));
 
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back(
-        {TextInline{"Authored ([[https://example.com][link]]) stays; unmatched ([ stays too."}});
-    remarks.paragraphs.push_back({TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Authored ([[https://example.com][link]]) stays; unmatched ([ stays too."}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, RefInline{"optional.general"}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = org::render_to_string(item);
@@ -250,8 +258,8 @@ TEST_CASE("org - a concept reference is code font") {
     SpecItem           item;
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.paragraphs.push_back(
-        {CodeInline{{"T", {}}}, TextInline{" models "}, ConceptRef{"copy_constructible"}, TextInline{"."}});
+    constraints.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        CodeInline{{"T", {}}}, TextInline{" models "}, ConceptRef{"copy_constructible"}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(constraints));
 
     CHECK(org::render_to_string(item).find("~T~ models ~copy_constructible~.") != std::string::npos);
@@ -265,7 +273,7 @@ TEST_CASE("org - every element kind renders as its draft label, in italics") {
         SpecItem           item;
         DescriptionElement element;
         element.kind = kind;
-        element.paragraphs.push_back({TextInline{"x."}});
+        element.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"x."}}});
         item.descr.elements.push_back(std::move(element));
 
         const std::string label = '/' + std::string(backend::element_label(kind)) + "/: x.";
@@ -279,7 +287,7 @@ TEST_CASE("org - the labels that differ from the macro name") {
     SpecItem           item;
     DescriptionElement expects;
     expects.kind = ElementKind::Expects;
-    expects.paragraphs.push_back({TextInline{"x."}});
+    expects.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"x."}}});
     item.descr.elements.push_back(std::move(expects));
 
     const std::string out = org::render_to_string(item);
@@ -291,8 +299,8 @@ TEST_CASE("org - a multi-paragraph element repeats the number but not the label"
     SpecItem           item;
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.paragraphs.push_back({TextInline{"First."}});
-    effects.paragraphs.push_back({TextInline{"Second."}});
+    effects.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"First."}}});
+    effects.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Second."}}});
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(effects));
 
@@ -314,8 +322,8 @@ Second.
 TEST_CASE("org - an itemize with no lead-in prose carries the label") {
     SpecItem           item;
     DescriptionElement constraints;
-    constraints.kind    = ElementKind::Constraints;
-    constraints.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    constraints.kind = ElementKind::Constraints;
+    constraints.body.push_back(Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}});
     item.decl.signatures.push_back({"int f();", {}});
     item.descr.elements.push_back(std::move(constraints));
 
@@ -337,8 +345,9 @@ TEST_CASE("org - an itemize with lead-in prose stays in that paragraph") {
     SpecItem           item;
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.paragraphs.push_back({TextInline{"All of:"}});
-    constraints.itemize = Itemize{{{TextInline{"one."}}}};
+    constraints.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"All of:"}}});
+    constraints.body.push_back(Itemize{{{TextInline{"one."}}}});
     item.descr.elements.push_back(std::move(constraints));
 
     CHECK(org::render_to_string(item).find("/Constraints/: All of:\n\n- one.\n") != std::string::npos);
@@ -347,11 +356,11 @@ TEST_CASE("org - an itemize with lead-in prose stays in that paragraph") {
 TEST_CASE("org - same-kind authored itemizes concatenate") {
     SpecItem           item;
     DescriptionElement first;
-    first.kind    = ElementKind::Constraints;
-    first.itemize = Itemize{{{TextInline{"one,"}}}};
+    first.kind = ElementKind::Constraints;
+    first.body.push_back(Itemize{{{TextInline{"one,"}}}});
     DescriptionElement second;
-    second.kind         = ElementKind::Constraints;
-    second.itemize      = Itemize{{{TextInline{"two."}}}};
+    second.kind = ElementKind::Constraints;
+    second.body.push_back(Itemize{{{TextInline{"two."}}}});
     item.descr.elements = {std::move(first), std::move(second)};
 
     const std::string out = org::render_to_string(item);
@@ -360,8 +369,8 @@ TEST_CASE("org - same-kind authored itemizes concatenate") {
 
 TEST_CASE("org - an authored two-dimensional table is a named native table") {
     DescriptionElement effects;
-    effects.kind  = ElementKind::Effects;
-    effects.table = Table2D{
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(Table2D{
         .stable_name = "optional.assign.copy",
         .caption     = {CodeInline{{"operator=", {}}}, TextInline{" effects"}},
         .column1     = {TextInline{"has | value"}},
@@ -372,11 +381,11 @@ TEST_CASE("org - an authored two-dimensional table is a named native table") {
                         Table2DRow{.header = {TextInline{"empty"}},
                                    .cell1  = {TextInline{"destroys"}},
                                    .cell2  = {TextInline{"no effect"}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
-    DescriptionElement second = effects;
-    second.table->stable_name = "optional.assign.second";
+    DescriptionElement second                                          = effects;
+    body_test::first<beman::specgen::ir::Table2D>(second)->stable_name = "optional.assign.second";
     item.descr.elements.push_back(std::move(effects));
     item.descr.elements.push_back(std::move(second));
 
@@ -399,15 +408,15 @@ TEST_CASE("org - an authored two-dimensional table is a named native table") {
 
 TEST_CASE("org - an authored flat two-column table is a named native table") {
     DescriptionElement remarks;
-    remarks.kind       = ElementKind::Remarks;
-    remarks.flat_table = Table1D{
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(Table1D{
         .stable_name = "demo.errors.tab",
         .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
         .column1     = {TextInline{"Constant | ish"}},
         .column2     = {TextInline{"Meaning"}},
         .rows = {Table1DRow{.cell1 = {CodeInline{{"invalid_byte", {}}}}, .cell2 = {TextInline{"bad byte"}}},
                  Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}}, .cell2 = {TextInline{"short read"}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
     item.descr.elements.push_back(std::move(remarks));
@@ -430,10 +439,10 @@ TEST_CASE("org - adjacent same-kind elements share one label") {
     DescriptionElement derived;
     derived.kind    = ElementKind::Mandates;
     derived.derived = true;
-    derived.paragraphs.push_back({TextInline{"Derived."}});
+    derived.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Derived."}}});
     DescriptionElement authored;
     authored.kind = ElementKind::Mandates;
-    authored.paragraphs.push_back({TextInline{"Authored."}});
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Authored."}}});
     item.descr.elements.push_back(std::move(derived));
     item.descr.elements.push_back(std::move(authored));
 
@@ -463,7 +472,8 @@ TEST_CASE("org - a description with no declaration emits no itemdecl block") {
     // empty itemdecl block would be the blank box design §9 rejects on a
     // synopsis.
     SpecItem item;
-    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}));
 
     const std::string out = org::render_to_string(item);
     CHECK(out.find("itemdecl") == std::string::npos);
@@ -646,7 +656,7 @@ TEST_CASE("org - a synopsis is a codeblock, an itemdecl is an itemdecl") {
 TEST_CASE("org - paper mode marks additions and numbers one item") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"Does a thing."}}}, {}});
+    item.descr.elements.push_back(body_test::element(ElementKind::Effects, {{TextInline{"Does a thing."}}}, {}));
 
     const std::string out = org::render_to_string(item, {.paper_mode = true});
     CHECK(out.starts_with("#+begin_addedblock\n"));
@@ -661,7 +671,8 @@ TEST_CASE("org - paper mode numbers across added section roots") {
         sec.stable_name = name;
         sec.title       = name;
         SpecItem item;
-        item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}});
+        item.descr.elements.push_back(
+            body_test::element(ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}));
         sec.children.push_back(std::move(item));
         doc.nodes.push_back(std::move(sec));
     }
@@ -680,4 +691,45 @@ TEST_CASE("org - paper mode wraps a bare synopsis") {
     doc.nodes.push_back(Synopsis{.name = "gadget", .code = {"class gadget;", {}}, .roster = {}});
     CHECK(org::render_to_string(doc, {.paper_mode = true}) ==
           "#+begin_addedblock\n#+begin_codeblock\nclass gadget;\n#+end_codeblock\n#+end_addedblock\n");
+}
+
+TEST_CASE("org - merged bodies preserve list continuations and table positions") {
+    SpecItem           item;
+    DescriptionElement first;
+    first.kind = ElementKind::Effects;
+    first.body = {
+        BodyParagraph{{TextInline{"Before the list."}}},
+        Itemize{{{TextInline{"List entry."}}}},
+        BodyParagraph{{TextInline{"After the list."}}, true},
+        Table1D{.stable_name = "first.table",
+                .caption     = {TextInline{"First table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"one"}}, {TextInline{"two"}}}}},
+    };
+    DescriptionElement second;
+    second.kind = ElementKind::Effects;
+    second.body = {
+        BodyParagraph{{TextInline{"Before the second table."}}},
+        Table1D{.stable_name = "second.table",
+                .caption     = {TextInline{"Second table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"three"}}, {TextInline{"four"}}}}},
+    };
+    item.descr.elements     = {std::move(first), std::move(second)};
+    const auto out          = org::render_to_string(item);
+    const auto lead         = out.find("Before the list.");
+    const auto entry        = out.find("List entry.");
+    const auto continuation = out.find("After the list.");
+    const auto table        = out.find("First table.");
+    const auto next         = out.find("Before the second table.");
+    const auto last         = out.find("Second table.");
+    REQUIRE(last != std::string::npos);
+    CHECK(lead < entry);
+    CHECK(entry < continuation);
+    CHECK(continuation < table);
+    CHECK(table < next);
+    CHECK(next < last);
+    CHECK(out.find("List entry.\n\nAfter the list.") != std::string::npos);
 }

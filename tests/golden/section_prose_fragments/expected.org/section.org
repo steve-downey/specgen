@@ -1,0 +1,93 @@
+** Section prose [section]
+:PROPERTIES:
+:CUSTOM_ID: section
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** General [section.general]
+:PROPERTIES:
+:CUSTOM_ID: section.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+The header provides a ~wrapper~ for callable objects.
+#+end_pnum
+
+#+begin_pnum
+A separate paragraph refers to ([[https://eel.is/c++draft/section.class][@@html:[section.class]@@@@latex:{[}section.class{]}@@]]).
+#+end_pnum
+
+*** Class template wrapper [section.class]
+:PROPERTIES:
+:CUSTOM_ID: section.class
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  struct wrapper {};
+}
+#+end_codeblock
+
+#+begin_pnum
+The ~wrapper~ class template stores a callable object.
+#+end_pnum
+
+*** Operations [section.operations]
+:PROPERTIES:
+:CUSTOM_ID: section.operations
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+inline void first();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Performs the first operation.
+#+end_pnum
+
+#+begin_pnum
+Wording between items stays between those items.
+#+end_pnum
+
+#+begin_itemdecl
+inline void second();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Performs the second operation.
+#+end_pnum
+
+**** Details [section.operations.detail]
+:PROPERTIES:
+:CUSTOM_ID: section.operations.detail
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+A block-form paragraph belongs to the nested section.
+#+end_pnum
+
+#+begin_pnum
+This paragraph belongs to the enclosing section again.
+#+end_pnum
+
+*** Header synopsis [section.syn]
+:PROPERTIES:
+:CUSTOM_ID: section.syn
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  struct section_part {};
+}
+#+end_codeblock
+
+#+begin_pnum
+Prose from a followed header appears after the assembled synopsis.
+#+end_pnum

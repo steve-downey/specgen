@@ -6,6 +6,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <cstddef>
+#include <stdexcept>
+#include <vector>
 #include <format>
 #include <string>
 #include <string_view>
@@ -15,6 +19,31 @@ using namespace beman::specgen::grammar;
 namespace ir = beman::specgen::ir;
 
 namespace {
+
+std::size_t                        paragraph_count(const Element& e);
+const ProseParagraph&              paragraph(const Element& e, std::size_t n = 0);
+const std::vector<ProseParagraph>& items(const Element& e);
+template <class T>
+const T* first(const Element& e);
+
+std::size_t paragraph_count(const Element& e) {
+    return std::ranges::count_if(e.body,
+                                 [](const BodyBlock& block) { return std::holds_alternative<BodyParagraph>(block); });
+}
+const ProseParagraph& paragraph(const Element& e, std::size_t n) {
+    for (const auto& block : e.body)
+        if (const auto* p = std::get_if<BodyParagraph>(&block); p != nullptr && n-- == 0)
+            return p->text;
+    throw std::out_of_range("paragraph");
+}
+const std::vector<ProseParagraph>& items(const Element& e) { return first<Itemize>(e)->items; }
+template <class T>
+const T* first(const Element& e) {
+    for (const auto& block : e.body)
+        if (const auto* value = std::get_if<T>(&block))
+            return value;
+    return nullptr;
+}
 
 bool has_diag(const ParseResult& r, Severity sev, std::string_view needle) {
     for (const auto& d : r.diags)
@@ -39,8 +68,8 @@ TEST_CASE("docblock - value_or shape: mandates prose + effects-equiv marker") {
     REQUIRE(r.block.elements.size() == 1);
     const auto& e = r.block.elements[0];
     CHECK(e.kind == ir::ElementKind::Mandates);
-    REQUIRE(e.paragraphs.size() == 1);
-    const auto& p = e.paragraphs[0];
+    REQUIRE(paragraph_count(e) == 1);
+    const auto& p = paragraph(e, 0);
     REQUIRE(p.size() == 4);
     CHECK(std::holds_alternative<InlineCode>(p[0]));
     CHECK(std::get<InlineCode>(p[0]).code == "is_copy_constructible_v<T>");
@@ -58,9 +87,9 @@ TEST_CASE("docblock - multi-paragraph element") {
     CHECK(r.ok());
     REQUIRE(r.block.elements.size() == 1);
     const auto& e = r.block.elements[0];
-    REQUIRE(e.paragraphs.size() == 2);
-    CHECK(std::get<InlineText>(e.paragraphs[0][0]).text == "First paragraph continues here.");
-    CHECK(std::get<InlineText>(e.paragraphs[1][0]).text == "Second paragraph.");
+    REQUIRE(paragraph_count(e) == 2);
+    CHECK(std::get<InlineText>(paragraph(e, 0)[0]).text == "First paragraph continues here.");
+    CHECK(std::get<InlineText>(paragraph(e, 1)[0]).text == "Second paragraph.");
 }
 
 TEST_CASE("docblock - out-of-canonical-order note") {
@@ -132,11 +161,16 @@ TEST_CASE("docblock - effects and effects-equiv conflict") {
     CHECK(has_diag(r, Severity::Error, "mutually exclusive"));
 }
 
-TEST_CASE("docblock - prose before first tag is an error") {
-    auto r = parse_docblock("//! Some stray prose.\n//! \\effects Fine.\n");
-    CHECK(!r.ok());
-    CHECK(has_diag(r, Severity::Error, "prose before first element tag"));
-    CHECK(r.block.elements.size() == 1); // element still parsed
+TEST_CASE("docblock - prose before first tag is a leading description") {
+    const auto r = parse_docblock("//! Leading prose.\n//! \\effects Fine.\n");
+    CHECK(r.ok());
+    CHECK(r.diags.empty());
+    REQUIRE(r.block.leading.size() == 1);
+    const auto& leading = std::get<BodyParagraph>(r.block.leading.front());
+    REQUIRE(leading.text.size() == 1);
+    CHECK(std::get<InlineText>(leading.text.front()).text == "Leading prose.");
+    REQUIRE(r.block.elements.size() == 1);
+    CHECK(r.block.elements.front().kind == ir::ElementKind::Effects);
 }
 
 TEST_CASE("docblock - lone also marker") {
@@ -203,16 +237,16 @@ TEST_CASE("docblock - authored items belong to the current element") {
     CHECK(r.ok());
     REQUIRE(r.block.elements.size() == 1);
     const Element& constraints = r.block.elements.front();
-    REQUIRE(constraints.paragraphs.size() == 1);
-    REQUIRE(constraints.items.size() == 2);
-    CHECK(std::get<InlineText>(constraints.paragraphs.front().front()).text == "All of the following are true:");
-    CHECK(std::get<InlineCode>(constraints.items.at(0).at(0)).code == "A");
-    CHECK(std::get<InlineText>(constraints.items.at(0).back()).text == ",");
-    CHECK(std::get<InlineCode>(constraints.items.at(1).at(2)).code == "false");
-    CHECK(std::get<InlineText>(constraints.items.at(1).back()).text == ".");
+    REQUIRE(paragraph_count(constraints) == 1);
+    REQUIRE(items(constraints).size() == 2);
+    CHECK(std::get<InlineText>(paragraph(constraints).front()).text == "All of the following are true:");
+    CHECK(std::get<InlineCode>(items(constraints).at(0).at(0)).code == "A");
+    CHECK(std::get<InlineText>(items(constraints).at(0).back()).text == ",");
+    CHECK(std::get<InlineCode>(items(constraints).at(1).at(2)).code == "false");
+    CHECK(std::get<InlineText>(items(constraints).at(1).back()).text == ".");
 }
 
-TEST_CASE("docblock - authored item diagnostics reject unrepresentable shapes") {
+TEST_CASE("docblock - authored item diagnostics and resumed prose") {
     const auto before = parse_docblock("//! \\item orphan\n");
     CHECK(!before.ok());
     CHECK(has_diag(before, Severity::Error, "requires a preceding element tag"));
@@ -222,20 +256,21 @@ TEST_CASE("docblock - authored item diagnostics reject unrepresentable shapes") 
     CHECK(has_diag(empty, Severity::Error, "\\item requires content"));
 
     const auto after = parse_docblock("//! \\constraints\n//! \\item One.\n//!\n//! Stray prose.\n");
-    CHECK(!after.ok());
-    CHECK(has_diag(after, Severity::Error, "prose after \\item cannot be represented"));
+    CHECK(after.ok());
+    REQUIRE(after.block.elements.front().body.size() == 2);
+    CHECK(std::get<BodyParagraph>(after.block.elements.front().body.back()).continuation);
 
     const auto after_marker =
         parse_docblock("//! \\constraints\n//! \\item One.\n//! \\freestanding\n//! Stray prose.\n");
-    CHECK(!after_marker.ok());
-    CHECK(has_diag(after_marker, Severity::Error, "prose after \\item cannot be represented"));
+    CHECK(after_marker.ok());
+    CHECK(std::get<BodyParagraph>(after_marker.block.elements.front().body.back()).continuation);
 }
 
 TEST_CASE("docblock - iref is prose markup outside backticks") {
     auto r = parse_docblock("//! \\remarks \\iref{class.union.general} follows `\\iref{literal}`.\n");
     CHECK(r.ok());
     REQUIRE(r.block.elements.size() == 1);
-    const ProseParagraph& para = r.block.elements.front().paragraphs.front();
+    const ProseParagraph& para = paragraph(r.block.elements.front());
     REQUIRE(para.size() == 4);
     CHECK(std::get<InlineRef>(para.at(0)).stable_name == "class.union.general");
     CHECK(std::get<InlineText>(para.at(1)).text == " follows ");
@@ -253,7 +288,7 @@ TEST_CASE("docblock - malformed iref is diagnosed") {
     CHECK(has_diag(unterminated, Severity::Error, "unterminated \\iref"));
 }
 
-TEST_CASE("docblock - an authored two-dimensional table is terminal element content") {
+TEST_CASE("docblock - an authored two-dimensional table preserves table content") {
     auto r = parse_docblock("//! \\effects See the following table.\n"
                             "//! \\lib2dtab2[optional.assign.copy]{`optional::operator=(const optional&)` effects}\n"
                             "//! continued caption\n"
@@ -266,8 +301,8 @@ TEST_CASE("docblock - an authored two-dimensional table is terminal element cont
                             "//! \\endlib2dtab2\n");
     CHECK(r.ok());
     REQUIRE(r.block.elements.size() == 1);
-    const auto& table = r.block.elements.front().table;
-    REQUIRE(table.has_value());
+    const auto& table = first<Table2D>(r.block.elements.front());
+    REQUIRE(table != nullptr);
     CHECK(table->stable_name == "optional.assign.copy");
     CHECK(std::get<InlineText>(table->caption.back()).text == " effects continued caption");
     CHECK(std::get<InlineCode>(table->column1.front()).code == "*this");
@@ -326,8 +361,8 @@ TEST_CASE("docblock - malformed two-dimensional table structure is diagnosed") {
                                          "//! \\cell two\n"
                                          "//! \\endlib2dtab2\n"
                                          "//! more prose\n");
-    CHECK(!trailing.ok());
-    CHECK(has_diag(trailing, Severity::Error, "prose after \\lib2dtab2"));
+    CHECK(trailing.ok());
+    CHECK(std::get<BodyParagraph>(trailing.block.elements.front().body.back()).continuation);
 
     const auto duplicate = parse_docblock("//! \\effects\n"
                                           "//! \\lib2dtab2[x]{first}\n"
@@ -339,11 +374,11 @@ TEST_CASE("docblock - malformed two-dimensional table structure is diagnosed") {
                                           "//! \\column one\n//! \\column two\n"
                                           "//! \\row row\n//! \\cell one\n//! \\cell two\n"
                                           "//! \\endlib2dtab2\n");
-    CHECK(!duplicate.ok());
-    CHECK(has_diag(duplicate, Severity::Error, "only one \\lib2dtab2"));
+    CHECK(duplicate.ok());
+    CHECK(has_diag(duplicate, Severity::Warning, "duplicate"));
 }
 
-TEST_CASE("docblock - an authored flat two-column table is terminal element content") {
+TEST_CASE("docblock - an authored flat two-column table preserves table content") {
     auto r = parse_docblock("//! \\remarks The enumerators have the meanings in the table.\n"
                             "//! \\libtab2[demo.errors.tab]{Enum class `whatwg_error`}\n"
                             "//! \\column Constant\n"
@@ -356,8 +391,8 @@ TEST_CASE("docblock - an authored flat two-column table is terminal element cont
                             "//! \\endlibtab2\n");
     CHECK(r.ok());
     REQUIRE(r.block.elements.size() == 1);
-    const auto& table = r.block.elements.front().flat_table;
-    REQUIRE(table.has_value());
+    const auto& table = first<Table1D>(r.block.elements.front());
+    REQUIRE(table != nullptr);
     CHECK(table->stable_name == "demo.errors.tab");
     CHECK(std::get<InlineText>(table->column1.front()).text == "Constant");
     CHECK(std::get<InlineText>(table->column2.front()).text == "Meaning");
@@ -412,8 +447,8 @@ TEST_CASE("docblock - malformed flat two-column table structure is diagnosed") {
                                          "//! \\cell one\n"
                                          "//! \\endlibtab2\n"
                                          "//! more prose\n");
-    CHECK(!trailing.ok());
-    CHECK(has_diag(trailing, Severity::Error, "prose after \\libtab2"));
+    CHECK(trailing.ok());
+    CHECK(std::get<BodyParagraph>(trailing.block.elements.front().body.back()).continuation);
 
     const auto duplicate = parse_docblock("//! \\remarks\n"
                                           "//! \\libtab2[x]{first}\n"
@@ -425,8 +460,8 @@ TEST_CASE("docblock - malformed flat two-column table structure is diagnosed") {
                                           "//! \\column one\n//! \\column two\n"
                                           "//! \\row row\n//! \\cell one\n"
                                           "//! \\endlibtab2\n");
-    CHECK(!duplicate.ok());
-    CHECK(has_diag(duplicate, Severity::Error, "only one \\libtab2"));
+    CHECK(duplicate.ok());
+    CHECK(has_diag(duplicate, Severity::Warning, "duplicate"));
 
     // The two table kinds are independent constructs: \lib2dtab2 and \libtab2
     // do not collide with each other's "one table per element kind" check.

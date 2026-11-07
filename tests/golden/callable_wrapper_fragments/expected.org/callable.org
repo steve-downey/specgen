@@ -1,0 +1,102 @@
+** Callable wrappers [callable]
+:PROPERTIES:
+:CUSTOM_ID: callable
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** General [callable.general]
+:PROPERTIES:
+:CUSTOM_ID: callable.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+The header provides callable wrappers for each combination of the placeholders.
+#+end_pnum
+
+#+begin_pnum
+The invocation qualifiers determine how the stored target is called.
+#+end_pnum
+
+*** Class template callable_wrapper [callable.class]
+:PROPERTIES:
+:CUSTOM_ID: callable.class
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class R, class... ArgTypes>
+  class callable_wrapper {
+  public:
+    // \ref{callable.ctor}, constructors
+
+    template<class F> callable_wrapper(F&& f);
+
+  private:
+    // \ref{callable.ctor}, exposition members
+
+    template<class VT>
+    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+  };
+}
+#+end_codeblock
+
+#+begin_pnum
+The ~callable_wrapper~ class template provides polymorphic wrappers that generalize the notion of a callable object([[https://eel.is/c++draft/func.def][@@html:[func.def]@@@@latex:{[}func.def{]}@@]]). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+#+end_pnum
+
+#+begin_pnum
+/Recommended practice/: Implementations should avoid the use of dynamically allocated memory for a small contained value.
+
+#+begin_note
+Such small-object optimization can only be applied to a type ~T~ for which ~is_nothrow_move_constructible_v<T>~ is ~true~.
+#+end_note
+#+end_pnum
+
+*** Construction [callable.ctor]
+:PROPERTIES:
+:CUSTOM_ID: callable.ctor
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<class F> callable_wrapper(F&& f);
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: ~*this~ has no target object if any of the following hold:
+
+- ~f~ is a null function pointer value, or
+- ~f~ is a null member pointer value, or
+- ~f~ is an empty callable wrapper.
+
+Otherwise, ~*this~ has a target object initialized with ~f~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+If the invocation is nonthrowing, @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_nothrow_invocable_r_v<R, VT, ArgTypes...>
+#+end_codeblock
+
+Otherwise, @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_invocable_r_v<R, VT, ArgTypes...>
+#+end_codeblock
+
+#+begin_wgexample
+A callable target can be checked as follows:
+
+#+begin_codeblock
+static_assert(is_invocable_r_v<int, int (*)()>);
+#+end_codeblock
+#+end_wgexample
+#+end_pnum

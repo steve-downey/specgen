@@ -70,9 +70,9 @@ void render_into(const std::vector<ir::Paragraph>& parts, ir::DescriptionElement
         return;
 
     if (parts.size() <= options.sentence_threshold)
-        element.paragraphs.push_back(join_sentence(parts));
+        element.body.push_back(ir::BodyParagraph{join_sentence(parts)});
     else
-        element.itemize = as_itemize(parts);
+        element.body.push_back(as_itemize(parts));
 }
 
 } // namespace beman::specgen::conjuncts

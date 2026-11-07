@@ -55,7 +55,7 @@ namespace {
 
 // The findings for a class-body docblock that can produce no wording of its
 // own: the bodyless declaration of a member defined elsewhere, or a non-static
-// or exposition-only data member. Markers that act on the declaration --
+// data member. Markers that act on the declaration --
 // `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, `\freestanding` -- are
 // what such a docblock is for, and stay silent. A description element, or a marker only a
 // definition's wording can carry out, asks for wording this docblock cannot
@@ -76,10 +76,10 @@ declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManage
     const grammar::ParseResult parsed  = grammar::parse_docblock(raw.substr(*start).str());
     const lowering::Lowered    lowered = lowering::lower(parsed.block);
     const grammar::Markers&    markers = lowered.directives;
-    const bool asks_for_wording = !lowered.descr.elements.empty() || parsed.block.verbatim_itemdecl ||
-                                  markers.verbatim_synopsis || markers.describe || markers.also || markers.group_id ||
-                                  markers.constraints_in_decl || markers.impdef || markers.at_anchor ||
-                                  markers.effects_equiv || markers.returns_expr;
+    const bool asks_for_wording = beman::specgen::ir::has_description(lowered.descr) ||
+                                  parsed.block.verbatim_itemdecl || markers.verbatim_synopsis || markers.describe ||
+                                  markers.also || markers.group_id || markers.constraints_in_decl || markers.impdef ||
+                                  markers.at_anchor || markers.effects_equiv || markers.returns_expr;
 
     std::vector<beman::specgen::document_build::Diagnostic> out = docblock_diagnostics(rc, *start, parsed.diags, sm);
     if (asks_for_wording)
@@ -209,15 +209,16 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 friend_begin = friend_decl->getBeginLoc();
         }
         if (fn == nullptr) {
-            // A documented static data member is an item of its own, routed
-            // like an alias (issue #148), unless it is `\expos`: exposition
-            // renders in the synopsis alone.
-            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm) &&
-                !expos_set.contains(member->getCanonicalDecl())) {
+            // Documented static data members route like aliases (issues #148,
+            // #215). Marker-only exposition stays in the synopsis.
+            if (llvm::isa<clang::VarDecl, clang::VarTemplateDecl>(member) && has_docblock(member, sm)) {
                 AttachedItem attached = attach_static_member(
                     llvm::cast<clang::NamedDecl>(member), record, sm, lang_opts, ns_drop_set, expos_set);
                 diagnostics.append_range(std::move(attached.diagnostics));
                 if (suppresses_generated_entity(attached.directives))
+                    continue;
+                if (expos_set.contains(member->getCanonicalDecl()) &&
+                    !beman::specgen::ir::has_description(attached.item.descr) && !attached.verbatim_itemdecl)
                     continue;
                 const std::string section =
                     attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
@@ -295,6 +296,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // specify, and on a deleted overload a standalone item for it is
         // actively misleading (issue #121).
         const bool has_authored_element =
+            !attached.item.descr.leading.empty() ||
             std::ranges::any_of(attached.item.descr.elements, [](const auto& element) { return !element.derived; });
         if ((is_defaulted_or_deleted || is_bare_pure_virtual) && !has_authored_element &&
             !attached.directives.describe)

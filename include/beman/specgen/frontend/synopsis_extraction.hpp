@@ -108,6 +108,8 @@ void add_declaration_masks(std::vector<synopsis_edits::SynopsisEdit>&       edit
 // `uninitialized` is the static data member whose bare `\seebelow` drops its
 // initializer and nothing else (issue #148), as [numeric.limits.members]
 // writes `static constexpr bool is_specialized;`.
+// `initialized_below` instead writes `= see below`, for exposition-only static
+// members (issue #215), consistently with their class synopsis.
 beman::specgen::ir::CodeText
 extract_freestanding_declaration(const clang::NamedDecl*                          named,
                                  const clang::SourceManager&                      sm,
@@ -119,7 +121,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  const clang::VarDecl*                            unspecified          = nullptr,
                                  std::optional<clang::SourceRange>                see_below            = std::nullopt,
                                  const clang::VarDecl*                            uninitialized        = nullptr,
-                                 std::string_view                                 declarator_qualifier = {});
+                                 std::string_view                                 declarator_qualifier = {},
+                                 const clang::VarDecl*                            initialized_below    = nullptr);
 
 // A free-standing exposition-only entity is already a complete
 // definition, so it uses the ordinary Synopsis IR rather than inventing an

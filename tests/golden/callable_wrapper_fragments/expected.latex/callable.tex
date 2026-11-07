@@ -1,0 +1,83 @@
+\rSec3[callable]{Callable wrappers}
+
+\rSec4[callable.general]{General}
+
+\pnum
+The header provides callable wrappers for each combination of the placeholders.
+
+\pnum
+The invocation qualifiers determine how the stored target is called.
+
+\rSec4[callable.class]{Class template callable_wrapper}
+
+\begin{codeblock}
+namespace std {
+  template<class R, class... ArgTypes>
+  class @\libglobal{callable_wrapper}@ {
+  public:
+    // \ref{callable.ctor}, constructors
+
+    template<class F> callable_wrapper(F&& f);
+
+  private:
+    // \ref{callable.ctor}, exposition members
+
+    template<class VT>
+    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+  };
+}
+\end{codeblock}
+
+\begin{itemdescr}
+\pnum
+The \tcode{callable_wrapper} class template provides polymorphic wrappers that generalize the notion of a callable object\iref{func.def}. These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+
+\pnum
+\recommended
+Implementations should avoid the use of dynamically allocated memory for a small contained value.
+\begin{note}
+Such small-object optimization can only be applied to a type \tcode{T} for which \tcode{is_nothrow_move_constructible_v<T>} is \tcode{true}.
+\end{note}
+\end{itemdescr}
+
+\rSec4[callable.ctor]{Construction}
+
+\indexlibraryctor{callable_wrapper}%
+\begin{itemdecl}
+template<class F> callable_wrapper(F&& f);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+\tcode{*this} has no target object if any of the following hold:
+\begin{itemize}
+\item \tcode{f} is a null function pointer value, or
+\item \tcode{f} is a null member pointer value, or
+\item \tcode{f} is an empty callable wrapper.
+\end{itemize}
+Otherwise, \tcode{*this} has a target object initialized with \tcode{f}.
+\end{itemdescr}
+
+\begin{itemdecl}
+template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+If the invocation is nonthrowing, \tcode{\exposid{is-callable-from}<VT>} is equal to:
+\begin{codeblock}
+is_nothrow_invocable_r_v<R, VT, ArgTypes...>
+\end{codeblock}
+Otherwise, \tcode{\exposid{is-callable-from}<VT>} is equal to:
+\begin{codeblock}
+is_invocable_r_v<R, VT, ArgTypes...>
+\end{codeblock}
+\begin{example}
+A callable target can be checked as follows:
+
+\begin{codeblock}
+static_assert(is_invocable_r_v<int, int (*)()>);
+\end{codeblock}
+\end{example}
+\end{itemdescr}

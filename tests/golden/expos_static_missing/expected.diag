@@ -1,0 +1,1 @@
+spec_expos_static_missing.hpp:15: error: a documented data member produces no wording: describe `field_` in its class's description

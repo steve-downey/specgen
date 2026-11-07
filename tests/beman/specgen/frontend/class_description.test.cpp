@@ -12,6 +12,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -65,7 +67,7 @@ TEST_CASE("build_document - a defined record's own docblock becomes a descriptio
     REQUIRE(descr != nullptr);
     REQUIRE(descr->descr.elements.size() == 1);
     CHECK(descr->descr.elements[0].kind == ir::ElementKind::Remarks);
-    CHECK(paragraph_text(descr->descr.elements[0].paragraphs.at(0)) == "A defined record's own description.");
+    CHECK(paragraph_text(body_test::paragraph(descr->descr.elements[0], 0)) == "A defined record's own description.");
 }
 
 TEST_CASE("build_document - a class template's own docblock survives alongside its routed member") {
@@ -89,7 +91,7 @@ TEST_CASE("build_document - an authored class \\mandates replaces the derived pa
         descr->descr.elements, [](const ir::DescriptionElement& e) { return e.kind == ir::ElementKind::Mandates; });
     REQUIRE(mandates != descr->descr.elements.end());
     CHECK_FALSE(mandates->derived);
-    CHECK(paragraph_text(mandates->paragraphs.at(0)) == "T is a type this facility accepts.");
+    CHECK(paragraph_text(body_test::paragraph(*mandates, 0)) == "T is a type this facility accepts.");
     // The suppressed derivation stays as drift evidence, not as a second
     // paragraph saying the same thing.
     REQUIRE(mandates->conjuncts.size() == 1);
