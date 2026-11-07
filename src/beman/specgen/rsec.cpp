@@ -54,8 +54,8 @@ constexpr auto skip_blank(parse::cursor cur) -> parse::cursor {
 }
 
 // Collects the run of characters strictly between an `open`/`close` pair,
-// discarding the delimiters — the shared shape behind both `[stable]` and
-// `{title}`. The run may be empty (e.g. `[]`); an unterminated run (no
+// discarding the delimiters for `[stable]`. Titles use balanced groups.
+// The run may be empty (e.g. `[]`); an unterminated run (no
 // `close` before the input ends) is a positioned failure at end-of-input
 // rather than a silent non-match.
 [[nodiscard]] auto bracketed(char open, char close, const char* open_message, const char* close_message) {
@@ -134,7 +134,7 @@ parse::parse_result<SectionHeader> parse_rsec(std::string_view raw) {
 
     auto header =
         parse::lift2(depth_and_stable,
-                     parse::sequence_right(blanks(), bracketed('{', '}', "expected '{'", "expected '}'")),
+                     parse::sequence_right(blanks(), parse::braced()),
                      [](std::pair<int, std::string> depth_stable, std::string title) {
                          // The braced content may span physical lines when a
                          // formatter wrapped a long title (issue #8) — the

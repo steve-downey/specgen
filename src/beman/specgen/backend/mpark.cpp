@@ -34,6 +34,7 @@
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
+#include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -372,9 +373,11 @@ struct SeededProjector {
         const std::string hashes(static_cast<std::size_t>(level), '#');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header = s.title.empty()
-                                 ? std::format("{} [{}]{{- .sref}} {{-}}\n", hashes, s.stable_name)
-                                 : std::format("{} {} [{}]{{- .sref}} {{-}}\n", hashes, s.title, s.stable_name);
+        std::string header = s.title.empty() ? std::format("{} [{}]{{- .sref}} {{-}}\n", hashes, s.stable_name)
+                                             : std::format("{} {} [{}]{{- .sref}} {{-}}\n",
+                                                           hashes,
+                                                           backend::render_section_title(s.title, '`'),
+                                                           s.stable_name);
 
         const RenderCtx     child_ctx{ctx.level + 1};
         std::vector<Seeded> children =

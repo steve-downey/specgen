@@ -10,6 +10,7 @@ target_sources(
                 draft_spans.hpp
                 element_label.hpp
                 render_fold.hpp
+                section_title.hpp
                 latex.hpp
                 mpark.hpp
                 org.hpp

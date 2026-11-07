@@ -502,3 +502,10 @@ TEST_CASE("latex - merged bodies preserve list continuations and table positions
     CHECK(next < last);
     CHECK(out.find("\\end{itemize}\nAfter the list.") != std::string::npos);
 }
+
+TEST_CASE("latex - a braced title macro renders as heading code") {
+    Document doc;
+    doc.nodes.push_back(Section{"gadget.class", R"(Class \tcode{gadget})", {}});
+    const auto out = latex::render_to_string(doc);
+    CHECK(out.find(R"(Class \tcode{gadget})") != std::string::npos);
+}

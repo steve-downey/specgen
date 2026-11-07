@@ -35,6 +35,7 @@
 #include <charconv>
 #include <expected>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -101,6 +102,36 @@ class parser {
 /// Deduction guide: @c parser(f) deduces @c parser<F>.
 template <class F>
 parser(F) -> parser<F>;
+
+/// A balanced braced argument, preserving nested groups and escaped bytes.
+/// The delimiters are consumed but excluded from the returned text.
+[[nodiscard]] constexpr auto braced() {
+    return parser{[](cursor cur) -> parse_result<std::string> {
+        if (cur.empty() || cur.peek() != '{')
+            return std::unexpected(parse_error{cur.position(), "expected '{'"});
+        cur                = cur.bump();
+        const cursor begin = cur;
+        unsigned     depth = 1;
+        // substrate generic algorithm: balanced-delimiter scan with escaped-byte pairs.
+        while (!cur.empty()) {
+            const char ch = cur.peek();
+            if (ch == '\\') {
+                cur = cur.bump();
+                if (!cur.empty())
+                    cur = cur.bump();
+                continue;
+            }
+            if (ch == '{')
+                ++depth;
+            else if (ch == '}' && --depth == 0)
+                return parse_state<std::string>{
+                    std::string(begin.remaining().substr(0, cur.position().offset - begin.position().offset)),
+                    cur.bump()};
+            cur = cur.bump();
+        }
+        return std::unexpected(parse_error{cur.position(), "expected '}'"});
+    }};
+}
 
 /// Returns a parser that always succeeds, consuming no input and yielding
 /// @p value.
