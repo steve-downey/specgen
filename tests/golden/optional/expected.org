@@ -92,7 +92,8 @@ constexpr optional(const optional& rhs);
 #+end_pnum
 
 #+begin_itemdecl
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 #+end_itemdecl
 
 #+begin_pnum
@@ -109,7 +110,7 @@ template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
 #+begin_itemdecl
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 #+end_itemdecl
 
 #+begin_pnum
@@ -137,7 +138,8 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 :END:
 
 #+begin_itemdecl
-template<class... Args> constexpr T& emplace(Args&&... args);
+template<class... Args>
+  constexpr T& emplace(Args&&... args);
 #+end_itemdecl
 
 #+begin_pnum
@@ -184,7 +186,8 @@ constexpr const T& operator*() const&;
 #+end_pnum
 
 #+begin_itemdecl
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 #+end_itemdecl
 
 #+begin_pnum
@@ -207,7 +210,8 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 :END:
 
 #+begin_itemdecl
-template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+template<class F>
+  constexpr @\seebelow@ transform(F&& f) const&;
 #+end_itemdecl
 
 #+begin_pnum

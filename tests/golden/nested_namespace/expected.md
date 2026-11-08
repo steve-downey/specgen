@@ -124,13 +124,15 @@ constexpr encoding scheme() const;
 ## Decoding [demo.decode]{- .sref} {-}
 
 ```cpp
-template<encoding E> decoder<E> proto::decode(const char* text);
+template<encoding E>
+  decoder<E> proto::decode(const char* text);
 ```
 
 [#]{.pnum} *Returns*: A `decoder<E>` over `text`.
 
 ```cpp
-template<class D> D decode(D d);
+template<class D>
+  D decode(D d);
 ```
 
 [#]{.pnum} *Returns*: `d`.

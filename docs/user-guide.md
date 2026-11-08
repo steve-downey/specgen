@@ -153,6 +153,10 @@ nested namespace flattens into the one that encloses it, and a qualifier
 naming one is reported as a leak, so an implementation `detail` needs no
 marker.
 
+Generated item declarations keep each template head on its own line and indent
+the declaration beneath it by two spaces. Item declarations use a 120-column
+limit; synopses use 88 columns.
+
 Render the complete document while editing:
 
 ```sh
@@ -1039,7 +1043,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.14.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.14.1 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

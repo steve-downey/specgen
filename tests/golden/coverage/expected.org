@@ -6,7 +6,8 @@
 :END:
 
 #+begin_itemdecl
-template<class F> void accept(F);
+template<class F>
+  void accept(F);
 #+end_itemdecl
 
 #+begin_pnum
@@ -62,7 +63,8 @@ The wrapper stores a callable object.
 :END:
 
 #+begin_itemdecl
-template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+template<class VT>
+  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum
@@ -70,7 +72,8 @@ The predicate determines whether ~VT~ can be invoked.
 #+end_pnum
 
 #+begin_itemdecl
-template<class F> constexpr move_only_function(F&& f);
+template<class F>
+  constexpr move_only_function(F&& f);
 #+end_itemdecl
 
 #+begin_pnum
@@ -86,7 +89,8 @@ Let ~VT~ be ~decay_t<F>~.
 #+end_pnum
 
 #+begin_itemdecl
-template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+template<class T>
+  constexpr explicit move_only_function(in_place_type_t<T>);
 #+end_itemdecl
 
 #+begin_pnum

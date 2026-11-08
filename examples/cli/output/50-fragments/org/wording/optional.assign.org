@@ -6,7 +6,8 @@
 :END:
 
 #+begin_itemdecl
-template<class... Args> constexpr T& emplace(Args&&... args);
+template<class... Args>
+  constexpr T& emplace(Args&&... args);
 #+end_itemdecl
 
 #+begin_pnum

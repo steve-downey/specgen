@@ -41,7 +41,8 @@ Such small-object optimization can only be applied to a type `T` for which `is_n
 ### Construction [callable.ctor]{- .sref} {-}
 
 ```cpp
-template<class F> callable_wrapper(F&& f);
+template<class F>
+  callable_wrapper(F&& f);
 ```
 
 [#]{.pnum} *Postconditions*: `*this` has no target object if any of the following hold:
@@ -53,7 +54,8 @@ template<class F> callable_wrapper(F&& f);
 Otherwise, `*this` has a target object initialized with `f`.
 
 ```cpp
-template<class VT> static constexpr bool $is-callable-from$ = $see below$;
+template<class VT>
+  static constexpr bool $is-callable-from$ = $see below$;
 ```
 
 [#]{.pnum} If the invocation is nonthrowing, `$is-callable-from$<VT>` is equal to:

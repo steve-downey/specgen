@@ -8,9 +8,11 @@
 #ifndef BEMAN_SPECGEN_FRONTEND_DRAFT_FORMAT_HPP
 #define BEMAN_SPECGEN_FRONTEND_DRAFT_FORMAT_HPP
 
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/span_sentinels.hpp>
 
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
@@ -21,8 +23,21 @@ namespace beman::specgen::frontend {
 // The draft's line width, which a synopsis's final text has to respect too:
 // enclose_in_namespace_std indents a synopsis's body this far *after* it is
 // formatted, so a synopsis formats that much narrower (issue #157).
-constexpr unsigned kDraftColumnLimit = 88;
-constexpr unsigned kNamespaceIndent  = 2;
+constexpr unsigned kDraftColumnLimit    = 88;
+constexpr unsigned kNamespaceIndent     = 2;
+constexpr unsigned kItemDeclColumnLimit = 120;
+
+enum class DraftContext { Synopsis, ItemDecl };
+
+} // namespace beman::specgen::frontend
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::frontend::DraftContext> = std::array{
+    beman::specgen::frontend::DraftContext::Synopsis,
+    beman::specgen::frontend::DraftContext::ItemDecl,
+};
+
+namespace beman::specgen::frontend {
 
 // `code` in the draft style, `indent` columns narrower than the draft's width
 // for text that is indented that far afterwards.
@@ -35,14 +50,17 @@ constexpr unsigned kNamespaceIndent  = 2;
 // lone `;` is gone. One that survives every retry is not that artifact but an
 // empty statement, `while (f())` over an indented `;`, and the first
 // formatting stands.
-std::string format_draft(std::string_view code, unsigned indent);
+std::string format_draft(std::string_view code, unsigned indent, DraftContext context = DraftContext::Synopsis);
 
+// Item declarations always break template heads, indent their declarations two
+// spaces, and use a 120-column limit; synopses retain their 88-column policy.
 // `indent` is how far the result is indented once formatted: a synopsis's
 // kNamespaceIndent, else 0.
 ir::CodeText format_and_recover(std::string                                            text,
                                 const std::map<std::string, span_sentinels::SpanInfo>& sentinels,
                                 std::optional<std::string_view>                        record_tag = std::nullopt,
-                                unsigned                                               indent     = 0);
+                                unsigned                                               indent     = 0,
+                                DraftContext context = DraftContext::Synopsis);
 
 // Format an expression fragment in a declaration context, then take the
 // context back off.

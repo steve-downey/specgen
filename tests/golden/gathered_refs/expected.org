@@ -43,7 +43,8 @@ constexpr explicit holder(I ptr);
 :END:
 
 #+begin_itemdecl
-template<typename I> void swap(holder<I>&, holder<I>&);
+template<typename I>
+  void swap(holder<I>&, holder<I>&);
 #+end_itemdecl
 
 #+begin_pnum

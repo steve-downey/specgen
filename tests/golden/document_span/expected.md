@@ -40,7 +40,8 @@ enum class error_kind { bad_input, truncated };
 - [#.#]{.pnum} `truncated` -- the input ends in the middle of a sequence.
 
 ```cpp
-template<class T> inline constexpr bool flag = false;
+template<class T>
+  inline constexpr bool flag = false;
 ```
 
 [#]{.pnum} *Remarks*: `flag<T>` is `true` for a type the encoding admits.

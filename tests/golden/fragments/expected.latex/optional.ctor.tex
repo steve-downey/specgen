@@ -33,7 +33,8 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 
 \indexlibraryctor{optional}%
 \begin{itemdecl}
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -53,7 +54,7 @@ Direct-non-list-initializes the contained value with \tcode{std::forward<Args>(a
 \indexlibraryctor{optional}%
 \begin{itemdecl}
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 \end{itemdecl}
 
 \begin{itemdescr}

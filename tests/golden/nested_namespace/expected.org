@@ -148,7 +148,8 @@ constexpr encoding scheme() const;
 :END:
 
 #+begin_itemdecl
-template<encoding E> decoder<E> proto::decode(const char* text);
+template<encoding E>
+  decoder<E> proto::decode(const char* text);
 #+end_itemdecl
 
 #+begin_pnum
@@ -156,7 +157,8 @@ template<encoding E> decoder<E> proto::decode(const char* text);
 #+end_pnum
 
 #+begin_itemdecl
-template<class D> D decode(D d);
+template<class D>
+  D decode(D d);
 #+end_itemdecl
 
 #+begin_pnum

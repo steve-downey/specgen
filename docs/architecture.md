@@ -411,9 +411,11 @@ back to name match within the class's fragments only):
    the front end aligns for what the reader sees rather than for any one fragment spelling.
 2. `clang::format::reformat()` with a `FormatStyle` derived from `getLLVMStyle()`
    (`draft_format_style()` in `frontend/draft_format.cpp`), tuned to draft conventions:
-   `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,
-   `IndentRequiresClause`, `BreakBeforeConceptDeclarations`, column limit ≈ 85–90, penalties
-   keeping return type and name together. Tuned via golden-file diff, not a priori.
+   `RequiresClausePosition: OwnLine`, `IndentRequiresClause`,
+   `BreakBeforeConceptDeclarations`, and penalties keeping return type and name
+   together. Item declarations set `BreakTemplateDeclarations: Yes`; synopses
+   use `MultiLine`. Column limits depend on that context, as below. Tuned via
+   golden-file diff, not a priori.
    Two of the options are about **spelling** rather than layout, and both say the same
    thing — the draft's spelling wins over the library's: `PointerAlignment: Left` attaches
    `&`/`*` to the type, and `QualifierAlignment: Left` writes `const T&` however the header
@@ -423,7 +425,9 @@ back to name match within the class's fragments only):
    Expression text — a derived conjunct, an *Equivalent to:* body — is taken from source
    verbatim and never reflowed, so it goes through the same style with `ColumnLimit: 0`:
    the qualifier fixer runs, the layout does not move.
-   The column limit is 88 for the *final* text. A synopsis is indented two columns inside
+   Item declarations use a 120-column final limit, always break template heads, and
+   indent the declaration beneath its head by two spaces. Synopses retain an
+   88-column limit for the *final* text. A synopsis is indented two columns inside
    `namespace std {` after it is formatted, so it formats at 86. When the last line of a
    declaration lands exactly on the limit, clang-format puts the `;` on a line of its own
    instead of breaking the line earlier, so such a fragment is reformatted a column narrower

@@ -81,7 +81,8 @@ constexpr optional(const optional& rhs);
 [#]{.pnum} *Postconditions*: `has_value()` is equal to `rhs.has_value()`.
 
 ```cpp
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 ```
 
 [#]{.pnum} *Constraints*: `is_constructible_v<T, Args...>` is `true`.
@@ -92,7 +93,7 @@ template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
 ```cpp
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ```
 
 [#]{.pnum} *Constraints*:
@@ -113,7 +114,8 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ## Assignment [optional.assign]{- .sref} {-}
 
 ```cpp
-template<class... Args> constexpr T& emplace(Args&&... args);
+template<class... Args>
+  constexpr T& emplace(Args&&... args);
 ```
 
 [#]{.pnum} *Mandates*: `is_constructible_v<T, Args...>` is `true`.
@@ -145,7 +147,8 @@ constexpr const T& operator*() const&;
 [#]{.pnum} *Returns*: A reference to the contained value.
 
 ```cpp
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 ```
 
 [#]{.pnum} *Mandates*: `is_copy_constructible_v<T>` is `true` and `is_convertible_v<U, T>` is `true`.
@@ -163,7 +166,8 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 ## Monadic operations [optional.monadic]{- .sref} {-}
 
 ```cpp
-template<class F> constexpr $see below$ transform(F&& f) const&;
+template<class F>
+  constexpr $see below$ transform(F&& f) const&;
 ```
 
 [#]{.pnum} *Effects*: If `*this` contains a value, returns an optional holding the result of invoking `f` with the contained value; otherwise returns an empty optional.

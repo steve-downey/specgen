@@ -30,7 +30,8 @@ namespace std {
 #+end_codeblock
 
 #+begin_itemdecl
-template<class T> constexpr int with_req_expr(T) const;
+template<class T>
+  constexpr int with_req_expr(T) const;
 #+end_itemdecl
 
 #+begin_pnum
@@ -42,7 +43,8 @@ template<class T> constexpr int with_req_expr(T) const;
 #+end_pnum
 
 #+begin_itemdecl
-template<class T> constexpr int with_named(T) const;
+template<class T>
+  constexpr int with_named(T) const;
 #+end_itemdecl
 
 #+begin_pnum
@@ -54,7 +56,8 @@ template<class T> constexpr int with_named(T) const;
 #+end_pnum
 
 #+begin_itemdecl
-template<class I> friend constexpr bool operator==(const I& it, box);
+template<class I>
+  friend constexpr bool operator==(const I& it, box);
 #+end_itemdecl
 
 #+begin_pnum
@@ -73,7 +76,8 @@ template<class I> friend constexpr bool operator==(const I& it, box);
 :END:
 
 #+begin_itemdecl
-template<class T> constexpr int free_with_req_expr(T);
+template<class T>
+  constexpr int free_with_req_expr(T);
 #+end_itemdecl
 
 #+begin_pnum
@@ -85,7 +89,8 @@ template<class T> constexpr int free_with_req_expr(T);
 #+end_pnum
 
 #+begin_itemdecl
-template<class T> constexpr int free_with_named(T);
+template<class T>
+  constexpr int free_with_named(T);
 #+end_itemdecl
 
 #+begin_pnum

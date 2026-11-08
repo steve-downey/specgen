@@ -3,7 +3,8 @@
 ## Explicit coverage [demo.coverage]{- .sref} {-}
 
 ```cpp
-template<class F> void accept(F);
+template<class F>
+  void accept(F);
 ```
 
 [#]{.pnum} *Constraints*:
@@ -47,13 +48,15 @@ namespace std {
 ### Construction [demo.coverage.ctors]{- .sref} {-}
 
 ```cpp
-template<class VT> static constexpr bool $is-callable-from$ = $see below$;
+template<class VT>
+  static constexpr bool $is-callable-from$ = $see below$;
 ```
 
 [#]{.pnum} The predicate determines whether `VT` can be invoked.
 
 ```cpp
-template<class F> constexpr move_only_function(F&& f);
+template<class F>
+  constexpr move_only_function(F&& f);
 ```
 
 [#]{.pnum} Let `VT` be `decay_t<F>`.
@@ -65,7 +68,8 @@ template<class F> constexpr move_only_function(F&& f);
 - [#.#]{.pnum} `$is-callable-from$<VT>` is `true`.
 
 ```cpp
-template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+template<class T>
+  constexpr explicit move_only_function(in_place_type_t<T>);
 ```
 
 [#]{.pnum} Let `VT` be `decay_t<T>`.

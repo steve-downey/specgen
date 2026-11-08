@@ -2,7 +2,8 @@
 
 \indexlibraryglobal{accept}%
 \begin{itemdecl}
-template<class F> void accept(F);
+template<class F>
+  void accept(F);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -51,7 +52,8 @@ The wrapper stores a callable object.
 \rSec4[demo.coverage.ctors]{Construction}
 
 \begin{itemdecl}
-template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+template<class VT>
+  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -61,7 +63,8 @@ The predicate determines whether \tcode{VT} can be invoked.
 
 \indexlibraryctor{move_only_function}%
 \begin{itemdecl}
-template<class F> constexpr move_only_function(F&& f);
+template<class F>
+  constexpr move_only_function(F&& f);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -79,7 +82,8 @@ Let \tcode{VT} be \tcode{decay_t<F>}.
 
 \indexlibraryctor{move_only_function}%
 \begin{itemdecl}
-template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+template<class T>
+  constexpr explicit move_only_function(in_place_type_t<T>);
 \end{itemdecl}
 
 \begin{itemdescr}

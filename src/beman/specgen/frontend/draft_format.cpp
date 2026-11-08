@@ -102,38 +102,78 @@ clang::format::FormatStyle qualifier_style() {
 
 constexpr std::string_view expr_context_prefix = "auto beman_specgen_expr = ";
 
+// clang-format leaves a template's declaration at column zero, after its
+// head and any indented requires-clause. Indent that declaration as a unit;
+// the formatter has already resolved nested parameter and expression syntax.
+// This operates on one extracted item declaration, never an entire synopsis.
+std::string indent_template_declaration(std::string text);
+
+std::string indent_template_declaration(std::string text) {
+    if (!text.starts_with("template<"))
+        return text;
+    std::size_t pos = text.find('\n');
+    // substrate generic algorithm: find the declaration's first unindented formatted line.
+    while (pos != std::string::npos && pos + 1 < text.size()) {
+        ++pos;
+        if (text[pos] != ' ' && text[pos] != '\t' && text[pos] != '\n' &&
+            !std::string_view(text).substr(pos).starts_with("template<"))
+            break;
+        pos = text.find('\n', pos);
+    }
+    if (pos == std::string::npos || pos >= text.size())
+        return text;
+    const std::string tail = std::string_view(text).substr(pos) | std::views::split('\n') |
+                             std::views::transform([](auto line) {
+                                 return std::format("  {}", std::string_view(line.begin(), line.end()));
+                             }) |
+                             std::views::join_with('\n') | std::ranges::to<std::string>();
+    text.replace(pos, std::string::npos, tail);
+    return text;
+}
+
 } // namespace
 
-std::string format_draft(std::string_view code, unsigned indent) {
-    clang::format::FormatStyle style = draft_format_style();
-    style.ColumnLimit -= indent;
+std::string format_draft(std::string_view code, unsigned indent, DraftContext context) {
+    clang::format::FormatStyle style    = draft_format_style();
+    const bool                 itemdecl = context == DraftContext::ItemDecl;
+    if (itemdecl) {
+        style.BreakTemplateDeclarations = clang::format::FormatStyle::BTDS_Yes;
+        style.ColumnLimit               = kItemDeclColumnLimit;
+        if (code.starts_with("template"))
+            indent += 2;
+    }
+    style.ColumnLimit = style.ColumnLimit > indent ? style.ColumnLimit - indent : 1;
+    const auto finish = [itemdecl](std::string text) {
+        return itemdecl ? indent_template_declaration(std::move(text)) : text;
+    };
     const std::string formatted = format_code(code, style);
     if (!has_lone_semicolon(formatted))
-        return formatted;
+        return finish(formatted);
     const unsigned limit = style.ColumnLimit;
-    // substrate generic algorithm: a bounded retry whose every attempt is a
-    // full reformat; the first acceptable one ends it.
-    for (unsigned narrower = 1; narrower <= 8; ++narrower) {
+    // substrate generic algorithm: a bounded retry whose every attempt is a full reformat.
+    for (unsigned narrower = 1; narrower <= 8 && narrower < limit; ++narrower) {
         style.ColumnLimit = limit - narrower;
         std::string again = format_code(code, style);
         if (!has_lone_semicolon(again))
-            return again;
+            return finish(std::move(again));
     }
-    return formatted;
+    return finish(formatted);
 }
 
 ir::CodeText format_and_recover(std::string                            text,
                                 const std::map<std::string, SpanInfo>& sentinels,
                                 std::optional<std::string_view>        record_tag,
-                                unsigned                               indent) {
+                                unsigned                               indent,
+                                DraftContext                           context) {
     auto [sized_text, sized] = resize_sentinels(std::move(text), sentinels);
-    std::string formatted    = format_draft(sized_text, indent);
+    std::string formatted    = format_draft(sized_text, indent, context);
 
     // BTDS_MultiLine matches the draft for function templates, but considers a
     // record head short even when its body is not and joins `template<...>` to
     // `class`/`struct`. The AST gives this path the record tag, so preserve
     // that one draft line break without guessing at arbitrary formatted code.
-    if (record_tag && !record_tag->empty() && formatted.starts_with("template<")) {
+    if (context == DraftContext::Synopsis && record_tag && !record_tag->empty() &&
+        formatted.starts_with("template<")) {
         const std::size_t line_end = formatted.find('\n');
         const std::size_t pos      = formatted.rfind(std::format(" {} ", *record_tag), line_end);
         if (pos != std::string::npos && pos < line_end)
