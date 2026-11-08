@@ -632,7 +632,7 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
-An element may contain authored itemizations:
+Labelled elements and leading unlabelled prose may contain authored itemizations:
 
 ```cpp
 //! \constraints All of the following are true:
@@ -642,7 +642,7 @@ An element may contain authored itemizations:
 
 Each nonblank line that follows an item continues that item. A blank decorated
 line closes the item. Another `\item` then continues the list; prose resumes
-the element in the same numbered paragraph. A later `\item` starts a new list.
+the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
 An element may also contain two-column tables:
@@ -1037,7 +1037,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.13.4 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.13.5 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1052,7 +1052,8 @@ when moving to the new writer.
 ### Section prose
 
 A prose-only `//!` or `/*! */` block separated from declarations belongs to
-the current section. Blank decorated lines separate its numbered paragraphs.
+the current section. It can contain authored `\item` lists, followed by resumed
+prose. Blank decorated lines separate its numbered paragraphs.
 A detached block outside every section reports an error. Inside a bounded
 header synopsis, detached prose follows the assembled synopsis alongside the
 classes' own descriptions. Labelled description elements require a declaration.

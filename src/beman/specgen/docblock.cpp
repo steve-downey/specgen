@@ -864,10 +864,6 @@ ParseResult parse_docblock(std::string_view raw) {
                 diags.push_back({Severity::Error, lineno, std::format("\\{} appears outside a table", name)});
             } else if (name == "item") {
                 flush_paragraph();
-                if (current_element() == nullptr && informative == nullptr) {
-                    diags.push_back({Severity::Error, lineno, "\\item requires a preceding element tag"});
-                    continue;
-                }
                 flush_item();
                 in_itemize                  = true;
                 item_open                   = true;

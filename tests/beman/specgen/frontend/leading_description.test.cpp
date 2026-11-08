@@ -53,7 +53,10 @@ TEST_CASE("leading descriptions route classes and documented declaration-only me
     CHECK(std::get<ir::SpecItem>(functions->children[1]).decl.signatures.size() == 1);
     const auto& grouped = std::get<ir::SpecItem>(functions->children[2]);
     CHECK(grouped.decl.signatures.size() == 2);
-    CHECK(grouped.descr.leading.size() == 2);
+    REQUIRE(grouped.descr.leading.size() == 4);
+    REQUIRE(std::holds_alternative<ir::Itemize>(grouped.descr.leading[1]));
+    CHECK(std::get<ir::Itemize>(grouped.descr.leading[1]).items.size() == 2);
+    CHECK(std::get<ir::BodyParagraph>(grouped.descr.leading[2]).continuation);
     CHECK(grouped.descr.elements.size() == 1);
 }
 

@@ -296,11 +296,11 @@ struct Ignored {
 // Detached prose belongs to the open section at its physical source position.
 // It has no declaration and never participates in overload grouping.
 struct SectionProse {
-    unsigned                                       offset = 0;
-    std::vector<beman::specgen::ir::FreeParagraph> paragraphs;
-    std::vector<Diagnostic>                        diagnostics;
-    unsigned                                       line = 0;
-    std::string                                    file;
+    unsigned                            offset = 0;
+    beman::specgen::ir::DescriptionBody body;
+    std::vector<Diagnostic>             diagnostics;
+    unsigned                            line = 0;
+    std::string                         file;
 };
 
 // classify()'s output (decision document-build-stages): a closed variant naming no

@@ -698,8 +698,8 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
         db::SectionOpen{1, 3, "demo.general", "General"},
         db::ItemDecl{2, false, make_item("before();", true)},
         db::SectionProse{3,
-                         {ir::FreeParagraph{{ir::TextInline{"First paragraph."}}},
-                          ir::FreeParagraph{{ir::TextInline{"Second paragraph."}}}},
+                         {ir::BodyParagraph{{ir::TextInline{"First paragraph."}}},
+                          ir::BodyParagraph{{ir::TextInline{"Second paragraph."}}}},
                          {},
                          10,
                          "part.hpp"},
@@ -709,18 +709,23 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
     CHECK(result.diagnostics.empty());
     REQUIRE(result.document.nodes.size() == 1);
     const auto& children = std::get<ir::Section>(result.document.nodes.front()).children;
-    REQUIRE(children.size() == 4);
+    REQUIRE(children.size() == 3);
     CHECK(std::holds_alternative<ir::SpecItem>(children[0]));
-    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[1]).text.front()).text == "First paragraph.");
-    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[2]).text.front()).text == "Second paragraph.");
-    CHECK(std::get<ir::SpecItem>(children[3]).decl.signatures.front().text == "after();");
+    const auto& prose = std::get<ir::SpecItem>(children[1]);
+    CHECK(prose.decl.signatures.empty());
+    REQUIRE(prose.descr.leading.size() == 2);
+    CHECK(std::get<ir::TextInline>(std::get<ir::BodyParagraph>(prose.descr.leading[0]).text.front()).text ==
+          "First paragraph.");
+    CHECK(std::get<ir::TextInline>(std::get<ir::BodyParagraph>(prose.descr.leading[1]).text.front()).text ==
+          "Second paragraph.");
+    CHECK(std::get<ir::SpecItem>(children[2]).decl.signatures.front().text == "after();");
 }
 
 TEST_CASE("build_tree - detached prose after a section fence reports its source") {
     std::vector<db::DocEvent> events{
         db::SectionOpen{1, 3, "demo.general", "General"},
         db::SectionClose{"demo.general", 3, "part.hpp"},
-        db::SectionProse{4, {ir::FreeParagraph{{ir::TextInline{"Unplaced prose."}}}}, {}, 12, "part.hpp"},
+        db::SectionProse{4, {ir::BodyParagraph{{ir::TextInline{"Unplaced prose."}}}}, {}, 12, "part.hpp"},
     };
     const auto result = db::build_tree(events);
     REQUIRE(result.diagnostics.size() == 1);

@@ -336,9 +336,10 @@ BuildResult build_tree(std::span<DocEvent> events) {
                                                std::move(prose.file)});
                         return;
                     }
-                    // substrate generic algorithm: append each paragraph through the frame's placement sink.
-                    for (ir::FreeParagraph& paragraph : prose.paragraphs)
-                        stack.back().pushed.push_back(GroupCandidate{prose.offset, std::move(paragraph), false});
+                    ir::ItemDescr description;
+                    description.leading = std::move(prose.body);
+                    stack.back().pushed.push_back(
+                        GroupCandidate{prose.offset, ir::SpecItem{{}, std::move(description)}, false});
                 },
                 [&](Ignored& ig) {
                     // \ref group headers, license/SPDX text, trailing

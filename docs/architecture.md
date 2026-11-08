@@ -457,7 +457,7 @@ Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
 by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
 descriptions require a declaration or a verbatim item declaration.
-Detached prose-only docblocks become `FreeParagraph` nodes in the open
+Detached prose-only docblocks become signatureless `SpecItem` nodes in the open
 section, at the block's source position (issue #217). Outside a section they
 report an Error. Labelled descriptions still require a declaration. Inside a
 bounded header synopsis, detached prose follows the assembled code, alongside
@@ -481,7 +481,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   element.
 - Backticks → `\tcode`, and backticked spans are reference-resolved: expos names
   render as `\exposid`, the leakage checker runs inside prose.
-- `\item` starts an authored item on the current element; nonblank following
+- `\item` starts an authored item on the current element or leading unlabelled
+  body (including detached section prose); nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.

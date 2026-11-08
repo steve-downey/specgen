@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.13.4
+    VERSION 0.13.5
 )
 
 # `specgen --version` identifies both the release and the exact source

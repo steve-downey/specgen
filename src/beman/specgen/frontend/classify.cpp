@@ -52,7 +52,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -297,18 +296,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     return out;
                 }
                 if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
-                    parsed.block.markers == grammar::Markers{} &&
-                    std::ranges::all_of(parsed.block.leading, [](const grammar::BodyBlock& block) {
-                        return std::holds_alternative<grammar::BodyParagraph>(block);
-                    })) {
-                    auto lowered    = lowering::lower(parsed.block);
-                    auto paragraphs = lowered.descr.leading | std::views::as_rvalue |
-                                      std::views::transform([](ir::BodyBlock&& block) {
-                                          return ir::FreeParagraph{std::move(std::get<ir::BodyParagraph>(block).text)};
-                                      }) |
-                                      std::ranges::to<std::vector>();
-                    return db::SectionProse{
-                        ev.offset, std::move(paragraphs), std::move(diagnostics), first_line, diagnostic_file};
+                    parsed.block.markers == grammar::Markers{}) {
+                    auto lowered = lowering::lower(parsed.block);
+                    return db::SectionProse{ev.offset,
+                                            std::move(lowered.descr.leading),
+                                            std::move(diagnostics),
+                                            first_line,
+                                            diagnostic_file};
                 }
                 if (ir::has_description(lowering::lower(parsed.block).descr) &&
                     !suppresses_generated_entity(parsed.block.markers))

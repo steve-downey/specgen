@@ -4,7 +4,12 @@
 
 ### General [section.general]{- .sref} {-}
 
-[#]{.pnum} The header provides a `wrapper` for callable objects.
+[#]{.pnum} The header provides a `wrapper` with these choices:
+
+- [#.#]{.pnum} the first choice, or
+- [#.#]{.pnum} the second choice.
+
+Prose resumes after the list.
 
 [#]{.pnum} A separate paragraph refers to ([section.class]{- .sref}).
 

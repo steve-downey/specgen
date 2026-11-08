@@ -80,7 +80,12 @@ inline void third(int);
 #+end_itemdecl
 
 #+begin_pnum
-The third function introduces the labelled requirements.
+The third function offers these choices:
+
+- a first choice, or
+- a second choice.
+
+It introduces the labelled requirements.
 #+end_pnum
 
 #+begin_pnum
