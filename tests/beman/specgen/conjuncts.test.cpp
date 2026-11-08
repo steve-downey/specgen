@@ -6,6 +6,8 @@
 
 #include <beman/specgen/foundation/overloaded.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <cstddef>
@@ -82,50 +84,51 @@ TEST_CASE("conjuncts - HeaderIsIdempotent") {
 
 TEST_CASE("conjuncts - sentence form for one, two, and three") {
     const DescriptionElement one = conjunction(1);
-    REQUIRE(one.paragraphs.size() == 1);
-    CHECK(prose(one.paragraphs[0]) == "`T0` is `true`.");
-    CHECK_FALSE(one.itemize.has_value());
+    REQUIRE(body_test::paragraph_count(one) == 1);
+    CHECK(prose(body_test::paragraph(one, 0)) == "`T0` is `true`.");
+    CHECK_FALSE((body_test::first<beman::specgen::ir::Itemize>(one) != nullptr));
 
     const DescriptionElement two = conjunction(2);
-    REQUIRE(two.paragraphs.size() == 1);
-    CHECK(prose(two.paragraphs[0]) == "`T0` is `true` and `T1` is `true`.");
+    REQUIRE(body_test::paragraph_count(two) == 1);
+    CHECK(prose(body_test::paragraph(two, 0)) == "`T0` is `true` and `T1` is `true`.");
 
     // Serial comma before the final conjunct, as the draft writes it.
     const DescriptionElement three = conjunction(3);
-    REQUIRE(three.paragraphs.size() == 1);
-    CHECK(prose(three.paragraphs[0]) == "`T0` is `true`, `T1` is `true`, and `T2` is `true`.");
+    REQUIRE(body_test::paragraph_count(three) == 1);
+    CHECK(prose(body_test::paragraph(three, 0)) == "`T0` is `true`, `T1` is `true`, and `T2` is `true`.");
 }
 
 TEST_CASE("conjuncts - beyond the threshold becomes an itemize") {
     const DescriptionElement four = conjunction(4);
-    CHECK(four.paragraphs.empty());
-    REQUIRE(four.itemize.has_value());
-    REQUIRE(four.itemize->items.size() == 4);
-    CHECK(prose(four.itemize->items[0]) == "`T0` is `true`,");
-    CHECK(prose(four.itemize->items[1]) == "`T1` is `true`,");
-    CHECK(prose(four.itemize->items[2]) == "`T2` is `true`,");
-    CHECK(prose(four.itemize->items[3]) == "`T3` is `true`.");
+    CHECK((body_test::paragraph_count(four) == 0));
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(four) != nullptr));
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(four)->items.size() == 4);
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[0]) == "`T0` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[1]) == "`T1` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[2]) == "`T2` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[3]) == "`T3` is `true`.");
 }
 
 TEST_CASE("conjuncts - the threshold is configurable") {
     Options options;
     options.sentence_threshold = 2;
-    CHECK(conjunction(3, options).itemize.has_value());
-    CHECK_FALSE(conjunction(2, options).itemize.has_value());
+    CHECK((body_test::first<beman::specgen::ir::Itemize>(conjunction(3, options)) != nullptr));
+    CHECK_FALSE((body_test::first<beman::specgen::ir::Itemize>(conjunction(2, options)) != nullptr));
 
     options.sentence_threshold    = 5;
     const DescriptionElement four = conjunction(4, options);
-    CHECK_FALSE(four.itemize.has_value());
-    REQUIRE(four.paragraphs.size() == 1);
-    CHECK(prose(four.paragraphs[0]) == "`T0` is `true`, `T1` is `true`, `T2` is `true`, and `T3` is `true`.");
+    CHECK_FALSE((body_test::first<beman::specgen::ir::Itemize>(four) != nullptr));
+    REQUIRE(body_test::paragraph_count(four) == 1);
+    CHECK(prose(body_test::paragraph(four, 0)) ==
+          "`T0` is `true`, `T1` is `true`, `T2` is `true`, and `T3` is `true`.");
 }
 
 TEST_CASE("conjuncts - an empty conjunction contributes nothing") {
     DescriptionElement element;
     element.kind = ElementKind::Constraints;
     render_into({}, element);
-    CHECK(element.paragraphs.empty());
-    CHECK(!element.itemize.has_value());
+    CHECK((body_test::paragraph_count(element) == 0));
+    CHECK(!(body_test::first<beman::specgen::ir::Itemize>(element) != nullptr));
 }
 
 TEST_CASE("conjuncts - join_sentence and as_itemize directly") {
@@ -145,14 +148,15 @@ TEST_CASE("conjuncts - join_sentence and as_itemize directly") {
 TEST_CASE("conjuncts - a lead-in paragraph is kept ahead of the list") {
     DescriptionElement element;
     element.kind = ElementKind::Constraints;
-    element.paragraphs.push_back({TextInline{"All of the following are true:"}});
+    element.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"All of the following are true:"}}});
     Options options;
     options.sentence_threshold = 0; // force the list form
     render_into(traits(2), element, options);
 
-    REQUIRE(element.paragraphs.size() == 1);
-    CHECK(prose(element.paragraphs[0]) == "All of the following are true:");
-    REQUIRE(element.itemize.has_value());
-    REQUIRE(element.itemize->items.size() == 2);
-    CHECK(prose(element.itemize->items[1]) == "`T1` is `true`.");
+    REQUIRE(body_test::paragraph_count(element) == 1);
+    CHECK(prose(body_test::paragraph(element, 0)) == "All of the following are true:");
+    REQUIRE((body_test::first<beman::specgen::ir::Itemize>(element) != nullptr));
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(element)->items.size() == 2);
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(element)->items[1]) == "`T1` is `true`.");
 }

@@ -165,7 +165,7 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
 
     if (!directives.at_anchor || directives.at_anchor->empty())
         return;
-    if (!out.general && out.descr.elements.empty())
+    if (!out.general && !beman::specgen::ir::has_description(out.descr))
         return;
 
     const std::string name = record->getNameAsString();
@@ -176,7 +176,7 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
         out.pending.push_back(db::PendingItem{*directives.at_anchor, out.offset, std::move(*out.general)});
         out.general.reset();
     }
-    if (!out.descr.elements.empty()) {
+    if (beman::specgen::ir::has_description(out.descr)) {
         out.pending.push_back(
             db::PendingItem{*directives.at_anchor, out.offset, ir::SpecItem{{}, std::move(out.descr)}});
         out.descr = {};

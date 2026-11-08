@@ -11,6 +11,8 @@
 
 #include <beman/specgen/backend/element_label.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -36,20 +38,21 @@ TEST_CASE("mpark - value_or golden") {
 
     DescriptionElement mandates;
     mandates.kind = ElementKind::Mandates;
-    mandates.paragraphs.push_back({CodeInline{{"is_copy_constructible_v<T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{" and "},
-                                   CodeInline{{"is_convertible_v<U, T>", {}}},
-                                   TextInline{" is "},
-                                   CodeInline{{"true", {}}},
-                                   TextInline{"."}});
+    mandates.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{CodeInline{{"is_copy_constructible_v<T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{" and "},
+                                                                        CodeInline{{"is_convertible_v<U, T>", {}}},
+                                                                        TextInline{" is "},
+                                                                        CodeInline{{"true", {}}},
+                                                                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(mandates));
 
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.equivalent =
-        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}};
+    effects.body.push_back(
+        EquivalentTo{{"return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));", {}}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string expected =
@@ -80,11 +83,12 @@ TEST_CASE("mpark - spans use the framework's embedded-Markdown convention") {
 
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"The type is "},
-                                  CodeInline{{"SB", {{0, 2, SpanKind::SeeBelow, ""}}}},
-                                  TextInline{", see "},
-                                  RefInline{"optional.general"},
-                                  TextInline{"."}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The type is "},
+                                      CodeInline{{"SB", {{0, 2, SpanKind::SeeBelow, ""}}}},
+                                      TextInline{", see "},
+                                      RefInline{"optional.general"},
+                                      TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item);
@@ -112,7 +116,8 @@ TEST_CASE("mpark - a whole-span code inline keeps its backticks") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({CodeInline{{"VAL", {{0, 3, SpanKind::ExposId, "val"}}}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{{"VAL", {{0, 3, SpanKind::ExposId, "val"}}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item);
@@ -123,8 +128,8 @@ TEST_CASE("mpark - a partially-spanned code inline is one backticked run") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back(
-        {TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}});
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Equivalent to "}, CodeInline{{"x.VAL", {{2, 5, SpanKind::ExposId, "val"}}}}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item);
@@ -165,19 +170,19 @@ TEST_CASE("mpark - a concept reference is code font") {
     SpecItem           item;
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.paragraphs.push_back(
-        {CodeInline{{"T", {}}}, TextInline{" models "}, ConceptRef{"copy_constructible"}, TextInline{"."}});
+    constraints.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        CodeInline{{"T", {}}}, TextInline{" models "}, ConceptRef{"copy_constructible"}, TextInline{"."}}});
     item.descr.elements.push_back(std::move(constraints));
 
     CHECK(mpark::render_to_string(item).find("`T` models `copy_constructible`.") != std::string::npos);
 }
 
 TEST_CASE("mpark - every element kind renders as its draft label") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         const auto kind = static_cast<ElementKind>(i);
         SpecItem   item;
         item.decl.signatures.push_back({"int f();", {}});
-        item.descr.elements.push_back({kind, {{TextInline{"Prose."}}}, {}});
+        item.descr.elements.push_back(body_test::element(kind, {{TextInline{"Prose."}}}, {}));
 
         const std::string out      = mpark::render_to_string(item);
         const std::string expected = "[#]{.pnum} *" + std::string(backend::element_label(kind)) + "*: Prose.";
@@ -189,7 +194,8 @@ TEST_CASE("mpark - every element kind renders as its draft label") {
 TEST_CASE("mpark - multi-paragraph element repeats the pnum but not the label") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}}, {}));
 
     const std::string expected =
         R"(::: wording
@@ -212,9 +218,9 @@ TEST_CASE("mpark - an itemize is a nested auto-numbered sublist") {
     item.decl.signatures.push_back({"int f();", {}});
     DescriptionElement constraints;
     constraints.kind = ElementKind::Constraints;
-    constraints.itemize =
+    constraints.body.push_back(
         Itemize{{{CodeInline{{"A", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}, TextInline{","}},
-                 {CodeInline{{"B", {}}}, TextInline{" is "}, CodeInline{{"false", {}}}, TextInline{"."}}}};
+                 {CodeInline{{"B", {}}}, TextInline{" is "}, CodeInline{{"false", {}}}, TextInline{"."}}}});
     item.descr.elements.push_back(std::move(constraints));
 
     // No lead-in prose, so the list is the element's whole content and opens
@@ -241,8 +247,9 @@ TEST_CASE("mpark - an itemize with lead-in prose stays in that paragraph") {
     item.decl.signatures.push_back({"int f();", {}});
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.paragraphs.push_back({TextInline{"Equivalent to:"}});
-    effects.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    effects.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Equivalent to:"}}});
+    effects.body.push_back(Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}});
     item.descr.elements.push_back(std::move(effects));
 
     const std::string out = mpark::render_to_string(item);
@@ -255,11 +262,11 @@ TEST_CASE("mpark - an itemize with lead-in prose stays in that paragraph") {
 TEST_CASE("mpark - same-kind authored itemizes concatenate") {
     SpecItem           item;
     DescriptionElement first;
-    first.kind    = ElementKind::Constraints;
-    first.itemize = Itemize{{{TextInline{"one,"}}}};
+    first.kind = ElementKind::Constraints;
+    first.body.push_back(Itemize{{{TextInline{"one,"}}}});
     DescriptionElement second;
-    second.kind         = ElementKind::Constraints;
-    second.itemize      = Itemize{{{TextInline{"two."}}}};
+    second.kind = ElementKind::Constraints;
+    second.body.push_back(Itemize{{{TextInline{"two."}}}});
     item.descr.elements = {std::move(first), std::move(second)};
 
     const std::string out = mpark::render_to_string(item);
@@ -268,8 +275,8 @@ TEST_CASE("mpark - same-kind authored itemizes concatenate") {
 
 TEST_CASE("mpark - an authored two-dimensional table is a native pipe table") {
     DescriptionElement effects;
-    effects.kind  = ElementKind::Effects;
-    effects.table = Table2D{
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(Table2D{
         .stable_name = "optional.assign.copy",
         .caption     = {CodeInline{{"operator=", {}}}, TextInline{" effects"}},
         .column1     = {TextInline{"has | value"}},
@@ -280,11 +287,11 @@ TEST_CASE("mpark - an authored two-dimensional table is a native pipe table") {
                         Table2DRow{.header = {TextInline{"empty"}},
                                    .cell1  = {TextInline{"destroys"}},
                                    .cell2  = {TextInline{"no effect"}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
-    DescriptionElement second = effects;
-    second.table->stable_name = "optional.assign.second";
+    DescriptionElement second                                          = effects;
+    body_test::first<beman::specgen::ir::Table2D>(second)->stable_name = "optional.assign.second";
     item.descr.elements.push_back(std::move(effects));
     item.descr.elements.push_back(std::move(second));
 
@@ -304,15 +311,15 @@ TEST_CASE("mpark - an authored two-dimensional table is a native pipe table") {
 
 TEST_CASE("mpark - an authored flat two-column table is a native pipe table") {
     DescriptionElement remarks;
-    remarks.kind       = ElementKind::Remarks;
-    remarks.flat_table = Table1D{
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(Table1D{
         .stable_name = "demo.errors.tab",
         .caption     = {CodeInline{{"whatwg_error", {}}}, TextInline{" meanings"}},
         .column1     = {TextInline{"Constant | ish"}},
         .column2     = {TextInline{"Meaning"}},
         .rows = {Table1DRow{.cell1 = {CodeInline{{"invalid_byte", {}}}}, .cell2 = {TextInline{"bad byte"}}},
                  Table1DRow{.cell1 = {CodeInline{{"truncated_sequence", {}}}}, .cell2 = {TextInline{"short read"}}}},
-    };
+    });
     SpecItem item;
     item.decl.signatures.push_back({"enum class whatwg_error { invalid_byte, truncated_sequence };", {}});
     item.descr.elements.push_back(std::move(remarks));
@@ -334,10 +341,10 @@ TEST_CASE("mpark - adjacent same-kind elements share one label") {
     DescriptionElement derived;
     derived.kind    = ElementKind::Mandates;
     derived.derived = true;
-    derived.paragraphs.push_back({TextInline{"Derived."}});
+    derived.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Derived."}}});
     DescriptionElement authored;
     authored.kind = ElementKind::Mandates;
-    authored.paragraphs.push_back({TextInline{"Authored."}});
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Authored."}}});
     item.descr.elements.push_back(std::move(derived));
     item.descr.elements.push_back(std::move(authored));
 
@@ -350,7 +357,8 @@ TEST_CASE("mpark - grouped overloads share one code fence") {
     SpecItem item;
     item.decl.signatures.push_back({"constexpr optional() noexcept;", {}});
     item.decl.signatures.push_back({"constexpr optional(nullopt_t) noexcept;", {}});
-    item.descr.elements.push_back({ElementKind::Ensures, {{TextInline{"*this does not contain a value."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Ensures, {{TextInline{"*this does not contain a value."}}}, {}));
 
     CHECK(mpark::render_to_string(item).find(
               "```cpp\nconstexpr optional() noexcept;\nconstexpr optional(nullopt_t) noexcept;\n```") !=
@@ -368,7 +376,8 @@ TEST_CASE("mpark - a description with no declaration emits no fence") {
     // A class's own wording (design §6): an itemdescr with no itemdecl. The
     // fence would be the empty code block design §9 rejects on a synopsis.
     SpecItem item;
-    item.descr.elements.push_back({ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Remarks, {{TextInline{"A defined class's own description."}}}, {}));
 
     CHECK(mpark::render_to_string(item) ==
           "::: wording\n\n[#]{.pnum} *Remarks*: A defined class's own description.\n\n:::\n");
@@ -546,11 +555,12 @@ TEST_CASE("new-root - a RefInline citation outside the root keeps .sref, one und
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({TextInline{"See "},
-                                  RefInline{"transcode.errors"},
-                                  TextInline{" and "},
-                                  RefInline{"range.utility"},
-                                  TextInline{"."}});
+    remarks.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"See "},
+                                                                        RefInline{"transcode.errors"},
+                                                                        TextInline{" and "},
+                                                                        RefInline{"range.utility"},
+                                                                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode"}});
@@ -562,13 +572,14 @@ TEST_CASE("new-root - an exact match and a name at any depth are under the root;
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({RefInline{"transcode"},
-                                  TextInline{" "},
-                                  RefInline{"transcode.errors"},
-                                  TextInline{" "},
-                                  RefInline{"transcode.whatwg.decode.iterator"},
-                                  TextInline{" "},
-                                  RefInline{"transcoded.other"}});
+    remarks.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{RefInline{"transcode"},
+                                                                        TextInline{" "},
+                                                                        RefInline{"transcode.errors"},
+                                                                        TextInline{" "},
+                                                                        RefInline{"transcode.whatwg.decode.iterator"},
+                                                                        TextInline{" "},
+                                                                        RefInline{"transcoded.other"}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode"}});
@@ -587,11 +598,12 @@ TEST_CASE("new-root - two roots both apply, and a name under neither keeps .sref
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({RefInline{"transcode.reqs"},
-                                  TextInline{" "},
-                                  RefInline{"null.term.adaptor"},
-                                  TextInline{" "},
-                                  RefInline{"range.utility"}});
+    remarks.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{RefInline{"transcode.reqs"},
+                                                                        TextInline{" "},
+                                                                        RefInline{"null.term.adaptor"},
+                                                                        TextInline{" "},
+                                                                        RefInline{"range.utility"}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode", "null.term"}});
@@ -627,7 +639,8 @@ TEST_CASE("new-root - empty (the default) changes nothing") {
     SpecItem           item;
     DescriptionElement remarks;
     remarks.kind = ElementKind::Remarks;
-    remarks.paragraphs.push_back({RefInline{"transcode.errors"}});
+    remarks.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{RefInline{"transcode.errors"}}});
     item.descr.elements.push_back(std::move(remarks));
 
     CHECK(mpark::render_to_string(item).find("([transcode.errors]{- .sref})") != std::string::npos);
@@ -662,7 +675,7 @@ TEST_CASE("mpark - each top-level node gets its own wording div") {
 TEST_CASE("mpark - paper mode wraps the fragment in an add div") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"Does a thing."}}}, {}});
+    item.descr.elements.push_back(body_test::element(ElementKind::Effects, {{TextInline{"Does a thing."}}}, {}));
 
     const std::string expected =
         R"(::: add
@@ -691,8 +704,8 @@ int f();
 TEST_CASE("mpark - added paragraph numbers run x, x+1, x+2") {
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
-    item.descr.elements.push_back(
-        {ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}, {TextInline{"Third."}}}, {}});
+    item.descr.elements.push_back(body_test::element(
+        ElementKind::Effects, {{TextInline{"First."}}, {TextInline{"Second."}}, {TextInline{"Third."}}}));
 
     const std::string out = mpark::render_to_string(item, {.paper_mode = true});
     CHECK(out.find("[x]{.pnum} *Effects*: First.") != std::string::npos);
@@ -708,11 +721,11 @@ TEST_CASE("mpark - an added sublist hangs off its lead-in paragraph's literal") 
     SpecItem item;
     item.decl.signatures.push_back({"int f();", {}});
     DescriptionElement constraints;
-    constraints.kind    = ElementKind::Constraints;
-    constraints.itemize = Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}};
+    constraints.kind = ElementKind::Constraints;
+    constraints.body.push_back(Itemize{{{TextInline{"one,"}}, {TextInline{"two."}}}});
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.paragraphs.push_back({TextInline{"Then this."}});
+    effects.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{TextInline{"Then this."}}});
     item.descr.elements.push_back(std::move(constraints));
     item.descr.elements.push_back(std::move(effects));
 
@@ -737,7 +750,8 @@ TEST_CASE("mpark - added numbering runs across wording divs, under one add div")
         sec.title       = name;
         SpecItem item;
         item.decl.signatures.push_back({"int f();", {}});
-        item.descr.elements.push_back({ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}});
+        item.descr.elements.push_back(
+            body_test::element(ElementKind::Effects, {{TextInline{"One."}}, {TextInline{"Two."}}}, {}));
         sec.children.push_back(std::move(item));
         doc.nodes.push_back(std::move(sec));
     }
@@ -784,12 +798,12 @@ TEST_CASE("mpark - a changed prose run is the framework's add or rm span around 
     item.decl.signatures.push_back({"void f();", {}});
     DescriptionElement effects;
     effects.kind = ElementKind::Effects;
-    effects.paragraphs.push_back(
-        {TextInline{"Sets "},
-         ChangedInline{Change::Removed, {CodeInline{{"x", {}}}}},
-         ChangedInline{Change::Added,
-                       {CodeInline{{"y", {}}}, TextInline{" (see "}, RefInline{"a.b"}, TextInline{")"}}},
-         TextInline{"."}});
+    effects.body.push_back(
+        BodyParagraph{{TextInline{"Sets "},
+                       ChangedInline{Change::Removed, {CodeInline{{"x", {}}}}},
+                       ChangedInline{Change::Added,
+                                     {CodeInline{{"y", {}}}, TextInline{" (see "}, RefInline{"a.b"}, TextInline{")"}}},
+                       TextInline{"."}}});
     item.descr.elements.push_back(std::move(effects));
     const std::string out = mpark::render_to_string(item);
     CHECK(out.find("*Effects*: Sets [`x`]{.rm}[`y` (see ([a.b]{- .sref}))]{.add}.\n") != std::string::npos);
@@ -835,15 +849,56 @@ TEST_CASE("mpark - a marked element takes its own div inside the wording div") {
     SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
     DescriptionElement kept;
-    kept.kind       = ElementKind::Effects;
-    kept.paragraphs = {{TextInline{"Kept."}}};
+    kept.kind = ElementKind::Effects;
+    kept.body = {BodyParagraph{{TextInline{"Kept."}}}};
     DescriptionElement removed;
     removed.kind        = ElementKind::Remarks;
-    removed.paragraphs  = {{TextInline{"Old."}}};
+    removed.body        = {BodyParagraph{{TextInline{"Old."}}}};
     removed.change      = Change::Removed;
     item.descr.elements = {kept, removed};
     CHECK(mpark::render_to_string(item) == "::: wording\n\n```cpp\nvoid f();\n```\n\n"
                                            "[#]{.pnum} *Effects*: Kept.\n\n"
                                            "::: rm\n\n[#]{.pnum} *Remarks*: Old.\n\n:::\n"
                                            "\n:::\n");
+}
+
+TEST_CASE("mpark - merged bodies preserve list continuations and table positions") {
+    SpecItem           item;
+    DescriptionElement first;
+    first.kind = ElementKind::Effects;
+    first.body = {
+        BodyParagraph{{TextInline{"Before the list."}}},
+        Itemize{{{TextInline{"List entry."}}}},
+        BodyParagraph{{TextInline{"After the list."}}, true},
+        Table1D{.stable_name = "first.table",
+                .caption     = {TextInline{"First table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"one"}}, {TextInline{"two"}}}}},
+    };
+    DescriptionElement second;
+    second.kind = ElementKind::Effects;
+    second.body = {
+        BodyParagraph{{TextInline{"Before the second table."}}},
+        Table1D{.stable_name = "second.table",
+                .caption     = {TextInline{"Second table."}},
+                .column1     = {TextInline{"Key"}},
+                .column2     = {TextInline{"Value"}},
+                .rows        = {Table1DRow{{TextInline{"three"}}, {TextInline{"four"}}}}},
+    };
+    item.descr.elements     = {std::move(first), std::move(second)};
+    const auto out          = mpark::render_to_string(item);
+    const auto lead         = out.find("Before the list.");
+    const auto entry        = out.find("List entry.");
+    const auto continuation = out.find("After the list.");
+    const auto table        = out.find("First table.");
+    const auto next         = out.find("Before the second table.");
+    const auto last         = out.find("Second table.");
+    REQUIRE(last != std::string::npos);
+    CHECK(lead < entry);
+    CHECK(entry < continuation);
+    CHECK(continuation < table);
+    CHECK(table < next);
+    CHECK(next < last);
+    CHECK(out.find("List entry.\n\nAfter the list.") != std::string::npos);
 }

@@ -1,0 +1,3 @@
+spec_section_prose_diagnostics.hpp:7: error: detached prose requires an open section
+spec_section_prose_diagnostics.hpp:11: error: a detached description has no declaration; attach its markup to the declaration it describes
+spec_section_prose_diagnostics.hpp:15: error: detached prose requires an open section

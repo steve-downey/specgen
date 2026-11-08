@@ -1,0 +1,92 @@
+#+begin_codeblock
+namespace std {
+  struct wrapper {
+    // \ref{leading.members}, members
+    wrapper() = default;
+
+    virtual void run() = 0;
+  };
+}
+#+end_codeblock
+
+** Leading descriptions [leading]
+:PROPERTIES:
+:CUSTOM_ID: leading
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** General [leading.general]
+:PROPERTIES:
+:CUSTOM_ID: leading.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+A wrapper stores one value.
+#+end_pnum
+
+#+begin_pnum
+Its description is routed independently of its synopsis.
+#+end_pnum
+
+*** Members [leading.members]
+:PROPERTIES:
+:CUSTOM_ID: leading.members
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+wrapper() = default;
+#+end_itemdecl
+
+#+begin_pnum
+Constructs an empty wrapper.
+#+end_pnum
+
+#+begin_itemdecl
+virtual void run() = 0;
+#+end_itemdecl
+
+#+begin_pnum
+A concrete wrapper supplies this operation.
+#+end_pnum
+
+*** Functions [leading.functions]
+:PROPERTIES:
+:CUSTOM_ID: leading.functions
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+inline void first();
+#+end_itemdecl
+
+#+begin_pnum
+The first function has prose only.
+#+end_pnum
+
+#+begin_itemdecl
+inline void second();
+#+end_itemdecl
+
+#+begin_pnum
+The second function has its own description.
+#+end_pnum
+
+#+begin_itemdecl
+inline void third();
+inline void third(int);
+#+end_itemdecl
+
+#+begin_pnum
+The third function introduces the labelled requirements.
+#+end_pnum
+
+#+begin_pnum
+This is a separate leading paragraph with ([[https://eel.is/c++draft/leading.general][@@html:[leading.general]@@@@latex:{[}leading.general{]}@@]]).
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Performs the operation.
+#+end_pnum

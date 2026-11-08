@@ -17,6 +17,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -102,10 +104,10 @@ TEST_CASE("build_document - spec_mandates.hpp derives Mandates from the static_a
     // Three conjuncts is within the sentence threshold, so the Mandates renders
     // as one joined sentence (a single paragraph), not an itemize.
     const ir::DescriptionElement& mandates = item->descr.elements[0];
-    CHECK_FALSE(mandates.itemize.has_value());
-    REQUIRE(mandates.paragraphs.size() == 1);
+    CHECK_FALSE((body_test::first<beman::specgen::ir::Itemize>(mandates) != nullptr));
+    REQUIRE(body_test::paragraph_count(mandates) == 1);
 
-    const std::string sentence = paragraph_text(mandates.paragraphs[0]);
+    const std::string sentence = paragraph_text(body_test::paragraph(mandates, 0));
 
     // Two static_asserts, the second split at top-level `&&` into a trait and a
     // negation — three conjuncts in source order.
@@ -148,8 +150,8 @@ TEST_CASE("build_document - spec_mandates.hpp authored Mandates replaces derived
     CHECK(item->descr.elements[1].kind == ir::ElementKind::Effects);
 
     const ir::DescriptionElement& authored = item->descr.elements[0];
-    REQUIRE(authored.paragraphs.size() == 1);
-    CHECK(contains(paragraph_text(authored.paragraphs[0]), "No other reference"));
+    REQUIRE(body_test::paragraph_count(authored) == 1);
+    CHECK(contains(paragraph_text(body_test::paragraph(authored, 0)), "No other reference"));
     REQUIRE(authored.conjuncts.size() == 1);
     CHECK(contains(paragraph_text(authored.conjuncts[0]), "is_move_constructible_v<T>"));
 }

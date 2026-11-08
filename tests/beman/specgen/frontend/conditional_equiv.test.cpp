@@ -4,6 +4,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <string>
@@ -34,17 +36,17 @@ const ir::SpecItem* item_with(const ir::Document& document, std::string_view sig
 const std::string& returns_code(const ir::SpecItem& item) {
     REQUIRE(item.descr.elements.size() == 1);
     REQUIRE(item.descr.elements[0].kind == ir::ElementKind::Returns);
-    REQUIRE_FALSE(item.descr.elements[0].equivalent.has_value());
-    REQUIRE(item.descr.elements[0].paragraphs.size() == 1);
-    const auto* code = std::get_if<ir::CodeInline>(&item.descr.elements[0].paragraphs[0].at(0));
+    REQUIRE_FALSE((body_test::first<beman::specgen::ir::EquivalentTo>(item.descr.elements[0]) != nullptr));
+    REQUIRE(body_test::paragraph_count(item.descr.elements[0]) == 1);
+    const auto* code = std::get_if<ir::CodeInline>(&body_test::paragraph(item.descr.elements[0], 0).at(0));
     REQUIRE(code != nullptr);
     return code->code.text;
 }
 
 const std::string& equivalent_code(const ir::SpecItem& item) {
     REQUIRE(item.descr.elements.size() == 1);
-    REQUIRE(item.descr.elements[0].equivalent.has_value());
-    return item.descr.elements[0].equivalent->code.text;
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(item.descr.elements[0]) != nullptr));
+    return body_test::first<beman::specgen::ir::EquivalentTo>(item.descr.elements[0])->code.text;
 }
 } // namespace
 

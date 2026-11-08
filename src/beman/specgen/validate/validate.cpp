@@ -20,7 +20,6 @@
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <format>
 #include <functional>
@@ -645,24 +644,6 @@ check_paragraph_leakage(const std::string& context, const ir::Paragraph& paragra
         diagnostics_monoid);
 }
 
-std::vector<const ir::Paragraph*> table_paragraphs(const ir::Table2D& table) {
-    std::vector<const ir::Paragraph*> out{&table.caption, &table.column1, &table.column2};
-    out.append_range(table.rows | std::views::transform([](const ir::Table2DRow& row) {
-                         return std::array{&row.header, &row.cell1, &row.cell2};
-                     }) |
-                     std::views::join);
-    return out;
-}
-
-std::vector<const ir::Paragraph*> table_paragraphs(const ir::Table1D& table) {
-    std::vector<const ir::Paragraph*> out{&table.caption, &table.column1, &table.column2};
-    out.append_range(table.rows | std::views::transform([](const ir::Table1DRow& row) {
-                         return std::array{&row.cell1, &row.cell2};
-                     }) |
-                     std::views::join);
-    return out;
-}
-
 // Whether one inline says anything. Five alternatives (decision
 // visitation-rules' >3 rule), so a named visitor. The changed-run case visits
 // `PlainInline`, a different and non-recursive variant, with this same
@@ -687,12 +668,16 @@ bool paragraph_has_content(const ir::Paragraph& paragraph) {
                                [](const ir::Inline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
 }
 
-Diagnostics check_table_structure(const ir::DescriptionElement& element) {
+template <class Block>
+Diagnostics check_leaf_table_block(const std::string& label, const Block& block);
+
+template <class Block>
+Diagnostics check_leaf_table_block(const std::string& label, const Block& block) {
     Diagnostics out;
 
-    if (element.table) {
-        const ir::Table2D& table   = *element.table;
-        const std::string  context = std::string(ir::element_name(element.kind)) + "/table";
+    if (const auto* t = std::get_if<ir::Table2D>(&block)) {
+        const ir::Table2D& table   = *t;
+        const std::string  context = label + "/table";
         const auto         require = [&](bool condition, std::string message) {
             if (!condition)
                 out.push_back({Severity::Error, context, std::move(message)});
@@ -722,9 +707,9 @@ Diagnostics check_table_structure(const ir::DescriptionElement& element) {
             diagnostics_monoid));
     }
 
-    if (element.flat_table) {
-        const ir::Table1D& table   = *element.flat_table;
-        const std::string  context = std::string(ir::element_name(element.kind)) + "/flat_table";
+    if (const auto* t = std::get_if<ir::Table1D>(&block)) {
+        const ir::Table1D& table   = *t;
+        const std::string  context = label + "/flat_table";
         const auto         require = [&](bool condition, std::string message) {
             if (!condition)
                 out.push_back({Severity::Error, context, std::move(message)});
@@ -756,85 +741,63 @@ Diagnostics check_table_structure(const ir::DescriptionElement& element) {
     return out;
 }
 
-Diagnostics check_element_spans(const ir::DescriptionElement& element) {
-    const std::string context = std::string(ir::element_name(element.kind));
-    Diagnostics       out     = foundation::mconcat_map(
-        element.paragraphs,
-        [&](const ir::Paragraph& paragraph) { return check_paragraph_spans(context, paragraph); },
-        diagnostics_monoid);
-    if (element.itemize)
-        out = diagnostics_monoid.combine(
-            std::move(out),
-            foundation::mconcat_map(
-                element.itemize->items,
-                [&](const ir::Paragraph& paragraph) { return check_paragraph_spans(context, paragraph); },
-                diagnostics_monoid));
-    if (element.table)
-        out = diagnostics_monoid.combine(
-            std::move(out),
-            foundation::mconcat_map(
-                table_paragraphs(*element.table),
-                [&](const ir::Paragraph* paragraph) { return check_paragraph_spans(context, *paragraph); },
-                diagnostics_monoid));
-    if (element.flat_table)
-        out = diagnostics_monoid.combine(
-            std::move(out),
-            foundation::mconcat_map(
-                table_paragraphs(*element.flat_table),
-                [&](const ir::Paragraph* paragraph) { return check_paragraph_spans(context, *paragraph); },
-                diagnostics_monoid));
-    if (element.equivalent)
-        out = diagnostics_monoid.combine(std::move(out), check_spans(context + "-equiv", element.equivalent->code));
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block);
+Diagnostics check_table_block(const std::string& label, const ir::BodyBlock& block) {
+    auto       out               = check_leaf_table_block(label, block);
+    const auto check_informative = [&](const ir::InformativeBody& body) {
+        return foundation::mconcat_map(
+            body,
+            [&](const ir::InformativeBlock& leaf) { return check_leaf_table_block(label, leaf); },
+            diagnostics_monoid);
+    };
+    if (const auto* note = std::get_if<ir::Note>(&block))
+        out.append_range(check_informative(note->body));
+    if (const auto* example = std::get_if<ir::Example>(&block))
+        out.append_range(check_informative(example->body));
     return out;
 }
 
-// One description element's wording: its prose, its itemized conditions, and
-// its extracted "Equivalent to:" body. The body gets its own context suffix
-// -- `effects-equiv` -- because that is the marker the author would go and
-// edit, and because it is the one fragment here that was extracted from code
-// rather than written.
-Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible) {
-    const std::string context = std::string(ir::element_name(element.kind));
-
-    Diagnostics prose = foundation::mconcat_map(
-        element.paragraphs,
-        [&](const ir::Paragraph& paragraph) { return check_paragraph_leakage(context, paragraph, visible); },
+Diagnostics check_table_structure(const ir::DescriptionElement& element) {
+    return foundation::mconcat_map(
+        element.body,
+        [&](const ir::BodyBlock& b) { return check_table_block(std::string(ir::element_name(element.kind)), b); },
         diagnostics_monoid);
+}
 
-    Diagnostics itemized =
-        element.itemize.has_value()
-            ? foundation::mconcat_map(
-                  element.itemize->items,
-                  [&](const ir::Paragraph& paragraph) { return check_paragraph_leakage(context, paragraph, visible); },
-                  diagnostics_monoid)
-            : Diagnostics{};
+Diagnostics check_body_spans(const ir::DescriptionBody& body, const std::string& context);
+Diagnostics check_body_spans(const ir::DescriptionBody& body, const std::string& context) {
+    return diagnostics_monoid.combine(foundation::mconcat_map(
+                                          ir::body_paragraphs(body),
+                                          [&](const ir::Paragraph* p) { return check_paragraph_spans(context, *p); },
+                                          diagnostics_monoid),
+                                      foundation::mconcat_map(
+                                          ir::body_code(body),
+                                          [&](const ir::CodeText* c) { return check_spans(context + "-equiv", *c); },
+                                          diagnostics_monoid));
+}
 
-    Diagnostics table = element.table.has_value()
-                            ? foundation::mconcat_map(
-                                  table_paragraphs(*element.table),
-                                  [&](const ir::Paragraph* paragraph) {
-                                      return check_paragraph_leakage(context, *paragraph, visible);
-                                  },
-                                  diagnostics_monoid)
-                            : Diagnostics{};
-
-    Diagnostics flat_table = element.flat_table.has_value()
-                                 ? foundation::mconcat_map(
-                                       table_paragraphs(*element.flat_table),
-                                       [&](const ir::Paragraph* paragraph) {
-                                           return check_paragraph_leakage(context, *paragraph, visible);
-                                       },
-                                       diagnostics_monoid)
-                                 : Diagnostics{};
-
-    Diagnostics equivalent = element.equivalent.has_value()
-                                 ? check_leakage(context + "-equiv", element.equivalent->code, visible)
-                                 : Diagnostics{};
-
+Diagnostics
+check_body_leakage(const ir::DescriptionBody& body, const std::string& context, const NameVisibility& visible);
+Diagnostics
+check_body_leakage(const ir::DescriptionBody& body, const std::string& context, const NameVisibility& visible) {
     return diagnostics_monoid.combine(
-        diagnostics_monoid.combine(
-            diagnostics_monoid.combine(diagnostics_monoid.combine(std::move(prose), itemized), table), flat_table),
-        equivalent);
+        foundation::mconcat_map(
+            ir::body_paragraphs(body),
+            [&](const ir::Paragraph* p) { return check_paragraph_leakage(context, *p, visible); },
+            diagnostics_monoid),
+        foundation::mconcat_map(
+            ir::body_code(body),
+            [&](const ir::CodeText* c) { return check_leakage(context + "-equiv", *c, visible); },
+            diagnostics_monoid));
+}
+
+Diagnostics check_element_spans(const ir::DescriptionElement& element);
+Diagnostics check_element_spans(const ir::DescriptionElement& element) {
+    return check_body_spans(element.body, std::string(ir::element_name(element.kind)));
+}
+Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible);
+Diagnostics check_element_leakage(const ir::DescriptionElement& element, const NameVisibility& visible) {
+    return check_body_leakage(element.body, std::string(ir::element_name(element.kind)), visible);
 }
 
 // --- a helper named only by a body the tool never renders (design §9) --------
@@ -862,27 +825,17 @@ std::set<std::string> paragraph_names(const ir::Paragraph& paragraph) {
         paragraph_code(paragraph), [](const ir::CodeText* code) { return code_names(*code); }, names_monoid);
 }
 
-std::set<std::string> element_names(const ir::DescriptionElement& element) {
-    std::set<std::string> names = foundation::mconcat_map(element.paragraphs, paragraph_names, names_monoid);
-    if (element.itemize)
-        names = names_monoid.combine(std::move(names),
-                                     foundation::mconcat_map(element.itemize->items, paragraph_names, names_monoid));
-    if (element.table)
-        names = names_monoid.combine(std::move(names),
-                                     foundation::mconcat_map(
-                                         table_paragraphs(*element.table),
-                                         [](const ir::Paragraph* paragraph) { return paragraph_names(*paragraph); },
-                                         names_monoid));
-    if (element.flat_table)
-        names = names_monoid.combine(std::move(names),
-                                     foundation::mconcat_map(
-                                         table_paragraphs(*element.flat_table),
-                                         [](const ir::Paragraph* paragraph) { return paragraph_names(*paragraph); },
-                                         names_monoid));
-    if (element.equivalent)
-        names = names_monoid.combine(std::move(names), code_names(element.equivalent->code));
-    return names;
+std::set<std::string> body_names(const ir::DescriptionBody& body);
+std::set<std::string> body_names(const ir::DescriptionBody& body) {
+    return names_monoid.combine(
+        foundation::mconcat_map(
+            ir::body_paragraphs(body), [](const ir::Paragraph* p) { return paragraph_names(*p); }, names_monoid),
+        foundation::mconcat_map(
+            ir::body_code(body), [](const ir::CodeText* c) { return code_names(*c); }, names_monoid));
 }
+
+std::set<std::string> element_names(const ir::DescriptionElement& element);
+std::set<std::string> element_names(const ir::DescriptionElement& element) { return body_names(element.body); }
 
 std::set<std::string> wording_names_layer(const ir::NodeF<std::set<std::string>>& layer) {
     return std::visit(
@@ -892,8 +845,10 @@ std::set<std::string> wording_names_layer(const ir::NodeF<std::set<std::string>>
             // emptiness is a decision rather than a fact.
             [](const ir::Synopsis&) { return std::set<std::string>{}; },
             [](const ir::SpecItem& v) {
-                return names_monoid.combine(foundation::mconcat_map(v.decl.signatures, code_names, names_monoid),
-                                            foundation::mconcat_map(v.descr.elements, element_names, names_monoid));
+                return names_monoid.combine(
+                    foundation::mconcat_map(v.decl.signatures, code_names, names_monoid),
+                    names_monoid.combine(body_names(v.descr.leading),
+                                         foundation::mconcat_map(v.descr.elements, element_names, names_monoid)));
             },
             [](const ir::FreeParagraph& v) { return paragraph_names(v.text); },
         },
@@ -1035,16 +990,7 @@ std::optional<ConjunctPolarity> find_subject(const ir::Paragraph& paragraph, con
 // its itemized conditions -- the same two places check_element_leakage
 // (above) reads wording from.
 std::vector<const ir::Paragraph*> element_paragraphs(const ir::DescriptionElement& element) {
-    const auto                        address_of = [](const ir::Paragraph& p) { return &p; };
-    std::vector<const ir::Paragraph*> out =
-        element.paragraphs | std::views::transform(address_of) | std::ranges::to<std::vector>();
-    if (element.itemize)
-        out.append_range(element.itemize->items | std::views::transform(address_of));
-    if (element.table)
-        out.append_range(table_paragraphs(*element.table));
-    if (element.flat_table)
-        out.append_range(table_paragraphs(*element.flat_table));
-    return out;
+    return ir::body_paragraphs(element.body, false);
 }
 
 // One derived/authored pair sharing a kind (design §5.2): for every derived
@@ -1303,12 +1249,14 @@ std::string paragraph_text(const ir::Paragraph& paragraph) {
 // An element carrying itemized conditions or an "Equivalent to:" body is
 // saying more than that by construction.
 bool reads_as_nothing(const ir::DescriptionElement& element) {
-    if (element.itemize.has_value() || element.table.has_value() || element.flat_table.has_value() ||
-        element.equivalent.has_value())
+    if (std::ranges::any_of(element.body, [](const ir::BodyBlock& b) {
+            return !std::holds_alternative<ir::BodyParagraph>(b) && !std::holds_alternative<ir::Note>(b) &&
+                   !std::holds_alternative<ir::Example>(b);
+        }))
         return false;
     const std::string joined = foundation::mconcat_map(
-        element.paragraphs,
-        paragraph_text,
+        ir::body_paragraphs(element.body, false),
+        [](const ir::Paragraph* p) { return paragraph_text(*p); },
         foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
     // Trailing punctuation and whitespace come off together: "Nothing.",
     // "Nothing" and " Nothing. " are the same claim.
@@ -1363,10 +1311,11 @@ Diagnostics check_noexcept_throws(const ir::SpecItem& item) {
         [&subject](const ir::DescriptionElement& element) -> Diagnostics {
             if (element.kind != ir::ElementKind::Throws)
                 return {};
-            if (element.paragraphs.empty() && !element.itemize && !element.table && !element.flat_table &&
-                !element.equivalent)
+            if (element.body.empty())
                 return {}; // says nothing at all; nothing to contradict
             const std::string context = std::string(ir::element_name(element.kind));
+            if (ir::body_paragraphs(element.body, false).empty() && ir::body_code(element.body, false).empty())
+                return Diagnostics{};
             if (reads_as_nothing(element))
                 return {{Severity::Warning,
                          context,
@@ -1447,7 +1396,7 @@ Diagnostics check_nonempty(const std::string& context, const ir::CodeText& code)
 // motivated the check above, in the shape that produces no blank box to
 // notice it by, so it is an Error here rather than an absence.
 Diagnostics check_item_nonempty(const ir::SpecItem& item) {
-    if (!item.decl.signatures.empty() || !item.descr.elements.empty())
+    if (!item.decl.signatures.empty() || beman::specgen::ir::has_description(item.descr))
         return {};
     return {Diagnostic{Severity::Error, "item", "the item has neither a declaration nor a description"}};
 }
@@ -1534,6 +1483,18 @@ struct ValidationAlgebra {
                     check_element_leakage(element, visible));
             },
             diagnostics_monoid);
+
+        descr_findings = diagnostics_monoid.combine(
+            std::move(descr_findings),
+            diagnostics_monoid.combine(check_body_spans(v.descr.leading, "description"),
+                                       check_body_leakage(v.descr.leading, "description", visible)));
+
+        descr_findings = diagnostics_monoid.combine(
+            std::move(descr_findings),
+            foundation::mconcat_map(
+                v.descr.leading,
+                [](const ir::BodyBlock& block) { return check_table_block("description", block); },
+                diagnostics_monoid));
 
         Diagnostics drift_findings = check_mandates_constraints_drift(v.descr.elements);
 

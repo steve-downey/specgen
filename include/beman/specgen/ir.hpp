@@ -153,7 +153,8 @@ enum class ElementKind {
     Throws,
     Complexity,
     Remarks,
-    Errors, // Error conditions
+    Errors,      // Error conditions
+    Recommended, // Recommended practice
 };
 
 } // namespace beman::specgen::ir
@@ -173,6 +174,7 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::ElementKind::Complexity,
     beman::specgen::ir::ElementKind::Remarks,
     beman::specgen::ir::ElementKind::Errors,
+    beman::specgen::ir::ElementKind::Recommended,
 };
 
 namespace beman::specgen::ir {
@@ -227,25 +229,46 @@ struct Table1D {
     std::vector<Table1DRow> rows        = {};
 };
 
+// A paragraph either opens a numbered paragraph or continues the paragraph
+// containing the preceding list/table (decision ordered-description-bodies).
+struct BodyParagraph {
+    Paragraph text;
+    bool      continuation = false;
+};
+struct AuthoredCode {
+    CodeText code;
+};
+
+// Informative bodies have no recursive informative position: notes and
+// examples contain prose, code, lists, and tables, but cannot nest each other.
+using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
+using InformativeBody  = std::vector<InformativeBlock>;
+struct Note {
+    InformativeBody body;
+};
+struct Example {
+    InformativeBody body;
+};
+
+using BodyBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, EquivalentTo, AuthoredCode, Note, Example>;
+using DescriptionBody = std::vector<BodyBlock>;
+
 struct DescriptionElement {
-    ElementKind                 kind = ElementKind::Effects;
-    std::vector<Paragraph>      paragraphs;      // prose (possibly empty)
-    std::optional<Itemize>      itemize;         // enumerated conditions
-    std::optional<Table2D>      table      = {}; // authored two-dimensional table
-    std::optional<Table1D>      flat_table = {}; // authored flat two-column table
-    std::optional<EquivalentTo> equivalent = {}; // "Equivalent to:" code
-    // Produced by derive_constraints/derive_mandates (design §5.2)
-    // rather than authored in a docblock. `conjuncts` -- one paragraph per
-    // derived conjunct, before conjuncts::render_into folds them into
-    // `paragraphs`/`itemize` -- is a validator-only side channel, the same
-    // shape as `Synopsis::roster`: every renderer ignores it, and it
-    // exists so the drift validator can point at the specific conjunct
-    // instead of a joined sentence with no conjunct boundaries left in it.
+    ElementKind     kind = ElementKind::Effects;
+    DescriptionBody body;
+    // Validator-only derivation evidence, independent of the rendered body.
     bool                   derived   = false;
     std::vector<Paragraph> conjuncts = {};
     // The wording diff's mark on the whole element (docs/plans/wording-diff.md).
     Change change = Change::Same;
 };
+
+// Views of all wording sites, in authored order. Code returned here is block
+// code; inline code is reached through the returned paragraphs.
+std::vector<const Paragraph*> body_paragraphs(const DescriptionBody&, bool include_informative = true);
+std::vector<const CodeText*>  body_code(const DescriptionBody&, bool include_informative = true);
+// Adjacent lists in a merged same-kind description form one itemization.
+DescriptionBody coalesce_itemizations(DescriptionBody);
 
 // --- items -----------------------------------------------------------------
 enum class IndexKind { Global, Constructor, Destructor, Member, MemberX, MemberExpos, Zombie, Misc };
@@ -289,7 +312,11 @@ struct ItemDecl {
 
 struct ItemDescr {
     std::vector<DescriptionElement> elements;
+    DescriptionBody                 leading = {};
 };
+
+// One content predicate for rendering, routing, grouping, and coverage.
+bool has_description(const ItemDescr&);
 
 // Stable-sort elements into canonical order (authored order is irrelevant).
 void canonicalize(ItemDescr&);

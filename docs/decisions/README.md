@@ -22,6 +22,7 @@ and cite the design document as `docs/architecture.md` §N.
 | [subtree-consumption](subtree-consumption.md) | Git subtree or ported, provenance-tracked code |
 | [node-base-functor](node-base-functor.md) | `NodeF<A>` + `fold_with`; `ir.hpp` untouched |
 | [backend-direct-algebra](backend-direct-algebra.md) | A backend is a fold algebra straight to output |
+| [ordered-description-bodies](ordered-description-bodies.md) | Ordered semantic bodies; legacy IR migration and visible old-reader rejection |
 | [json-single-schema](json-single-schema.md) | One descriptor table drives JSON emit and parse |
 | [parser-combinators](parser-combinators.md) | Combinators replace the hand scanners |
 | [expected-error-taxonomy](expected-error-taxonomy.md) | Expected-based errors; diagnostics as a monoid |

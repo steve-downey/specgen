@@ -4,6 +4,8 @@
 #include <beman/specgen/frontend/build_document.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -98,7 +100,7 @@ TEST_CASE("build_document - anonymous-union exposition members remain in the syn
     REQUIRE(observers->children.size() == 2);
     const auto& get = std::get<ir::SpecItem>(observers->children.front());
     REQUIRE(get.descr.elements.size() == 1);
-    const ir::Paragraph& effects = get.descr.elements.front().paragraphs.front();
+    const ir::Paragraph& effects = body_test::paragraph(get.descr.elements.front());
     const auto           code_inline =
         std::ranges::find_if(effects, [](const ir::Inline& in) { return std::holds_alternative<ir::CodeInline>(in); });
     REQUIRE(code_inline != effects.end());
@@ -109,8 +111,9 @@ TEST_CASE("build_document - anonymous-union exposition members remain in the syn
     CHECK(code->code.spans.front().payload == "value");
 
     const auto& set = std::get<ir::SpecItem>(observers->children.back());
-    REQUIRE(set.descr.elements.front().equivalent.has_value());
-    const ir::CodeText& set_body = set.descr.elements.front().equivalent->code;
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(set.descr.elements.front()) != nullptr));
+    const ir::CodeText& set_body =
+        body_test::first<beman::specgen::ir::EquivalentTo>(set.descr.elements.front())->code;
     CHECK(set_body.text.contains("convert-ref-init-val(value);"));
     CHECK(std::ranges::count(set_body.spans, std::string("convert-ref-init-val"), &ir::Span::payload) == 1);
 
@@ -162,8 +165,8 @@ TEST_CASE("build_document - Equivalent-to bodies resolve namespace exposition us
     const auto  effects =
         std::ranges::find(bump.descr.elements, ir::ElementKind::Effects, &ir::DescriptionElement::kind);
     REQUIRE(effects != bump.descr.elements.end());
-    REQUIRE(effects->equivalent.has_value());
-    const ir::CodeText& code = effects->equivalent->code;
+    REQUIRE((body_test::first<beman::specgen::ir::EquivalentTo>(*effects) != nullptr));
+    const ir::CodeText& code = body_test::first<beman::specgen::ir::EquivalentTo>(*effects)->code;
 
     CHECK_FALSE(code.text.contains("detail::"));
     CHECK_FALSE(code.text.contains("static_assert"));

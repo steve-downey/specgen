@@ -1,0 +1,58 @@
+\begin{codeblock}
+namespace std {
+  class @\libglobal{predicate}@ {
+  public:
+    // \ref{predicate.members}, exposition members
+    static constexpr bool @\exposidnc{test-value}@ = true; // exposition only
+
+  private:
+    template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@; // exposition only
+
+    static constexpr int @\exposidnc{storage-limit}@{42}; // exposition only
+
+    static constexpr int @\exposidnc{marker-only}@ = 8; // exposition only
+  };
+}
+\end{codeblock}
+
+\rSec3[predicate]{Class predicate}
+
+\rSec4[predicate.members]{Exposition members}
+
+\begin{itemdecl}
+static constexpr bool @\exposidnc{test-value}@ = true;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+\exposid{test-value} is always true.
+\end{itemdescr}
+
+\begin{itemdecl}
+template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\tcode{\exposid{accepts-type}<T>} tests whether the type can be called.
+\begin{example}
+For an ordinary type:
+
+\begin{codeblock}
+static_assert(true);
+\end{codeblock}
+\end{example}
+\end{itemdescr}
+
+\rSec4[predicate.limits]{Limits}
+
+\begin{itemdecl}
+static constexpr int @\exposidnc{storage-limit}@{42};
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The limit used by \exposid{storage-limit}.
+\end{itemdescr}

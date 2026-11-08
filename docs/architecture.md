@@ -450,11 +450,22 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
+by a declaration reports through that declaration exactly once; otherwise its
+parser findings retain the block's physical file and line. Detached labelled
+descriptions require a declaration or a verbatim item declaration.
+Detached prose-only docblocks become `FreeParagraph` nodes in the open
+section, at the block's source position (issue #217). Outside a section they
+report an Error. Labelled descriptions still require a declaration. Inside a
+bounded header synopsis, detached prose follows the assembled code, alongside
+class wording, preserving source order among wording nodes. Prose retains
+inline references and participates in reference and leakage validation.
+
 ### 4.1 Description elements
 
 Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpects`,
 `\effects`, `\sync`, `\ensures`, `\result`, `\returns`, `\throws`, `\complexity`, `\errors`,
-`\remarks`.
+`\remarks`, `\recommended`.
 
 - `\hardexpects` is **not** `\expects`: it is a distinct description element, serialized as
   `hardexpects`, emitted as the draft's `\hardexpects` macro, and labelled
@@ -469,8 +480,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   render as `\exposid`, the leakage checker runs inside prose.
 - `\item` starts an authored item on the current element; nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
-  Once a list starts, another `\item` or element tag must follow, because the IR
-  places an element's prose before its one itemization.
+  Another `\item` after the blank continues that list; prose after the blank
+  resumes the same numbered paragraph. A later `\item` starts another list.
+  A further blank in resumed prose starts a new numbered paragraph.
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
@@ -478,12 +490,10 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   current element. Exactly two `\column` entries precede one or more `\row`
   entries, and each row has exactly two `\cell` entries before
   `\endlib2dtab2`. Non-tag lines continue the active caption, header, or cell.
-  The table is terminal within its element. One table is allowed per element
-  kind in a docblock; duplicate rows belong in that table rather than in a
-  duplicate same-kind element. Semantic IR retains one optional table per
-  element, and backend same-kind folds preserve every table if diagnostic or
-  hand-authored IR nevertheless contains more than one. Table prose participates in expos
-  rewriting, leakage, drift, and *Throws:* validation like every other authored paragraph.
+  After the explicit terminator, prose resumes the element in its authored
+  position without another paragraph number. Several tables may occur in one
+  element. Table prose participates in expos rewriting, leakage, drift, and
+  *Throws:* validation like every other authored paragraph.
 - `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
   current element (issue #74) -- the shape [fs.enum.file.type] and its
   neighbours use for an enumeration's meanings, one row per enumerator, with
@@ -493,15 +503,33 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   `\libtab2` shares `\column`/`\row`/`\cell` with `\lib2dtab2`: exactly two
   `\column` entries precede one or more `\row` entries, but each row has
   exactly *one* `\cell` entry (the `\row` tag's own trailing text is the
-  row's first column) before `\endlibtab2`. In every other respect --
-  terminal within its element, one table of a given kind per element kind,
-  duplicate rows joining the existing table, expos/leakage/drift/*Throws:*
-  participation -- it follows `\lib2dtab2`'s rules exactly; the two table
-  kinds do not count against each other's "one table per element kind" limit.
-  Semantic IR keeps a separate optional flat table alongside the
-  two-dimensional one, so an element can in principle carry both.
+  row's first column) before `\endlibtab2`. It follows the same ordering and
+  prose continuation rules as `\lib2dtab2`.
+
+`\recommended` renders *Recommended practice*, after `\errors` in canonical
+order. It is accepted on a class description as well as an item description.
 
 All three backends render authored itemizations, prose references, and tables.
+
+An item description may begin with unlabelled paragraphs, or contain only
+those paragraphs (issue #211). They precede the labelled elements, receive
+normal paragraph numbers, and have no fabricated label. This applies to a
+class's own description and a standalone verbatim item declaration too.
+Prose-only descriptions request wording when grouping, routing, and coverage
+are decided; an empty description and explicit `\also` retain their grouping
+meaning. Leading prose undergoes the same reference, span, and leakage checks
+as other authored wording.
+
+Notes (`\note` / `\endnote`) and examples (`\example` /
+`\endexample`) contain informative prose, lists, tables, and authored code.
+They cannot nest each other. `\codeblock` / `\endcodeblock` preserves its
+decorated payload verbatim; embedded commands and blank lines are not markup.
+Missing, mismatched, and nested delimiters report positioned findings.
+Informative bodies use a closed, nonrecursive leaf-block vocabulary, traversed
+by leaf visitors. Their paragraphs never advance the enclosing normative count.
+Authored code is distinct from AST-extracted `EquivalentTo` code and receives
+no semantic introduction. Its explicit backend escapes remain source-authored,
+as in the verbatim item declaration contract.
 
 ### 4.2 Extraction elements
 
@@ -809,6 +837,14 @@ function *declaration*, whose markup belongs at the definition — is an Error f
 rather than a silent drop, unless `\omit`/`\merge`/`\expos` says the silence is
 deliberate.
 
+Exposition-only static members, including static member templates, can carry
+an authored description (issue #215). They route through their class's `\ref`
+group or an explicit `\at`, retaining their semantic entity in the roster.
+Their item declarations use the exposition name and have no normative library
+index. Bare `\seebelow` writes `= see below` in both the synopsis and item;
+marker-only exposition stays in the synopsis. Non-static data members still
+have no independent item description.
+
 ## 7. Intermediate representation
 
 - Node vocabulary = wording ontology: Section (stable name, title, depth),
@@ -819,9 +855,14 @@ deliberate.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
-  `Inline`/`Paragraph` for prose; thirteen `ElementKind`s in canonical
-  [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying prose,
-  one optional trailing `Itemize`, one optional table, and an optional `EquivalentTo` body;
+  `Inline`/`Paragraph` for prose; fourteen `ElementKind`s in canonical
+  [structure.specifications] order (the §4.1 tags), with `DescriptionElement` carrying
+  one ordered `DescriptionBody`: `BodyParagraph`, `Itemize`, `Table2D`, `Table1D`,
+  extracted `EquivalentTo`, authored `AuthoredCode`, `Note`, or `Example` blocks.
+  Informative bodies contain a nonrecursive sequence of prose, lists, tables,
+  and authored code. A paragraph's continuation flag preserves
+  the enclosing numbered paragraph after a list or table. Validator-only
+  `derived`/`conjuncts` evidence remains separate from the rendered body;
   `ItemDecl`/`ItemDescr`/`SpecItem`; `IndexEntry`; `Section`/`Synopsis`/`FreeParagraph`/
   `Document`; and `canonicalize()`. Nodes share a common traversal substrate
   ([node-base-functor](decisions/node-base-functor.md),
@@ -866,8 +907,12 @@ deliberate.
 - **Serializable** (`--emit-ir`): one JSON schema for emit and parse
   ([json-single-schema](decisions/json-single-schema.md)); `ir::emit_json` (`ir_json.hpp`)
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
-  invariant holding over every node, span, index, element kind, and disposition. The
-  serialized form decouples the wg21org exporter and enables backend-independent golden tests.
+  invariant holding over every node, span, index, element kind, and disposition.
+  Legacy description slots normalize to ordered bodies when read. New item nodes
+  use `item-v3`, so older readers reject the changed contract visibly rather than
+  skipping body content (decision [ordered-description-bodies](decisions/ordered-description-bodies.md)).
+  The serialized form decouples the wg21org exporter and enables backend-independent golden
+  tests.
 - **Change marks** ([ir-level-diff](decisions/ir-level-diff.md),
   [plans/wording-diff.md](plans/wording-diff.md)): the wording diff's
   record of what a revision added or removed, carried in the IR because a `::: add` div or
@@ -884,7 +929,17 @@ deliberate.
   `all_marked` reach the mark on a node of any kind; paper mode is `all_marked(..., Added)`,
   the diff of an empty baseline, until the differ itself lands.
 
+Item descriptions carry an ordered `leading` body followed by their canonical
+labelled elements. Item nodes emit `item-v3`; readers accept both `item-v2`
+and legacy `item`. The new discriminator prevents a body-only reader from
+silently ignoring leading wording. The semantic content predicate is
+`ir::has_description`, shared by rendering, grouping, routing, and coverage.
+
 ## 8. Backends (serializers)
+
+Same-kind element merging concatenates complete bodies in stable order, coalescing
+adjacent itemizations while preserving every table and paragraph boundary. Each
+backend renders blocks in that order and writes an element's label only once.
 
 All backends emit **standalone fragments for transclusion**; the including
 document owns framing. Fragment paths derive from stable names
@@ -963,7 +1018,7 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
 - A description element's *label* ("Preconditions" for `\expects`, "Error conditions" for
   `\errors`) comes from `backend::element_label` (`backend/element_label.hpp`), not from `ir::element_name`, which
   spells the LaTeX macro and is simultaneously the IR's frozen JSON key. The two agree on
-  eight of thirteen kinds, which is exactly enough to make a hand-written table look right
+  eight of fourteen kinds, which is exactly enough to make a hand-written table look right
   and be wrong.
 - mpark's span escape is `$x$` (its shorthand for `@*x*@`) and it is **not**
   backslash-escaped: the framework's scanner has no backslash handling, so a literal `@` or
@@ -1019,6 +1074,12 @@ driver. Consequences:
 
 ## 9. Validation
 
+Informative bodies participate in span, table, reference, and leakage checks.
+Their prose is excluded from normative drift evidence and Throws assertions.
+Both the normative and informative block vocabularies are descriptor-driven in
+saved IR. Backend informative-body visitors handle leaf blocks without recursive
+visitation; note and example bodies cannot contain further informative bodies.
+
 `render --validate` runs eight checks over an IR document. An Error makes validation skip
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
@@ -1035,7 +1096,9 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    including those folded into a gathered synopsis. A documented one produces wording and an
    undocumented one is an implementation helper (§3.3), so neither has a roster entry
    (issue #141).
-2. **Leakage checker**: every name token in rendered output must resolve to a std-visible
+2. **Leakage checker**: ordered-body paragraph and code collectors cover every body block.
+   Every table is structurally checked, including repeated tables in same-kind elements.
+   Every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
    body. Four clauses at two severities:
    - **Error** if the leak lands in wording text: an itemdecl, an *Equivalent to:* body, or
@@ -1127,6 +1190,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
 ## 10. Testing strategy
 
 - **Grammar unit tests**: parser over strings, no clang.
+- **IR migration tests**: legacy item/description fields normalize into ordered
+  bodies; new bodies round-trip; mixed legacy/new bodies fail. Tagged variants
+  resolve their tag before reading fields, so late tags and overlapping table
+  field names preserve their selected payload.
 - **Golden files per backend**; IR goldens via `--emit-ir`. The golden harness
   ([golden-test-harness](decisions/golden-test-harness.md), `tests/golden/`,
   `run-golden.cmake`) registers each case as ctest → driver → `cmake -E compare_files`, in
@@ -1214,7 +1281,7 @@ The build assembles the tool from these components, each following the shared CM
 ([subtree-consumption](decisions/subtree-consumption.md)).
 
 - **Semantic IR** — `include/beman/specgen/ir.hpp`, `src/beman/specgen/ir.cpp`.
-  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the thirteen
+  The §7 node vocabulary: spans and `CodeText`, prose inlines and paragraphs, the fourteen
   `ElementKind`s in canonical order, `DescriptionElement` + `EquivalentTo`,
   `ItemDecl` (signatures plus semantic entity names)/`ItemDescr`/`SpecItem`, `IndexEntry`,
   `Section`/`Synopsis`/`FreeParagraph`/

@@ -13,12 +13,17 @@ unset(_specgen_compile_options)
 list(APPEND CMAKE_MODULE_PATH "${Catch2_SOURCE_DIR}/extras")
 include(Catch)
 
+# Shared assertions inspect ordered description bodies without copying wording.
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+
 foreach(
     component
     ir
     ir_fold
     ir_json
     docblock
+    resume_body
+    description_blocks
     markers
     rsec
     section_markers

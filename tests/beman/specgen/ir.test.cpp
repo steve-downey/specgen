@@ -4,6 +4,8 @@
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir.hpp> // Re-inclusion verification
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 using namespace beman::specgen::ir;
@@ -15,7 +17,7 @@ TEST_CASE("ir - HeaderIsIdempotent") {
 }
 
 TEST_CASE("ir - element names round-trip") {
-    for (int i = 0; i <= static_cast<int>(ElementKind::Errors); ++i) {
+    for (int i = 0; i <= static_cast<int>(ElementKind::Recommended); ++i) {
         auto kind = static_cast<ElementKind>(i);
         auto name = element_name(kind);
         CHECK(name != "?");
@@ -40,9 +42,9 @@ TEST_CASE("ir - disposition names round-trip") {
 
 TEST_CASE("ir - canonicalize sorts into structure.specifications order") {
     ItemDescr d;
-    d.elements.push_back({ElementKind::Returns, {}, {}});
-    d.elements.push_back({ElementKind::Mandates, {}, {}});
-    d.elements.push_back({ElementKind::Effects, {}, {}});
+    d.elements.push_back(body_test::element(ElementKind::Returns, {}, {}));
+    d.elements.push_back(body_test::element(ElementKind::Mandates, {}, {}));
+    d.elements.push_back(body_test::element(ElementKind::Effects, {}, {}));
     canonicalize(d);
     REQUIRE(d.elements.size() == 3);
     CHECK(d.elements[0].kind == ElementKind::Mandates);

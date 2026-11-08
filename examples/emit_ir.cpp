@@ -33,16 +33,16 @@ int main() {
 
     ir::DescriptionElement mandates;
     mandates.kind = ir::ElementKind::Mandates;
-    mandates.paragraphs.push_back({ir::CodeInline{{"is_copy_constructible_v<T>", {}}},
-                                   ir::TextInline{" is "},
-                                   ir::CodeInline{{"true", {}}},
-                                   ir::TextInline{"."}});
+    mandates.body.push_back(ir::BodyParagraph{{ir::CodeInline{{"is_copy_constructible_v<T>", {}}},
+                                               ir::TextInline{" is "},
+                                               ir::CodeInline{{"true", {}}},
+                                               ir::TextInline{"."}}});
     item.descr.elements.push_back(std::move(mandates));
 
     ir::DescriptionElement effects;
     effects.kind = ir::ElementKind::Effects;
-    effects.equivalent =
-        ir::EquivalentTo{{"return has_value() ? *(*this) : static_cast<remove_cv_t<T>>(std::forward<U>(u));", {}}};
+    effects.body.push_back(
+        ir::EquivalentTo{{"return has_value() ? *(*this) : static_cast<remove_cv_t<T>>(std::forward<U>(u));", {}}});
     item.descr.elements.push_back(std::move(effects));
 
     // 3. Canonical [structure.specifications] order, then serialize.

@@ -1,0 +1,51 @@
+\rSec3[blocks.general]{Description blocks}
+
+\indexlibraryglobal{run}%
+\begin{itemdecl}
+inline void run();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Performs the operation.
+\begin{note}
+An explanation with \tcode{int} and \iref{blocks.general}.
+
+A second informative paragraph.
+
+\begin{itemize}
+\item The informative list is unnumbered.
+\end{itemize}
+\end{note}
+\begin{example}
+The following code illustrates an operation:
+
+\begin{codeblock}
+  run();
+
+// Commands in a code payload remain literal.
+// \effects is part of this comment.
+\end{codeblock}
+
+The example continues after its code.
+\end{example}
+This continues the normative paragraph.
+
+\pnum
+This is a separate normative paragraph.
+\end{itemdescr}
+
+\indexlibraryglobal{value}%
+\begin{itemdecl}
+inline int value();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+The result is equal to:
+\begin{codeblock}
+1 + 2
+\end{codeblock}
+Otherwise, the result is zero.
+\end{itemdescr}

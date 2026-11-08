@@ -1,0 +1,67 @@
+#+begin_codeblock
+namespace std {
+  class predicate {
+  public:
+    // \ref{predicate.members}, exposition members
+    static constexpr bool @\exposidnc{test-value}@ = true; // exposition only
+
+  private:
+    template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@; // exposition only
+
+    static constexpr int @\exposidnc{storage-limit}@{42}; // exposition only
+
+    static constexpr int @\exposidnc{marker-only}@ = 8; // exposition only
+  };
+}
+#+end_codeblock
+
+** Class predicate [predicate]
+:PROPERTIES:
+:CUSTOM_ID: predicate
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** Exposition members [predicate.members]
+:PROPERTIES:
+:CUSTOM_ID: predicate.members
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+static constexpr bool @\exposidnc{test-value}@ = true;
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: @@latex:\exposid{test-value}@@@@html:<code><var>test-value</var></code>@@ is always true.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+@@latex:\tcode{\exposid{accepts-type}<T>}@@@@html:<code><var>accepts-type</var>&lt;T&gt;</code>@@ tests whether the type can be called.
+
+#+begin_wgexample
+For an ordinary type:
+
+#+begin_codeblock
+static_assert(true);
+#+end_codeblock
+#+end_wgexample
+#+end_pnum
+
+*** Limits [predicate.limits]
+:PROPERTIES:
+:CUSTOM_ID: predicate.limits
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+static constexpr int @\exposidnc{storage-limit}@{42};
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: The limit used by @@latex:\exposid{storage-limit}@@@@html:<code><var>storage-limit</var></code>@@.
+#+end_pnum

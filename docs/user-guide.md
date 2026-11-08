@@ -29,8 +29,7 @@ export PATH="$PWD/$(echo specgen-*-manylinux_2_34_x86_64)/bin:$PATH"
 specgen --version
 ```
 
-`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu). The same tree is also
-published as `specgen-manylinux_2_34_x86_64.tar.gz`, for `tar -xz`.
+`tar -xJ` needs `xz` (`xz-utils` on Debian and Ubuntu).
 
 The remainder of this section concerns building from source. A source build
 requires GCC 16 with its C++26 libstdc++, CMake 3.30 or later, `uv`, and the
@@ -616,22 +615,28 @@ vocabulary, in canonical output order, is:
 ```text
 \constraints  \mandates  \expects  \hardexpects  \effects  \sync
 \ensures      \result    \returns  \throws       \complexity
-\remarks      \errors
+\remarks      \errors    \recommended
 ```
 
 The display labels include *Preconditions* for `\expects`, *Hardened
 preconditions* for `\hardexpects`, *Postconditions* for `\ensures`, and *Error
-conditions* for `\errors`. Authored order does not determine output order: an
+conditions* for `\errors`, and *Recommended practice* for `\recommended`.
+Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
 error.
+
+Prose before the first element tag is an unlabelled description. It may be
+the entire description, or lead into labelled requirements. Blank decorated
+lines separate its numbered paragraphs. Classes can carry the same prose;
+`\at` routes their description independently of the synopsis.
 
 Text after a tag begins the element's first paragraph. A blank decorated line
 separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
-An element may end in one authored itemization:
+An element may contain authored itemizations:
 
 ```cpp
 //! \constraints All of the following are true:
@@ -639,11 +644,12 @@ An element may end in one authored itemization:
 //! \item `T` meets the requirements in \iref{some.requirements}.
 ```
 
-Each nonblank line that follows an item continues that item. After the first
-`\item`, only another `\item` or a new element may follow; no further prose can
-be placed after the list within the same element.
+Each nonblank line that follows an item continues that item. A blank decorated
+line closes the item. Another `\item` then continues the list; prose resumes
+the element in the same numbered paragraph. A later `\item` starts a new list.
+A further blank within resumed prose starts a new numbered paragraph.
 
-An element may instead end in one two-column table:
+An element may also contain two-column tables:
 
 ```cpp
 //! \effects See the following table.
@@ -659,7 +665,7 @@ An element may instead end in one two-column table:
 The table requires exactly two `\column` entries, one or more `\row` entries,
 and exactly two `\cell` entries per row. Lines without a tag continue the
 active caption, column heading, row heading, or cell. `\endlib2dtab2` is
-required, and the table ends its element.
+required. Prose after it resumes the element in the same numbered paragraph.
 
 `\libtab2` produces a flat two-column table, such as an enumeration's meanings.
 Here the text on `\row` is the first column, and each row has one `\cell` for
@@ -680,7 +686,28 @@ the second:
 `\lib2dtab2` is a cross-product table: each `\row` is a row heading followed by
 two data cells. `\libtab2` is the ordinary two-column form: each `\row` is its
 first data cell, followed by one `\cell`. Both require two column headings and
-at least one row, and both end their element.
+at least one row. Both preserve their position among the element's prose and lists.
+
+### Notes, examples, and authored code
+
+Use `\note` / `\endnote` and `\example` / `\endexample` inside a
+leading description or a labelled element. Their bodies accept ordinary
+paragraphs, backticks, `\iref`, lists, tables, and code blocks. Notes and
+examples cannot nest. Their paragraphs do not advance the surrounding wording's
+paragraph counter. Prose after a closed block continues the enclosing paragraph;
+a subsequent blank decorated line starts a new paragraph.
+
+`\codeblock` / `\endcodeblock` preserves the decorated payload lines,
+including indentation and blank lines. Tags inside the payload are literal;
+only a line containing `\endcodeblock` closes it. Authored code has no
+attached C++ AST and is not introduced as “Equivalent to”. Like verbatim item
+declarations, its payload preserves explicit backend escapes as authored.
+
+The LaTeX backend writes the draft's note, example, and codeblock environments.
+Mpark uses note/example divs and fenced C++ blocks. Org uses `note`, `wgexample`,
+and `codeblock` special blocks; `wgexample` requires the corresponding wg21org
+exporter support. Informative text still undergoes span and leakage validation,
+but it does not satisfy a normative drift obligation or assert a Throws guarantee.
 
 ## Extraction markers
 
@@ -846,6 +873,13 @@ wording follows [structure.specifications].
 `\verbatim-synopsis` written as the docblock of anything other than a class or
 class-template definition is an error.
 
+A static member marked `\expos` can carry its own description, including a
+static member template. Route it with the class's `\ref` group or `\at`.
+Its item declaration uses the exposition name; bare `\seebelow` writes
+`= see below` in both the synopsis and item declaration. A marker-only
+exposition member stays in the synopsis. Non-static data members are described
+by their class.
+
 ## Validation and diagnostics
 
 Run `generate --validate` as part of the normal authoring loop. Validation
@@ -1007,6 +1041,22 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.7.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.14.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
+
+### Saved IR compatibility
+
+Newly emitted item nodes use `item-v3` for leading and ordered description
+bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
+with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
+wording cannot disappear through unknown-field skipping. Regenerate saved IR
+when moving to the new writer.
+
+### Section prose
+
+A prose-only `//!` or `/*! */` block separated from declarations belongs to
+the current section. Blank decorated lines separate its numbered paragraphs.
+A detached block outside every section reports an error. Inside a bounded
+header synopsis, detached prose follows the assembled synopsis alongside the
+classes' own descriptions. Labelled description elements require a declaration.

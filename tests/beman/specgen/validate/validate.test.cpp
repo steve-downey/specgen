@@ -14,6 +14,8 @@
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir_json.hpp>
 
+#include <beman/specgen/body_test.hpp>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
@@ -110,7 +112,7 @@ TEST_CASE("validate - an item with a description and no declaration is a class's
     // Design §6: a class's description is an itemdescr with no itemdecl.
     ir::SpecItem item;
     item.descr.elements.push_back(
-        ir::DescriptionElement{ir::ElementKind::Remarks, {{ir::TextInline{"Its own description."}}}, {}});
+        body_test::element(ir::ElementKind::Remarks, {{ir::TextInline{"Its own description."}}}, {}));
     ir::Node node = std::move(item);
     CHECK(validate(node).empty());
 }
@@ -378,8 +380,8 @@ namespace {
 // extracted "Equivalent to:" body -- §9's headline leakage site.
 ir::Document document_with_equiv(std::vector<ir::SynopsisEntry> roster, std::string body) {
     ir::DescriptionElement effects;
-    effects.kind       = ir::ElementKind::Effects;
-    effects.equivalent = ir::EquivalentTo{{std::move(body), {}}};
+    effects.kind = ir::ElementKind::Effects;
+    effects.body.push_back(ir::EquivalentTo{{std::move(body), {}}});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void reset();", {}});
@@ -528,11 +530,12 @@ TEST_CASE("validate - a leak is matched whole-identifier, not as a substring") {
 TEST_CASE("validate - leaks are reported in backticked prose and in itemized conditions") {
     ir::DescriptionElement ensures;
     ensures.kind = ir::ElementKind::Ensures;
-    ensures.paragraphs.push_back({ir::CodeInline{{"scratch", {}}}, ir::TextInline{" is released"}});
+    ensures.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{ir::CodeInline{{"scratch", {}}}, ir::TextInline{" is released"}}});
 
     ir::DescriptionElement remarks;
-    remarks.kind    = ir::ElementKind::Remarks;
-    remarks.itemize = ir::Itemize{{{ir::CodeInline{{"clone", {}}}, ir::TextInline{" is not called"}}}};
+    remarks.kind = ir::ElementKind::Remarks;
+    remarks.body.push_back(ir::Itemize{{{ir::CodeInline{{"clone", {}}}, ir::TextInline{" is not called"}}}});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void reset();", {}});
@@ -551,8 +554,8 @@ TEST_CASE("validate - leaks are reported in backticked prose and in itemized con
 
 TEST_CASE("validate - every two-dimensional table field is a leakage site") {
     ir::DescriptionElement effects;
-    effects.kind  = ir::ElementKind::Effects;
-    effects.table = ir::Table2D{
+    effects.kind = ir::ElementKind::Effects;
+    effects.body.push_back(ir::Table2D{
         .stable_name = "widget.effects",
         .caption     = {ir::CodeInline{{"caption_hidden", {}}}},
         .column1     = {ir::CodeInline{{"column_hidden", {}}}},
@@ -560,7 +563,7 @@ TEST_CASE("validate - every two-dimensional table field is a leakage site") {
         .rows        = {{.header = {ir::CodeInline{{"row_hidden", {}}}},
                          .cell1  = {ir::CodeInline{{"cell1_hidden", {}}}},
                          .cell2  = {ir::CodeInline{{"cell2_hidden", {}}}}}},
-    };
+    });
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
@@ -582,14 +585,14 @@ TEST_CASE("validate - every two-dimensional table field is a leakage site") {
 
 TEST_CASE("validate - every flat two-column table field is a leakage site") {
     ir::DescriptionElement remarks;
-    remarks.kind       = ir::ElementKind::Remarks;
-    remarks.flat_table = ir::Table1D{
+    remarks.kind = ir::ElementKind::Remarks;
+    remarks.body.push_back(ir::Table1D{
         .stable_name = "widget.remarks",
         .caption     = {ir::CodeInline{{"caption_hidden", {}}}},
         .column1     = {ir::CodeInline{{"column_hidden", {}}}},
         .column2     = {ir::TextInline{"visible"}},
         .rows = {{.cell1 = {ir::CodeInline{{"cell1_hidden", {}}}}, .cell2 = {ir::CodeInline{{"cell2_hidden", {}}}}}},
-    };
+    });
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
@@ -614,17 +617,17 @@ TEST_CASE("validate - spans are checked in every description CodeText") {
     };
 
     ir::DescriptionElement effects;
-    effects.kind       = ir::ElementKind::Effects;
-    effects.paragraphs = {{malformed_inline()}};
-    effects.itemize    = ir::Itemize{{{malformed_inline()}}};
-    effects.table      = ir::Table2D{
+    effects.kind = ir::ElementKind::Effects;
+    effects.body = body_test::prose({{malformed_inline()}});
+    effects.body.push_back(ir::Itemize{{{malformed_inline()}}});
+    effects.body.push_back(ir::Table2D{
         .stable_name = "widget.effects",
         .caption     = {malformed_inline()},
         .column1     = {malformed_inline()},
         .column2     = {malformed_inline()},
         .rows = {{.header = {malformed_inline()}, .cell1 = {malformed_inline()}, .cell2 = {malformed_inline()}}},
-    };
-    effects.equivalent = ir::EquivalentTo{{"x", {{0, 2, ir::SpanKind::ExposId, "x"}}}};
+    });
+    effects.body.push_back(ir::EquivalentTo{{"x", {{0, 2, ir::SpanKind::ExposId, "x"}}}});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
@@ -642,8 +645,8 @@ TEST_CASE("validate - malformed tables remain invalid after a JSON round trip") 
     ir::SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
     ir::DescriptionElement effects;
-    effects.kind  = ir::ElementKind::Effects;
-    effects.table = ir::Table2D{.rows = {ir::Table2DRow{}}};
+    effects.kind = ir::ElementKind::Effects;
+    effects.body.push_back(ir::Table2D{.rows = {ir::Table2DRow{}}});
     item.descr.elements.push_back(std::move(effects));
 
     const auto parsed = ir::parse_item(ir::emit_json(item));
@@ -658,7 +661,7 @@ TEST_CASE("validate - malformed tables remain invalid after a JSON round trip") 
     CHECK(empty_fields.at(6).message == "table row 1 second cell is empty");
 
     ir::SpecItem no_rows = *parsed;
-    no_rows.descr.elements.front().table->rows.clear();
+    body_test::first<beman::specgen::ir::Table2D>(no_rows.descr.elements.front())->rows.clear();
     const auto reparsed = ir::parse_item(ir::emit_json(no_rows));
     REQUIRE(reparsed.has_value());
     const Diagnostics missing_row = validate(ir::Node{*reparsed});
@@ -670,8 +673,8 @@ TEST_CASE("validate - malformed flat tables remain invalid after a JSON round tr
     ir::SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
     ir::DescriptionElement remarks;
-    remarks.kind       = ir::ElementKind::Remarks;
-    remarks.flat_table = ir::Table1D{.rows = {ir::Table1DRow{}}};
+    remarks.kind = ir::ElementKind::Remarks;
+    remarks.body.push_back(ir::Table1D{.rows = {ir::Table1DRow{}}});
     item.descr.elements.push_back(std::move(remarks));
 
     const auto parsed = ir::parse_item(ir::emit_json(item));
@@ -685,7 +688,7 @@ TEST_CASE("validate - malformed flat tables remain invalid after a JSON round tr
     CHECK(empty_fields.at(5).message == "flat table row 1 second cell is empty");
 
     ir::SpecItem no_rows = *parsed;
-    no_rows.descr.elements.front().flat_table->rows.clear();
+    body_test::first<beman::specgen::ir::Table1D>(no_rows.descr.elements.front())->rows.clear();
     const auto reparsed = ir::parse_item(ir::emit_json(no_rows));
     REQUIRE(reparsed.has_value());
     const Diagnostics missing_row = validate(ir::Node{*reparsed});
@@ -1034,7 +1037,8 @@ TEST_CASE("validate - an authored Mandates duplicating its derived conjunct warn
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
-    authored.paragraphs.push_back(authored_paragraph("is_copy_constructible_v<int>", "true"));
+    authored.body.push_back(
+        beman::specgen::ir::BodyParagraph{authored_paragraph("is_copy_constructible_v<int>", "true")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"gadget(const gadget&);", {}});
@@ -1052,7 +1056,8 @@ TEST_CASE("validate - an authored Mandates contradicting its derived conjunct wa
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
-    authored.paragraphs.push_back(authored_paragraph("is_copy_constructible_v<int>", "false"));
+    authored.body.push_back(
+        beman::specgen::ir::BodyParagraph{authored_paragraph("is_copy_constructible_v<int>", "false")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"gadget(const gadget&);", {}});
@@ -1069,7 +1074,7 @@ TEST_CASE("validate - an authored Constraints element compares the same way") {
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Constraints;
     authored.conjuncts = {conjunct_paragraph("copyable<T>", "true")};
-    authored.paragraphs.push_back(authored_paragraph("copyable<T>", "true"));
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{authored_paragraph("copyable<T>", "true")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class T> void f(T);", {}});
@@ -1085,7 +1090,7 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Constraints;
     authored.conjuncts = {conjunct_paragraph("copyable<T>", "true")};
-    authored.table     = ir::Table2D{
+    authored.body.push_back(ir::Table2D{
         .stable_name = "widget.constraints",
         .caption     = {ir::TextInline{"Conditions"}},
         .column1     = {ir::TextInline{"yes"}},
@@ -1093,7 +1098,7 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
         .rows        = {{.header = {ir::TextInline{"T"}},
                          .cell1  = authored_paragraph("copyable<T>", "true"),
                          .cell2  = {ir::TextInline{"otherwise"}}}},
-    };
+    });
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class T> void f(T);", {}});
@@ -1106,15 +1111,15 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
 
 TEST_CASE("validate - drift comparison reads authored flat table cells") {
     ir::DescriptionElement authored;
-    authored.kind       = ir::ElementKind::Constraints;
-    authored.conjuncts  = {conjunct_paragraph("copyable<T>", "true")};
-    authored.flat_table = ir::Table1D{
+    authored.kind      = ir::ElementKind::Constraints;
+    authored.conjuncts = {conjunct_paragraph("copyable<T>", "true")};
+    authored.body.push_back(ir::Table1D{
         .stable_name = "widget.constraints",
         .caption     = {ir::TextInline{"Conditions"}},
         .column1     = {ir::TextInline{"Constant"}},
         .column2     = {ir::TextInline{"Meaning"}},
         .rows        = {{.cell1 = {ir::TextInline{"T"}}, .cell2 = authored_paragraph("copyable<T>", "true")}},
-    };
+    });
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class T> void f(T);", {}});
@@ -1131,7 +1136,8 @@ TEST_CASE("validate - a derived conjunct absent from unrelated authored prose wa
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
-    authored.paragraphs.push_back({ir::TextInline{"Some unrelated authored condition."}});
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{ir::TextInline{"Some unrelated authored condition."}}});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"gadget(const gadget&);", {}});
@@ -1153,11 +1159,12 @@ TEST_CASE("validate - a derived conjunct documented only in a sibling Remarks el
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_reference_v<E>", "true")};
-    authored.paragraphs.push_back({ir::TextInline{"Some unrelated authored condition."}});
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{ir::TextInline{"Some unrelated authored condition."}}});
 
     ir::DescriptionElement remarks;
     remarks.kind = ir::ElementKind::Remarks;
-    remarks.paragraphs.push_back(authored_paragraph("is_reference_v<E>", "true"));
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{authored_paragraph("is_reference_v<E>", "true")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"gadget(const gadget&);", {}});
@@ -1174,7 +1181,7 @@ TEST_CASE("validate - one documented and one undocumented conjunct in the same r
     authored.kind      = ir::ElementKind::Constraints;
     authored.conjuncts = {conjunct_paragraph("is_constructible_v<T, U>", "true"),
                           conjunct_paragraph("is_same_v<U, int>", "false")};
-    authored.paragraphs.push_back(authored_paragraph("is_constructible_v<T, U>", "true"));
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{authored_paragraph("is_constructible_v<T, U>", "true")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class U> void put(U&&);", {}});
@@ -1208,7 +1215,7 @@ TEST_CASE("validate - a derived conjunct with no readable polarity (a concept-id
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Constraints;
     authored.conjuncts = {{ir::CodeInline{{"U", {}}}, ir::TextInline{" models "}, ir::ConceptRef{"copyable"}}};
-    authored.paragraphs.push_back(authored_paragraph("U", "true"));
+    authored.body.push_back(beman::specgen::ir::BodyParagraph{authored_paragraph("U", "true")});
 
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class U> void f(U);", {}});
@@ -1318,7 +1325,8 @@ ir::SpecItem throwing_item(std::vector<std::string> signatures, std::string clai
                            std::ranges::to<std::vector>();
     ir::DescriptionElement throws;
     throws.kind = ir::ElementKind::Throws;
-    throws.paragraphs.push_back({ir::TextInline{std::move(claim)}});
+    throws.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{ir::TextInline{std::move(claim)}}});
     item.descr.elements = {throws};
     return item;
 }
@@ -1420,7 +1428,8 @@ TEST_CASE("validate - a noexcept item carrying no Throws element is silent") {
     item.decl.signatures.push_back({"void f() noexcept;", {}});
     ir::DescriptionElement effects;
     effects.kind = ir::ElementKind::Effects;
-    effects.paragraphs.push_back({ir::TextInline{"Does nothing."}});
+    effects.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{ir::TextInline{"Does nothing."}}});
     item.descr.elements = {effects};
     CHECK(validate(ir::Node{item}).empty());
 }
@@ -1439,8 +1448,9 @@ TEST_CASE("validate - a Throws element carrying itemized conditions says more th
     item.decl.signatures.push_back({"void f() noexcept;", {}});
     ir::DescriptionElement throws;
     throws.kind = ir::ElementKind::Throws;
-    throws.paragraphs.push_back({ir::TextInline{"Nothing."}});
-    throws.itemize      = ir::Itemize{{{ir::TextInline{"unless the allocator throws."}}}};
+    throws.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{ir::TextInline{"Nothing."}}});
+    throws.body.push_back(ir::Itemize{{{ir::TextInline{"unless the allocator throws."}}}});
     item.descr.elements = {throws};
 
     const Diagnostics diags = validate(ir::Node{item});

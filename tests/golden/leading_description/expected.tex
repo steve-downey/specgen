@@ -1,0 +1,84 @@
+\begin{codeblock}
+namespace std {
+  struct @\libglobal{wrapper}@ {
+    // \ref{leading.members}, members
+    wrapper() = default;
+
+    virtual void run() = 0;
+  };
+}
+\end{codeblock}
+
+\rSec3[leading]{Leading descriptions}
+
+\rSec4[leading.general]{General}
+
+\begin{itemdescr}
+\pnum
+A wrapper stores one value.
+
+\pnum
+Its description is routed independently of its synopsis.
+\end{itemdescr}
+
+\rSec4[leading.members]{Members}
+
+\indexlibraryctor{wrapper}%
+\begin{itemdecl}
+wrapper() = default;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Constructs an empty wrapper.
+\end{itemdescr}
+
+\indexlibrarymember{run}{wrapper}%
+\begin{itemdecl}
+virtual void run() = 0;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+A concrete wrapper supplies this operation.
+\end{itemdescr}
+
+\rSec4[leading.functions]{Functions}
+
+\indexlibraryglobal{first}%
+\begin{itemdecl}
+inline void first();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+The first function has prose only.
+\end{itemdescr}
+
+\indexlibraryglobal{second}%
+\begin{itemdecl}
+inline void second();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+The second function has its own description.
+\end{itemdescr}
+
+\indexlibraryglobal{third}%
+\begin{itemdecl}
+inline void third();
+inline void third(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+The third function introduces the labelled requirements.
+
+\pnum
+This is a separate leading paragraph with \iref{leading.general}.
+
+\pnum
+\effects
+Performs the operation.
+\end{itemdescr}
