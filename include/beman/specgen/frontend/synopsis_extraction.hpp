@@ -10,6 +10,7 @@
 #define BEMAN_SPECGEN_FRONTEND_SYNOPSIS_EXTRACTION_HPP
 
 #include <beman/specgen/frontend/declaration_masks.hpp>
+#include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/span_sentinels.hpp>
 #include <beman/specgen/synopsis_edits.hpp>
@@ -122,7 +123,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  std::optional<clang::SourceRange>                see_below            = std::nullopt,
                                  const clang::VarDecl*                            uninitialized        = nullptr,
                                  std::string_view                                 declarator_qualifier = {},
-                                 const clang::VarDecl*                            initialized_below    = nullptr);
+                                 const clang::VarDecl*                            initialized_below    = nullptr,
+                                 DraftContext                                     context = DraftContext::Synopsis);
 
 // A free-standing exposition-only entity is already a complete
 // definition, so it uses the ordinary Synopsis IR rather than inventing an

@@ -28,7 +28,8 @@ A reference to the contained value.
 
 \indexlibrarymember{value_or}{optional}%
 \begin{itemdecl}
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 \end{itemdecl}
 
 \begin{itemdescr}

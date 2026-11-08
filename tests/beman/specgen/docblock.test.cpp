@@ -248,8 +248,9 @@ TEST_CASE("docblock - authored items belong to the current element") {
 
 TEST_CASE("docblock - authored item diagnostics and resumed prose") {
     const auto before = parse_docblock("//! \\item orphan\n");
-    CHECK(!before.ok());
-    CHECK(has_diag(before, Severity::Error, "requires a preceding element tag"));
+    CHECK(before.ok());
+    REQUIRE(before.block.leading.size() == 1);
+    CHECK(std::get<Itemize>(before.block.leading.front()).items.size() == 1);
 
     const auto empty = parse_docblock("//! \\constraints\n//! \\item\n//! \\effects Fine.\n");
     CHECK(!empty.ok());
@@ -589,6 +590,8 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
             break;
         }
         input += "\n";
+        if (entry.spelling == "covers")
+            input = "\\constraints\n" + input;
 
         auto r = parse_docblock(input);
         CHECK(!has_diag(r, Severity::Error, "unknown tag"));
@@ -617,4 +620,46 @@ TEST_CASE("docblock - specified is a flag marker") {
 TEST_CASE("docblock - a slash that is not a line decoration passes through") {
     CHECK(strip_comment_decorations("//! \\effects A path follows.\n/path\n/*! another comment */") ==
           "\\effects A path follows.\n/path\n/*! another comment */");
+}
+
+TEST_CASE("docblock - leading prose preserves lists and resumed paragraphs") {
+    const auto parsed = parse_docblock("//! Choose one:\n//! \\item First, or\n//! \\item Second.\n//!\n"
+                                       "//! Resume this paragraph.\n//!\n//! A new paragraph.\n"
+                                       "//! \\item Another list.\n//! \\effects Performs the operation.\n");
+    REQUIRE(parsed.ok());
+    REQUIRE(parsed.block.leading.size() == 5);
+    CHECK(std::get<Itemize>(parsed.block.leading[1]).items.size() == 2);
+    CHECK(std::get<BodyParagraph>(parsed.block.leading[2]).continuation);
+    CHECK_FALSE(std::get<BodyParagraph>(parsed.block.leading[3]).continuation);
+    CHECK(std::get<Itemize>(parsed.block.leading[4]).items.size() == 1);
+    CHECK(parsed.block.elements.size() == 1);
+}
+
+TEST_CASE("docblock - coverage claims belong to normative constraint elements") {
+    const auto valid = parse_docblock("\\constraints\n\\covers !detail::trait<T>\nThe specified condition holds.");
+    CHECK(valid.ok());
+    REQUIRE(valid.block.elements.size() == 1);
+    CHECK(valid.block.elements.front().coverage.size() == 1);
+    for (const auto* invalid : {"\\covers trait<T>",
+                                "\\remarks\n\\covers trait<T>",
+                                "\\constraints\n\\covers",
+                                "\\constraints\n\\covers !!trait<T>",
+                                "\\constraints\n\\note\n\\covers trait<T>\n\\endnote"}) {
+        CAPTURE(invalid);
+        CHECK_FALSE(parse_docblock(invalid).ok());
+    }
+}
+
+TEST_CASE("docblock - coverage metadata does not split authored lists") {
+    const auto parsed = parse_docblock(R"(\constraints
+\item First condition.
+\covers trait<T>
+\item Second condition.)");
+    REQUIRE(parsed.ok());
+    REQUIRE(parsed.block.elements.size() == 1);
+    const auto& element = parsed.block.elements.front();
+    REQUIRE(element.body.size() == 1);
+    REQUIRE(first<Itemize>(element) != nullptr);
+    CHECK(items(element).size() == 2);
+    CHECK(element.coverage.size() == 1);
 }

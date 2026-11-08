@@ -6,7 +6,8 @@
 :END:
 
 #+begin_itemdecl
-template<class F> constexpr @\seebelow@ transform(F&& f) const&;
+template<class F>
+  constexpr @\seebelow@ transform(F&& f) const&;
 #+end_itemdecl
 
 #+begin_pnum

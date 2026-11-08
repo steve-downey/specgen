@@ -5,6 +5,7 @@ namespace std {
     // @[tally.modifiers]{- .sref}@, modifiers
     void reset();
     void assign(long value);
+    void assign(int value);
 
     // @[tally.observers]{- .sref}@, observers
     int size() const;
@@ -37,6 +38,7 @@ $count$ = 0;
 
 ```cpp
 void assign(long value);
+void assign(int value);
 ```
 
 [#]{.pnum} *Mandates*: `sizeof(long) >= sizeof(int)` is `true`.

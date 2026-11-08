@@ -3,7 +3,8 @@
 ## Vocabulary [demo.vocab]{- .sref} {-}
 
 ```cpp
-template<class T> using id_t = T;
+template<class T>
+  using id_t = T;
 ```
 
 [#]{.pnum} *Remarks*: The identity alias.
@@ -22,7 +23,8 @@ using token_t = $implementation-defined$;
 [#]{.pnum} *Remarks*: The token type is implementation-defined.
 
 ```cpp
-template<class T> inline constexpr bool flag_v = false;
+template<class T>
+  inline constexpr bool flag_v = false;
 ```
 
 [#]{.pnum} *Remarks*: `flag_v<T>` is `false` unless a program specializes it.
@@ -35,14 +37,14 @@ inline constexpr int max_links = 8;
 
 ```cpp
 template<class T>
-concept usable = requires { typename T::type; };
+  concept usable = requires { typename T::type; };
 ```
 
 [#]{.pnum} *Remarks*: A type is usable if it names a member type.
 
 ```cpp
 template<class T>
-concept masked = $see below$;
+  concept masked = $see below$;
 ```
 
 [#]{.pnum} *Remarks*: The concept is specified below.

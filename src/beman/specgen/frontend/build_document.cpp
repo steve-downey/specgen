@@ -508,20 +508,27 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // is. A declaration with nothing to say contributes
                         // only its declaration, exactly as before: a masked
                         // customization point object is the common case.
-                        if (beman::specgen::ir::has_description(item_decl->item.descr)) {
+                        if (beman::specgen::ir::has_description(item_decl->item.descr) || directives.also ||
+                            item_decl->group_id || item_decl->also_target ||
+                            (item_decl->wants_join && function_or_template(item.decl) != nullptr)) {
                             // An out-of-line member definition belongs to its
                             // class's group, not to whatever namespace-scope
                             // header was last seen (issue #77): in the house
                             // style the definition carries the wording, and
                             // its `\ref` group is written in the class body
                             // beside the declaration.
-                            std::string inherited = current_ref;
+                            std::string inherited      = current_ref;
+                            std::string grouping_scope = std::format("gathered:{}", nested);
                             if (const clang::FunctionDecl* fn = as_out_of_line_member(item.decl)) {
                                 const clang::FunctionDecl* in_class = fn->getFirstDecl();
                                 if (const auto* record =
-                                        llvm::dyn_cast<clang::CXXRecordDecl>(in_class->getLexicalDeclContext()))
+                                        llvm::dyn_cast<clang::CXXRecordDecl>(in_class->getLexicalDeclContext())) {
+                                    grouping_scope =
+                                        std::format("gathered-record:{}",
+                                                    record->getCanonicalDecl()->getLocation().getRawEncoding());
                                     inherited = ClassRefGroups(record, sm, lang_opts)
                                                     .section_for(sm.getDecomposedLoc(in_class->getBeginLoc()).second);
+                                }
                             }
                             const std::string section = directives.at_anchor.value_or(inherited);
                             if (section.empty()) {
@@ -544,8 +551,14 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                     section,
                                     llvm::isa<clang::FunctionDecl>(item.decl) ? ir::MemberKind::Function
                                                                               : ir::MemberKind::Data});
-                                gathered.pending.push_back(
-                                    db::PendingItem{section, item_decl->placement_key, std::move(item_decl->item)});
+                                gathered.pending.push_back(db::PendingItem{section,
+                                                                           item_decl->placement_key,
+                                                                           std::move(item_decl->item),
+                                                                           item_decl->wants_join,
+                                                                           std::move(item_decl->group_id),
+                                                                           std::move(item_decl->also_target),
+                                                                           item_decl->grouping_line,
+                                                                           std::move(grouping_scope)});
                             }
                         }
                     }

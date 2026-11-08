@@ -28,7 +28,8 @@ static constexpr bool $test-value$ = true;
 [#]{.pnum} *Remarks*: `$test-value$` is always true.
 
 ```cpp
-template<class T> static constexpr bool $accepts-type$ = $see below$;
+template<class T>
+  static constexpr bool $accepts-type$ = $see below$;
 ```
 
 [#]{.pnum} `$accepts-type$<T>` tests whether the type can be called.

@@ -26,7 +26,8 @@ namespace std {
 
 \indexlibrarymember{with_req_expr}{box}%
 \begin{itemdecl}
-template<class T> constexpr int with_req_expr(T) const;
+template<class T>
+  constexpr int with_req_expr(T) const;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -41,7 +42,8 @@ template<class T> constexpr int with_req_expr(T) const;
 
 \indexlibrarymember{with_named}{box}%
 \begin{itemdecl}
-template<class T> constexpr int with_named(T) const;
+template<class T>
+  constexpr int with_named(T) const;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -56,7 +58,8 @@ template<class T> constexpr int with_named(T) const;
 
 \indexlibraryglobal{operator==}%
 \begin{itemdecl}
-template<class I> friend constexpr bool operator==(const I& it, box);
+template<class I>
+  friend constexpr bool operator==(const I& it, box);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -73,7 +76,8 @@ Whether \tcode{it} is at the end.
 
 \indexlibraryglobal{free_with_req_expr}%
 \begin{itemdecl}
-template<class T> constexpr int free_with_req_expr(T);
+template<class T>
+  constexpr int free_with_req_expr(T);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -88,7 +92,8 @@ template<class T> constexpr int free_with_req_expr(T);
 
 \indexlibraryglobal{free_with_named}%
 \begin{itemdecl}
-template<class T> constexpr int free_with_named(T);
+template<class T>
+  constexpr int free_with_named(T);
 \end{itemdecl}
 
 \begin{itemdescr}

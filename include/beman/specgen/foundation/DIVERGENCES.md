@@ -186,3 +186,11 @@ intended diagnostic wherever a visitor returns a value. **Filed:**
 [tree_algorithms#2](https://github.com/steve-downey/tree_algorithms/issues/2)
 and
 [compile-time-scheme#46](https://github.com/steve-downey/compile-time-scheme/issues/46).
+
+## Balanced braced arguments
+
+The local `parse::braced` primitive preserves nested groups and escaped bytes
+for section titles and their backend code markup (issue #228). It returns the
+argument without delimiters and a positioned failure for an unclosed group.
+The operation is constexpr and tested at compile time. It is a local parser
+extension, like `keyword`, rather than a change to an upstream algorithm.

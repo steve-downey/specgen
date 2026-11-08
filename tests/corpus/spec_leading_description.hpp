@@ -30,7 +30,11 @@ inline void first() {}
 //! The second function has its own description.
 inline void second() {}
 
-//! The third function introduces the labelled requirements.
+//! The third function offers these choices:
+//! \item a first choice, or
+//! \item a second choice.
+//!
+//! It introduces the labelled requirements.
 //!
 //! This is a separate leading paragraph with \iref{leading.general}.
 //! \effects Performs the operation.

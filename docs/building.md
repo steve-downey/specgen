@@ -258,12 +258,15 @@ anything ever needs more than v2.
 
 ### Publishing the wheel
 
-The wheel is published to [PyPI](https://pypi.org/project/beman-specgen/) as
-`beman-specgen`: `uv tool install beman-specgen` gives the `specgen` command.
-The `pypi` GitHub environment and the pypi.org trusted publisher both name
-repository `steve-downey/specgen` and workflow `release-binary.yml`, and the
-repository variable `PYPI_PUBLISH` is `pypi`. The steps below are how an index
-is turned on; `testpypi` works the same way for a rehearsal.
+The wheel is built as `beman-specgen`. As checked on 2026-11-08, the repository
+variable `PYPI_PUBLISH` is `testpypi`; GitHub has environments `testpypi` and
+`PYPI_PUBLISH`, and no `pypi` environment. The production project endpoint
+returns 404. Production publication remains pending, tracked by
+[#161](https://github.com/steve-downey/specgen/issues/161).
+
+The [cutover checklist](plans/pypi-cutover.md) ties publication to the tested,
+merged fixes and verification of the trusted publisher. Once published,
+`uv tool install beman-specgen` will install the `specgen` command.
 
 The release workflow builds and checks the wheel on every run and uploads it
 as the `beman-specgen-wheel` artifact. It publishes only when the repository
@@ -276,10 +279,11 @@ trusted publishing, so no token is stored. To turn it on for an index:
    Publishing*, add a pending publisher: project `beman-specgen`, owner
    `steve-downey`, repository `specgen`, workflow `release-binary.yml`, and
    environment `testpypi` or `pypi` to match.
-2. In the repository's *Settings → Secrets and variables → Actions →
-   Variables*, set `PYPI_PUBLISH` to that environment's name. The workflow
-   creates the environment on first use; add protection rules to it there if
-   publishing should wait for an approval.
+2. Create the GitHub environment named by that publisher, including any
+   required protection rules. Then, in *Settings → Secrets and variables →
+   Actions → Variables*, set `PYPI_PUBLISH` to the environment's name.
+   The variable changes where the next eligible `main` run publishes, so
+   complete the release gates before changing it.
 3. Push to `main`, or open the latest `main` run of the release workflow and
    re-run only its *Publish the wheel* job. Do not re-run all jobs: *Publish
    the release* would create the run's tag a second time, and fail. The

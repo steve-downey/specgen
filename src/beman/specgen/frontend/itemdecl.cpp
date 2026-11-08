@@ -209,7 +209,7 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
         applied_begin = edit.begin;
     }
 
-    return format_and_recover(std::move(text), sentinels);
+    return format_and_recover(std::move(text), sentinels, std::nullopt, 0, DraftContext::ItemDecl);
 }
 
 beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl*                      alias,
@@ -279,7 +279,7 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
         text.replace(begin, end - begin, edit.replacement);
         applied_begin = edit.begin;
     }
-    return format_and_recover(std::move(text), sentinels);
+    return format_and_recover(std::move(text), sentinels, std::nullopt, 0, DraftContext::ItemDecl);
 }
 
 } // namespace beman::specgen::frontend

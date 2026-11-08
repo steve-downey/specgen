@@ -17,7 +17,8 @@ constexpr const T& operator*() const&;
 [#]{.pnum} *Returns*: A reference to the contained value.
 
 ```cpp
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 ```
 
 [#]{.pnum} *Mandates*: `is_copy_constructible_v<T>` is `true` and `is_convertible_v<U, T>` is `true`.

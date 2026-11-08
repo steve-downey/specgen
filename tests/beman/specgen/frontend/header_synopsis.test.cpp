@@ -380,7 +380,7 @@ TEST_CASE("build_document renders specified nested namespaces as blocks, enclosu
     const std::vector<std::string> decode = signatures_in("demo.decode");
     REQUIRE(decode.size() == 2);
     CHECK(decode[0].contains(" proto::decode(const char* text);"));
-    CHECK(decode[1] == "template<class D> D decode(D d);");
+    CHECK(decode[1] == "template<class D>\n  D decode(D d);");
     const std::vector<std::string> adapt = signatures_in("demo.views");
     REQUIRE(adapt.size() == 1);
     CHECK(adapt.front().contains(" views::adapt;"));

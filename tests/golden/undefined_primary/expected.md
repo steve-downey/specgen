@@ -4,16 +4,16 @@
 
 ```cpp
 template<class L, class R>
-struct join;
+  struct join;
 ```
 
 [#]{.pnum} *Remarks*: A program may specialize `join` for cv-unqualified program-defined types.
 
 ```cpp
 template<class T>
-struct bottom;
+  struct bottom;
 template<class T>
-struct unit;
+  struct unit;
 ```
 
 [#]{.pnum} *Remarks*: Registration points for the bottom element.

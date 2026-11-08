@@ -11,11 +11,15 @@ namespace demo {
 //! \effects-equiv
 void tally::reset() { count_ = 0; }
 
+//! \group assignment
 //! \effects Sets the count to `value`.
 void tally::assign(long value) {
     static_assert(sizeof(long) >= sizeof(int));
     count_ = static_cast<int>(value);
 }
+
+//! \also assignment
+void tally::assign(int value) { count_ = value; }
 
 //! \omit
 void tally::rehash() {}

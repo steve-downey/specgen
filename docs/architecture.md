@@ -171,6 +171,9 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   immediately following plain `//` lines — never a `///`/`//!` line or another `\rSec` — and
   the wrapped lines join back into one title with single spaces; an unclosed title is still a
   malformed-marker Warning.
+  Title braces balance through nested macros and ignore escaped literal braces.
+  Draft titles retain authored markup; mpark and org render `\tcode{...}` in
+  their native inline-code syntax, alongside the existing backtick spelling.
 - An **unrecognized draft-style section heading reports a Warning**. A draft-form line such as
   `// 22.5.3.3 Destructor[optional.dtor]` cannot open a section (it carries no `\rSec` depth),
   but it is reported instead of silently filing every following declaration into the
@@ -408,9 +411,11 @@ back to name match within the class's fragments only):
    the front end aligns for what the reader sees rather than for any one fragment spelling.
 2. `clang::format::reformat()` with a `FormatStyle` derived from `getLLVMStyle()`
    (`draft_format_style()` in `frontend/draft_format.cpp`), tuned to draft conventions:
-   `AlwaysBreakTemplateDeclarations: Yes`, `RequiresClausePosition: OwnLine`,
-   `IndentRequiresClause`, `BreakBeforeConceptDeclarations`, column limit ≈ 85–90, penalties
-   keeping return type and name together. Tuned via golden-file diff, not a priori.
+   `RequiresClausePosition: OwnLine`, `IndentRequiresClause`,
+   `BreakBeforeConceptDeclarations`, and penalties keeping return type and name
+   together. Item declarations set `BreakTemplateDeclarations: Yes`; synopses
+   use `MultiLine`. Column limits depend on that context, as below. Tuned via
+   golden-file diff, not a priori.
    Two of the options are about **spelling** rather than layout, and both say the same
    thing — the draft's spelling wins over the library's: `PointerAlignment: Left` attaches
    `&`/`*` to the type, and `QualifierAlignment: Left` writes `const T&` however the header
@@ -420,7 +425,9 @@ back to name match within the class's fragments only):
    Expression text — a derived conjunct, an *Equivalent to:* body — is taken from source
    verbatim and never reflowed, so it goes through the same style with `ColumnLimit: 0`:
    the qualifier fixer runs, the layout does not move.
-   The column limit is 88 for the *final* text. A synopsis is indented two columns inside
+   Item declarations use a 120-column final limit, always break template heads, and
+   indent the declaration beneath its head by two spaces. Synopses retain an
+   88-column limit for the *final* text. A synopsis is indented two columns inside
    `namespace std {` after it is formatted, so it formats at 86. When the last line of a
    declaration lands exactly on the limit, clang-format puts the `;` on a line of its own
    instead of breaking the line earlier, so such a fragment is reformatted a column narrower
@@ -454,7 +461,7 @@ Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
 by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
 descriptions require a declaration or a verbatim item declaration.
-Detached prose-only docblocks become `FreeParagraph` nodes in the open
+Detached prose-only docblocks become signatureless `SpecItem` nodes in the open
 section, at the block's source position (issue #217). Outside a section they
 report an Error. Labelled descriptions still require a declaration. Inside a
 bounded header synopsis, detached prose follows the assembled code, alongside
@@ -478,7 +485,8 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   element.
 - Backticks → `\tcode`, and backticked spans are reference-resolved: expos names
   render as `\exposid`, the leakage checker runs inside prose.
-- `\item` starts an authored item on the current element; nonblank following
+- `\item` starts an authored item on the current element or leading unlabelled
+  body (including detached section prose); nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.
@@ -587,7 +595,12 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   and source-ordered**: resolution happens left-to-right within one open `\rSec` frame before
   placement-key sorting, so a target must precede its follower and cannot cross a section
   boundary, even when other primaries intervene. Duplicate IDs and unresolved targets are
-  Errors, but the affected item is retained. Bare `\also` and an empty docblock keep their
+  Errors, but the affected item is retained. Routed members use the same
+  grouping operation within their class and target-section cohort, before
+  placement sorting. This covers in-class functions, hidden friends, aliases,
+  static members, and members harvested from a source file. Separate classes
+  and target changes are grouping boundaries; the ordinary out-of-line event
+  stream retains its independent push-order grouping. Bare `\also` and an empty docblock keep their
   adjacent push-order behavior; group IDs are transient front-end metadata and never appear
   in IR or JSON.
 - `\expos` / `\expos(name)` — exposition-only; name derived by stripping trailing
@@ -712,7 +725,7 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - `static_assert` messages are stripped.
 - An authored `\mandates` replaces the derived wording. The suppressed
   derivation's conjuncts remain validator-only evidence, so drift detection can
-  still warn when the authored text duplicates or contradicts a specific assert.
+  still warn when the authored text contradicts a specific assert or leaves one uncovered.
 - Every direct class-scope static_assert routes, in source order, to one sibling
   paragraph immediately after the class synopsis in the active *general*
   subclause — or to the section an `\at` on the class names, together with the
@@ -802,7 +815,8 @@ naming the class in both `name` and `parent`, so §9's dangling-route rule repor
 ordinary `SpecItem` node with an empty `signatures` list rather than a new node kind:
 that is what puts the class's own prose through the span, table, leakage and drift
 checks every other description already goes through, where a Synopsis deliberately is
-*not* a wording site. Backends emit no itemdecl block for it (§8), grouping never
+*not* a wording site. Backends emit its numbered paragraphs directly, with neither an itemdecl nor an
+itemdescr wrapper (§8). Grouping never
 treats it as an `\also` primary or follower (it has no signatures to group), and §9
 rejects an item carrying neither signatures nor elements the way it rejects an empty
 synopsis. `\verbatim-itemdecl` and the `*-equiv` extraction markers are Errors on a
@@ -909,7 +923,7 @@ have no independent item description.
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition.
   Legacy description slots normalize to ordered bodies when read. New item nodes
-  use `item-v3`, so older readers reject the changed contract visibly rather than
+  use `item-v4`, so older readers reject the changed contract visibly rather than
   skipping body content (decision [ordered-description-bodies](decisions/ordered-description-bodies.md)).
   The
   serialized form decouples the wg21org exporter, enables backend-independent golden tests,
@@ -917,7 +931,7 @@ have no independent item description.
   header revisions; out of scope, by hand at first).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
-labelled elements. Item nodes emit `item-v3`; readers accept both `item-v2`
+labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
 and legacy `item`. The new discriminator prevents a body-only reader from
 silently ignoring leading wording. The semantic content predicate is
 `ir::has_description`, shared by rendering, grouping, routing, and coverage.
@@ -1110,6 +1124,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      may share a word deliberately, and only one of them is foreign. The roster's own
      `documented` set does not settle it, an enumeration's enumerators being text inside an
      itemdecl rather than roster rows.
+     A standard-qualified occurrence such as `std::move` is not a bare use of
+     an unrelated foreign spelling. Ordinary C++ comment and literal contents
+     are excluded from this bare-name occurrence check; the implementation
+     qualifier and private-member checks retain their existing reach.
      When `render` receives several `--from-ir` inputs, it validates each document against
      the union of every input's visible roster names, synopsis names, and ItemDecl semantic
      entity names, plus explicit `paper_entities`. A normative entity specified by a sibling
@@ -1131,7 +1149,13 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    and a wrong *Throws:* paragraph should not cost the whole document. No reverse check, per
    §5.4.
 4. **Mandates/Constraints drift** (Warning): authored prose vs. the suppressed derivation's
-   conjuncts (§5.2), located at the specific assert, firing on duplication or contradiction.
+   conjuncts (§5.2), located at the specific assert. Agreement with suppressed
+   derivation evidence is quiet; contradiction warns. Separately rendered
+   derived/authored duplicates still warn. Same-type prose (`X is [not] the
+   same type as Y`) matches `is_same_v<X, Y>` with the corresponding polarity.
+   Leading normative `Let X be Y.` bindings substitute complete code identifiers
+   within that item; duplicate introductions and cycles cannot establish a match.
+   Informative notes/examples supply neither bindings nor drift evidence.
    The reverse direction is checked too: a derived conjunct with no comparable reading
    anywhere in the item's wording — not just its paired element, so a conjunct legitimately
    documented in a sibling element (e.g. `\remarks` instead of `\constraints`) stays silent —
@@ -1155,6 +1179,14 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    and one with no description is the ordinary undescribed itemdecl; carrying neither renders
    as nothing at all, which is the same silent drop as the check above in the shape that
    leaves no blank box to notice it by.
+
+Validator metadata on a Constraints or Mandates element may include explicit
+`\covers [!]predicate` claims (decision `explicit-constraint-coverage`).
+Each claim must identify exactly one derived conjunct of that kind and agree
+with its polarity. Claims neither render nor participate in leakage checks;
+recognizable contradictions and unrelated missing counterparts remain findings.
+Items emit as `item-v4`, accepting legacy `item`, `item-v2`, and `item-v3` on
+input, so older readers cannot silently discard coverage claims.
 
 ## 10. Testing strategy
 

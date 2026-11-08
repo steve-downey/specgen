@@ -12,7 +12,12 @@
 :END:
 
 #+begin_pnum
-The header provides a ~wrapper~ for callable objects.
+The header provides a ~wrapper~ with these choices:
+
+- the first choice, or
+- the second choice.
+
+Prose resumes after the list.
 #+end_pnum
 
 #+begin_pnum

@@ -301,8 +301,8 @@ TEST_CASE("build_tree - a pending in-class item is injected into the section its
     // seen before the \rSec section it targets even opens — collect_
     // inclass_items routes by stable name, not by tree position — and the
     // pending item's placement key (2) sorts it ahead of the section's own
-    // out-of-line item (key 5). Neither is a join candidate: a pending item
-    // is never subject to the join check (see PendingItem's doc comment).
+    // out-of-line item (key 5). Neither is a join candidate: this pending item
+    // has wants_join false, and ordinary items group in their own stream.
     db::PendingItem  pending{"widget.cons", 2, make_item("widget(int);", true)};
     db::SynopsisDecl synopsis{
         0, ir::Synopsis{.name = {}, .code = ir::CodeText{"class widget { ... };", {}}, .roster = {}}, {pending}};
@@ -698,8 +698,8 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
         db::SectionOpen{1, 3, "demo.general", "General"},
         db::ItemDecl{2, false, make_item("before();", true)},
         db::SectionProse{3,
-                         {ir::FreeParagraph{{ir::TextInline{"First paragraph."}}},
-                          ir::FreeParagraph{{ir::TextInline{"Second paragraph."}}}},
+                         {ir::BodyParagraph{{ir::TextInline{"First paragraph."}}},
+                          ir::BodyParagraph{{ir::TextInline{"Second paragraph."}}}},
                          {},
                          10,
                          "part.hpp"},
@@ -709,18 +709,23 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
     CHECK(result.diagnostics.empty());
     REQUIRE(result.document.nodes.size() == 1);
     const auto& children = std::get<ir::Section>(result.document.nodes.front()).children;
-    REQUIRE(children.size() == 4);
+    REQUIRE(children.size() == 3);
     CHECK(std::holds_alternative<ir::SpecItem>(children[0]));
-    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[1]).text.front()).text == "First paragraph.");
-    CHECK(std::get<ir::TextInline>(std::get<ir::FreeParagraph>(children[2]).text.front()).text == "Second paragraph.");
-    CHECK(std::get<ir::SpecItem>(children[3]).decl.signatures.front().text == "after();");
+    const auto& prose = std::get<ir::SpecItem>(children[1]);
+    CHECK(prose.decl.signatures.empty());
+    REQUIRE(prose.descr.leading.size() == 2);
+    CHECK(std::get<ir::TextInline>(std::get<ir::BodyParagraph>(prose.descr.leading[0]).text.front()).text ==
+          "First paragraph.");
+    CHECK(std::get<ir::TextInline>(std::get<ir::BodyParagraph>(prose.descr.leading[1]).text.front()).text ==
+          "Second paragraph.");
+    CHECK(std::get<ir::SpecItem>(children[2]).decl.signatures.front().text == "after();");
 }
 
 TEST_CASE("build_tree - detached prose after a section fence reports its source") {
     std::vector<db::DocEvent> events{
         db::SectionOpen{1, 3, "demo.general", "General"},
         db::SectionClose{"demo.general", 3, "part.hpp"},
-        db::SectionProse{4, {ir::FreeParagraph{{ir::TextInline{"Unplaced prose."}}}}, {}, 12, "part.hpp"},
+        db::SectionProse{4, {ir::BodyParagraph{{ir::TextInline{"Unplaced prose."}}}}, {}, 12, "part.hpp"},
     };
     const auto result = db::build_tree(events);
     REQUIRE(result.diagnostics.size() == 1);
@@ -730,4 +735,66 @@ TEST_CASE("build_tree - detached prose after a section fence reports its source"
     CHECK(result.diagnostics.front().message == "detached prose requires an open section");
     REQUIRE(result.document.nodes.size() == 1);
     CHECK(std::get<ir::Section>(result.document.nodes.front()).children.empty());
+}
+
+TEST_CASE("group_pending_items - named and adjacent overloads group within their class and target") {
+    std::vector<db::PendingItem> pending;
+    auto                         primary = db::PendingItem{"widget.ctor", 10, make_item("widget();", true)};
+    primary.group_id                     = "ctors";
+    primary.grouping_scope               = "widget";
+    pending.push_back(std::move(primary));
+    auto other           = db::PendingItem{"widget.ctor", 20, make_item("size();", true)};
+    other.grouping_scope = "widget";
+    pending.push_back(std::move(other));
+    auto named           = db::PendingItem{"widget.ctor", 30, make_item("widget(int);", false)};
+    named.also_target    = "ctors";
+    named.grouping_scope = "widget";
+    pending.push_back(std::move(named));
+    auto adjacent           = db::PendingItem{"widget.ctor", 40, make_item("widget(long);", false)};
+    adjacent.wants_join     = true;
+    adjacent.grouping_scope = "widget";
+    pending.push_back(std::move(adjacent));
+    const auto grouped = db::group_pending_items(std::move(pending));
+    REQUIRE(grouped.size() == 2);
+    CHECK(std::get<ir::SpecItem>(grouped.front().item).decl.signatures.size() == 3);
+    CHECK(grouped.front().offset == 10);
+}
+
+TEST_CASE("group_pending_items - a different class or target cannot supply a primary") {
+    auto primary            = db::PendingItem{"widget.ctor", 10, make_item("widget();", true)};
+    primary.group_id        = "ctors";
+    primary.grouping_scope  = "widget";
+    auto follower           = db::PendingItem{"widget.ctor", 20, make_item("other();", true)};
+    follower.also_target    = "ctors";
+    follower.grouping_scope = "other";
+    std::vector<db::Diagnostic> findings;
+    const auto                  grouped = db::group_pending_items({primary, follower}, &findings);
+    CHECK(grouped.size() == 2);
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().message.find("no preceding") != std::string::npos);
+    follower.grouping_scope = "widget";
+    follower.stable         = "other.ctor";
+    findings.clear();
+    CHECK(db::group_pending_items({primary, follower}, &findings).size() == 2);
+    CHECK(findings.size() == 1);
+}
+
+TEST_CASE("group_pending_items - routed and ordinary streams group independently") {
+    db::SynopsisDecl synopsis;
+    synopsis.offset             = 1;
+    synopsis.synopsis.code.text = "class widget {};";
+    auto primary                = db::PendingItem{"widget.ops", 2, make_item("void f();", true)};
+    primary.group_id            = "routed";
+    auto follower               = db::PendingItem{"widget.ops", 4, make_item("void f(int);", false)};
+    follower.also_target        = "routed";
+    synopsis.pending            = {primary, follower};
+    std::vector<db::DocEvent> events{synopsis,
+                                     db::SectionOpen{10, 1, "widget.ops", "Operations"},
+                                     db::ItemDecl{3, false, make_item("void g();", true)},
+                                     db::ItemDecl{5, true, make_item("void g(int);", false)}};
+    const auto                result  = db::build_tree(events);
+    const auto&               section = std::get<ir::Section>(result.document.nodes.back());
+    REQUIRE(section.children.size() == 2);
+    CHECK(std::get<ir::SpecItem>(section.children.front()).decl.signatures.size() == 2);
+    CHECK(std::get<ir::SpecItem>(section.children.back()).decl.signatures.size() == 2);
 }

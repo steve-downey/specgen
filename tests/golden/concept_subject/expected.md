@@ -7,7 +7,8 @@ namespace std {
 ::: wording
 
 ```cpp
-template<class T> void g(T&&);
+template<class T>
+  void g(T&&);
 ```
 
 [#]{.pnum} *Constraints*:
@@ -24,7 +25,8 @@ template<class T> void g(T&&);
 ::: wording
 
 ```cpp
-template<class T> void h(T&&);
+template<class T>
+  void h(T&&);
 ```
 
 [#]{.pnum} *Mandates*: `remove_cvref_t<T>` models `small`.

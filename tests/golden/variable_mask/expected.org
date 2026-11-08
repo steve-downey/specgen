@@ -28,7 +28,8 @@ inline constexpr @\placeholder{unspecified}@ copied;
 #+end_pnum
 
 #+begin_itemdecl
-template<typename T> inline constexpr @\placeholder{unspecified}@ tag;
+template<typename T>
+  inline constexpr @\placeholder{unspecified}@ tag;
 #+end_itemdecl
 
 #+begin_pnum

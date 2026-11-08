@@ -4,11 +4,9 @@ namespace std {
 }
 \end{codeblock}
 
-\begin{itemdescr}
 \pnum
 \remarks
 A defined record's own description.
-\end{itemdescr}
 
 \begin{codeblock}
 namespace std {
@@ -17,7 +15,6 @@ namespace std {
 }
 \end{codeblock}
 
-\begin{itemdescr}
 \pnum
 \mandates
 \tcode{T} is a type this facility accepts.
@@ -25,7 +22,6 @@ namespace std {
 \pnum
 \remarks
 Instantiating \tcode{checked} registers nothing; it only constrains.
-\end{itemdescr}
 
 \begin{codeblock}
 namespace std {
@@ -37,11 +33,9 @@ namespace std {
 \pnum
 A program that instantiates \tcode{probe<T>} is ill-formed unless \tcode{acceptable_v<T>} is \tcode{true}.
 
-\begin{itemdescr}
 \pnum
 \remarks
 The derived paragraph above states the requirement; this says what the type is for.
-\end{itemdescr}
 
 \begin{codeblock}
 namespace std {
@@ -53,11 +47,9 @@ namespace std {
 }
 \end{codeblock}
 
-\begin{itemdescr}
 \pnum
 \remarks
 A \tcode{box} is a distinct type for each \tcode{T}; two \tcode{box} types with different \tcode{T} never compare equal.
-\end{itemdescr}
 
 \rSec3[box.mem]{Member types}
 

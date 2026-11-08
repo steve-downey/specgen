@@ -3,7 +3,8 @@
 ## Assignment [optional.assign]{- .sref} {-}
 
 ```cpp
-template<class... Args> constexpr T& emplace(Args&&... args);
+template<class... Args>
+  constexpr T& emplace(Args&&... args);
 ```
 
 [#]{.pnum} *Mandates*: `is_constructible_v<T, Args...>` is `true`.

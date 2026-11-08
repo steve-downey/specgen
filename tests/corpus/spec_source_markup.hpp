@@ -21,6 +21,7 @@ class tally {
     // \ref{tally.modifiers}, modifiers
     void reset();
     void assign(long value);
+    void assign(int value);
     void rehash();
 
     // \ref{tally.observers}, observers

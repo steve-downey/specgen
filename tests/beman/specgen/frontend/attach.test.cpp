@@ -59,7 +59,7 @@ TEST_CASE("build_document - documented namespace free-function definitions becom
     REQUIRE(inspect != nullptr);
 
     REQUIRE(identity->decl.signatures.size() == 1);
-    CHECK(contains(identity->decl.signatures.front().text, "template<class T> constexpr T identity(T value);"));
+    CHECK(contains(identity->decl.signatures.front().text, "template<class T>\n  constexpr T identity(T value);"));
     CHECK_FALSE(contains(identity->decl.signatures.front().text, "template <"));
     CHECK_FALSE(contains(identity->decl.signatures.front().text, "return value"));
     REQUIRE(identity->descr.elements.size() == 1);
@@ -128,7 +128,7 @@ TEST_CASE("build_document - marked in-class function templates attach and mixed-
     const auto* item = std::get_if<ir::SpecItem>(&operations.children.front());
     REQUIRE(item != nullptr);
     REQUIRE(item->decl.signatures.size() == 1);
-    CHECK(contains(item->decl.signatures.front().text, "template<class T> int convert(T value)"));
+    CHECK(contains(item->decl.signatures.front().text, "template<class T>\n  int convert(T value)"));
     CHECK_FALSE(contains(item->decl.signatures.front().text, "template <"));
     REQUIRE(item->descr.elements.size() == 1);
     CHECK(item->descr.elements.front().kind == ir::ElementKind::Effects);

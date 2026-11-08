@@ -47,7 +47,8 @@
 // re-derived from tree shape: classify() computes it (ItemDecl::
 // wants_join, below) but does not act on it, and the actual grouping runs
 // inside build_tree, per frame, over that frame's own children in push
-// order — before pending-member injection and the placement-key sort,
+// order — before pending-member injection and the placement-key sort. Routed
+// declaration cohorts are independently grouped before injection,
 // which is where it must be evaluated. ir::SpecItem itself never gains a
 // field for this (ir.hpp's contract is the serialized JSON, not additional
 // C++ members excluded from json_descriptor<T>::members, but the flag has
@@ -151,28 +152,27 @@ struct SectionClose {
 // building the class's own SynopsisDecl), tagged with the stable name of the
 // `\rSec` section its `\ref` group names and its class-body offset (the
 // placement key that interleaves it with out-of-line siblings). build_tree
-// injects it as a child of that section
-// when the section closes, after the front end has already grouped adjacent
-// documented aliases and after that section's own out-of-line
-// `\also`/empty-descr grouping has run. build_tree itself never subjects an
-// injected in-class item to another join check;
-// a stable name that names no section is silently dropped (a design §9
-// coverage concern).
+// groups its declaration cohort before injecting it as a child of that
+// section at close. Cohorts retain source order and do not cross classes or
+// target changes. A stable name naming no section is dropped and coverage
+// validation reports the missing route.
 //
 // `item` is an ir::Node and not an ir::SpecItem because a class's *own*
 // wording is two nodes, not one: the class-scope `static_assert` paragraph
 // (design §5.2) is an ir::FreeParagraph and the class's authored description
 // is a description-only SpecItem, and an `\at` on the class definition routes
 // both together (decision routed-wording-payload). Every other producer
-// still pushes a SpecItem, which converts; the one consumer that needs the
-// alternative back — alias grouping, which merges a follower's itemdecl into
-// its primary's — asks for it by the `is_alias` flag that put it there.
+// still pushes a SpecItem, which converts. Grouping tests the actual node
+// and its signatures, so description-only nodes remain barriers.
 struct PendingItem {
-    std::string              stable;
-    unsigned                 offset = 0;
-    beman::specgen::ir::Node item;
-    bool                     is_alias   = false; // transient alias-grouping metadata
-    bool                     wants_join = false; // adjacent alias carries \also
+    std::string                stable;
+    unsigned                   offset = 0;
+    beman::specgen::ir::Node   item;
+    bool                       wants_join     = false; // adjacent overload or alias joins its primary
+    std::optional<std::string> group_id       = {};
+    std::optional<std::string> also_target    = {};
+    unsigned                   grouping_line  = 0;
+    std::string                grouping_scope = {}; // class identity; gathered synopses may carry several classes
 };
 
 // A class/struct/union (or class template) *definition* at the top level
@@ -182,8 +182,8 @@ struct PendingItem {
 // becomes an ordinary ItemDecl when it is a documented undefined primary and
 // no node at all otherwise, so a Synopsis is never empty (an empty one
 // rendered as an empty code block, and the validator now rejects it). The
-// event itself is never a join candidate; adjacent alias joining is completed
-// inside its pending list before build_tree sees the event.
+// event itself is never a join candidate; its pending declaration cohorts are
+// grouped by build_tree before injection.
 //
 // `diagnostics` are the docblock findings of the *members* collected
 // alongside the synopsis — an in-class member's markup is parsed while
@@ -296,11 +296,11 @@ struct Ignored {
 // Detached prose belongs to the open section at its physical source position.
 // It has no declaration and never participates in overload grouping.
 struct SectionProse {
-    unsigned                                       offset = 0;
-    std::vector<beman::specgen::ir::FreeParagraph> paragraphs;
-    std::vector<Diagnostic>                        diagnostics;
-    unsigned                                       line = 0;
-    std::string                                    file;
+    unsigned                            offset = 0;
+    beman::specgen::ir::DescriptionBody body;
+    std::vector<Diagnostic>             diagnostics;
+    unsigned                            line = 0;
+    std::string                         file;
 };
 
 // classify()'s output (decision document-build-stages): a closed variant naming no
@@ -373,6 +373,11 @@ BuildResult build_tree(std::span<DocEvent> events);
 // in source order; index metadata forms a stable exact-value union so overloads
 // do not repeat one entry and differently named aliases do not lose theirs.
 void append_grouped_itemdecl(beman::specgen::ir::ItemDecl& primary, beman::specgen::ir::ItemDecl&& follower);
+
+// Group routed declarations in their original class/target cohorts, before
+// pending injection and placement sorting. Class prose forms a grouping barrier.
+std::vector<PendingItem> group_pending_items(std::vector<PendingItem> pending,
+                                             std::vector<Diagnostic>* diagnostics = nullptr);
 
 // Stage 3: `\also`/empty-descr grouping (design §4.3) over one frame's
 // own children, in the push order build_tree accumulated them in — *not*
