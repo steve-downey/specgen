@@ -874,7 +874,8 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  std::optional<clang::SourceRange>                see_below,
                                  const clang::VarDecl*                            uninitialized,
                                  std::string_view                                 declarator_qualifier,
-                                 const clang::VarDecl*                            initialized_below) {
+                                 const clang::VarDecl*                            initialized_below,
+                                 DraftContext                                     context) {
     const clang::SourceLocation begin_loc  = named->getBeginLoc();
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
@@ -960,7 +961,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
     }
     // An exposition-only declaration is a standalone synopsis, indented inside
     // `namespace std {` once formatted; every other caller's is an itemdecl.
-    return format_and_recover(std::move(text), sentinels, record_tag, exposition ? kNamespaceIndent : 0);
+    return format_and_recover(std::move(text), sentinels, record_tag, exposition ? kNamespaceIndent : 0, context);
 }
 
 beman::specgen::ir::CodeText

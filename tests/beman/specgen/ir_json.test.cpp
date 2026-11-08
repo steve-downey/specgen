@@ -51,7 +51,7 @@ TEST_CASE("ir_json - JSON emission of a value_or-shaped item") {
 
     const std::string json = emit_json(item);
 
-    CHECK(json.find("\"type\":\"item-v3\"") != std::string::npos);
+    CHECK(json.find("\"type\":\"item-v4\"") != std::string::npos);
     CHECK(json.find("\"kind\":\"mandates\"") != std::string::npos);
     CHECK(json.find("\"equivalent\"") != std::string::npos);
     CHECK(json.find("\"exposid\"") != std::string::npos);
@@ -556,7 +556,7 @@ TEST_CASE("ir_json - legacy description slots migrate in rendering order") {
     CHECK(std::holds_alternative<Itemize>(body[1]));
     CHECK(std::holds_alternative<EquivalentTo>(body[2]));
     const auto emitted = emit_json(*parsed);
-    CHECK(emitted.find("item-v3") != std::string::npos);
+    CHECK(emitted.find("item-v4") != std::string::npos);
     CHECK(emitted.find("paragraphs") == std::string::npos);
     CHECK(parse_item(emitted).has_value());
 }
@@ -584,10 +584,30 @@ TEST_CASE("ir_json - leading descriptions round-trip and accept earlier item tag
       {"block":"paragraph","text":[{"t":"text","text":"Leading wording."}]}]}})");
     REQUIRE(item.has_value());
     REQUIRE(item->descr.leading.size() == 1);
-    CHECK(emit_json(*item).find("item-v3") != std::string::npos);
+    CHECK(emit_json(*item).find("item-v4") != std::string::npos);
     const auto copy = parse_item(emit_json(*item));
     REQUIRE(copy.has_value());
     CHECK(emit_json(*copy) == emit_json(*item));
     CHECK(parse_item(R"({"type":"item-v2","descr":{"elements":[]}})").has_value());
     CHECK(parse_item(R"({"type":"item","descr":{"elements":[]}})").has_value());
+}
+
+TEST_CASE("ir_json - explicit coverage and change marks survive the item-v4 boundary") {
+    SpecItem           item;
+    DescriptionElement element;
+    item.change      = Change::Added;
+    element.kind     = ElementKind::Constraints;
+    element.coverage = {{CodeInline{{"detail::trait<T>", {}}}, TextInline{" is "}, CodeInline{{"false", {}}}}};
+    element.change   = Change::Removed;
+    item.descr.elements.push_back(element);
+    const auto json = emit_json(item);
+    CHECK(json.find("item-v4") != std::string::npos);
+    const auto saved = parse_item(json);
+    REQUIRE(saved.has_value());
+    CHECK(saved->change == Change::Added);
+    REQUIRE(saved->descr.elements.size() == 1);
+    CHECK(saved->descr.elements.front().coverage.size() == 1);
+    CHECK(saved->descr.elements.front().change == Change::Removed);
+    CHECK(emit_json(*saved) == json);
+    CHECK(parse_item(R"({"type":"item-v3","descr":{"elements":[]}})").has_value());
 }

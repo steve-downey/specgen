@@ -39,7 +39,8 @@ static constexpr int digits;
 [#]{.pnum} *Remarks*: The number of significant bits in a reading.
 
 ```cpp
-template<class U> static constexpr bool accepts = sizeof(U) >= sizeof(T);
+template<class U>
+  static constexpr bool accepts = sizeof(U) >= sizeof(T);
 ```
 
 [#]{.pnum} *Remarks*: `true` when a reading converts to `U`.

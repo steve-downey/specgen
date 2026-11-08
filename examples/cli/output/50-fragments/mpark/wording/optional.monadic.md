@@ -3,7 +3,8 @@
 ## Monadic operations [optional.monadic]{- .sref} {-}
 
 ```cpp
-template<class F> constexpr $see below$ transform(F&& f) const&;
+template<class F>
+  constexpr $see below$ transform(F&& f) const&;
 ```
 
 [#]{.pnum} *Effects*: If `*this` contains a value, returns an optional holding the result of invoking `f` with the contained value; otherwise returns an empty optional.

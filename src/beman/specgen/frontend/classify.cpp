@@ -52,7 +52,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <variant>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -297,18 +296,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     return out;
                 }
                 if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
-                    parsed.block.markers == grammar::Markers{} &&
-                    std::ranges::all_of(parsed.block.leading, [](const grammar::BodyBlock& block) {
-                        return std::holds_alternative<grammar::BodyParagraph>(block);
-                    })) {
-                    auto lowered    = lowering::lower(parsed.block);
-                    auto paragraphs = lowered.descr.leading | std::views::as_rvalue |
-                                      std::views::transform([](ir::BodyBlock&& block) {
-                                          return ir::FreeParagraph{std::move(std::get<ir::BodyParagraph>(block).text)};
-                                      }) |
-                                      std::ranges::to<std::vector>();
-                    return db::SectionProse{
-                        ev.offset, std::move(paragraphs), std::move(diagnostics), first_line, diagnostic_file};
+                    parsed.block.markers == grammar::Markers{}) {
+                    auto lowered = lowering::lower(parsed.block);
+                    return db::SectionProse{ev.offset,
+                                            std::move(lowered.descr.leading),
+                                            std::move(diagnostics),
+                                            first_line,
+                                            diagnostic_file};
                 }
                 if (ir::has_description(lowering::lower(parsed.block).descr) &&
                     !suppresses_generated_entity(parsed.block.markers))
@@ -478,10 +472,9 @@ db::DocEvent classify(const RawItem&                                   ev,
             record, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // After collection: the roster reads the routed sections
         // collect_inclass_items just decided.
-        // Build the roster before grouping so every alias offset still
+        // Build the roster before core grouping so every declaration offset still
         // identifies its own routed declaration, including an \also follower.
         out.synopsis.roster = build_roster(record, sm, expos_set, source_markup, out.pending);
-        group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), record, sm, lang_opts, ns_drop_set, expos_set);
         // After the description exists, and after grouping, which has no
         // opinion about it: `\at` on the class's own docblock sends both
@@ -517,10 +510,9 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                                  tmpl);
         collect_inclass_items(
             templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
-        // Build the roster before grouping so every alias offset still
+        // Build the roster before core grouping so every declaration offset still
         // identifies its own routed declaration, including an \also follower.
         out.synopsis.roster = build_roster(templated, sm, expos_set, source_markup, out.pending);
-        group_adjacent_aliases(out.pending);
         attach_class_description(out, std::move(block), templated, sm, lang_opts, ns_drop_set, expos_set);
         // Same `\at` routing as the plain-record arm above, read from the
         // ClassTemplateDecl the arm's other docblock reads use.

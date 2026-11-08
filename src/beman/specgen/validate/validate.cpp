@@ -427,24 +427,79 @@ NameVisibility name_visibility(const ir::Node& node) {
 struct IdentifierRun {
     std::string name;
     bool        namespace_qualifier = false;
+    bool        standard_qualified  = false;
+    bool        ordinary_text       = false;
 };
 
-// Every maximal run of identifier characters in @p text, in order of
-// appearance, plus whether that occurrence is followed by `::`. Not a C++
-// lexer: a run inside a string literal or a comment is returned like any
-// other, and a qualified name arrives as its separate components (`detail`,
-// `storage`). Roster checks need every run; foreign-namespace checks need the
-// occurrence-level qualifier bit so an English use of `detail` is not
-// mistaken for `detail::`.
+std::size_t ordinary_text_end(std::string_view text, std::size_t pos);
+
+// Recognize comments and quoted literals only to exclude their contents from
+// the bare foreign-name test. Other leakage rules retain their existing reach.
+std::size_t ordinary_text_end(std::string_view text, std::size_t pos) {
+    const auto rest = text.substr(pos);
+    if (rest.starts_with("//")) {
+        const auto end = text.find('\n', pos + 2);
+        return end == std::string_view::npos ? text.size() : end;
+    }
+    if (rest.starts_with("/*")) {
+        const auto end = text.find("*/", pos + 2);
+        return end == std::string_view::npos ? text.size() : end + 2;
+    }
+    constexpr std::string_view raw_prefixes[] = {"R\"", "u8R\"", "uR\"", "UR\"", "LR\""};
+    const auto                 raw_prefix =
+        std::ranges::find_if(raw_prefixes, [rest](auto prefix) { return rest.starts_with(prefix); });
+    if (raw_prefix != std::end(raw_prefixes)) {
+        const auto delimiter_begin = pos + raw_prefix->size();
+        const auto open            = text.find('(', delimiter_begin);
+        if (open != std::string_view::npos && open - delimiter_begin <= 16) {
+            const auto delimiter = text.substr(delimiter_begin, open - delimiter_begin);
+            const auto close     = text.find(std::format("){}\"", delimiter), open + 1);
+            return close == std::string_view::npos ? text.size() : close + delimiter.size() + 2;
+        }
+    }
+    if (text[pos] != '"' && text[pos] != '\'')
+        return pos;
+    // Digit separators belong to numeric tokens, including hexadecimal ones.
+    // A character-literal prefix such as u8 is not a numeric token.
+    if (text[pos] == '\'') {
+        const auto token_char = [](char ch) {
+            return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_';
+        };
+        auto begin = pos;
+        // substrate generic algorithm: find the start of the token preceding an apostrophe.
+        while (begin > 0 && token_char(text[begin - 1]))
+            --begin;
+        if (begin < pos && text[begin] >= '0' && text[begin] <= '9')
+            return pos;
+    }
+    const char quote = text[pos++];
+    // substrate generic algorithm: consume a quoted literal including escaped bytes.
+    while (pos < text.size()) {
+        const char ch = text[pos++];
+        if (ch == quote)
+            return pos;
+        if (ch == '\\' && pos < text.size())
+            ++pos;
+    }
+    return text.size();
+}
+
+// Preserve each identifier occurrence's qualifier chain. A standard-qualified
+// name and an unrelated implementation name may share a terminal spelling.
 std::vector<IdentifierRun> identifier_runs(std::string_view text) {
     const auto is_identifier_char = [](char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
     };
     std::vector<IdentifierRun> runs;
-    std::size_t                pos = 0;
-    // substrate generic algorithm: the position-tracking scan is what keeps
-    // the punctuation following each identifier occurrence available.
+    std::size_t                pos               = 0;
+    std::size_t                ignored_end       = 0;
+    std::size_t                previous_end      = 0;
+    bool                       previous_standard = false;
+    // substrate generic algorithm: a lexical scan retaining occurrence and qualifier context.
     while (pos < text.size()) {
+        if (pos >= ignored_end)
+            ignored_end = ordinary_text_end(text, pos);
+        const bool ordinary = pos < ignored_end;
         if (!is_identifier_char(text[pos])) {
             ++pos;
             continue;
@@ -455,10 +510,18 @@ std::vector<IdentifierRun> identifier_runs(std::string_view text) {
             ++pos;
         std::size_t after = pos;
         // substrate generic algorithm: find the following nonblank token.
-        while (after < text.size() && (text[after] == ' ' || text[after] == '\t'))
+        while (after < text.size() && (text[after] == ' ' || text[after] == '\t' || text[after] == '\n'))
             ++after;
-        runs.push_back(
-            IdentifierRun{std::string(text.substr(begin, pos - begin)), text.substr(after).starts_with("::")});
+        std::string_view gap   = text.substr(previous_end, begin - previous_end);
+        const auto       first = gap.find_first_not_of(" \t\r\n");
+        const auto       last  = gap.find_last_not_of(" \t\r\n");
+        const bool       connected =
+            !runs.empty() && first != std::string_view::npos && gap.substr(first, last - first + 1) == "::";
+        const bool        standard = connected && previous_standard;
+        const std::string name(text.substr(begin, pos - begin));
+        runs.push_back(IdentifierRun{name, text.substr(after).starts_with("::"), standard, ordinary});
+        previous_standard = standard || (name == "std" && !connected);
+        previous_end      = pos;
     }
     return runs;
 }
@@ -500,7 +563,8 @@ std::optional<std::string> foreign_message(const IdentifierRun& run, const NameV
 // declaration lives, and this side of the boundary knows only text.
 std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const NameVisibility& visible) {
     const auto entry = visible.foreign_decl.find(run.name);
-    if (entry == visible.foreign_decl.end() || visible.documented.contains(run.name))
+    if (run.standard_qualified || run.ordinary_text || entry == visible.foreign_decl.end() ||
+        visible.documented.contains(run.name))
         return std::nullopt;
     return "`" + run.name + "` appears in rendered output but is not a documented entity (declared in `" +
            entry->second +
@@ -928,6 +992,43 @@ struct Conjunct {
     ConjunctPolarity polarity;
 };
 
+// The four ordinary inline kinds stay one piece; a changed run contributes
+// its plain pieces. Marks annotate wording rather than hide drift evidence.
+struct UnmarkedPieces {
+    std::vector<ir::PlainInline> operator()(const ir::TextInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::CodeInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::RefInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::ConceptRef& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
+};
+
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TextInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::CodeInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RefInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ConceptRef& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
+
+std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
+
+std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph) {
+    auto pieces = paragraph | std::views::transform([](const ir::Inline& piece) {
+                      return std::visit(overloaded{UnmarkedPieces{}}, piece);
+                  }) |
+                  std::views::join;
+    // A word-level mark may split a relation or a Let introduction into
+    // adjacent text pieces; rejoin those before recognizing its phrasing.
+    return std::ranges::fold_left(pieces, std::vector<ir::PlainInline>{}, [](auto out, const ir::PlainInline& piece) {
+        if (const auto* text = std::get_if<ir::TextInline>(&piece); text != nullptr && !out.empty()) {
+            if (auto* previous = std::get_if<ir::TextInline>(&out.back())) {
+                previous->text += text->text;
+                return out;
+            }
+        }
+        out.push_back(piece);
+        return out;
+    });
+}
+
 // The subject and polarity of one derived conjunct, read off the
 // `phrase_conjunct` shape it was built from: a bool trait/negation conjunct
 // is `[CodeInline{subject}, TextInline{" is "}, CodeInline{"true"|"false"}]`,
@@ -935,7 +1036,8 @@ struct Conjunct {
 // `true`/`false` CodeInline, the polarity is right there too. A concept-id
 // or verbatim-fallback conjunct has no such trailing literal, so it reads
 // Unknown -- the drift check below skips those rather than guessing.
-std::optional<Conjunct> read_conjunct(const ir::Paragraph& paragraph) {
+std::optional<Conjunct> read_conjunct(const ir::Paragraph& input) {
+    const auto paragraph = unmarked_paragraph(input);
     if (paragraph.empty())
         return std::nullopt;
     const auto* subject = std::get_if<ir::CodeInline>(&paragraph.front());
@@ -951,6 +1053,128 @@ std::optional<Conjunct> read_conjunct(const ir::Paragraph& paragraph) {
     return Conjunct{subject->code.text, polarity};
 }
 
+using Bindings = std::map<std::string, std::string>;
+
+std::optional<std::string>
+normalized_expression(std::string_view text, const Bindings& bindings, std::set<std::string> active = {});
+std::string predicate_subject(std::string_view text, const Bindings& bindings);
+Bindings    description_bindings(const ir::ItemDescr& description);
+
+// Normalize only code spelling and explicitly introduced local names. A cycle
+// is unrecognizable evidence, never a reason to invent an equivalence.
+std::optional<std::string>
+normalized_expression(std::string_view text, const Bindings& bindings, std::set<std::string> active) {
+    const auto identifier = [](char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
+    };
+    std::string out;
+    std::size_t pos = 0;
+    // substrate generic algorithm: identifier-aware normalization and variable-width binding substitution.
+    while (pos < text.size()) {
+        const auto literal_end = ordinary_text_end(text, pos);
+        if (literal_end > pos) {
+            out += text.substr(pos, literal_end - pos);
+            pos = literal_end;
+            continue;
+        }
+        if (text[pos] == ' ' || text[pos] == '\t' || text[pos] == '\r' || text[pos] == '\n') {
+            const auto next = text.find_first_not_of(" \t\r\n", pos);
+            if (!out.empty() && identifier(out.back()) && next != std::string_view::npos && identifier(text[next]))
+                out.push_back(' ');
+            pos = next == std::string_view::npos ? text.size() : next;
+            continue;
+        }
+        if (!identifier(text[pos])) {
+            out.push_back(text[pos++]);
+            continue;
+        }
+        const auto begin = pos;
+        // substrate generic algorithm: consume a complete identifier before substituting it.
+        while (pos < text.size() && identifier(text[pos]))
+            ++pos;
+        const std::string name(text.substr(begin, pos - begin));
+        const auto        after     = text.find_first_not_of(" \t\r\n", pos);
+        const bool        qualifier = after != std::string_view::npos && text.substr(after).starts_with("::");
+        const bool        qualified = out.ends_with("::");
+        if (name == "std" && qualifier && (!qualified || out == "::")) {
+            if (out == "::")
+                out.clear();
+            pos = after + 2;
+            continue;
+        }
+        const auto binding = bindings.find(name);
+        if (binding == bindings.end() || qualified || qualifier) {
+            out += name;
+            continue;
+        }
+        auto next = active;
+        if (!next.insert(name).second)
+            return std::nullopt;
+        const auto replacement = normalized_expression(binding->second, bindings, std::move(next));
+        if (!replacement)
+            return std::nullopt;
+        out += *replacement;
+    }
+    return out;
+}
+
+// Type identity is symmetric. Keep other predicates as their normalized code;
+// an implementation trait's spelling cannot establish what its prose means.
+std::string predicate_subject(std::string_view text, const Bindings& bindings) {
+    const auto expanded = normalized_expression(text, bindings);
+    if (!expanded)
+        return std::string(text);
+    constexpr std::string_view prefix = "is_same_v<";
+    if (!expanded->starts_with(prefix) || !expanded->ends_with('>'))
+        return *expanded;
+    const std::string_view args =
+        std::string_view(*expanded).substr(prefix.size(), expanded->size() - prefix.size() - 1);
+    int                        depth = 0;
+    std::optional<std::size_t> comma;
+    // substrate generic algorithm: locate the sole top-level template-argument separator.
+    for (const auto [pos, ch] : args | std::views::enumerate) {
+        if (ch == '<' || ch == '(' || ch == '[' || ch == '{')
+            ++depth;
+        else if (ch == '>' || ch == ')' || ch == ']' || ch == '}')
+            --depth;
+        else if (ch == ',' && depth == 0) {
+            if (comma)
+                return *expanded;
+            comma = pos;
+        }
+    }
+    if (!comma || depth != 0)
+        return *expanded;
+    const auto left  = args.substr(0, *comma);
+    const auto right = args.substr(*comma + 1);
+    return left < right ? std::format("is_same_v<{},{}>", left, right) : std::format("is_same_v<{},{}>", right, left);
+}
+
+// Bindings belong to normative leading prose. Duplicate introductions are
+// ambiguous and therefore are not used to discharge drift obligations.
+Bindings description_bindings(const ir::ItemDescr& description) {
+    Bindings              bindings;
+    std::set<std::string> ambiguous;
+    // substrate generic algorithm: collect local declarations with duplicate-name tracking.
+    for (const auto* input : ir::body_paragraphs(description.leading, false)) {
+        const auto paragraph = unmarked_paragraph(*input);
+        if (paragraph.size() != 5)
+            continue;
+        const auto* let   = std::get_if<ir::TextInline>(&paragraph[0]);
+        const auto* name  = std::get_if<ir::CodeInline>(&paragraph[1]);
+        const auto* be    = std::get_if<ir::TextInline>(&paragraph[2]);
+        const auto* value = std::get_if<ir::CodeInline>(&paragraph[3]);
+        const auto* stop  = std::get_if<ir::TextInline>(&paragraph[4]);
+        if (let == nullptr || name == nullptr || be == nullptr || value == nullptr || stop == nullptr ||
+            let->text != "Let " || be->text != " be " || stop->text != ".")
+            continue;
+        if (!bindings.emplace(name->code.text, value->code.text).second)
+            ambiguous.insert(name->code.text);
+    }
+    std::erase_if(bindings, [&ambiguous](const auto& entry) { return ambiguous.contains(entry.first); });
+    return bindings;
+}
+
 // Does @p paragraph assert @p subject, and with what polarity, per the same
 // `` `X` is `true`/`false` `` shape authors already write by hand (the
 // corpus convention `spec_inclass_markers.hpp` uses)? Scans forward from a
@@ -960,10 +1184,27 @@ std::optional<Conjunct> read_conjunct(const ir::Paragraph& paragraph) {
 // nullopt means the subject was not found at all; `Unknown` means it was
 // found but nothing nearby reads as a polarity, which the caller treats as
 // "found, but not comparable" rather than "not found".
-std::optional<ConjunctPolarity> find_subject(const ir::Paragraph& paragraph, const std::string& subject) {
-    const auto is_named = [&](const ir::Inline& piece) {
+std::optional<ConjunctPolarity>
+find_subject(const ir::Paragraph& input, const std::string& subject, const Bindings& bindings) {
+    const auto paragraph  = unmarked_paragraph(input);
+    const auto normalized = predicate_subject(subject, bindings);
+    // substrate generic algorithm: recognize a relation spanning two code inlines and the prose between them.
+    for (std::size_t pos = 0; pos + 2 < paragraph.size(); ++pos) {
+        const auto* left     = std::get_if<ir::CodeInline>(&paragraph[pos]);
+        const auto* relation = std::get_if<ir::TextInline>(&paragraph[pos + 1]);
+        const auto* right    = std::get_if<ir::CodeInline>(&paragraph[pos + 2]);
+        if (left == nullptr || relation == nullptr || right == nullptr)
+            continue;
+        const bool positive = relation->text == " is the same type as ";
+        const bool negative = relation->text == " is not the same type as ";
+        if ((positive || negative) &&
+            predicate_subject(std::format("is_same_v<{},{}>", left->code.text, right->code.text), bindings) ==
+                normalized)
+            return positive ? ConjunctPolarity::Positive : ConjunctPolarity::Negative;
+    }
+    const auto is_named = [&](const ir::PlainInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
-        return code != nullptr && code->code.text == subject;
+        return code != nullptr && predicate_subject(code->code.text, bindings) == normalized;
     };
     const auto match = std::ranges::find_if(paragraph, is_named);
     if (match == paragraph.end())
@@ -975,7 +1216,7 @@ std::optional<ConjunctPolarity> find_subject(const ir::Paragraph& paragraph, con
     // `false` further along that must not be misread as this one's.
     constexpr std::ptrdiff_t window          = 3;
     const auto               window_end      = std::ranges::next(match, window + 1, paragraph.end());
-    const auto               is_bool_literal = [](const ir::Inline& piece) {
+    const auto               is_bool_literal = [](const ir::PlainInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
         return code != nullptr && (code->code.text == "true" || code->code.text == "false");
     };
@@ -995,14 +1236,15 @@ std::vector<const ir::Paragraph*> element_paragraphs(const ir::DescriptionElemen
 
 // One derived/authored pair sharing a kind (design §5.2): for every derived
 // conjunct with a known subject and polarity, look for that subject
-// anywhere in the authored element's wording, and warn when found --
-// "duplicates" at matching polarity, "contradicts" at the opposite one. A
-// subject not found at all, or found with an unreadable polarity on either
-// side, is silently not compared -- the same conservative direction the
-// leakage checker set: a miss costs a finding, never invents one.
+// anywhere in the authored element's wording. Matching suppressed evidence is
+// quiet; separately rendered duplication and a polarity contradiction warn.
+// A subject not found at all, or found with an unreadable polarity on either
+// side, is not compared here; the coverage check handles missing counterparts.
 std::string_view polarity_spelling(ConjunctPolarity p) { return p == ConjunctPolarity::Positive ? "true" : "false"; }
 
-Diagnostics check_drift_pair(const ir::DescriptionElement& derived, const ir::DescriptionElement& authored) {
+Diagnostics check_drift_pair(const ir::DescriptionElement& derived,
+                             const ir::DescriptionElement& authored,
+                             const Bindings&               bindings) {
     const std::vector<const ir::Paragraph*> authored_paragraphs = element_paragraphs(authored);
     const std::string                       kind_name           = std::string(ir::element_name(derived.kind));
 
@@ -1013,20 +1255,25 @@ Diagnostics check_drift_pair(const ir::DescriptionElement& derived, const ir::De
             if (!conjunct || conjunct->polarity == ConjunctPolarity::Unknown)
                 return {};
 
-            // The first authored paragraph with a *comparable* reading of
-            // this subject -- one that is present and not Unknown; a
-            // paragraph that merely mentions the subject without a nearby
-            // true/false is not a comparison point (find_subject already
-            // reads it as Unknown, not as "not found").
+            // Prefer a contradictory comparable reading over agreement in an
+            // earlier paragraph. A mere mention with unknown polarity is not
+            // a comparison point.
             const std::vector<std::optional<ConjunctPolarity>> readings =
-                authored_paragraphs |
-                std::views::transform([&](const ir::Paragraph* p) { return find_subject(*p, conjunct->subject); }) |
+                authored_paragraphs | std::views::transform([&](const ir::Paragraph* p) {
+                    return find_subject(*p, conjunct->subject, bindings);
+                }) |
                 std::ranges::to<std::vector>();
-            const auto comparable = std::ranges::find_if(
-                readings, [](const auto& r) { return r.has_value() && *r != ConjunctPolarity::Unknown; });
+            auto comparable = std::ranges::find_if(readings, [&](const auto& r) {
+                return r.has_value() && *r != ConjunctPolarity::Unknown && *r != conjunct->polarity;
+            });
+            if (comparable == readings.end())
+                comparable = std::ranges::find_if(
+                    readings, [](const auto& r) { return r.has_value() && *r != ConjunctPolarity::Unknown; });
             if (comparable == readings.end())
                 return {};
 
+            if (**comparable == conjunct->polarity && !derived.derived)
+                return {};
             if (**comparable == conjunct->polarity)
                 return {
                     {Severity::Warning,
@@ -1048,12 +1295,80 @@ Diagnostics check_drift_pair(const ir::DescriptionElement& derived, const ir::De
 // sibling \remarks instead of repeating it in \constraints, and that pattern
 // must stay silent. Only a conjunct with no comparable reading anywhere in
 // the item is a real coverage gap.
-Diagnostics check_missing_pair(const ir::DescriptionElement&              derived,
-                               const std::vector<ir::DescriptionElement>& all_elements) {
+struct CoverageAudit {
+    Diagnostics                                      diagnostics;
+    std::map<ir::ElementKind, std::set<std::string>> covered;
+};
+
+std::string   coverage_key(const Conjunct& conjunct, const Bindings& bindings);
+CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& bindings);
+
+std::string coverage_key(const Conjunct& conjunct, const Bindings& bindings) {
+    return std::format(
+        "{}:{}", predicate_subject(conjunct.subject, bindings), conjunct.polarity == ConjunctPolarity::Positive);
+}
+
+CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& bindings) {
+    CoverageAudit                                    result;
+    std::map<ir::ElementKind, std::set<std::string>> claimed;
+    const auto                                       report = [&](ir::ElementKind kind, std::string message) {
+        result.diagnostics.push_back({Severity::Error, std::string(ir::element_name(kind)), std::move(message)});
+    };
+    // substrate generic algorithm: scatter claim state and validated targets into per-kind sets.
+    for (const auto& element : description.elements) {
+        // substrate generic algorithm: scatter each claim's target or append its diagnostic.
+        for (const auto& paragraph : element.coverage) {
+            const auto claim = read_conjunct(paragraph);
+            if (element.derived || element_paragraphs(element).empty() ||
+                (element.kind != ir::ElementKind::Constraints && element.kind != ir::ElementKind::Mandates) ||
+                !claim || claim->polarity == ConjunctPolarity::Unknown) {
+                report(element.kind,
+                       "invalid explicit coverage claim; expected a predicate and polarity on an authored Constraints "
+                       "or Mandates element with normative wording");
+                continue;
+            }
+            const auto subject = predicate_subject(claim->subject, bindings);
+            if (!claimed[element.kind].insert(subject).second) {
+                report(element.kind, std::format("duplicate coverage claim for `{}`", claim->subject));
+                continue;
+            }
+            const auto readings =
+                description.elements |
+                std::views::filter([&](const auto& other) { return other.kind == element.kind; }) |
+                std::views::transform([](const auto& other) -> const auto& { return other.conjuncts; }) |
+                std::views::join | std::views::transform(read_conjunct) | std::views::filter([&](const auto& value) {
+                    return value && predicate_subject(value->subject, bindings) == subject;
+                }) |
+                std::ranges::to<std::vector>();
+            if (readings.size() != 1) {
+                report(element.kind,
+                       std::format("coverage claim `{}` matches {} derived conjuncts; expected exactly one",
+                                   claim->subject,
+                                   readings.size()));
+                continue;
+            }
+            if (readings.front()->polarity != claim->polarity) {
+                report(element.kind,
+                       std::format("coverage claim `{}` has the wrong polarity for its derived conjunct",
+                                   claim->subject));
+                continue;
+            }
+            result.covered[element.kind].insert(coverage_key(*claim, bindings));
+        }
+    }
+    return result;
+}
+
+Diagnostics check_missing_pair(const ir::DescriptionElement& derived,
+                               const ir::ItemDescr&          description,
+                               const Bindings&               bindings,
+                               const CoverageAudit&          coverage) {
     const std::string kind_name = std::string(ir::element_name(derived.kind));
 
-    const std::vector<const ir::Paragraph*> item_paragraphs =
-        all_elements | std::views::transform(element_paragraphs) | std::views::join | std::ranges::to<std::vector>();
+    std::vector<const ir::Paragraph*> item_paragraphs = description.elements |
+                                                        std::views::transform(element_paragraphs) | std::views::join |
+                                                        std::ranges::to<std::vector>();
+    item_paragraphs.append_range(ir::body_paragraphs(description.leading, false));
 
     return foundation::mconcat_map(
         derived.conjuncts,
@@ -1062,8 +1377,13 @@ Diagnostics check_missing_pair(const ir::DescriptionElement&              derive
             if (!conjunct || conjunct->polarity == ConjunctPolarity::Unknown)
                 return {};
 
+            const auto explicit_kind = coverage.covered.find(derived.kind);
+            if (explicit_kind != coverage.covered.end() &&
+                explicit_kind->second.contains(coverage_key(*conjunct, bindings)))
+                return {};
+
             const bool covered = std::ranges::any_of(item_paragraphs, [&](const ir::Paragraph* p) {
-                const auto reading = find_subject(*p, conjunct->subject);
+                const auto reading = find_subject(*p, conjunct->subject, bindings);
                 return reading.has_value() && *reading != ConjunctPolarity::Unknown;
             });
             if (covered)
@@ -1078,33 +1398,33 @@ Diagnostics check_missing_pair(const ir::DescriptionElement&              derive
 }
 
 // The front end keeps suppressed derived conjuncts on the authored element
-// itself, so compare that element's rendered prose with its own validator-only
-// evidence. The grouped authored/derived form remains readable for hand-built
-// IR, though the front end does not emit it.
-Diagnostics check_mandates_constraints_drift(const std::vector<ir::DescriptionElement>& elements) {
-    // Materialized rather than folded straight over the chunk_by view:
-    // chunk_by_view caches its current group boundary in the iterator, so it
-    // is only range-for-able as a mutable range, and mconcat_map (like
-    // ir_fold's other consumers) takes its range by const reference.
-    const std::vector<std::vector<ir::DescriptionElement>> groups =
-        elements | std::views::chunk_by([](const auto& a, const auto& b) { return a.kind == b.kind; }) |
-        std::views::transform([](auto&& group) { return group | std::ranges::to<std::vector>(); }) |
-        std::ranges::to<std::vector>();
-
-    return foundation::mconcat_map(
-        groups,
-        [&elements](const std::vector<ir::DescriptionElement>& group) -> Diagnostics {
-            const auto derived_it  = std::ranges::find_if(group, [](const auto& e) { return e.derived; });
-            const auto authored_it = std::ranges::find_if(group, [](const auto& e) { return !e.derived; });
-            if (authored_it != group.end() && !authored_it->conjuncts.empty())
-                return diagnostics_monoid.combine(check_drift_pair(*authored_it, *authored_it),
-                                                  check_missing_pair(*authored_it, elements));
-            if (derived_it == group.end() || authored_it == group.end())
-                return {};
-            return diagnostics_monoid.combine(check_drift_pair(*derived_it, *authored_it),
-                                              check_missing_pair(*derived_it, elements));
-        },
-        diagnostics_monoid);
+// itself. Compare every authored element of that kind with this evidence,
+// including later elements that carry no copy of the conjuncts. The grouped
+// authored/derived form remains readable for hand-built IR.
+Diagnostics check_mandates_constraints_drift(const ir::ItemDescr& description) {
+    const auto bindings = description_bindings(description);
+    const auto coverage = audit_coverage(description, bindings);
+    return diagnostics_monoid.combine(
+        coverage.diagnostics,
+        foundation::mconcat_map(
+            description.elements,
+            [&](const ir::DescriptionElement& authored) -> Diagnostics {
+                if (authored.derived)
+                    return {};
+                if (!authored.conjuncts.empty())
+                    return diagnostics_monoid.combine(check_drift_pair(authored, authored, bindings),
+                                                      check_missing_pair(authored, description, bindings, coverage));
+                const auto derived = std::ranges::find_if(description.elements, [&](const auto& element) {
+                    return !element.conjuncts.empty() && element.kind == authored.kind;
+                });
+                if (derived == description.elements.end())
+                    return {};
+                if (!derived->derived)
+                    return check_drift_pair(*derived, authored, bindings);
+                return diagnostics_monoid.combine(check_drift_pair(*derived, authored, bindings),
+                                                  check_missing_pair(*derived, description, bindings, coverage));
+            },
+            diagnostics_monoid));
 }
 
 // --- noexcept <-> *Throws:* cross-check (design §5.4) -----------------------
@@ -1496,7 +1816,7 @@ struct ValidationAlgebra {
                 [](const ir::BodyBlock& block) { return check_table_block("description", block); },
                 diagnostics_monoid));
 
-        Diagnostics drift_findings = check_mandates_constraints_drift(v.descr.elements);
+        Diagnostics drift_findings = check_mandates_constraints_drift(v.descr);
 
         Diagnostics throws_findings = check_noexcept_throws(v);
 

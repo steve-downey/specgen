@@ -9,7 +9,11 @@ namespace demo {
 // \rSec2[section]{Section prose}
 // \rSec3[section.general]{General}
 
-//! The header provides a `wrapper` for callable objects.
+//! The header provides a `wrapper` with these choices:
+//! \item the first choice, or
+//! \item the second choice.
+//!
+//! Prose resumes after the list.
 //!
 //! A separate paragraph refers to \iref{section.class}.
 

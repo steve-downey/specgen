@@ -7,7 +7,7 @@
 
 #+begin_itemdecl
 template<class L, class R>
-struct join;
+  struct join;
 #+end_itemdecl
 
 #+begin_pnum
@@ -16,9 +16,9 @@ struct join;
 
 #+begin_itemdecl
 template<class T>
-struct bottom;
+  struct bottom;
 template<class T>
-struct unit;
+  struct unit;
 #+end_itemdecl
 
 #+begin_pnum

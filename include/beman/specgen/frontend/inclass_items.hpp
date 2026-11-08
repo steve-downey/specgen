@@ -96,8 +96,6 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                            std::vector<beman::specgen::document_build::PendingItem>& pending,
                            std::vector<beman::specgen::document_build::Diagnostic>&  diagnostics);
 
-void group_adjacent_aliases(std::vector<beman::specgen::document_build::PendingItem>& pending);
-
 } // namespace beman::specgen::frontend
 
 #endif // BEMAN_SPECGEN_FRONTEND_INCLASS_ITEMS_HPP

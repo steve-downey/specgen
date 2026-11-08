@@ -86,7 +86,8 @@ constexpr bool empty() const;
 #+end_pnum
 
 #+begin_itemdecl
-template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
+template<typename T>
+  constexpr @\exposidnc{box}@<T> make(T t);
 #+end_itemdecl
 
 #+begin_pnum
@@ -94,7 +95,8 @@ template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
 #+end_pnum
 
 #+begin_itemdecl
-template<typename T> constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
+template<typename T>
+  constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
 #+end_itemdecl
 
 #+begin_pnum

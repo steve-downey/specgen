@@ -37,7 +37,8 @@ static constexpr bool @\exposidnc{test-value}@ = true;
 #+end_pnum
 
 #+begin_itemdecl
-template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
+template<class T>
+  static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum

@@ -83,7 +83,8 @@ if constexpr (@\exposidnc{enabled}@<int>)
 #+end_pnum
 
 #+begin_itemdecl
-template<class F> int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<int> context);
+template<class F>
+  int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<int> context);
 #+end_itemdecl
 
 #+begin_pnum
@@ -124,7 +125,8 @@ int level() const;
 #+end_pnum
 
 #+begin_itemdecl
-template<class T> bool fully_qualified_use();
+template<class T>
+  bool fully_qualified_use();
 #+end_itemdecl
 
 #+begin_pnum

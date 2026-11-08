@@ -15,13 +15,12 @@ its JSON intermediate representation.
 
 ## Requirements and build
 
-The quickest way to obtain `specgen` is `uv tool install beman-specgen`, which
-installs the prebuilt wheel from PyPI, or `uvx --from beman-specgen specgen ...`
-to run it without installing. Every push to `main` also publishes the same
-binary as a GitHub Release. Either requires glibc 2.34 or newer (Ubuntu
-22.04, Debian 12, Fedora 35, RHEL 9 and their derivatives, or later), an
-x86-64-v2 processor, and, for headers that include the standard library, the
-host's `g++`. It requires nothing else. From the release archive:
+Every push to `main` publishes a prebuilt binary as a GitHub Release.
+PyPI publication is pending; the [cutover checklist](plans/pypi-cutover.md)
+records the remaining release and downstream gates. The release archive requires
+glibc 2.34 or newer (Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9 and their
+derivatives, or later), an x86-64-v2 processor, and, for headers that include
+the standard library, the host's `g++`. From the release archive:
 
 ```sh
 curl -sSL https://github.com/steve-downey/specgen/releases/latest/download/specgen-manylinux_2_34_x86_64.tar.xz | tar -xJ
@@ -152,6 +151,10 @@ a `namespace views { … }` block inside the header synopsis, a
 nested namespace flattens into the one that encloses it, and a qualifier
 naming one is reported as a leak, so an implementation `detail` needs no
 marker.
+
+Generated item declarations keep each template head on its own line and indent
+the declaration beneath it by two spaces. Item declarations use a 120-column
+limit; synopses use 88 columns.
 
 Render the complete document while editing:
 
@@ -636,7 +639,7 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
-An element may contain authored itemizations:
+Labelled elements and leading unlabelled prose may contain authored itemizations:
 
 ```cpp
 //! \constraints All of the following are true:
@@ -646,7 +649,7 @@ An element may contain authored itemizations:
 
 Each nonblank line that follows an item continues that item. A blank decorated
 line closes the item. Another `\item` then continues the list; prose resumes
-the element in the same numbered paragraph. A later `\item` starts a new list.
+the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
 An element may also contain two-column tables:
@@ -911,9 +914,11 @@ checks:
   set.
 - Local references in synopsis code must name generated sections. Prose `\iref`
   references may deliberately name external standard subclauses.
-- Authored *Constraints* and *Mandates* must neither duplicate nor contradict
-  the derived conjuncts they suppress, and a derived conjunct with no authored
-  counterpart anywhere in the description is reported as a warning.
+- Authored *Constraints* and *Mandates* are checked against the derived
+  conjuncts they suppress. Agreement is quiet; contradictions and conjuncts
+  without an authored counterpart warn. Separately rendered derived/authored
+  duplicates still warn. The validator recognizes same-type prose and local
+  normative `Let X be Y.` bindings; notes and examples supply no evidence.
 - An authored *Throws:* paragraph must not contradict an unconditionally
   `noexcept` signature, and *Throws:* Nothing on such a signature is reported
   as redundant. There is deliberately no check in the reverse direction.
@@ -1041,22 +1046,43 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.14.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.15.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
 ### Saved IR compatibility
 
-Newly emitted item nodes use `item-v3` for leading and ordered description
-bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
-with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
+Newly emitted item nodes use `item-v4` for ordered description bodies and
+explicit coverage metadata. Updated renderers still read `item-v3`, `item-v2`, and the earlier `item` nodes
+with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer.
 
 ### Section prose
 
 A prose-only `//!` or `/*! */` block separated from declarations belongs to
-the current section. Blank decorated lines separate its numbered paragraphs.
+the current section. It can contain authored `\item` lists, followed by resumed
+prose. Blank decorated lines separate its numbered paragraphs.
 A detached block outside every section reports an error. Inside a bounded
 header synopsis, detached prose follows the assembled synopsis alongside the
 classes' own descriptions. Labelled description elements require a declaration.
+
+## Explicit constraint coverage
+
+The drift validator recognizes boolean assertions, same-type prose, and local
+`Let` bindings. When an opaque implementation predicate is stated only in
+prose, acknowledge its correspondence on the authored element:
+
+```cpp
+//! \constraints
+//! \covers !detail::is_in_place_type<remove_cvref_t<F>>
+//! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
+```
+
+`\covers` belongs to the current normative Constraints or Mandates element.
+Its argument names one derived predicate; a leading `!` claims negative
+polarity. It does not render. Each claim must match exactly one derived
+conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are
+Errors. A recognizable contradiction in the authored wording still warns.
+Unrelated conjuncts still require coverage. Saved IR preserves these claims;
+readers predating `item-v4` reject the item visibly.

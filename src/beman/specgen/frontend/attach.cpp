@@ -701,7 +701,13 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                              ns_drop_set,
                                              expos_set,
                                              /*exposition=*/false,
-                                             std::string_view(tag.data(), tag.size())));
+                                             std::string_view(tag.data(), tag.size()),
+                                             nullptr,
+                                             std::nullopt,
+                                             nullptr,
+                                             {},
+                                             nullptr,
+                                             DraftContext::ItemDecl));
     attached.item.decl.entities.push_back(decl->getNameAsString());
     return attached;
 }
@@ -740,7 +746,9 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                                                                  mask.unspecified,
                                                                                  see_below,
                                                                                  nullptr,
-                                                                                 declarator_qualifier));
+                                                                                 declarator_qualifier,
+                                                                                 nullptr,
+                                                                                 DraftContext::ItemDecl));
     attached.item.decl.entities.push_back(decl->getNameAsString());
     attached.item.decl.index.push_back({ir::IndexKind::Global, decl->getNameAsString(), {}});
     return attached;
@@ -782,7 +790,8 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
                                              std::nullopt,
                                              masks_initializer && !exposition ? variable : nullptr,
                                              {},
-                                             masks_initializer && exposition ? variable : nullptr));
+                                             masks_initializer && exposition ? variable : nullptr,
+                                             DraftContext::ItemDecl));
     attached.item.decl.entities.push_back(decl->getNameAsString());
     if (!exposition)
         attached.item.decl.index.push_back(

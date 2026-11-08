@@ -1,0 +1,155 @@
+\rSec3[routed.syn]{Header <routed> synopsis}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{gadget}@ {
+  public:
+    // \ref{gadget.ctor}, constructors
+    constexpr gadget() noexcept;
+    int size() const;
+    constexpr gadget(int) noexcept;
+    constexpr gadget(long) noexcept;
+    constexpr gadget(short) noexcept;
+
+    // \ref{gadget.obs}, observers
+    using value_type = int;
+    using reference = int&;
+
+    static constexpr int first = 1;
+    static constexpr int second = 2;
+
+    friend void swap(gadget&, gadget&);
+    friend void swap(gadget&, int);
+  };
+
+  // \ref{gadget.obs}, namespace observers
+
+  int @\libglobal{observe}@(gadget&);
+
+  int @\libglobal{observe}@(gadget&, int);
+
+  int @\libglobal{observe}@(gadget&, long);
+
+  template<class T> class @\libglobal{specialized}@;
+
+  template<>
+  class @\libglobal{specialized}@<int> {
+  public:
+    // \ref{gadget.ctor}, constructors
+    specialized();
+    specialized(int);
+  };
+
+  template<>
+  class @\libglobal{specialized}@<long> {
+  public:
+    // \ref{gadget.ctor}, constructors
+    specialized();
+    specialized(long);
+  };
+}
+\end{codeblock}
+
+\rSec4[gadget.ctor]{Constructors}
+
+\indexlibraryctor{gadget}%
+\begin{itemdecl}
+constexpr gadget() noexcept;
+constexpr gadget(int) noexcept;
+constexpr gadget(long) noexcept;
+constexpr gadget(short) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+Has no value.
+\end{itemdescr}
+
+\indexlibrarymember{size}{gadget}%
+\begin{itemdecl}
+int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+Zero.
+\end{itemdescr}
+
+\indexlibraryctor{specialized}%
+\begin{itemdecl}
+specialized();
+specialized(int);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+Has an integer value.
+\end{itemdescr}
+
+\indexlibraryctor{specialized}%
+\begin{itemdecl}
+specialized();
+specialized(long);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+Has a long value.
+\end{itemdescr}
+
+\rSec4[gadget.obs]{Observers}
+
+\indexlibrarymember{value_type}{gadget}%
+\indexlibrarymember{reference}{gadget}%
+\begin{itemdecl}
+using value_type = int;
+using reference = int&;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The value type.
+\end{itemdescr}
+
+\indexlibrarymember{first}{gadget}%
+\indexlibrarymember{second}{gadget}%
+\begin{itemdecl}
+static constexpr int first = 1;
+static constexpr int second = 2;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+The first constant.
+\end{itemdescr}
+
+\indexlibraryglobal{swap}%
+\begin{itemdecl}
+friend void swap(gadget&, gadget&);
+friend void swap(gadget&, int);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Exchanges values.
+\end{itemdescr}
+
+\indexlibraryglobal{observe}%
+\begin{itemdecl}
+int observe(gadget&);
+int observe(gadget&, int);
+int observe(gadget&, long);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+Zero.
+\end{itemdescr}

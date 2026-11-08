@@ -2,7 +2,8 @@
 
 \indexlibraryglobal{id_t}%
 \begin{itemdecl}
-template<class T> using id_t = T;
+template<class T>
+  using id_t = T;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -37,7 +38,8 @@ The token type is implementation-defined.
 
 \indexlibraryglobal{flag_v}%
 \begin{itemdecl}
-template<class T> inline constexpr bool flag_v = false;
+template<class T>
+  inline constexpr bool flag_v = false;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -60,7 +62,7 @@ The registration limit.
 \indexlibraryglobal{usable}%
 \begin{itemdecl}
 template<class T>
-concept usable = requires { typename T::type; };
+  concept usable = requires { typename T::type; };
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -72,7 +74,7 @@ A type is usable if it names a member type.
 \indexlibraryglobal{masked}%
 \begin{itemdecl}
 template<class T>
-concept masked = @\seebelow@;
+  concept masked = @\seebelow@;
 \end{itemdecl}
 
 \begin{itemdescr}

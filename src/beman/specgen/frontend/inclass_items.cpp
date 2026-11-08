@@ -161,6 +161,22 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
     const ClassRefGroups ref_groups(record, sm, lang_opts);
     const auto           section_for = [&ref_groups](unsigned offset) { return ref_groups.section_for(offset); };
 
+    const auto add_pending = [&](AttachedItem&& attached, bool alias = false, bool adjacent_alias = false) {
+        const bool named = attached.directives.group_id || attached.directives.also_target;
+        const bool joins = !named && (alias ? (attached.directives.also && adjacent_alias)
+                                            : (attached.directives.also || !ir::has_description(attached.item.descr)));
+        const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
+        pending.push_back(beman::specgen::document_build::PendingItem{
+            section,
+            attached.inclass_offset,
+            std::move(attached.item),
+            joins,
+            std::move(attached.directives.group_id),
+            std::move(attached.directives.also_target),
+            attached.grouping_line,
+            std::format("record:{}", record->getCanonicalDecl()->getLocation().getRawEncoding())});
+    };
+
     // substrate generic algorithm: whether a member is collected, and what it
     // is collected as, is a five-step conditional computation -- unwrap it,
     // require a real body or defaulted/deleted, require a docblock, call
@@ -190,13 +206,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             if (suppresses_generated_entity(attached.directives))
                 continue;
 
-            const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
-            pending.push_back(
-                beman::specgen::document_build::PendingItem{section,
-                                                            attached.inclass_offset,
-                                                            std::move(attached.item),
-                                                            true,
-                                                            attached.directives.also && adjacent_to_alias});
+            add_pending(std::move(attached), true, adjacent_to_alias);
             previous_was_routed_alias = true;
             continue;
         }
@@ -220,10 +230,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 if (expos_set.contains(member->getCanonicalDecl()) &&
                     !beman::specgen::ir::has_description(attached.item.descr) && !attached.verbatim_itemdecl)
                     continue;
-                const std::string section =
-                    attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
-                pending.push_back(beman::specgen::document_build::PendingItem{
-                    section, attached.inclass_offset, std::move(attached.item)});
+                add_pending(std::move(attached));
                 continue;
             }
             // Any other data member's specification is its declaration and
@@ -270,9 +277,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             diagnostics.append_range(std::move(attached.diagnostics));
             if (suppresses_generated_entity(attached.directives))
                 continue;
-            const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
-            pending.push_back(beman::specgen::document_build::PendingItem{
-                section, attached.inclass_offset, std::move(attached.item)});
+            add_pending(std::move(attached));
             continue;
         }
         if (!has_docblock(fn, sm))
@@ -305,33 +310,8 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         // omit-set pre-pass).
         if (suppresses_generated_entity(attached.directives))
             continue;
-        // Placement: `\at <stable>` overrides the inferred `\ref` group.
-        const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
-        pending.push_back(
-            beman::specgen::document_build::PendingItem{section, attached.inclass_offset, std::move(attached.item)});
+        add_pending(std::move(attached));
     }
-}
-
-void group_adjacent_aliases(std::vector<beman::specgen::document_build::PendingItem>& pending) {
-    namespace db = beman::specgen::document_build;
-    std::vector<db::PendingItem> grouped;
-    grouped.reserve(pending.size());
-    // substrate generic algorithm: a follower mutates its preceding routed primary.
-    for (db::PendingItem& candidate : pending) {
-        if (candidate.is_alias && candidate.wants_join && !grouped.empty() && grouped.back().is_alias &&
-            grouped.back().stable == candidate.stable) {
-            // `is_alias` is set only where a marked alias's SpecItem was
-            // pushed, so it is also the record of which alternative of the
-            // pending payload this item holds (decision
-            // routed-wording-payload); a class's own routed wording is never
-            // an alias and never reaches here.
-            db::append_grouped_itemdecl(std::get<ir::SpecItem>(grouped.back().item).decl,
-                                        std::move(std::get<ir::SpecItem>(candidate.item).decl));
-            continue;
-        }
-        grouped.push_back(std::move(candidate));
-    }
-    pending = std::move(grouped);
 }
 
 } // namespace beman::specgen::frontend

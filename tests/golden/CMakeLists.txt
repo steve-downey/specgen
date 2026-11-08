@@ -932,6 +932,21 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_rsec_wrapped.hpp"
 )
 
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        rsec_wrapped
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/rsec_wrapped/expected.json"
+    )
+    specgen_add_golden(
+        rsec_wrapped_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/rsec_wrapped/expected.json"
+    )
+endforeach()
+
 # Private-member elision leaves neither a stray leading `public:` (a
 # struct's default access is already public) nor a silent invisible-name
 # use: the surviving `using type = raw;` names the elided private alias,
@@ -2289,6 +2304,60 @@ foreach(backend latex mpark org)
         MODE split
         BACKEND ${backend}
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/callable_wrapper/expected.json"
+    )
+endforeach()
+
+specgen_add_golden(
+    qualified_move
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_qualified_move.hpp"
+)
+
+specgen_add_golden(
+    routed_overloads
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_routed_overloads.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        routed_overloads
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/routed_overloads/expected.json"
+    )
+endforeach()
+
+specgen_add_golden(
+    drift_prose
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_drift_prose.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        drift_prose
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/drift_prose/expected.json"
+    )
+endforeach()
+
+specgen_add_golden(
+    coverage
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_coverage.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        coverage
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/coverage/expected.json"
+    )
+    specgen_add_golden(
+        coverage_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/coverage/expected.json"
     )
 endforeach()
 

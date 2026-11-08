@@ -356,7 +356,8 @@ TEST_CASE("latex - a description with no declaration emits no itemdecl") {
 
     const std::string out = latex::render_to_string(item);
     CHECK(out.find("itemdecl") == std::string::npos);
-    CHECK(out == "\\begin{itemdescr}\n\\pnum\n\\remarks\nA defined class's own description.\n\\end{itemdescr}\n");
+    CHECK(out == "\\pnum\n\\remarks\nA defined class's own description.\n");
+    CHECK(out.find("itemdescr") == std::string::npos);
 }
 
 TEST_CASE("latex - index entry kinds") {
@@ -588,4 +589,26 @@ TEST_CASE("latex - merged bodies preserve list continuations and table positions
     CHECK(table < next);
     CHECK(next < last);
     CHECK(out.find("\\end{itemize}\nAfter the list.") != std::string::npos);
+}
+
+TEST_CASE("latex - a braced title macro renders as heading code") {
+    Document doc;
+    doc.nodes.push_back(Section{"gadget.class", R"(Class \tcode{gadget})", {}});
+    const auto out = latex::render_to_string(doc);
+    CHECK(out.find(R"(Class \tcode{gadget})") != std::string::npos);
+}
+
+TEST_CASE("latex - leading class prose and a labelled paragraph have no item wrapper") {
+    SpecItem item;
+    item.descr.leading.push_back(BodyParagraph{{TextInline{"The class wraps a value."}}});
+    item.descr.elements.push_back(
+        body_test::element(ElementKind::Recommended, {{TextInline{"Avoid allocation."}}}, {}));
+    const auto out = latex::render_to_string(item);
+    CHECK(out == "\\pnum\nThe class wraps a value.\n\n\\pnum\n\\recommended\nAvoid allocation.\n");
+    CHECK(out.find("itemdescr") == std::string::npos);
+
+    item.change = Change::Added;
+    CHECK(latex::render_to_string(item) == "\\begin{addedblock}\n" + out + "\\end{addedblock}\n");
+    item.change = Change::Removed;
+    CHECK(latex::render_to_string(item) == "\\begin{removedblock}\n" + out + "\\end{removedblock}\n");
 }

@@ -13,8 +13,8 @@
 
 namespace demo {
 
-// \rSec2[demo.accumulating]{Accumulating applicative instance for expected with error accumulation across the whole
-// applicative chain}
+// \rSec2[demo.accumulating]{Accumulating applicative instance for \tcode{expected} with error accumulation across the
+// whole applicative chain}
 
 //! \returns The accumulated value unchanged.
 inline int accumulate_probe(int value) { return value; }

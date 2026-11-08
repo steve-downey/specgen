@@ -349,9 +349,11 @@ std::string render_item(const ir::SpecItem& item) {
 
     if (!out.empty())
         out += '\n';
-    out += "\\begin{itemdescr}\n";
+    if (!item.decl.signatures.empty())
+        out += "\\begin{itemdescr}\n";
     out += groups | std::views::join_with('\n') | std::ranges::to<std::string>();
-    out += "\\end{itemdescr}\n";
+    if (!item.decl.signatures.empty())
+        out += "\\end{itemdescr}\n";
     return wrap_block(item.change, std::move(out));
 }
 

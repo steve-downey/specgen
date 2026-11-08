@@ -259,6 +259,8 @@ struct DescriptionElement {
     // Validator-only derivation evidence, independent of the rendered body.
     bool                   derived   = false;
     std::vector<Paragraph> conjuncts = {};
+    // Explicit authored correspondence claims, checked but never rendered.
+    std::vector<Paragraph> coverage = {};
     // The wording diff's mark on the whole element (docs/plans/wording-diff.md).
     Change change = Change::Same;
 };

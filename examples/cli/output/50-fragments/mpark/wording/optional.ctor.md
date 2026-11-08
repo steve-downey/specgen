@@ -20,7 +20,8 @@ constexpr optional(const optional& rhs);
 [#]{.pnum} *Postconditions*: `has_value()` is equal to `rhs.has_value()`.
 
 ```cpp
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 ```
 
 [#]{.pnum} *Constraints*: `is_constructible_v<T, Args...>` is `true`.
@@ -31,7 +32,7 @@ template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
 ```cpp
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ```
 
 [#]{.pnum} *Constraints*:

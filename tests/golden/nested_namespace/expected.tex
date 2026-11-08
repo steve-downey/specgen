@@ -123,7 +123,8 @@ constexpr encoding scheme() const;
 
 \indexlibraryglobal{decode}%
 \begin{itemdecl}
-template<encoding E> decoder<E> proto::decode(const char* text);
+template<encoding E>
+  decoder<E> proto::decode(const char* text);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -134,7 +135,8 @@ A \tcode{decoder<E>} over \tcode{text}.
 
 \indexlibraryglobal{decode}%
 \begin{itemdecl}
-template<class D> D decode(D d);
+template<class D>
+  D decode(D d);
 \end{itemdecl}
 
 \begin{itemdescr}

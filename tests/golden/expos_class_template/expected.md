@@ -92,7 +92,8 @@ constexpr bool empty() const;
 ::: wording
 
 ```cpp
-template<typename T> constexpr $box$<T> make(T t);
+template<typename T>
+  constexpr $box$<T> make(T t);
 ```
 
 [#]{.pnum} *Returns*: A boxed copy of `t`.
@@ -102,7 +103,8 @@ template<typename T> constexpr $box$<T> make(T t);
 ::: wording
 
 ```cpp
-template<typename T> constexpr $raw-box$<T> unwrap($box$<T> b);
+template<typename T>
+  constexpr $raw-box$<T> unwrap($box$<T> b);
 ```
 
 [#]{.pnum} *Returns*: The raw form of `b`.

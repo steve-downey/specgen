@@ -902,3 +902,10 @@ TEST_CASE("mpark - merged bodies preserve list continuations and table positions
     CHECK(next < last);
     CHECK(out.find("List entry.\n\nAfter the list.") != std::string::npos);
 }
+
+TEST_CASE("mpark - a braced title macro renders as heading code") {
+    Document doc;
+    doc.nodes.push_back(Section{"gadget.class", R"(Class \tcode{gadget})", {}});
+    const auto out = mpark::render_to_string(doc);
+    CHECK(out.find(R"(Class `gadget`)") != std::string::npos);
+}

@@ -30,7 +30,8 @@ constexpr explicit holder(I ptr);
 ### Operations [demo.ops]{- .sref} {-}
 
 ```cpp
-template<typename I> void swap(holder<I>&, holder<I>&);
+template<typename I>
+  void swap(holder<I>&, holder<I>&);
 ```
 
 [#]{.pnum} *Effects*: Exchanges the states of `a` and `b`.

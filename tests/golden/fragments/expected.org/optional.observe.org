@@ -26,7 +26,8 @@ constexpr const T& operator*() const&;
 #+end_pnum
 
 #+begin_itemdecl
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 #+end_itemdecl
 
 #+begin_pnum

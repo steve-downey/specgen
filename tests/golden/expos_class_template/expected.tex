@@ -93,7 +93,8 @@ constexpr bool empty() const;
 
 \indexlibraryglobal{make}%
 \begin{itemdecl}
-template<typename T> constexpr @\exposidnc{box}@<T> make(T t);
+template<typename T>
+  constexpr @\exposidnc{box}@<T> make(T t);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -104,7 +105,8 @@ A boxed copy of \tcode{t}.
 
 \indexlibraryglobal{unwrap}%
 \begin{itemdecl}
-template<typename T> constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
+template<typename T>
+  constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
 \end{itemdecl}
 
 \begin{itemdescr}

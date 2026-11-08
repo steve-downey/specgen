@@ -65,9 +65,10 @@ struct Markers {
 
 // The marker registry (design §4; decision marker-registry): one row per marker
 // spelling, driving `find_marker` and the marker-vs-marker duplicate checks
-// in parse_docblock. Adding a marker means adding a field to `Markers`
-// above plus one row here — never a second table or an ad-hoc `if`
-// chain. `flag` covers the plain-boolean markers (most of them); markers
+// in parse_docblock. Structural/extraction markers add a field to `Markers`
+// above plus one row here; element-scoped coverage is stored on its element
+// and parsed directly. Never add a second inventory table. `flag` covers the
+// plain-boolean markers (most of them); markers
 // that carry argument text instead (or in addition) — string-valued or
 // arity-1 markers like `\expos(name)` and `\at` — carry a `set_arg` setter
 // rather than being forced into `bool Markers::*`.
@@ -107,7 +108,7 @@ bool set_also_target(Markers& markers, std::string arg);
 struct MarkerInfo {
     std::string_view spelling;
     bool Markers::* flag                   = nullptr; // nullptr when the marker has no dedicated flag (\at).
-    bool (*set_arg)(Markers&, std::string) = nullptr; // nullptr when the marker takes no argument text.
+    bool (*set_arg)(Markers&, std::string) = nullptr; // nullptr when no argument is stored in Markers.
     MarkerArity      arity                 = MarkerArity::Flag;
     std::string_view missing_arg_error     = {}; // used only when arity == RestRequired and the text is empty.
 };
@@ -138,6 +139,10 @@ inline constexpr MarkerInfo kMarkers[] = {
     {.spelling = "verbatim-synopsis",    .flag = &Markers::verbatim_synopsis},
     {.spelling = "specified",            .flag = &Markers::specified},
     {.spelling = "verbatim-itemdecl"},
+    // Element-scoped validator metadata, parsed directly like verbatim-itemdecl.
+    {.spelling = "covers",
+     .arity = MarkerArity::RestRequired,
+     .missing_arg_error = "\\covers requires a predicate, optionally prefixed by !"},
     {.spelling = "at",
      .set_arg  = &detail::set_at_anchor,
      .arity    = MarkerArity::RestRequired,

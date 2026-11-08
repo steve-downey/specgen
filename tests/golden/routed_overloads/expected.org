@@ -1,0 +1,142 @@
+** Header <routed> synopsis [routed.syn]
+:PROPERTIES:
+:CUSTOM_ID: routed.syn
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  class gadget {
+  public:
+    // \ref{gadget.ctor}, constructors
+    constexpr gadget() noexcept;
+    int size() const;
+    constexpr gadget(int) noexcept;
+    constexpr gadget(long) noexcept;
+    constexpr gadget(short) noexcept;
+
+    // \ref{gadget.obs}, observers
+    using value_type = int;
+    using reference = int&;
+
+    static constexpr int first = 1;
+    static constexpr int second = 2;
+
+    friend void swap(gadget&, gadget&);
+    friend void swap(gadget&, int);
+  };
+
+  // \ref{gadget.obs}, namespace observers
+
+  int observe(gadget&);
+
+  int observe(gadget&, int);
+
+  int observe(gadget&, long);
+
+  template<class T> class specialized;
+
+  template<>
+  class specialized<int> {
+  public:
+    // \ref{gadget.ctor}, constructors
+    specialized();
+    specialized(int);
+  };
+
+  template<>
+  class specialized<long> {
+  public:
+    // \ref{gadget.ctor}, constructors
+    specialized();
+    specialized(long);
+  };
+}
+#+end_codeblock
+
+*** Constructors [gadget.ctor]
+:PROPERTIES:
+:CUSTOM_ID: gadget.ctor
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+constexpr gadget() noexcept;
+constexpr gadget(int) noexcept;
+constexpr gadget(long) noexcept;
+constexpr gadget(short) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: Has no value.
+#+end_pnum
+
+#+begin_itemdecl
+int size() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: Zero.
+#+end_pnum
+
+#+begin_itemdecl
+specialized();
+specialized(int);
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: Has an integer value.
+#+end_pnum
+
+#+begin_itemdecl
+specialized();
+specialized(long);
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: Has a long value.
+#+end_pnum
+
+*** Observers [gadget.obs]
+:PROPERTIES:
+:CUSTOM_ID: gadget.obs
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+using value_type = int;
+using reference = int&;
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: The value type.
+#+end_pnum
+
+#+begin_itemdecl
+static constexpr int first = 1;
+static constexpr int second = 2;
+#+end_itemdecl
+
+#+begin_pnum
+/Remarks/: The first constant.
+#+end_pnum
+
+#+begin_itemdecl
+friend void swap(gadget&, gadget&);
+friend void swap(gadget&, int);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Exchanges values.
+#+end_pnum
+
+#+begin_itemdecl
+int observe(gadget&);
+int observe(gadget&, int);
+int observe(gadget&, long);
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: Zero.
+#+end_pnum

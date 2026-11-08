@@ -62,7 +62,8 @@ Such small-object optimization can only be applied to a type ~T~ for which ~is_n
 :END:
 
 #+begin_itemdecl
-template<class F> callable_wrapper(F&& f);
+template<class F>
+  callable_wrapper(F&& f);
 #+end_itemdecl
 
 #+begin_pnum
@@ -76,7 +77,8 @@ Otherwise, ~*this~ has a target object initialized with ~f~.
 #+end_pnum
 
 #+begin_itemdecl
-template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+template<class VT>
+  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum

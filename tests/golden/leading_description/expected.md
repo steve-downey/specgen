@@ -52,7 +52,12 @@ inline void third();
 inline void third(int);
 ```
 
-[#]{.pnum} The third function introduces the labelled requirements.
+[#]{.pnum} The third function offers these choices:
+
+- [#.#]{.pnum} a first choice, or
+- [#.#]{.pnum} a second choice.
+
+It introduces the labelled requirements.
 
 [#]{.pnum} This is a separate leading paragraph with ([leading.general]{- .sref}).
 

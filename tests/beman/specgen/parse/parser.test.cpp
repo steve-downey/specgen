@@ -286,3 +286,14 @@ TEST_CASE("combined - keyword+digits+char_p+many composes into a marker header p
     CHECK(r->value.second == "algorithms.sort");
     CHECK(r->rest.remaining() == "{Sorting}");
 }
+
+static_assert([] {
+    const auto value = beman::specgen::parse::braced()(cursor{R"({outer{inner}\{escaped\}}tail)"});
+    return value && value->value == R"(outer{inner}\{escaped\})" && value->rest.remaining() == "tail";
+}());
+
+TEST_CASE("braced - a missing outer delimiter fails at the end") {
+    const auto value = beman::specgen::parse::braced()(cursor{"{outer{inner}"});
+    REQUIRE_FALSE(value);
+    CHECK(value.error().where.offset == 13);
+}
