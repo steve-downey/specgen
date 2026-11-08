@@ -2276,6 +2276,12 @@ foreach(backend latex mpark org)
     )
 endforeach()
 
+specgen_add_golden(
+    qualified_move
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_qualified_move.hpp"
+)
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

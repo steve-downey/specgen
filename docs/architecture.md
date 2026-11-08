@@ -1113,6 +1113,10 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
      may share a word deliberately, and only one of them is foreign. The roster's own
      `documented` set does not settle it, an enumeration's enumerators being text inside an
      itemdecl rather than roster rows.
+     A standard-qualified occurrence such as `std::move` is not a bare use of
+     an unrelated foreign spelling. Ordinary C++ comment and literal contents
+     are excluded from this bare-name occurrence check; the implementation
+     qualifier and private-member checks retain their existing reach.
      When `render` receives several `--from-ir` inputs, it validates each document against
      the union of every input's visible roster names, synopsis names, and ItemDecl semantic
      entity names, plus explicit `paper_entities`. A normative entity specified by a sibling

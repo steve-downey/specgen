@@ -427,24 +427,79 @@ NameVisibility name_visibility(const ir::Node& node) {
 struct IdentifierRun {
     std::string name;
     bool        namespace_qualifier = false;
+    bool        standard_qualified  = false;
+    bool        ordinary_text       = false;
 };
 
-// Every maximal run of identifier characters in @p text, in order of
-// appearance, plus whether that occurrence is followed by `::`. Not a C++
-// lexer: a run inside a string literal or a comment is returned like any
-// other, and a qualified name arrives as its separate components (`detail`,
-// `storage`). Roster checks need every run; foreign-namespace checks need the
-// occurrence-level qualifier bit so an English use of `detail` is not
-// mistaken for `detail::`.
+std::size_t ordinary_text_end(std::string_view text, std::size_t pos);
+
+// Recognize comments and quoted literals only to exclude their contents from
+// the bare foreign-name test. Other leakage rules retain their existing reach.
+std::size_t ordinary_text_end(std::string_view text, std::size_t pos) {
+    const auto rest = text.substr(pos);
+    if (rest.starts_with("//")) {
+        const auto end = text.find('\n', pos + 2);
+        return end == std::string_view::npos ? text.size() : end;
+    }
+    if (rest.starts_with("/*")) {
+        const auto end = text.find("*/", pos + 2);
+        return end == std::string_view::npos ? text.size() : end + 2;
+    }
+    constexpr std::string_view raw_prefixes[] = {"R\"", "u8R\"", "uR\"", "UR\"", "LR\""};
+    const auto                 raw_prefix =
+        std::ranges::find_if(raw_prefixes, [rest](auto prefix) { return rest.starts_with(prefix); });
+    if (raw_prefix != std::end(raw_prefixes)) {
+        const auto delimiter_begin = pos + raw_prefix->size();
+        const auto open            = text.find('(', delimiter_begin);
+        if (open != std::string_view::npos && open - delimiter_begin <= 16) {
+            const auto delimiter = text.substr(delimiter_begin, open - delimiter_begin);
+            const auto close     = text.find(std::format("){}\"", delimiter), open + 1);
+            return close == std::string_view::npos ? text.size() : close + delimiter.size() + 2;
+        }
+    }
+    if (text[pos] != '"' && text[pos] != '\'')
+        return pos;
+    // Digit separators belong to numeric tokens, including hexadecimal ones.
+    // A character-literal prefix such as u8 is not a numeric token.
+    if (text[pos] == '\'') {
+        const auto token_char = [](char ch) {
+            return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_';
+        };
+        auto begin = pos;
+        // substrate generic algorithm: find the start of the token preceding an apostrophe.
+        while (begin > 0 && token_char(text[begin - 1]))
+            --begin;
+        if (begin < pos && text[begin] >= '0' && text[begin] <= '9')
+            return pos;
+    }
+    const char quote = text[pos++];
+    // substrate generic algorithm: consume a quoted literal including escaped bytes.
+    while (pos < text.size()) {
+        const char ch = text[pos++];
+        if (ch == quote)
+            return pos;
+        if (ch == '\\' && pos < text.size())
+            ++pos;
+    }
+    return text.size();
+}
+
+// Preserve each identifier occurrence's qualifier chain. A standard-qualified
+// name and an unrelated implementation name may share a terminal spelling.
 std::vector<IdentifierRun> identifier_runs(std::string_view text) {
     const auto is_identifier_char = [](char c) {
         return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_';
     };
     std::vector<IdentifierRun> runs;
-    std::size_t                pos = 0;
-    // substrate generic algorithm: the position-tracking scan is what keeps
-    // the punctuation following each identifier occurrence available.
+    std::size_t                pos               = 0;
+    std::size_t                ignored_end       = 0;
+    std::size_t                previous_end      = 0;
+    bool                       previous_standard = false;
+    // substrate generic algorithm: a lexical scan retaining occurrence and qualifier context.
     while (pos < text.size()) {
+        if (pos >= ignored_end)
+            ignored_end = ordinary_text_end(text, pos);
+        const bool ordinary = pos < ignored_end;
         if (!is_identifier_char(text[pos])) {
             ++pos;
             continue;
@@ -455,10 +510,18 @@ std::vector<IdentifierRun> identifier_runs(std::string_view text) {
             ++pos;
         std::size_t after = pos;
         // substrate generic algorithm: find the following nonblank token.
-        while (after < text.size() && (text[after] == ' ' || text[after] == '\t'))
+        while (after < text.size() && (text[after] == ' ' || text[after] == '\t' || text[after] == '\n'))
             ++after;
-        runs.push_back(
-            IdentifierRun{std::string(text.substr(begin, pos - begin)), text.substr(after).starts_with("::")});
+        std::string_view gap   = text.substr(previous_end, begin - previous_end);
+        const auto       first = gap.find_first_not_of(" \t\r\n");
+        const auto       last  = gap.find_last_not_of(" \t\r\n");
+        const bool       connected =
+            !runs.empty() && first != std::string_view::npos && gap.substr(first, last - first + 1) == "::";
+        const bool        standard = connected && previous_standard;
+        const std::string name(text.substr(begin, pos - begin));
+        runs.push_back(IdentifierRun{name, text.substr(after).starts_with("::"), standard, ordinary});
+        previous_standard = standard || (name == "std" && !connected);
+        previous_end      = pos;
     }
     return runs;
 }
@@ -500,7 +563,8 @@ std::optional<std::string> foreign_message(const IdentifierRun& run, const NameV
 // declaration lives, and this side of the boundary knows only text.
 std::optional<std::string> foreign_decl_message(const IdentifierRun& run, const NameVisibility& visible) {
     const auto entry = visible.foreign_decl.find(run.name);
-    if (entry == visible.foreign_decl.end() || visible.documented.contains(run.name))
+    if (run.standard_qualified || run.ordinary_text || entry == visible.foreign_decl.end() ||
+        visible.documented.contains(run.name))
         return std::nullopt;
     return "`" + run.name + "` appears in rendered output but is not a documented entity (declared in `" +
            entry->second +

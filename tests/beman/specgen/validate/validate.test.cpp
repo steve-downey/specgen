@@ -1011,6 +1011,35 @@ TEST_CASE("validate - validate(Node) reports no body-use findings: the channel i
     CHECK(validate(doc.nodes.at(1)).empty());
 }
 
+TEST_CASE("validate - foreign bare spellings do not capture standard-qualified names or ordinary text") {
+    for (const std::string body : {"std::move(x);",
+                                   "::std::move(x);",
+                                   "std :: ranges :: move(x);",
+                                   "// store, move, and call\nreturn x;",
+                                   "/* move */ return x;",
+                                   "return \"move\";",
+                                   "return R\"tag(move \" text)tag\";",
+                                   "return u8R\"tag(\" move \\ text)tag\";",
+                                   "return LR\"(\" move)\";",
+                                   "return u8\'x\';"}) {
+        CAPTURE(body);
+        CHECK(validate(document_with_foreign_decl({}, body, {{"move", "ops.hpp"}})).empty());
+    }
+    CHECK_FALSE(validate(document_with_foreign_decl({}, "return move(x);", {{"move", "ops.hpp"}})).empty());
+    CHECK_FALSE(validate(document_with_foreign_decl({}, "return 0xA'B + move(x);", {{"move", "ops.hpp"}})).empty());
+    CHECK_FALSE(validate(document_with_foreign_decl({}, "return 1'000 + move(x);", {{"move", "ops.hpp"}})).empty());
+    CHECK_FALSE(validate(document_with_foreign_decl({}, "other::std::move(x);", {{"move", "ops.hpp"}})).empty());
+    CHECK_FALSE(validate(document_with_foreign_decl({}, "std::move(x); move(y);", {{"move", "ops.hpp"}})).empty());
+}
+
+TEST_CASE("validate - standard qualification does not hide implementation template arguments") {
+    auto doc               = document_with_foreign_decl({}, "std::tuple<detail::move> x;", {{"move", "ops.hpp"}});
+    doc.foreign_namespaces = {{"detail", "demo::detail"}};
+    const auto findings    = validate(doc);
+    CHECK(std::ranges::any_of(findings, [](const auto& finding) { return finding.message.starts_with("`move`"); }));
+    CHECK(std::ranges::any_of(findings, [](const auto& finding) { return finding.message.starts_with("`detail`"); }));
+}
+
 // --- Mandates/Constraints drift (design §5.2) -------------------------------
 
 namespace {
