@@ -65,7 +65,7 @@ std::expected<std::string, std::string> run(const std::vector<std::string>& argv
     }
     ::close(pipe_fds[1]);
 
-    std::string          output;
+    std::string            output;
     std::array<char, 4096> buffer{};
     // substrate generic algorithm: reading a pipe to its end is the read
     // loop itself, each read's length deciding the next.
@@ -86,7 +86,7 @@ std::expected<std::string, std::string> run(const std::vector<std::string>& argv
 // The directory git is asked about: the path's own directory when it is one,
 // its parent otherwise, and the current directory for a bare file name.
 fs::path directory_of(std::string_view path) {
-    const fs::path p(path);
+    const fs::path  p(path);
     std::error_code ec;
     if (fs::is_directory(p, ec))
         return p;
@@ -106,9 +106,8 @@ std::expected<fs::path, std::string> scratch_directory() {
 std::expected<fs::path, std::string> top_level_of(std::string_view path) {
     return run({"git", "rev-parse", "--show-toplevel"}, directory_of(path))
         .transform([](std::string out) { return fs::path(trimmed_line(std::move(out))); })
-        .transform_error([&](const std::string& why) {
-            return std::format("'{}' is not inside a git repository: {}", path, why);
-        });
+        .transform_error(
+            [&](const std::string& why) { return std::format("'{}' is not inside a git repository: {}", path, why); });
 }
 
 Tree::Tree(fs::path top_level, fs::path root) : top_level_(std::move(top_level)), root_(std::move(root)) {}
@@ -139,13 +138,14 @@ std::expected<Tree, std::string> Tree::materialize(std::string_view revision, st
     return top_level_of(path_in_repo).and_then([&](fs::path top_level) -> std::expected<Tree, std::string> {
         // A clear word for a revision that names no commit, before any
         // scratch directory exists to clean up.
-        const auto verified = run({"git", "rev-parse", "--verify", "--quiet", std::string(revision) + "^{commit}"}, top_level);
+        const auto verified =
+            run({"git", "rev-parse", "--verify", "--quiet", std::string(revision) + "^{commit}"}, top_level);
         if (!verified)
             return std::unexpected(std::format("'{}' does not name a commit in {}", revision, top_level.string()));
         return scratch_directory().and_then([&](fs::path scratch) -> std::expected<Tree, std::string> {
-            Tree           tree(top_level, scratch);
-            const fs::path index = scratch / "index";
-            const fs::path root  = scratch / "tree";
+            Tree            tree(top_level, scratch);
+            const fs::path  index = scratch / "index";
+            const fs::path  root  = scratch / "tree";
             std::error_code ec;
             fs::create_directories(root, ec);
             const std::string index_var = "GIT_INDEX_FILE=" + index.string();
@@ -158,9 +158,8 @@ std::expected<Tree, std::string> Tree::materialize(std::string_view revision, st
                     tree.root_ = scratch; // the whole scratch directory is the tree's to remove
                     return std::move(tree);
                 })
-                .transform_error([&](const std::string& why) {
-                    return std::format("cannot check out '{}': {}", revision, why);
-                });
+                .transform_error(
+                    [&](const std::string& why) { return std::format("cannot check out '{}': {}", revision, why); });
         });
     });
 }
@@ -176,7 +175,8 @@ std::string Tree::remap(std::string_view path) const {
 }
 
 std::vector<std::string> Tree::remap_args(const std::vector<std::string>& args) const {
-    static constexpr std::array<std::string_view, 6> path_flags{"-I", "-isystem", "-iquote", "-idirafter", "-include", "-imacros"};
+    static constexpr std::array<std::string_view, 6> path_flags{
+        "-I", "-isystem", "-iquote", "-idirafter", "-include", "-imacros"};
     // A fold with one bit of state: whether the previous argument was a
     // path-taking flag on its own, so this one is its path.
     struct State {

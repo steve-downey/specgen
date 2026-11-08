@@ -44,9 +44,7 @@ struct Repo {
         std::error_code ec;
         fs::remove_all(root, ec);
     }
-    void write(const std::string& relative, const std::string& text) const {
-        std::ofstream(root / relative) << text;
-    }
+    void write(const std::string& relative, const std::string& text) const { std::ofstream(root / relative) << text; }
     void git(const std::string& args) const {
         REQUIRE(std::system(("git -C '" + root.string() + "' " + args).c_str()) == 0);
     }
@@ -76,7 +74,9 @@ TEST_CASE("baseline_tree - a revision is checked out into a scratch tree and the
     const fs::path root = tree->root();
     CHECK(fs::exists(root));
     // The scratch tree goes with its last owner.
-    { const auto moved = std::move(*tree); }
+    {
+        const auto moved = std::move(*tree);
+    }
     CHECK_FALSE(fs::exists(root));
 }
 
@@ -89,7 +89,15 @@ TEST_CASE("baseline_tree - paths outside the repository are left alone, inside i
     CHECK_FALSE(tree->has("/usr/include/stdio.h"));
     const std::string include = (repo.root / "include").string();
     CHECK(tree->remap(include) == (tree->root() / "tree" / "include").string());
-    CHECK(tree->remap_args({"-std=c++2c", "-I", include, "-I" + include, "-isystem", "/opt/x", "-Dfoo=1", "-include", include + "/g.hpp"}) ==
+    CHECK(tree->remap_args({"-std=c++2c",
+                            "-I",
+                            include,
+                            "-I" + include,
+                            "-isystem",
+                            "/opt/x",
+                            "-Dfoo=1",
+                            "-include",
+                            include + "/g.hpp"}) ==
           std::vector<std::string>{"-std=c++2c",
                                    "-I",
                                    (tree->root() / "tree" / "include").string(),
@@ -103,7 +111,7 @@ TEST_CASE("baseline_tree - paths outside the repository are left alone, inside i
 
 TEST_CASE("baseline_tree - a revision that names no commit, and a path outside any repository, are reported") {
     const Repo repo;
-    const auto header = (repo.root / "include" / "g.hpp").string();
+    const auto header  = (repo.root / "include" / "g.hpp").string();
     const auto missing = baseline_tree::Tree::materialize("no-such-revision", header);
     REQUIRE_FALSE(missing.has_value());
     CHECK(missing.error().find("does not name a commit") != std::string::npos);
