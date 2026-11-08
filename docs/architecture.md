@@ -590,7 +590,12 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   and source-ordered**: resolution happens left-to-right within one open `\rSec` frame before
   placement-key sorting, so a target must precede its follower and cannot cross a section
   boundary, even when other primaries intervene. Duplicate IDs and unresolved targets are
-  Errors, but the affected item is retained. Bare `\also` and an empty docblock keep their
+  Errors, but the affected item is retained. Routed members use the same
+  grouping operation within their class and target-section cohort, before
+  placement sorting. This covers in-class functions, hidden friends, aliases,
+  static members, and members harvested from a source file. Separate classes
+  and target changes are grouping boundaries; the ordinary out-of-line event
+  stream retains its independent push-order grouping. Bare `\also` and an empty docblock keep their
   adjacent push-order behavior; group IDs are transient front-end metadata and never appear
   in IR or JSON.
 - `\expos` / `\expos(name)` — exposition-only; name derived by stripping trailing

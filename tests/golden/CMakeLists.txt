@@ -2282,6 +2282,20 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_qualified_move.hpp"
 )
 
+specgen_add_golden(
+    routed_overloads
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_routed_overloads.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        routed_overloads
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/routed_overloads/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

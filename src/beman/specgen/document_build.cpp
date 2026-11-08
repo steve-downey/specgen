@@ -115,6 +115,30 @@ std::vector<GroupCandidate> group_items(std::vector<GroupCandidate> candidates, 
     return grouped;
 }
 
+std::vector<PendingItem> group_pending_items(std::vector<PendingItem> pending, std::vector<Diagnostic>* diagnostics) {
+    return pending | std::views::chunk_by([](const PendingItem& a, const PendingItem& b) {
+               return a.stable == b.stable && a.grouping_scope == b.grouping_scope;
+           }) |
+           std::views::transform([diagnostics](auto&& cohort) {
+               const std::string stable     = cohort.front().stable;
+               auto              candidates = cohort | std::views::transform([](PendingItem& item) {
+                                     return GroupCandidate{item.offset,
+                                                           std::move(item.item),
+                                                           item.wants_join,
+                                                           std::move(item.group_id),
+                                                           std::move(item.also_target),
+                                                           item.grouping_line};
+                                              }) |
+                                              std::ranges::to<std::vector>();
+               return group_items(std::move(candidates), diagnostics) |
+                      std::views::transform([&stable](GroupCandidate& candidate) {
+                          return PendingItem{stable, candidate.key, std::move(candidate.node)};
+                      }) |
+                      std::ranges::to<std::vector>();
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+
 namespace {
 
 // A section under construction (decision document-build-stages, stage 2). Frames are
@@ -288,7 +312,7 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // (PendingItem::stable), not by position, so no
                     // ranges algorithm (chunk_by groups by adjacency,
                     // not by an arbitrary key) names it.
-                    for (PendingItem& p : syn.pending)
+                    for (PendingItem& p : group_pending_items(std::move(syn.pending), &diagnostics))
                         pending[p.stable].push_back(std::move(p));
                 },
                 [&](ItemDecl& item) {
