@@ -1,0 +1,92 @@
+\rSec3[demo.coverage]{Explicit coverage}
+
+\indexlibraryglobal{accept}%
+\begin{itemdecl}
+template<class F> void accept(F);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{remove_cvref_t<F>} is not a specialization of \tcode{in_place_type_t}.
+\end{itemize}
+\end{itemdescr}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  struct @\libglobal{in_place_type_t}@ {};
+}
+\end{codeblock}
+
+\rSec4[demo.coverage.class]{Class move_only_function}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{move_only_function}@ {
+  private:
+    // \ref{demo.coverage.ctors}, exposition members
+
+    template<class VT>
+    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+
+  public:
+    // \ref{demo.coverage.ctors}, constructors
+
+    template<class F>
+      requires(!is_same_v<remove_cvref_t<F>, move_only_function>) &&
+              (!detail::is_in_place_type<remove_cvref_t<F>>) &&
+              (@\exposidnc{is-callable-from}@<decay_t<F>>)
+    constexpr move_only_function(F&& f);
+
+    template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+  };
+}
+\end{codeblock}
+
+\pnum
+The wrapper stores a callable object.
+
+\rSec4[demo.coverage.ctors]{Construction}
+
+\begin{itemdecl}
+template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+The predicate determines whether \tcode{VT} can be invoked.
+\end{itemdescr}
+
+\indexlibraryctor{move_only_function}%
+\begin{itemdecl}
+template<class F> constexpr move_only_function(F&& f);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{VT} be \tcode{decay_t<F>}.
+
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{remove_cvref_t<F>} is not the same type as \tcode{move_only_function}, and
+\item \tcode{remove_cvref_t<F>} is not a specialization of \tcode{in_place_type_t}, and
+\item \tcode{\exposid{is-callable-from}<VT>} is \tcode{true}.
+\end{itemize}
+\end{itemdescr}
+
+\indexlibraryctor{move_only_function}%
+\begin{itemdecl}
+template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{VT} be \tcode{decay_t<T>}.
+
+\pnum
+\mandates
+\tcode{VT} is the same type as \tcode{T}.
+\end{itemdescr}

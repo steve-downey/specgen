@@ -919,7 +919,7 @@ have no independent item description.
   returns a `std::string` and `parse_document`/`parse_item`/`parse_code` read it back, with the round-trip
   invariant holding over every node, span, index, element kind, and disposition.
   Legacy description slots normalize to ordered bodies when read. New item nodes
-  use `item-v3`, so older readers reject the changed contract visibly rather than
+  use `item-v4`, so older readers reject the changed contract visibly rather than
   skipping body content (decision [ordered-description-bodies](decisions/ordered-description-bodies.md)).
   The
   serialized form decouples the wg21org exporter, enables backend-independent golden tests,
@@ -927,7 +927,7 @@ have no independent item description.
   header revisions; out of scope, by hand at first).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
-labelled elements. Item nodes emit `item-v3`; readers accept both `item-v2`
+labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
 and legacy `item`. The new discriminator prevents a body-only reader from
 silently ignoring leading wording. The semantic content predicate is
 `ir::has_description`, shared by rendering, grouping, routing, and coverage.
@@ -1175,6 +1175,14 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    and one with no description is the ordinary undescribed itemdecl; carrying neither renders
    as nothing at all, which is the same silent drop as the check above in the shape that
    leaves no blank box to notice it by.
+
+Validator metadata on a Constraints or Mandates element may include explicit
+`\covers [!]predicate` claims (decision `explicit-constraint-coverage`).
+Each claim must identify exactly one derived conjunct of that kind and agree
+with its polarity. Claims neither render nor participate in leakage checks;
+recognizable contradictions and unrelated missing counterparts remain findings.
+Items emit as `item-v4`, accepting legacy `item`, `item-v2`, and `item-v3` on
+input, so older readers cannot silently discard coverage claims.
 
 ## 10. Testing strategy
 

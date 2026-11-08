@@ -590,6 +590,8 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
             break;
         }
         input += "\n";
+        if (entry.spelling == "covers")
+            input = "\\constraints\n" + input;
 
         auto r = parse_docblock(input);
         CHECK(!has_diag(r, Severity::Error, "unknown tag"));
@@ -631,4 +633,33 @@ TEST_CASE("docblock - leading prose preserves lists and resumed paragraphs") {
     CHECK_FALSE(std::get<BodyParagraph>(parsed.block.leading[3]).continuation);
     CHECK(std::get<Itemize>(parsed.block.leading[4]).items.size() == 1);
     CHECK(parsed.block.elements.size() == 1);
+}
+
+TEST_CASE("docblock - coverage claims belong to normative constraint elements") {
+    const auto valid = parse_docblock("\\constraints\n\\covers !detail::trait<T>\nThe specified condition holds.");
+    CHECK(valid.ok());
+    REQUIRE(valid.block.elements.size() == 1);
+    CHECK(valid.block.elements.front().coverage.size() == 1);
+    for (const auto* invalid : {"\\covers trait<T>",
+                                "\\remarks\n\\covers trait<T>",
+                                "\\constraints\n\\covers",
+                                "\\constraints\n\\covers !!trait<T>",
+                                "\\constraints\n\\note\n\\covers trait<T>\n\\endnote"}) {
+        CAPTURE(invalid);
+        CHECK_FALSE(parse_docblock(invalid).ok());
+    }
+}
+
+TEST_CASE("docblock - coverage metadata does not split authored lists") {
+    const auto parsed = parse_docblock(R"(\constraints
+\item First condition.
+\covers trait<T>
+\item Second condition.)");
+    REQUIRE(parsed.ok());
+    REQUIRE(parsed.block.elements.size() == 1);
+    const auto& element = parsed.block.elements.front();
+    REQUIRE(element.body.size() == 1);
+    REQUIRE(first<Itemize>(element) != nullptr);
+    CHECK(items(element).size() == 2);
+    CHECK(element.coverage.size() == 1);
 }

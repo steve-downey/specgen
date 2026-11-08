@@ -1636,3 +1636,70 @@ TEST_CASE("validate - code normalization preserves token boundaries and literal 
     item.descr.elements.front().body      = {ir::BodyParagraph{authored_paragraph(R"(trait<"ab">)", "true")}};
     CHECK_FALSE(validate(ir::Node{item}).empty());
 }
+
+TEST_CASE("validate - explicit coverage checks exact targets and polarity through saved IR") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    ir::DescriptionElement element;
+    element.kind        = ir::ElementKind::Constraints;
+    element.body        = {ir::BodyParagraph{{ir::TextInline{"T satisfies the specified condition."}}}};
+    element.conjuncts   = {conjunct_paragraph("detail::trait<T>", "false")};
+    element.coverage    = {conjunct_paragraph("detail::trait<T>", "false")};
+    item.descr.elements = {element};
+    CHECK(validate(ir::Node{item}).empty());
+    const auto saved = ir::parse_item(ir::emit_json(item));
+    REQUIRE(saved.has_value());
+    CHECK(validate(ir::Node{*saved}).empty());
+
+    SECTION("a typo covers no target") {
+        item.descr.elements.front().coverage = {conjunct_paragraph("detail::typo<T>", "false")};
+        const auto findings                  = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(findings, [](const auto& finding) {
+            return finding.severity == Severity::Error && finding.message.find("matches 0") != std::string::npos;
+        }));
+    }
+    SECTION("the polarity must agree") {
+        item.descr.elements.front().coverage = {conjunct_paragraph("detail::trait<T>", "true")};
+        const auto findings                  = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(findings, [](const auto& finding) {
+            return finding.severity == Severity::Error && finding.message.find("wrong polarity") != std::string::npos;
+        }));
+    }
+    SECTION("duplicate claims remain errors") {
+        item.descr.elements.front().coverage.push_back(element.coverage.front());
+        const auto findings = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(findings, [](const auto& finding) {
+            return finding.severity == Severity::Error &&
+                   finding.message.find("duplicate coverage") != std::string::npos;
+        }));
+    }
+    SECTION("ambiguous targets remain errors") {
+        item.descr.elements.front().conjuncts.push_back(element.conjuncts.front());
+        const auto findings = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(findings, [](const auto& finding) {
+            return finding.severity == Severity::Error && finding.message.find("matches 2") != std::string::npos;
+        }));
+    }
+    SECTION("coverage never masks recognizable contradictions") {
+        item.descr.elements.front().body = {ir::BodyParagraph{authored_paragraph("detail::trait<T>", "true")}};
+        const auto findings              = validate(ir::Node{item});
+        REQUIRE(findings.size() == 1);
+        CHECK(findings.front().message.find("contradicts") != std::string::npos);
+    }
+    SECTION("coverage does not hide a later authored contradiction") {
+        auto later = element;
+        later.conjuncts.clear();
+        later.coverage.clear();
+        later.body = {ir::BodyParagraph{authored_paragraph("detail::trait<T>", "true")}};
+        item.descr.elements.push_back(std::move(later));
+        const auto findings = validate(ir::Node{item});
+        REQUIRE(findings.size() == 1);
+        CHECK(findings.front().message.find("contradicts") != std::string::npos);
+    }
+    SECTION("other conjuncts still require coverage") {
+        item.descr.elements.front().conjuncts.push_back(conjunct_paragraph("other<T>", "true"));
+        const auto findings = validate(ir::Node{item});
+        REQUIRE(findings.size() == 1);
+        CHECK(findings.front().message.find("`other<T>`") != std::string::npos);
+    }
+}

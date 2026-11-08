@@ -203,6 +203,8 @@ struct DescriptionElement {
     // Validator-only derivation evidence, independent of the rendered body.
     bool                   derived   = false;
     std::vector<Paragraph> conjuncts = {};
+    // Explicit authored correspondence claims, checked but never rendered.
+    std::vector<Paragraph> coverage = {};
 };
 
 // Views of all wording sites, in authored order. Code returned here is block

@@ -38,8 +38,15 @@ TEST_CASE("markers - every spelling appears once") {
 TEST_CASE("markers - each row's arity agrees with what it can store") {
     for (const MarkerInfo& entry : kMarkers) {
         CAPTURE(entry.spelling);
-        // Only a marker with a setter has anywhere to put argument text.
-        CHECK((entry.arity == MarkerArity::Flag) == (entry.set_arg == nullptr));
+        // Coverage stores its required argument on the current element.
+        // Other argument-bearing markers store it in Markers via a setter.
+        if (entry.spelling == "covers") {
+            CHECK(entry.arity == MarkerArity::RestRequired);
+            CHECK(entry.set_arg == nullptr);
+            CHECK(entry.flag == nullptr);
+        } else {
+            CHECK((entry.arity == MarkerArity::Flag) == (entry.set_arg == nullptr));
+        }
         // A required argument has a message for when it is missing, and
         // nothing else does.
         CHECK((entry.arity == MarkerArity::RestRequired) == !entry.missing_arg_error.empty());

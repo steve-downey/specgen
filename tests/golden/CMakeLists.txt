@@ -2310,6 +2310,26 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+specgen_add_golden(
+    coverage
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_coverage.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        coverage
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/coverage/expected.json"
+    )
+    specgen_add_golden(
+        coverage_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/coverage/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

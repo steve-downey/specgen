@@ -1237,8 +1237,74 @@ Diagnostics check_drift_pair(const ir::DescriptionElement& derived,
 // sibling \remarks instead of repeating it in \constraints, and that pattern
 // must stay silent. Only a conjunct with no comparable reading anywhere in
 // the item is a real coverage gap.
-Diagnostics
-check_missing_pair(const ir::DescriptionElement& derived, const ir::ItemDescr& description, const Bindings& bindings) {
+struct CoverageAudit {
+    Diagnostics                                      diagnostics;
+    std::map<ir::ElementKind, std::set<std::string>> covered;
+};
+
+std::string   coverage_key(const Conjunct& conjunct, const Bindings& bindings);
+CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& bindings);
+
+std::string coverage_key(const Conjunct& conjunct, const Bindings& bindings) {
+    return std::format(
+        "{}:{}", predicate_subject(conjunct.subject, bindings), conjunct.polarity == ConjunctPolarity::Positive);
+}
+
+CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& bindings) {
+    CoverageAudit                                    result;
+    std::map<ir::ElementKind, std::set<std::string>> claimed;
+    const auto                                       report = [&](ir::ElementKind kind, std::string message) {
+        result.diagnostics.push_back({Severity::Error, std::string(ir::element_name(kind)), std::move(message)});
+    };
+    // substrate generic algorithm: scatter claim state and validated targets into per-kind sets.
+    for (const auto& element : description.elements) {
+        // substrate generic algorithm: scatter each claim's target or append its diagnostic.
+        for (const auto& paragraph : element.coverage) {
+            const auto claim = read_conjunct(paragraph);
+            if (element.derived || element_paragraphs(element).empty() ||
+                (element.kind != ir::ElementKind::Constraints && element.kind != ir::ElementKind::Mandates) ||
+                !claim || claim->polarity == ConjunctPolarity::Unknown) {
+                report(element.kind,
+                       "invalid explicit coverage claim; expected a predicate and polarity on an authored Constraints "
+                       "or Mandates element with normative wording");
+                continue;
+            }
+            const auto subject = predicate_subject(claim->subject, bindings);
+            if (!claimed[element.kind].insert(subject).second) {
+                report(element.kind, std::format("duplicate coverage claim for `{}`", claim->subject));
+                continue;
+            }
+            const auto readings =
+                description.elements |
+                std::views::filter([&](const auto& other) { return other.kind == element.kind; }) |
+                std::views::transform([](const auto& other) -> const auto& { return other.conjuncts; }) |
+                std::views::join | std::views::transform(read_conjunct) | std::views::filter([&](const auto& value) {
+                    return value && predicate_subject(value->subject, bindings) == subject;
+                }) |
+                std::ranges::to<std::vector>();
+            if (readings.size() != 1) {
+                report(element.kind,
+                       std::format("coverage claim `{}` matches {} derived conjuncts; expected exactly one",
+                                   claim->subject,
+                                   readings.size()));
+                continue;
+            }
+            if (readings.front()->polarity != claim->polarity) {
+                report(element.kind,
+                       std::format("coverage claim `{}` has the wrong polarity for its derived conjunct",
+                                   claim->subject));
+                continue;
+            }
+            result.covered[element.kind].insert(coverage_key(*claim, bindings));
+        }
+    }
+    return result;
+}
+
+Diagnostics check_missing_pair(const ir::DescriptionElement& derived,
+                               const ir::ItemDescr&          description,
+                               const Bindings&               bindings,
+                               const CoverageAudit&          coverage) {
     const std::string kind_name = std::string(ir::element_name(derived.kind));
 
     std::vector<const ir::Paragraph*> item_paragraphs = description.elements |
@@ -1251,6 +1317,11 @@ check_missing_pair(const ir::DescriptionElement& derived, const ir::ItemDescr& d
         [&](const ir::Paragraph& conjunct_paragraph) -> Diagnostics {
             const std::optional<Conjunct> conjunct = read_conjunct(conjunct_paragraph);
             if (!conjunct || conjunct->polarity == ConjunctPolarity::Unknown)
+                return {};
+
+            const auto explicit_kind = coverage.covered.find(derived.kind);
+            if (explicit_kind != coverage.covered.end() &&
+                explicit_kind->second.contains(coverage_key(*conjunct, bindings)))
                 return {};
 
             const bool covered = std::ranges::any_of(item_paragraphs, [&](const ir::Paragraph* p) {
@@ -1274,25 +1345,28 @@ check_missing_pair(const ir::DescriptionElement& derived, const ir::ItemDescr& d
 // authored/derived form remains readable for hand-built IR.
 Diagnostics check_mandates_constraints_drift(const ir::ItemDescr& description) {
     const auto bindings = description_bindings(description);
-    return foundation::mconcat_map(
-        description.elements,
-        [&](const ir::DescriptionElement& authored) -> Diagnostics {
-            if (authored.derived)
-                return {};
-            if (!authored.conjuncts.empty())
-                return diagnostics_monoid.combine(check_drift_pair(authored, authored, bindings),
-                                                  check_missing_pair(authored, description, bindings));
-            const auto derived = std::ranges::find_if(description.elements, [&](const auto& element) {
-                return !element.conjuncts.empty() && element.kind == authored.kind;
-            });
-            if (derived == description.elements.end())
-                return {};
-            if (!derived->derived)
-                return check_drift_pair(*derived, authored, bindings);
-            return diagnostics_monoid.combine(check_drift_pair(*derived, authored, bindings),
-                                              check_missing_pair(*derived, description, bindings));
-        },
-        diagnostics_monoid);
+    const auto coverage = audit_coverage(description, bindings);
+    return diagnostics_monoid.combine(
+        coverage.diagnostics,
+        foundation::mconcat_map(
+            description.elements,
+            [&](const ir::DescriptionElement& authored) -> Diagnostics {
+                if (authored.derived)
+                    return {};
+                if (!authored.conjuncts.empty())
+                    return diagnostics_monoid.combine(check_drift_pair(authored, authored, bindings),
+                                                      check_missing_pair(authored, description, bindings, coverage));
+                const auto derived = std::ranges::find_if(description.elements, [&](const auto& element) {
+                    return !element.conjuncts.empty() && element.kind == authored.kind;
+                });
+                if (derived == description.elements.end())
+                    return {};
+                if (!derived->derived)
+                    return check_drift_pair(*derived, authored, bindings);
+                return diagnostics_monoid.combine(check_drift_pair(*derived, authored, bindings),
+                                                  check_missing_pair(*derived, description, bindings, coverage));
+            },
+            diagnostics_monoid));
 }
 
 // --- noexcept <-> *Throws:* cross-check (design §5.4) -----------------------

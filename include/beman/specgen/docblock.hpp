@@ -101,9 +101,10 @@ using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D, A
 using DescriptionBody = std::vector<BodyBlock>;
 
 struct Element {
-    ir::ElementKind kind = ir::ElementKind::Effects;
-    DescriptionBody body;
-    int             line = 0;
+    ir::ElementKind             kind = ir::ElementKind::Effects;
+    DescriptionBody             body;
+    int                         line     = 0;
+    std::vector<ProseParagraph> coverage = {};
 };
 
 struct Docblock {

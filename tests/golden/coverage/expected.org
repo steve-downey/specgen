@@ -1,0 +1,98 @@
+** Explicit coverage [demo.coverage]
+:PROPERTIES:
+:CUSTOM_ID: demo.coverage
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+template<class F> void accept(F);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~remove_cvref_t<F>~ is not a specialization of ~in_place_type_t~.
+#+end_pnum
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  struct in_place_type_t {};
+}
+#+end_codeblock
+
+*** Class move_only_function [demo.coverage.class]
+:PROPERTIES:
+:CUSTOM_ID: demo.coverage.class
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  class move_only_function {
+  private:
+    // \ref{demo.coverage.ctors}, exposition members
+
+    template<class VT>
+    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+
+  public:
+    // \ref{demo.coverage.ctors}, constructors
+
+    template<class F>
+      requires(!is_same_v<remove_cvref_t<F>, move_only_function>) &&
+              (!detail::is_in_place_type<remove_cvref_t<F>>) &&
+              (@\exposidnc{is-callable-from}@<decay_t<F>>)
+    constexpr move_only_function(F&& f);
+
+    template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+  };
+}
+#+end_codeblock
+
+#+begin_pnum
+The wrapper stores a callable object.
+#+end_pnum
+
+*** Construction [demo.coverage.ctors]
+:PROPERTIES:
+:CUSTOM_ID: demo.coverage.ctors
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<class VT> static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+The predicate determines whether ~VT~ can be invoked.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> constexpr move_only_function(F&& f);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<F>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~remove_cvref_t<F>~ is not the same type as ~move_only_function~, and
+- ~remove_cvref_t<F>~ is not a specialization of ~in_place_type_t~, and
+- @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<T>~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~VT~ is the same type as ~T~.
+#+end_pnum

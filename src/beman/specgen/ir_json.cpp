@@ -220,6 +220,7 @@ struct ElementWire {
     std::optional<EquivalentTo>               equivalent;
     bool                                      derived = false;
     std::vector<ir::Paragraph>                conjuncts;
+    std::vector<ir::Paragraph>                coverage;
 };
 
 template <>
@@ -234,6 +235,7 @@ struct json_descriptor<ElementWire> {
         optional_projected_field("equivalent", &ElementWire::equivalent, &EquivalentTo::code),
         field("derived", &ElementWire::derived),
         field("conjuncts", &ElementWire::conjuncts),
+        field("coverage", &ElementWire::coverage),
     };
 };
 
@@ -250,6 +252,7 @@ ElementWire json_descriptor<DescriptionElement>::to_representation(const Descrip
     w.body      = e.body;
     w.derived   = e.derived;
     w.conjuncts = e.conjuncts;
+    w.coverage  = e.coverage;
     return w;
 }
 
@@ -260,6 +263,7 @@ bool json_descriptor<DescriptionElement>::from_representation(Reader& r, Element
     e.kind      = w.kind;
     e.derived   = w.derived;
     e.conjuncts = std::move(w.conjuncts);
+    e.coverage  = std::move(w.coverage);
     if (w.body) {
         e.body = std::move(*w.body);
     } else {
@@ -357,12 +361,12 @@ struct json_descriptor<FreeParagraph> {
 
 template <>
 struct json_descriptor<Node> {
-    static constexpr std::string_view item_aliases[] = {"item", "item-v2"};
+    static constexpr std::string_view item_aliases[] = {"item", "item-v2", "item-v3"};
     static constexpr auto             alts           = alternatives("type",
                                                                     "node type",
                                                                     alt<Section>("section"),
                                                                     alt<Synopsis>("synopsis"),
-                                                                    alt<SpecItem>("item-v3", item_aliases),
+                                                                    alt<SpecItem>("item-v4", item_aliases),
                                                                     alt<FreeParagraph>("para"));
 };
 

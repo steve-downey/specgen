@@ -258,10 +258,13 @@ void rewrite_prose_expos(ir::ItemDescr& descr, const std::map<std::string, std::
                     std::ranges::to<ir::DescriptionBody>();
     descr.elements =
         std::move(descr.elements) | std::views::as_rvalue | std::views::transform([&](ir::DescriptionElement e) {
-            e.body = std::move(e.body) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
+            e.body     = std::move(e.body) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
                          return std::visit(foundation::overloaded{rewrite}, std::move(b));
-                     }) |
-                     std::ranges::to<ir::DescriptionBody>();
+                         }) |
+                         std::ranges::to<ir::DescriptionBody>();
+            e.coverage = std::move(e.coverage) | std::views::as_rvalue |
+                         std::views::transform([&](ir::Paragraph p) { return rewrite.paragraph(std::move(p)); }) |
+                         std::ranges::to<std::vector>();
             return e;
         }) |
         std::ranges::to<std::vector>();

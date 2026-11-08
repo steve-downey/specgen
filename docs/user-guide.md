@@ -1039,15 +1039,15 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.13.6 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.14.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
 ### Saved IR compatibility
 
-Newly emitted item nodes use `item-v3` for leading and ordered description
-bodies. Updated renderers still read `item-v2` and the earlier `item` nodes
-with paragraph/list/table slots. Older renderers reject `item-v3`, so saved
+Newly emitted item nodes use `item-v4` for ordered description bodies and
+explicit coverage metadata. Updated renderers still read `item-v3`, `item-v2`, and the earlier `item` nodes
+with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer.
 
@@ -1059,3 +1059,23 @@ prose. Blank decorated lines separate its numbered paragraphs.
 A detached block outside every section reports an error. Inside a bounded
 header synopsis, detached prose follows the assembled synopsis alongside the
 classes' own descriptions. Labelled description elements require a declaration.
+
+## Explicit constraint coverage
+
+The drift validator recognizes boolean assertions, same-type prose, and local
+`Let` bindings. When an opaque implementation predicate is stated only in
+prose, acknowledge its correspondence on the authored element:
+
+```cpp
+//! \constraints
+//! \covers !detail::is_in_place_type<remove_cvref_t<F>>
+//! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
+```
+
+`\covers` belongs to the current normative Constraints or Mandates element.
+Its argument names one derived predicate; a leading `!` claims negative
+polarity. It does not render. Each claim must match exactly one derived
+conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are
+Errors. A recognizable contradiction in the authored wording still warns.
+Unrelated conjuncts still require coverage. Saved IR preserves these claims;
+readers predating `item-v4` reject the item visibly.

@@ -112,7 +112,9 @@ ir::DescriptionElement lower_element(const grammar::Element& element) {
                                              }) |
                                              std::ranges::to<ir::DescriptionBody>(),
                                   .derived = false,
-                                  .conjuncts = {}};
+                                  .conjuncts = {},
+                                  .coverage  = element.coverage | std::views::transform(lower_paragraph) |
+                                               std::ranges::to<std::vector>()};
 }
 
 // An extraction marker contributes an element whose prose is empty and whose

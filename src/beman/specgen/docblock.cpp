@@ -748,6 +748,29 @@ ParseResult parse_docblock(std::string_view raw) {
                 continue;
             }
 
+            if (name == "covers") {
+                // Validator metadata leaves the current authored paragraph or list intact.
+                Element* element = current_element();
+                if (element == nullptr || informative != nullptr ||
+                    (element->kind != ir::ElementKind::Constraints && element->kind != ir::ElementKind::Mandates)) {
+                    diags.push_back(
+                        {Severity::Error, lineno, "\\covers requires a normative Constraints or Mandates element"});
+                    continue;
+                }
+                auto       predicate = trim(after);
+                const bool negative  = predicate.starts_with('!');
+                if (negative)
+                    predicate = trim(predicate.substr(1));
+                if (predicate.empty() || predicate.starts_with('!') || predicate.find('`') != std::string_view::npos) {
+                    diags.push_back(
+                        {Severity::Error, lineno, "\\covers requires a predicate, optionally prefixed by !"});
+                    continue;
+                }
+                element->coverage.push_back(
+                    {InlineCode{std::string(predicate)}, InlineText{" is "}, InlineCode{negative ? "false" : "true"}});
+                continue;
+            }
+
             if (name == "note" || name == "example") {
                 flush_item();
                 flush_paragraph();

@@ -216,3 +216,13 @@ TEST_CASE("lower - exposid name derivation") {
     CHECK(exposid_name("___") == "");
     CHECK(exposid_name("_leading") == "-leading");
 }
+
+TEST_CASE("lower - coverage metadata remains separate from the authored body") {
+    const auto result = lower_text("\\constraints\n\\covers !detail::trait<T>\nThe condition holds.");
+    REQUIRE(result.descr.elements.size() == 1);
+    const auto& element = result.descr.elements.front();
+    REQUIRE(element.coverage.size() == 1);
+    CHECK(code_of(element.coverage.front().front()) == "detail::trait<T>");
+    CHECK(code_of(element.coverage.front().back()) == "false");
+    CHECK(element.body.size() == 1);
+}
