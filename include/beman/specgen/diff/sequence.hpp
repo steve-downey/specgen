@@ -96,8 +96,11 @@ std::vector<Edit> edit_script(const A& a, const B& b, Eq eq = {}) {
     using sequence_detail::Frontier;
     using sequence_detail::steps_down;
 
-    const std::size_t    n   = std::ranges::size(a);
-    const std::size_t    m   = std::ranges::size(b);
+    const std::size_t n = std::ranges::size(a);
+    const std::size_t m = std::ranges::size(b);
+    if (n == 0 && m == 0)
+        return {};
+
     const std::ptrdiff_t max = static_cast<std::ptrdiff_t>(n + m);
 
     // The frontier after each depth, kept so the path can be read back once
