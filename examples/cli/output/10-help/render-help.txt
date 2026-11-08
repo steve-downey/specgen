@@ -44,6 +44,17 @@ generate options:
                              rather than one already in the working draft. May be
                              repeated; references beneath any root use a local
                              target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --baseline-header <path>  the wording diff against this header's wording,
+                             parsed with the same compile flags as the header
+                             it pairs with, in order. May be repeated
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -103,6 +114,14 @@ render options:
                              rather than one already in the working draft. May be
                              repeated; references beneath any root use a local
                              target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's

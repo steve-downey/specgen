@@ -1,0 +1,114 @@
+\begin{codeblock}
+namespace std {
+  class @\libglobal{gadget}@ {
+  public:
+    // \ref{gadget.observe}, observers
+    bool ready() const @\added{noexcept}@;
+    int level() const;
+
+    // \ref{gadget.mod}, modifiers
+    void @\removed{reset}@@\added{clear}@();
+    void arm(int level);
+
+    @\added{// \ref{gadget.query}, queries}@
+    @\added{bool armed() const;}@
+  };
+}
+\end{codeblock}
+
+\rSec3[gadget.observe]{Observers}
+
+\indexlibrarymember{ready}{gadget}%
+\begin{itemdecl}
+bool ready() const @\added{noexcept}@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true} if the gadget is \removed{ready.}\added{armed.}
+
+\begin{addedblock}
+\pnum
+\complexity
+Constant.
+\end{addedblock}
+\end{itemdescr}
+
+\indexlibrarymember{level}{gadget}%
+\begin{itemdecl}
+int level() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The current level.
+
+\pnum
+\remarks
+A gadget starts at level zero.
+\end{itemdescr}
+
+\rSec3[gadget.mod]{Modifiers}
+
+\begin{removedblock}
+\indexlibrarymember{reset}{gadget}%
+\begin{itemdecl}
+void reset();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Resets the gadget to level zero.
+\end{itemdescr}
+\end{removedblock}
+
+\begin{addedblock}
+\indexlibrarymember{clear}{gadget}%
+\begin{itemdecl}
+void clear();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Clears the gadget, returning it to level zero.
+\end{itemdescr}
+\end{addedblock}
+
+\indexlibrarymember{arm}{gadget}%
+\begin{itemdecl}
+void arm(int level);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\tcode{level} is \removed{positive.}\added{greater than zero.}
+
+\pnum
+\effects
+Arms the gadget at \tcode{level}.
+
+\begin{addedblock}
+\pnum
+Arming an armed gadget replaces its level.
+\end{addedblock}
+\end{itemdescr}
+
+\begin{addedblock}
+\rSec3[gadget.query]{Queries}
+
+\indexlibrarymember{armed}{gadget}%
+\begin{itemdecl}
+bool armed() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true} if the gadget has been armed.
+\end{itemdescr}
+\end{addedblock}

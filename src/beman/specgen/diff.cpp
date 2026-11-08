@@ -351,16 +351,19 @@ struct BuiltCode {
         else
             code.changes.push_back(ir::ChangeRun{at, at + text.size(), change});
     }
+    // A whole line marked: the mark starts after the indentation, so a
+    // backend's escape wraps the line's text and not the spaces before it.
     void append_line(const Line& line, ir::Change change) {
-        const std::size_t at = code.text.size();
+        const std::size_t at     = code.text.size();
+        const std::size_t indent = std::min(line.text.size(), line.text.find_first_not_of(" \t"));
         code.text += line.text;
         code.spans.append_range(line.spans | std::views::transform([at](ir::Span s) {
                                     s.begin += at;
                                     s.end += at;
                                     return s;
                                 }));
-        if (change != ir::Change::Same && !line.text.empty())
-            code.changes.push_back(ir::ChangeRun{at, at + line.text.size(), change});
+        if (change != ir::Change::Same && indent < line.text.size())
+            code.changes.push_back(ir::ChangeRun{at + indent, at + line.text.size(), change});
     }
     void newline() { code.text += '\n'; }
 };
@@ -605,8 +608,12 @@ template <class Block>
 std::vector<Block> diff_blocks(const std::vector<Block>& a, const std::vector<Block>& b, const Options& options) {
     if (a == b)
         return b;
+    // A lone block replaced by a lone block of its kind is that block edited,
+    // however thorough the edit: the alternative strands an element's label
+    // on a struck paragraph and leaves the new one unlabelled.
+    const bool              lone_pair = a.size() == 1 && b.size() == 1 && a.front().index() == b.front().index();
     const std::vector<Edit> script =
-        edit_script(a, b, [&](const Block& x, const Block& y) { return pairable(x, y, options); });
+        edit_script(a, b, [&](const Block& x, const Block& y) { return lone_pair || pairable(x, y, options); });
     return script | std::views::transform([&](const Edit& e) {
                if (e.op == Op::Keep)
                    return std::visit(overloaded{BlockDiffer<Block>{b[e.b], options}}, a[e.a]);

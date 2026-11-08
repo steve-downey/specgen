@@ -336,7 +336,7 @@ TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {
     REQUIRE(code.changes.size() == 2);
     CHECK(code.text.substr(code.changes[0].begin, code.changes[0].end - code.changes[0].begin) == "noexcept");
     CHECK(code.changes[0].change == Change::Added);
-    CHECK(code.text.substr(code.changes[1].begin, code.changes[1].end - code.changes[1].begin) == "  void arm();");
+    CHECK(code.text.substr(code.changes[1].begin, code.changes[1].end - code.changes[1].begin) == "void arm();");
     CHECK(code.changes[1].change == Change::Added);
     // No run crosses a line end.
     for (const ChangeRun& run : code.changes)

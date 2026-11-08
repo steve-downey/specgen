@@ -77,6 +77,18 @@ endif()
 # `file(GENERATE ...)`/`configure_file()` before registering the case that
 # names it.
 #
+# BASELINE (generate mode) and BASELINE_IR (render mode): the wording diff's
+# baseline (docs/plans/wording-diff.md), a corpus header the INPUT header is
+# diffed against, or an IR JSON the INPUT IR is. The compared output is then
+# the *marked* document or its rendering. DIFF_CONTEXT passes `--diff-context`.
+# A BASELINE case registers the `.roundtrip`, `.validate` and `.singlepass`
+# siblings -- the last with the baseline on its one-pass side -- but not the
+# `.quiet` or `.eastconst` ones, which the pair's own plain cases carry.
+#
+# SELFDIFF_IR (any mode): also register `golden.<case>.selfdiff`, the identity
+# law at the command line: that IR diffed against itself under `all` renders
+# the plain render's bytes.
+#
 # SOURCE (multi-valued; generate and diagnose modes): source files passed as
 # `--source` after the header, whose documented member definitions supply the
 # header's wording (issue #149). The `.eastconst` sibling is skipped for such a
@@ -134,6 +146,10 @@ function(specgen_add_golden case)
         EXTRA_ARGS
         COMPILE_COMMANDS_DIR
         EXPECTED_DIR
+        BASELINE
+        BASELINE_IR
+        DIFF_CONTEXT
+        SELFDIFF_IR
     )
     # ROOT is multi-valued because --root pairs with the inputs: a paper case
     # names one root per input, in order. ALSO_INPUT carries the further
@@ -230,6 +246,15 @@ function(specgen_add_golden case)
     if(DEFINED ARG_EXPECT_EXIT)
         list(APPEND case_args "-DEXPECT_EXIT=${ARG_EXPECT_EXIT}")
     endif()
+    if(ARG_BASELINE)
+        list(APPEND case_args "-DBASELINE=${ARG_BASELINE}")
+    endif()
+    if(ARG_BASELINE_IR)
+        list(APPEND case_args "-DBASELINE_IR=${ARG_BASELINE_IR}")
+    endif()
+    if(ARG_DIFF_CONTEXT)
+        list(APPEND case_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
+    endif()
     if(ARG_EXTRA_ARGS)
         list(APPEND case_args "-DEXTRA_ARGS=${ARG_EXTRA_ARGS}")
     endif()
@@ -289,6 +314,12 @@ function(specgen_add_golden case)
         if(ARG_SOURCE)
             list(APPEND single_pass_args "-DSOURCES=${_sources_joined}")
         endif()
+        if(ARG_BASELINE)
+            list(APPEND single_pass_args "-DBASELINE=${ARG_BASELINE}")
+        endif()
+        if(ARG_DIFF_CONTEXT)
+            list(APPEND single_pass_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
+        endif()
         if(ARG_COMPILE_COMMANDS_DIR)
             list(
                 APPEND single_pass_args
@@ -322,7 +353,7 @@ function(specgen_add_golden case)
         # reported on stderr, so silence is the wrong demand. Those cases pair
         # with an EXTRA_ARGS twin reaching the same parse, and the twin carries
         # the gate.
-        if(NOT ARG_COMPILE_COMMANDS_DIR)
+        if(NOT ARG_COMPILE_COMMANDS_DIR AND NOT ARG_BASELINE)
             set(quiet_args
                 "-DSPECGEN=$<TARGET_FILE:specgen>"
                 "-DINPUT=${ARG_INPUT}"
@@ -357,6 +388,7 @@ function(specgen_add_golden case)
             SPECGEN_CLANG_FORMAT
             AND NOT ARG_COMPILE_COMMANDS_DIR
             AND NOT ARG_SOURCE
+            AND NOT ARG_BASELINE
         )
             set(flip_args
                 "-DCLANG_FORMAT=${SPECGEN_CLANG_FORMAT}"
@@ -375,6 +407,17 @@ function(specgen_add_golden case)
                     "${CMAKE_CURRENT_SOURCE_DIR}/run-qualifier-flip.cmake"
             )
         endif()
+    endif()
+
+    if(ARG_SELFDIFF_IR)
+        add_test(
+            NAME ${test_name}.selfdiff
+            COMMAND
+                ${CMAKE_COMMAND} "-DSPECGEN=$<TARGET_FILE:specgen>"
+                "-DIR=${ARG_SELFDIFF_IR}"
+                "-DACTUAL=${CMAKE_CURRENT_BINARY_DIR}/${stem}.selfdiff" -P
+                "${CMAKE_CURRENT_SOURCE_DIR}/run-selfdiff.cmake"
+        )
     endif()
 
     list(
@@ -464,6 +507,68 @@ specgen_add_golden(
     paper_mode_latex
     PAPER
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paper_mode/input.json"
+)
+
+# The wording diff proper (docs/plans/wording-diff.md), over the corpus pair
+# tests/corpus/diff/gadget.before.hpp and gadget.after.hpp. The two headers
+# are ordinary generate goldens first, with every sibling a corpus header
+# gets. `diff_gadget` is the after header diffed against the before one: its
+# expected.json is the *marked* document, its `.singlepass` sibling demands
+# that `generate --baseline-header` render what `render --from-ir` of that
+# marked IR does, and its `.selfdiff` sibling pins the identity law on the
+# after header's own IR. `diff_gadget_items` is the same diff under the
+# `items` context, where `level()` -- the one member that did not change --
+# collapses to the ellipsis. The `_wording` cases render the marked IR through
+# each backend, and `diff_gadget_render` reaches the same mpark bytes by the
+# other route, `render --baseline-ir` over the two plain IRs.
+specgen_add_golden(
+    diff_gadget_before
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.before.hpp"
+)
+specgen_add_golden(
+    diff_gadget_after
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.after.hpp"
+)
+specgen_add_golden(
+    diff_gadget
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.after.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.before.hpp"
+    SELFDIFF_IR "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_after/expected.json"
+)
+specgen_add_golden(
+    diff_gadget_items
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.after.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.before.hpp"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_gadget_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget/expected.json"
+)
+specgen_add_golden(
+    diff_gadget_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget/expected.json"
+)
+specgen_add_golden(
+    diff_gadget_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget/expected.json"
+)
+specgen_add_golden(
+    diff_gadget_items_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_items/expected.json"
+)
+specgen_add_golden(
+    diff_gadget_render
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_after/expected.json"
+    BASELINE_IR "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_before/expected.json"
 )
 
 # The wording diff's marks (docs/plans/wording-diff.md), rendered by all three

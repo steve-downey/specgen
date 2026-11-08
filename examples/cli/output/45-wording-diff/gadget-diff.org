@@ -1,0 +1,111 @@
+#+begin_codeblock
+namespace std {
+  class gadget {
+  public:
+    // \ref{gadget.observe}, observers
+    bool ready() const @\added{noexcept}@;
+    int level() const;
+
+    // \ref{gadget.mod}, modifiers
+    void @\removed{reset}@@\added{clear}@();
+    void arm(int level);
+
+    @\added{// \ref{gadget.query}, queries}@
+    @\added{bool armed() const;}@
+  };
+}
+#+end_codeblock
+
+** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+bool ready() const @\added{noexcept}@;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~ if the gadget is [[delete:][ready.]][[insert:][armed.]]
+#+end_pnum
+
+#+begin_addedblock
+#+begin_pnum x
+/Complexity/: Constant.
+#+end_pnum
+#+end_addedblock
+
+#+begin_itemdecl
+int level() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: The current level.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A gadget starts at level zero.
+#+end_pnum
+
+** Modifiers [gadget.mod]
+:PROPERTIES:
+:CUSTOM_ID: gadget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_removedblock
+#+begin_itemdecl
+void reset();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Resets the gadget to level zero.
+#+end_pnum
+#+end_removedblock
+
+#+begin_addedblock
+#+begin_itemdecl
+void clear();
+#+end_itemdecl
+
+#+begin_pnum x+1
+/Effects/: Clears the gadget, returning it to level zero.
+#+end_pnum
+#+end_addedblock
+
+#+begin_itemdecl
+void arm(int level);
+#+end_itemdecl
+
+#+begin_pnum
+/Preconditions/: ~level~ is [[delete:][positive.]][[insert:][greater than zero.]]
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Arms the gadget at ~level~.
+#+end_pnum
+
+#+begin_addedblock
+#+begin_pnum x+2
+Arming an armed gadget replaces its level.
+#+end_pnum
+#+end_addedblock
+
+** Queries [gadget.query]
+:PROPERTIES:
+:CUSTOM_ID: gadget.query
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
+
+#+begin_itemdecl
+bool armed() const;
+#+end_itemdecl
+
+#+begin_pnum x+3
+/Returns/: ~true~ if the gadget has been armed.
+#+end_pnum

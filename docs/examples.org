@@ -50,6 +50,7 @@ That route is a debugging aid rather than an authoring workflow, but it lets an 
 | =--backend latex=, =mpark=, =org= | The three backends |
 | =--validate= | Validation |
 | =--paper= | Paper mode |
+| =--baseline-header=, =--baseline-ir=, =--diff-context= | The wording diff |
 | =--split=, =--root= | Fragment output |
 | =generate <header>...= (a paper) | A paper of several headers |
 | =-o= with =--split= | A paper of several headers |
@@ -131,6 +132,30 @@ for complete clause subtrees.
 The same input in org:
 
 #+transclude: [[file:../examples/cli/output/40-paper-mode/paper-mode.org]] :src org
+
+* The Wording Diff
+:PROPERTIES:
+:CUSTOM_ID: the-wording-diff
+:END:
+
+A baseline turns the render into a diff: the wording comes out marked with what
+the revision added and removed, in each backend's own editing form. The corpus
+pair is one header a revision apart; =--baseline-header= parses the old one,
+=--baseline-ir= would read a saved IR instead. Only the sections that changed
+are kept by default; =--diff-context items= also elides the members inside them
+that did not.
+
+#+transclude: [[file:../examples/cli/45-wording-diff.sh]] :src sh
+
+#+transclude: [[file:../examples/cli/output/45-wording-diff/gadget-diff.md]] :src markdown
+
+The same diff in org:
+
+#+transclude: [[file:../examples/cli/output/45-wording-diff/gadget-diff.org]] :src org
+
+And under the =items= context, where =level()= collapses to the ellipsis:
+
+#+transclude: [[file:../examples/cli/output/45-wording-diff/gadget-diff-items.md]] :src markdown
 
 * Fragment Output
 :PROPERTIES:

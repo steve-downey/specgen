@@ -87,6 +87,8 @@ stops at the IR and serializes it; `render --from-ir - --backend {latex,mpark,or
 serialized document back up. `--backend`, `--validate` (§9), `--paper` and
 `--split <dir> [--root <name>]` (§8) mean the same thing on both rendering commands, which
 share one back half, so single-pass wording equals two-pass wording byte for byte;
+`--baseline-ir` (and, on `generate`, `--baseline-header`) with `--diff-context` turn either
+render into the wording diff of §7, one baseline per document in order;
 `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
 `specgen --version` reports both the project version and the exact Git commit
@@ -931,8 +933,9 @@ have no independent item description.
   [plans/wording-diff.md](plans/wording-diff.md)): the wording diff's
   record of what a revision added or removed, carried in the IR because a `::: add` div or
   the draft's `\added` is an editing instruction, semantic to the paper, not typography.
-  `Change` (`Same`, `Added`, `Removed`) sits on every node kind and on a
-  `DescriptionElement`; a mark on a node covers everything beneath it and marks never nest.
+  `Change` (`Same`, `Added`, `Removed`, and `Elided`, below) sits on every node kind, on a
+  `DescriptionElement`, and on every block of a description body (`block_change` reads it off
+  either body variant); a mark on a node covers everything beneath it and marks never nest.
   Prose carries a `ChangedInline`, a marked run of `PlainInline`s (the four unmarked inline
   kinds, a separate non-recursive variant), so a `\tcode` is marked whole or not at all. Code
   carries a `ChangeRun` table beside the span table rather than two more `SpanKind`s, because a
@@ -941,7 +944,26 @@ have no independent item description.
   `changes` when empty), so a document emitted before the marks existed, and every unmarked
   document after, reads and re-emits byte for byte. `change_of`, `with_change` and
   `all_marked` reach the mark on a node of any kind; paper mode is `all_marked(..., Added)`,
-  the diff of an empty baseline, until the differ itself lands.
+  the diff of an empty baseline. `Elided` is the `items` context's fourth answer: unchanged
+  and not shown, on one `FreeParagraph` standing in for a run of unchanged children, which
+  every backend renders as its unnumbered ellipsis line.
+- **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
+  `diff::compare(baseline, current, options)` is the current document marked with what the
+  revision added and removed. Structural where the IR has structure: among siblings a
+  `Section` matches by stable name, a `Synopsis` by class, a `SpecItem` by its entities and
+  signatures and then by entities alone (an overload set whose signature changed is one item
+  with a code run); elements pair by kind in order; body blocks pair by kind and, for
+  paragraphs and tables, by word similarity or stable name, a lone block always pairing with a
+  lone block of its kind. A sequence diff (`diff/sequence.hpp`, Myers' shortest script with
+  git's island cleanup) runs only where the content is a sequence: paragraphs word by word
+  with code inlines and references atomic, code line by line and then token by token with
+  spans atomic, a run never crossing a line end. Whatever the baseline had and the current
+  lacks is carried over marked `Removed`, so the marked document holds both revisions' text;
+  kept tokens take the current revision's spacing. Three laws hold and are tested: a document
+  against itself under `all` is itself, an empty baseline marks every top-level node `Added`
+  and nothing beneath (which is paper mode), and stripping either side of the marks gives back
+  that revision. `Context` is `changed` (drop unchanged top-level nodes; the default), `all`,
+  or `items` (also elide unchanged children of a changed section).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
 labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
@@ -1234,7 +1256,16 @@ input, so older readers cannot silently discard coverage claims.
     registers `golden.<case>.<backend>` comparing `expected.md` / `expected.org`, so one
     input renders to one expected file per backend. `diff_marks` renders one hand-marked IR
     (§7) through all three, and `paper_mode`, `paper_mode_org` and `paper_mode_latex` pin that
-    `--paper` is the empty-baseline diff byte for byte.
+    `--paper` is the empty-baseline diff byte for byte. A `BASELINE_IR` argument makes the
+    render a diff (`--baseline-ir`), with `DIFF_CONTEXT` its level.
+  - `MODE=generate` with a `BASELINE` header is the wording diff by the one-pass route: the
+    `expected.json` is the *marked* document, the `.singlepass` sibling passes the baseline on
+    its one-pass side and renders the marked IR plain on its two-pass side, and a `SELFDIFF_IR`
+    argument registers `.selfdiff`, the identity law at the command line. The corpus pair
+    `tests/corpus/diff/gadget.before.hpp` / `gadget.after.hpp` carries all of it: each header
+    an ordinary golden, `diff_gadget` their diff, `diff_gadget_items` the same under `items`,
+    the `_wording` cases its rendering in every backend, and `diff_gadget_render` the same
+    mpark bytes by the `render --baseline-ir` route.
   - `MODE=validate` — stderr compared, exit 1 required unless `EXPECT_EXIT` says otherwise.
   - `MODE=generate` — run the front end over a corpus header; each case also registers a
     `.roundtrip` sibling (emit → parse → emit), a `.validate` sibling running
@@ -1360,6 +1391,9 @@ The build assembles the tool from these components, each following the shared CM
   Myers' shortest edit script over any two random-access ranges (`edit_script`) and git's
   island-joining cleanup (`join_islands`), for the wording diff
   ([plans/wording-diff.md](plans/wording-diff.md)).
+- **Wording diff** — `include/beman/specgen/diff.hpp`, `src/beman/specgen/diff.cpp`, Tier A.
+  §7's `diff::compare`: the prose and code tokenizers, the structural matcher over nodes,
+  elements and blocks, the three `Context` levels, and `has_marks`.
 - **Fragment split** — `include/beman/specgen/fragments.hpp`,
   `src/beman/specgen/fragments.cpp`. `fragments::split` per §8; backend-agnostic, with
   `usable_as_file_name` as the path boundary.
@@ -1450,9 +1484,12 @@ The build assembles the tool from these components, each following the shared CM
   that is where LLVM is reachable.
 - **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
   single-pass render), `render` (`--from-ir`), the wording options both share
-  (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`)
-  in `emit_wording` for one document and `emit_paper` for several (§2.1), and
-  `dump-decls`.
+  (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`,
+  and the wording diff's `--baseline-ir`, `--baseline-header` on `generate` alone, and
+  `--diff-context`) in `emit_wording` for one document and `emit_paper` for several (§2.1),
+  and `dump-decls`. A baseline pairs with the documents in order, is diffed after validation
+  and before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir`
+  makes the emitted IR the marked document.
 - **Dependency fragment** — `depfile.hpp`/`.cpp`. Make escaping, the one-rule target list
   and the `-MP` block. Tier A and clang-free: *which* files a parse read is the front end's
   answer (`frontend::DocumentBuild::sources`) and which were written is the driver's, but
