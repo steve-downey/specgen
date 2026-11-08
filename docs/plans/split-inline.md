@@ -1,20 +1,21 @@
-# Plan: `outline`, moving in-class definitions out of line
+# Plan: `split_inline`, moving in-class definitions out of line
 
-**Status:** PROPOSED, 2026-11-08. No issue yet; this document is the proposal. A spike against the distribution's
-Clang 18 (not the pinned 23) checked every source-location claim below, and the numbers and the excerpt are from
-that run. The questions at the end are the taste calls the user owns; each records the recommendation it is asked
-with.
+**Status:** PROPOSED, 2026-11-08. No issue yet; this document is the proposal. Two questions were settled with the
+user the same day and are recorded in place: the tool is `split_inline`, a separate executable rather than a
+`specgen` subcommand, so that specgen's own comment handling and the converter's never run in one process. A spike
+against the distribution's Clang 18 (not the pinned 23) checked every source-location claim below, and the numbers
+and the excerpt are from that run. The remaining questions at the end are the taste calls the user owns; each
+records the recommendation it is asked with.
 
 specgen's input contract (design §1) is a declaration-only class body with the definitions following it, out of
 line. A header written the ordinary way defines its members where it declares them. Restructuring one by hand is
 mechanical and has two classic failure modes: the definitions go into a *reopened* namespace, and a free function
 defined there under a misspelled namespace or a slightly different signature silently becomes a new function; and
-a hidden friend gets moved out with the rest, which changes what lookup finds. This plan proposes `specgen
-outline`, a Clang-based rewriter that does the move: the class body becomes the synopsis, each definition follows
-the class *inside the same namespace block*, and hidden friends stay where they are. In specgen mode it also turns
-each `// \ref{stable}, title` group into the `// \rSec3[stable]{Title}` header the definition region needs, and
-moves `//!` docblocks to the definitions, where §3.3 wants them. The output compiles under the header's own flags
-and is a fixed point of the tool.
+a hidden friend gets moved out with the rest, which changes what lookup finds. This plan proposes `split_inline`, a
+Clang-based rewriter that does the move: the class body becomes the synopsis, each definition follows the class
+*inside the same namespace block*, and hidden friends stay where they are. Comments stay with their declarations
+unless asked to travel; the tool knows nothing of specgen's markup. The output compiles under the header's own
+flags and is a fixed point of the tool.
 
 ## Why
 
@@ -82,24 +83,27 @@ class's members interleave with the enclosing class's in source order. Nothing i
 defined in the class, a static data member, an alias, a nested class definition, and a `static_assert` are not
 members the tool moves, and are untouched.
 
-### Specgen mode
+### Comments
 
-- Each `// \ref{stable}, title` group comment in the class body names the section its members' definitions belong
-  to. When the header already has a `// \rSec3[stable]{...}` section for it, the moved definitions are appended to
-  that section in class-body order, after any definitions already there. When it does not, the tool writes
-  `// \rSec3[stable]{Title}` after the class, derived from the `\ref` comment with the title's first letter
-  capitalized, and the definitions under it. The depth defaults to 3 and is an option.
-- A `//!`/`/*!` docblock on a moved member moves with the definition, which is where §3.3 attaches markup. A
-  docblock holding only markers that act on the declaration (`\omit`, `\merge`, `\elsewhere`, `\expos`,
-  `\seebelow`, `\freestanding`) stays; either placement is legal for those, and leaving them avoids a diff that
-  means nothing.
-- Clang coalesces adjacent `//` lines whatever their third character is, so a `// \ref` header and the `//!`
-  docblock beneath it arrive as *one* `RawComment` whose text starts with `// \ref`. The tool splits at the first
-  `//!` line, the same shape as §3.2's split around `\rSec` lines (`frontend/document_files.cpp`). Without the
-  split the spike moved nothing and wrote the docblock into the `\rSec3` title.
+Every comment stays where it is. The tool is a C++ restructuring and has no opinion about what a comment means;
+specgen's three-way classification (§1) is specgen's, and the one thing this tool must not do is guess at it.
 
-Without specgen mode the tool is a plain C++ restructuring: no section headers, every comment stays with its
-declaration.
+`--move-comments` carries the comment block directly above a moved definition along with it, whatever its flavour,
+and the class keeps a bare declaration. That is what a header already carrying `//!` docblocks on its in-class
+definitions needs, since §3.3 attaches markup to the out-of-line definition, and it is what a Doxygen-documented
+header does *not* want, since Doxygen documents the declaration. One flag, the author's call per run.
+
+One fact the spike found bears on either setting. Clang coalesces adjacent `//` lines whatever their third
+character is, so a `// \ref{...}` group comment and a `//!` docblock beneath it arrive as *one* `RawComment`
+whose text starts with `// \ref`. The block that moves is the run of lines from the first `//!` or `/*!` line to
+the end of the comment, or the whole comment when no such line is in it; the lines above that stay. The split is
+the same shape as §3.2's split around `\rSec` lines (`frontend/document_files.cpp`). Without it the spike moved
+nothing and wrote the docblock into the definition's group header.
+
+The `\ref`-to-`\rSec3` header rewrite, which turns each class-body `// \ref{stable}, title` into the
+`// \rSec3[stable]{Title}` the definition region needs, is **not** this tool's. The definitions come out in
+class-body order, so the groups are contiguous and a hand or a specgen-side step can put the headers in; whether
+specgen should grow that step is the first open question below.
 
 ### Refusals
 
@@ -124,22 +128,27 @@ Three oracles, all cheap given what the tree has:
 1. **It compiles.** The tool re-parses its own output under the same compile arguments and refuses to write if the
    second parse reports errors the first did not.
 2. **The wording does not change.** For a header in specgen form with in-class definitions (the shape
-   `spec_inclass.hpp`, `spec_inclass_bodies.hpp`, and `spec_inclass_template.hpp` pin), `specgen generate` on the
-   converted header renders byte for byte what it renders on the original. Itemdecl text comes from the in-class
+   `spec_inclass.hpp`, `spec_inclass_bodies.hpp`, and `spec_inclass_template.hpp` pin), converted with
+   `--move-comments`, `specgen generate` on the converted header renders byte for byte what it renders on the
+   original. Itemdecl text comes from the in-class
    declaration either way (§3.3), in-class items are already placed by class-body order relative to out-of-line
    siblings, and the bodies are the same tokens. For a header with no markup the synopsis `CodeText` is the
    invariant.
 3. **It is a fixed point.** Running the tool on its output changes nothing.
 
-The first is the tool's own guard; the second and third are ctest cases over the corpus.
+The first is the tool's own guard; the second and third are ctest cases over specgen's corpus.
 
 ### Where it lives
 
-A subcommand of the driver, `specgen outline <header> [-o <file> | --in-place] [--specgen] [-- <clang args>]`,
-sharing `frontend/compile_args` (the compilation-database precedence of the user guide), `parse_header`, the LLVM
-pin, `spliced_tail_begin`, the interleave's comment splitting, and the golden harness and examples pipeline. A
-separate binary would carry a second copy of the Clang build glue and the resource-directory rule for nothing. The
-alternatives are the first open question.
+A separate executable, `split_inline <header> [-o <file> | --in-place] [--move-comments] [-- <clang args>]`
+(decided, 2026-11-08). The reason is the comments: specgen reads `//!` as markup, drops `///`, and keeps `//`, and a
+converter running inside the same process would have to either share that classification or contradict it, and
+either is confusing to the author reading a diagnostic. A tool of its own has one job and no opinion. What it
+shares with specgen is the Clang front end's plumbing, not its model: the compile-argument precedence of
+`frontend/compile_args` (the `--` tail, an explicit database, the walk up from the header), the parse, the LLVM pin,
+and `spliced_tail_begin`. Whether it is built from this tree under `tools/split_inline/`, linking
+`beman::specgen.frontend` for those, or from a repository of its own that ports the two helpers and carries its own
+pin, is the second open question.
 
 ## The spike
 
@@ -225,51 +234,56 @@ template <class T, class Alloc>
 auto optional<T, Alloc>::begin() -> iterator { return iterator{&value_}; }
 ```
 
-The spike's output keeps the body's original indentation and spacing; formatting is the sixth question below.
+The spike's output keeps the body's original indentation and spacing; formatting is an open question below.
 
 ## Stages
 
-Each stage lands green on its own: full ctest, `make lint`, goldens and captures regenerated in the same commit, and
-the version bumped (a minor bump when the command first ships).
+Each stage lands green on its own: full ctest, `make lint`, goldens regenerated in the same commit, and, in this
+tree, the version bumped (a minor bump when the executable first ships).
 
-1. **The component.** `frontend/outline.hpp`/`.cpp` per [component-recipe](../decisions/component-recipe.md): given
-   a parsed header, the list of moved members, the refusals, and the edits as `{offset range, replacement}` pairs
-   over the main file, with the out-of-line text for each member. Pure over the AST; Catch2 tests parse snippets
-   the way the other front-end component tests do. The splice reuses `spliced_tail_begin`; the docblock split
-   follows the marker-line split in `frontend/document_files.cpp`.
-2. **The command.** `outline` in the driver with the options above, `-o -` as the default, refusals on standard
-   error, the re-parse guard, and the exit codes. Usage text and `docs/user-guide.md` gain a section, *Converting an
-   existing header*, placed before *Start with one header*'s successor sections since it is the step that produces
-   that shape.
-3. **Goldens.** `MODE outline` in `specgen_add_golden`: `tests/golden/outline_<case>/input.hpp` and
-   `expected.hpp`, with a `.compiles` sibling that parses `expected.hpp` through the pinned Clang, a `.fixed_point`
-   sibling, and, for the specgen-form cases, a `.same_wording` sibling comparing `generate` over the two. Corpus
-   headers for the cases the spike covered plus each refusal.
-4. **Examples and architecture.** `examples/cli/85-outline.sh` capturing the widget-shaped conversion for
-   `docs/examples.org`; a §11 inventory entry for the component; and one decision record,
-   `outline-in-place-namespace`: definitions stay in the class's own namespace block, hidden friends stay in the
-   class.
+1. **The rewriter.** One component, `split_inline/rewrite.hpp`/`.cpp` (per
+   [component-recipe](../decisions/component-recipe.md) if it lives here): given a parsed header, the list of moved
+   members, the refusals, and the edits as `{offset range, replacement}` pairs over the main file, with the
+   out-of-line text for each member. Pure over the AST; Catch2 tests parse snippets the way specgen's front-end
+   component tests do. The splice is `spliced_tail_begin`; the comment split follows the marker-line split in
+   `frontend/document_files.cpp`.
+2. **The executable.** `split_inline` with the options above, `-o -` as the default, refusals on standard error,
+   the re-parse guard, and the exit codes. Its compile arguments resolve exactly as `specgen generate`'s do, so a
+   header that specgen can parse, `split_inline` can parse with the same command tail.
+3. **Goldens.** `tests/golden/split_inline/<case>/input.hpp` and `expected.hpp`, compared with
+   `cmake -E compare_files` as the others are, with a `.compiles` sibling that parses `expected.hpp` through the
+   pinned Clang, a `.fixed_point` sibling, and, for the specgen-form cases converted with `--move-comments`, a
+   `.same_wording` sibling comparing `specgen generate` over the two. Inputs for the cases the spike covered plus
+   each refusal.
+4. **Documentation.** `docs/user-guide.md` gains a short *Converting an existing header* section pointing at the
+   tool, placed before the authoring loop since it is the step that produces the shape *Start with one header*
+   shows; and one decision record, `split-inline-in-place-namespace`: definitions stay in the class's own
+   namespace block, hidden friends stay in the class, and the converter is not part of specgen.
 
 ## Open questions
 
-### placement
+### section-headers
 
-Where the tool lives. **Recommendation: a `specgen outline` subcommand**, for the sharing listed under *Where it
-lives*. Alternatives: a second binary `specgen-outline` under `tools/` in this tree, which shares the build but not
-the driver's option handling; or a separate repository, which shares nothing and has to carry its own LLVM pin.
-The second is defensible if the driver's usage text is judged too long already; the third only if the tool is
-meant to outgrow specgen.
+Whether anything writes the `// \rSec3[stable]{Title}` headers from the class body's `// \ref{stable}, title`
+groups, now that `split_inline` does not. **Recommendation: nothing, for now.** The author writes the titles
+anyway, the definitions come out grouped, and a specgen `--scaffold-sections` step is a separate small proposal if
+hand-writing them proves to be the slow part of the acid test.
 
-### name
+### tree
 
-`outline`, read as *make out of line*; the draft's own sense of the word, a synopsis, is what the class body becomes.
-Alternatives: `hoist`, `out-of-line`, `delineate`. **Recommendation: `outline`.**
+Whether `split_inline` builds from this tree, under `tools/split_inline/` linking `beman::specgen.frontend`, or
+from a repository of its own. **Recommendation: this tree.** It gets the LLVM pin, the compile-argument
+precedence, `spliced_tail_begin`, the corpus, the golden harness, and the release binary's build for free, and the
+`.same_wording` oracle needs both executables in one ctest anyway. Its own repository is the right answer if the
+tool is meant to serve projects that never see specgen; then the two shared helpers are ported, provenance noted,
+and the pin is restated.
 
-### specgen-mode-default
+### placement, name
 
-Whether the `\ref` to `\rSec3` rewrite and the docblock move are on by default. **Recommendation: on**, with
-`--plain` to turn them off. The tool exists to produce specgen's input, and a header with no `\ref` groups and no
-`//!` docblocks gets the plain conversion under either default anyway.
+Settled 2026-11-08: a separate executable, not a `specgen` subcommand, named `split_inline`. The subcommand was
+recommended for the sharing listed under *Where it lives*; the user's ruling is that running the converter inside
+specgen's process would at best be confusing about which tool's comment handling applied, and the sharing is had
+by linking the front-end library instead.
 
 ### nested-return-type
 
