@@ -12,6 +12,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
                     conjuncts.hpp
                     depfile.hpp
                     diagnostic.hpp
+                    diff.hpp
                     docblock.hpp
                     document_build.hpp
                     foundation/enumeration.hpp
@@ -40,6 +41,7 @@ else()
                     conjuncts.hpp
                     depfile.hpp
                     diagnostic.hpp
+                    diff.hpp
                     docblock.hpp
                     document_build.hpp
                     foundation/enumeration.hpp

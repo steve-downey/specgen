@@ -16,6 +16,7 @@ target_sources(
         lower.cpp
         conjuncts.cpp
         depfile.cpp
+        diff.cpp
         document_build.cpp
         fragments.cpp
         span_sentinels.cpp

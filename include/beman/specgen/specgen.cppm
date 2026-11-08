@@ -18,6 +18,7 @@ export {
 #include <beman/specgen/conjuncts.hpp>
 #include <beman/specgen/depfile.hpp>
 #include <beman/specgen/diagnostic.hpp>
+#include <beman/specgen/diff.hpp>
 #include <beman/specgen/diff/sequence.hpp>
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>

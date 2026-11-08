@@ -31,6 +31,7 @@ foreach(
     conjuncts
     depfile
     diagnostic
+    diff
     document_build
     fragments
     span_sentinels
