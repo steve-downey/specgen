@@ -14,8 +14,10 @@ defined there under a misspelled namespace or a slightly different signature sil
 a hidden friend gets moved out with the rest, which changes what lookup finds. This plan proposes `split_inline`, a
 Clang-based rewriter that does the move: the class body becomes the synopsis, each definition follows the class
 *inside the same namespace block*, and hidden friends stay where they are. Comments stay with their declarations
-unless asked to travel; the tool knows nothing of specgen's markup. The output compiles under the header's own
-flags and is a fixed point of the tool.
+unless asked to travel: `--move-comments` carries existing `//!` markup to the definitions and places each under
+the `\rSec` section its `\ref` group already names, so a header with specgen work in it keeps that work and
+renders the same wording afterwards. The output compiles under the header's own flags and is a fixed point of the
+tool.
 
 ## Why
 
@@ -83,27 +85,65 @@ class's members interleave with the enclosing class's in source order. Nothing i
 defined in the class, a static data member, an alias, a nested class definition, and a `static_assert` are not
 members the tool moves, and are untouched.
 
-### Comments
+### Comments, and `--move-comments`
 
-Every comment stays where it is. The tool is a C++ restructuring and has no opinion about what a comment means;
-specgen's three-way classification (§1) is specgen's, and the one thing this tool must not do is guess at it.
+Without the flag every comment stays where it is. The tool is a C++ restructuring and has no opinion about what a
+comment means; specgen's three-way classification (§1) is specgen's. That is the form to run on a header *before*
+specgen markup is written into it, which is the expected case: convert first, then document the definitions.
 
-`--move-comments` carries the comment block directly above a moved definition along with it, whatever its flavour,
-and the class keeps a bare declaration. That is what a header already carrying `//!` docblocks on its in-class
-definitions needs, since §3.3 attaches markup to the out-of-line definition, and it is what a Doxygen-documented
-header does *not* want, since Doxygen documents the declaration. One flag, the author's call per run.
+`--move-comments` is the form for a header that already carries specgen work, in-class docblocks and `\ref` groups
+and perhaps a definition region with `\rSec` sections, and its contract is that nothing of that work is lost and
+nothing has to be redone: `specgen generate` on the converted header renders what it rendered on the original
+(oracle 2 below). Four rules do it.
 
-One fact the spike found bears on either setting. Clang coalesces adjacent `//` lines whatever their third
-character is, so a `// \ref{...}` group comment and a `//!` docblock beneath it arrive as *one* `RawComment`
-whose text starts with `// \ref`. The block that moves is the run of lines from the first `//!` or `/*!` line to
-the end of the comment, or the whole comment when no such line is in it; the lines above that stay. The split is
-the same shape as §3.2's split around `\rSec` lines (`frontend/document_files.cpp`). Without it the spike moved
-nothing and wrote the docblock into the definition's group header.
+**Which comment is a declaration's.** Clang's own attachment (`getRawCommentForDeclNoCache`, looked up through the
+described template as §3.1 notes), which is also the attachment specgen reads. The spike checked its reach: it
+attaches across a blank line, it attaches across an access specifier (`public:` has none of the `;{}#@` characters
+Clang stops at), and a preprocessor directive between the two breaks it. The tool keeps the blank-line reach, since
+specgen would have read that docblock as the member's and moving it is preserving it, and narrows the rest: if
+anything but whitespace lies between the comment's end and the declaration's first token, the comment is not the
+declaration's and stays. A docblock written above `public:` therefore stays on the declaration, where specgen
+reports it, rather than moving to a definition it was never meant for.
 
-The `\ref`-to-`\rSec3` header rewrite, which turns each class-body `// \ref{stable}, title` into the
-`// \rSec3[stable]{Title}` the definition region needs, is **not** this tool's. The definitions come out in
-class-body order, so the groups are contiguous and a hand or a specgen-side step can put the headers in; whether
-specgen should grow that step is the first open question below.
+**Which lines move.** The attached comment is one `RawComment`, and Clang coalesces adjacent `//` lines whatever
+their third character is, so the block is split by line:
+
+| Lines | Disposition |
+| --- | --- |
+| `//!` and `/*! ... */`, from the first such line to the end of the block | move with the definition |
+| a block of bare declaration markers only | stays; §3.3 allows those on the declaration |
+| `///` and `/** ... */` above the first markup line | stay; Doxygen documents the declaration |
+| a plain `//` line above the first markup line, the `// \ref{...}` group header among them | stays |
+| a plain `//` line below the first markup line | moves; it is inside the chunk specgen reads either way |
+| a trailing comment, code before it on its own line | stays, and never opens a moved run |
+
+The declaration markers are the six §3.3 lists: `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, and
+`\freestanding`. A block of only those stays because the author put it there and specgen reads it there; Doxygen
+stays because a synopsis drops it anyway (§1).
+
+The last row is a trap the spike fell into: `void h() {} //! three.` followed on the next line by `/*! four */`
+over `i()` coalesces into one comment attached to `i`, and the naive split moved `three` onto `i`'s definition. A
+line with code before the comment belongs to that code's declaration, whatever follows it.
+
+**Where the definition goes.** The member's group is the nearest `// \ref{stable}, title` comment above it in its
+own class body (a nested class owns its own groups, §3.4). When the same namespace block already has a
+`// \rSec<n>[stable]{...}` section after the class for that stable name, the definition goes into that section,
+ordered among the definitions already there by the file offset of each one's in-class declaration (the chain is
+`getCanonicalDecl()`); that is the order §3.3 already infers for in-class items relative to out-of-line siblings,
+so the itemdescrs come out where they were. When no section exists for the group, the tool writes
+`// \rSec<n>[stable]{Title}` after the last section already present, in class-body group order, with `n` taken
+from the sibling sections (3 when there are none, `--section-depth` to override) and the title from the `\ref`
+comment with its first letter capitalized; the author reviews the titles, which is a smaller edit than writing
+the headers. A member with no group goes after the class and before the first section, as the plain form places
+everything. Appending a moved definition right after `};` instead, ahead of the existing sections, would be wrong
+for exactly the headers this flag exists for: an out-of-line definition is placed by its position in the `\rSec`
+stream, and ahead of every section it has no section.
+
+**Housekeeping.** A moved comment is removed as whole lines, so no indentation is left behind on the declaration's
+line or on the `public:` below it (the spike left both), and is re-indented to column zero at its new home. One
+blank line separates the items in a section, as the corpus writes them.
+
+Doxygen never moves under this flag; a `--move-comments=all` that carries it too is an open question below.
 
 ### Refusals
 
@@ -244,17 +284,20 @@ tree, the version bumped (a minor bump when the executable first ships).
 1. **The rewriter.** One component, `split_inline/rewrite.hpp`/`.cpp` (per
    [component-recipe](../decisions/component-recipe.md) if it lives here): given a parsed header, the list of moved
    members, the refusals, and the edits as `{offset range, replacement}` pairs over the main file, with the
-   out-of-line text for each member. Pure over the AST; Catch2 tests parse snippets the way specgen's front-end
-   component tests do. The splice is `spliced_tail_begin`; the comment split follows the marker-line split in
-   `frontend/document_files.cpp`.
+   out-of-line text for each member; with `--move-comments`, also the comment lines that travel, the section each
+   definition lands in, and the headers to write. Pure over the AST; Catch2 tests parse snippets the way specgen's
+   front-end component tests do. The splice is `spliced_tail_begin`; the comment split follows the marker-line
+   split in `frontend/document_files.cpp`.
 2. **The executable.** `split_inline` with the options above, `-o -` as the default, refusals on standard error,
    the re-parse guard, and the exit codes. Its compile arguments resolve exactly as `specgen generate`'s do, so a
    header that specgen can parse, `split_inline` can parse with the same command tail.
 3. **Goldens.** `tests/golden/split_inline/<case>/input.hpp` and `expected.hpp`, compared with
    `cmake -E compare_files` as the others are, with a `.compiles` sibling that parses `expected.hpp` through the
    pinned Clang, a `.fixed_point` sibling, and, for the specgen-form cases converted with `--move-comments`, a
-   `.same_wording` sibling comparing `specgen generate` over the two. Inputs for the cases the spike covered plus
-   each refusal.
+   `.same_wording` sibling comparing `specgen generate` over the two. Inputs for the cases the spike covered, each
+   refusal, and the comment table row by row: the blank line, the access specifier, the trailing comment, the
+   marker-only block, Doxygen above markup, a group with an existing section holding out-of-line siblings on both
+   sides of the moved member, and a group with none.
 4. **Documentation.** `docs/user-guide.md` gains a short *Converting an existing header* section pointing at the
    tool, placed before the authoring loop since it is the step that produces the shape *Start with one header*
    shows; and one decision record, `split-inline-in-place-namespace`: definitions stay in the class's own
@@ -264,10 +307,16 @@ tree, the version bumped (a minor bump when the executable first ships).
 
 ### section-headers
 
-Whether anything writes the `// \rSec3[stable]{Title}` headers from the class body's `// \ref{stable}, title`
-groups, now that `split_inline` does not. **Recommendation: nothing, for now.** The author writes the titles
-anyway, the definitions come out grouped, and a specgen `--scaffold-sections` step is a separate small proposal if
-hand-writing them proves to be the slow part of the acid test.
+Whether `--move-comments` writes a `// \rSec3[stable]{Title}` header for a `\ref` group that has no section yet.
+**Recommendation: yes**, as designed above. The definitions have to be placed somewhere, and a header derived from
+the group comment is a smaller hand edit (review a title) than the alternative (write the header, then move the
+definitions under it). Without the flag nothing is written, since there is nothing to place by.
+
+### move-comments-all
+
+Whether a `--move-comments=all` carries Doxygen and plain comments along with the markup. **Recommendation: no.**
+Doxygen documents the declaration, specgen drops it from the synopsis regardless, and an author converting
+`@brief` prose into `//!` wording can read it where it is. Add it if a converted header shows the opposite need.
 
 ### tree
 
@@ -276,7 +325,14 @@ from a repository of its own. **Recommendation: this tree.** It gets the LLVM pi
 precedence, `spliced_tail_begin`, the corpus, the golden harness, and the release binary's build for free, and the
 `.same_wording` oracle needs both executables in one ctest anyway. Its own repository is the right answer if the
 tool is meant to serve projects that never see specgen; then the two shared helpers are ported, provenance noted,
-and the pin is restated.
+and the pin is restated. Delivery is not what decides it: the GitHub Release archive and the `beman-specgen` wheel
+are two packagings of one `cmake --install --component specgen_Runtime` tree, so a second executable in that
+component lands in `bin/` beside `specgen`, and the wheel needs one more `install(PROGRAMS ...)` line, one more
+`[project.scripts]` entry, and a shim that execs `data/bin/split_inline` instead of `data/bin/specgen`. The
+release scripts name `bin/specgen` in a handful of places (the debug split, the portability check, the smoke
+test) and would take the binary name as a parameter. The cost that is real is size: with
+`BEMAN_SPECGEN_LLVM_LINK=static` each executable carries its own copy of Clang, so the archive and the wheel
+roughly double.
 
 ### placement, name
 
