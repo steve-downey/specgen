@@ -8,6 +8,7 @@ export {
 #pragma clang diagnostic ignored "-Winclude-angled-in-module-purview"
 #include <beman/specgen/config.hpp>
 
+#include <beman/specgen/baseline_tree.hpp>
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>

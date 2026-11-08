@@ -87,8 +87,9 @@ stops at the IR and serializes it; `render --from-ir - --backend {latex,mpark,or
 serialized document back up. `--backend`, `--validate` (§9), `--paper` and
 `--split <dir> [--root <name>]` (§8) mean the same thing on both rendering commands, which
 share one back half, so single-pass wording equals two-pass wording byte for byte;
-`--baseline-ir` (and, on `generate`, `--baseline-header`) with `--diff-context` turn either
-render into the wording diff of §7, one baseline per document in order;
+`--baseline-ir` (and, on `generate`, `--baseline-header` and `--baseline-rev`) with
+`--diff-context` turn either render into the wording diff of §7, one baseline per document in
+order, or one git revision for the whole paper;
 `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
 `specgen --version` reports both the project version and the exact Git commit
@@ -1394,6 +1395,15 @@ The build assembles the tool from these components, each following the shared CM
 - **Wording diff** — `include/beman/specgen/diff.hpp`, `src/beman/specgen/diff.cpp`, Tier A.
   §7's `diff::compare`: the prose and code tokenizers, the structural matcher over nodes,
   elements and blocks, the three `Context` levels, and `has_marks`.
+- **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`,
+  `src/beman/specgen/baseline_tree.cpp`, Tier A. `--baseline-rev`'s git revision checked out
+  into a scratch tree for the run (`read-tree` into a temporary index, then `checkout-index`:
+  neither the real index nor the worktree list is touched), with the remap of a header path and
+  of the path-taking compile arguments under the repository's top level into that tree, and
+  the "exists at the revision" question. Git is the tool's one subprocess, driven without a
+  shell; a path outside the repository is left alone. Unit-tested against a throwaway
+  `git init` repository, never a golden: the corpus is hermetic
+  ([hermetic-corpus](decisions/hermetic-corpus.md)).
 - **Fragment split** — `include/beman/specgen/fragments.hpp`,
   `src/beman/specgen/fragments.cpp`. `fragments::split` per §8; backend-agnostic, with
   `usable_as_file_name` as the path boundary.
@@ -1485,11 +1495,13 @@ The build assembles the tool from these components, each following the shared CM
 - **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
   single-pass render), `render` (`--from-ir`), the wording options both share
   (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`,
-  and the wording diff's `--baseline-ir`, `--baseline-header` on `generate` alone, and
-  `--diff-context`) in `emit_wording` for one document and `emit_paper` for several (§2.1),
-  and `dump-decls`. A baseline pairs with the documents in order, is diffed after validation
-  and before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir`
-  makes the emitted IR the marked document.
+  and the wording diff's `--baseline-ir`, `--baseline-header` and `--baseline-rev` on
+  `generate` alone, and `--diff-context`) in `emit_wording` for one document and `emit_paper`
+  for several (§2.1), and `dump-decls`. A baseline pairs with the documents in order (a
+  revision names every document's baseline at once: its own path in the baseline tree, or the
+  empty document when the revision lacks it, noted on stderr), is diffed after validation and
+  before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir` makes
+  the emitted IR the marked document. A run takes one kind of baseline.
 - **Dependency fragment** — `depfile.hpp`/`.cpp`. Make escaping, the one-rule target list
   and the `-MP` block. Tier A and clang-free: *which* files a parse read is the front end's
   answer (`frontend::DocumentBuild::sources`) and which were written is the driver's, but
