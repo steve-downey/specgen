@@ -805,7 +805,8 @@ naming the class in both `name` and `parent`, so §9's dangling-route rule repor
 ordinary `SpecItem` node with an empty `signatures` list rather than a new node kind:
 that is what puts the class's own prose through the span, table, leakage and drift
 checks every other description already goes through, where a Synopsis deliberately is
-*not* a wording site. Backends emit no itemdecl block for it (§8), grouping never
+*not* a wording site. Backends emit its numbered paragraphs directly, with neither an itemdecl nor an
+itemdescr wrapper (§8). Grouping never
 treats it as an `\also` primary or follower (it has no signatures to group), and §9
 rejects an item carrying neither signatures nor elements the way it rejects an empty
 synopsis. `\verbatim-itemdecl` and the `*-equiv` extraction markers are Errors on a
