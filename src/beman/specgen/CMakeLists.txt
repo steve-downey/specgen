@@ -7,6 +7,7 @@
 target_sources(
     beman.specgen
     PRIVATE
+        baseline_tree.cpp
         ir.cpp
         ir_json.cpp
         docblock.cpp

@@ -8,6 +8,7 @@ if(BEMAN_SPECGEN_USE_MODULES)
             FILE_SET CXX_MODULES FILES specgen.cppm
             FILE_SET HEADERS
                 FILES
+                    baseline_tree.hpp
                     config.hpp
                     conjuncts.hpp
                     depfile.hpp
@@ -37,6 +38,7 @@ else()
         PUBLIC
             FILE_SET HEADERS
                 FILES
+                    baseline_tree.hpp
                     config.hpp
                     conjuncts.hpp
                     depfile.hpp

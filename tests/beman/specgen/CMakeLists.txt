@@ -18,6 +18,7 @@ include_directories("${PROJECT_SOURCE_DIR}/tests")
 
 foreach(
     component
+    baseline_tree
     ir
     ir_fold
     ir_json

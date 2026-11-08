@@ -51,6 +51,10 @@ generate options:
   --baseline-header <path>  the wording diff against this header's wording,
                              parsed with the same compile flags as the header
                              it pairs with, in order. May be repeated
+  --baseline-rev <rev>      the wording diff against the headers as they were
+                             at this git revision of their repository, checked
+                             out into a scratch tree for the run; a header the
+                             revision lacks is new wording. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a

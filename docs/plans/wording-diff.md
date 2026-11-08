@@ -1,8 +1,8 @@
 # Plan: wording diffs against a baseline
 
 **Status:** ACCEPTED, 2026-11-05; every open question was settled with the user the same day and the
-answer is recorded in place under its slug. PR 1 (steps 1–3) is #241; PR 2 (steps 4–5) follows it on
-this branch. Design §7 reserved the seam
+answer is recorded in place under its slug. PR 1 (steps 1–3) is #241; PR 2 (steps 4–5) is #246; PR 3
+(step 6, `--baseline-rev`) follows it on this branch. Design §7 reserved the seam
 ("the seam for future IR-level diff markup (add/rm wording generated from two header revisions;
 out of scope, by hand at first)"), and `--paper` is the by-hand first cut: it marks a whole fragment
 as added. This plan replaces that with a diff, and makes `--paper` the special case of it.
@@ -250,8 +250,9 @@ given to `render` *beside* a baseline is refused: diffing a diff means nothing.
   descriptors.
 - **Backend substrate** — `code_spans.hpp` walks two tables; `draft_spans.hpp` gains the change
   spellings; **the three backends** render every mark.
-- **Baseline tree** — `frontend/baseline_tree.hpp`/`.cpp`, Tier B: materialize a revision, remap
-  the header path and compile arguments, report a header missing at the revision.
+- **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`, `src/beman/specgen/baseline_tree.cpp`,
+  Tier A (clang-free; the parse of the remapped header is the front end's): materialize a revision,
+  remap the header path and compile arguments, report a header missing at the revision.
 - **Driver** — the three baseline flags, `--diff-context`, the pairing, the refusals; `compare`
   called in `emit_wording`/`emit_paper` after validation and before rendering, so `generate` and
   `render` agree byte for byte as they do for everything else.
@@ -406,10 +407,12 @@ backends, which is the by-hand route §7 described.
 
 **PR 3 — the revision.**
 
-- **Step 6.** `frontend/baseline_tree`: the plumbing pair, the scratch lifetime, the path remap, the
-   missing-at-revision note. Unit test against a throwaway `git init` repository. No golden: the
-   harness never runs git (decision hermetic-corpus). An example may use a fixed revision of this
-   repository's own corpus, which is stable and free of absolute paths.
+- **Step 6.** `baseline_tree` (at the top level, not under `frontend/`: it is clang-free string
+   and subprocess work, Tier A, and the parse of the remapped header is the front end's as for any
+   header): the plumbing pair, the scratch lifetime, the path remap, the missing-at-revision note.
+   Unit test against a throwaway `git init` repository. No golden: the harness never runs git
+   (decision hermetic-corpus). No example either: CI's checkout is shallow, so a fixed revision of
+   this repository's own corpus is not reliably in the clone the examples re-run from.
 
 **Each PR.**
 
