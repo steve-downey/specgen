@@ -239,10 +239,62 @@ the same paragraph labels; the `latex` backend uses the draft's own
 own right, so each carries its own framing and numbers its paragraphs from
 `x`. Use `--paper` when the whole fragment is an addition; omit it when the
 surrounding paper supplies that framing or when ordinary wording blocks are
-wanted. A fragment that is partly new is the wording diff's business
-([plans/wording-diff.md](plans/wording-diff.md)): its marks, on nodes,
-elements, runs of prose and runs of code, render in each backend's form of
-the same vocabulary, and `--paper` is the case where everything is new.
+wanted. A fragment that is partly new is the wording diff's business, below:
+its marks, on nodes, elements, blocks, runs of prose and runs of code, render
+in each backend's form of the same vocabulary, and `--paper` is the case where
+everything is new.
+
+### Diffing against a baseline
+
+A paper that modifies an existing facility proposes an edit, and `specgen`
+renders the edit when it is given the wording's previous revision as a
+baseline:
+
+```sh
+specgen generate include/beman/example/example.hpp \
+  --baseline-header baseline/include/beman/example/example.hpp \
+  --backend mpark -o papers/wording/example.md -- -Iinclude
+```
+
+The output is the current wording marked with what changed since the
+baseline, in each backend's own editing form: mpark's `::: add` and `::: rm`
+divs around a section, item, element or paragraph that is new or gone, and
+`[...]{.add}` / `[...]{.rm}` spans around the words that changed inside a kept
+paragraph, with `@[...]{.add}@` inside code; the draft's `addedblock`,
+`removedblock`, `\added` and `\removed` under `latex`; wg21org's
+`WG21_CHANGE`, `addedblock`, `removedblock` and `insert:`/`delete:` links under
+`org`. A retained paragraph keeps its paragraph number; an added one takes the
+`x`, `x+1` literal, as under `--paper`. A baseline implies `--paper`.
+
+The baseline is one of two things, one per document and pairing with the
+documents in order:
+
+- `--baseline-header <path>` (`generate` only): the previous revision of the
+  header, parsed with the compile flags that resolve for *its* path, so a
+  checkout of the old revision beside the new one works as it is.
+- `--baseline-ir <file>` (`generate` and `render`): the saved IR of the
+  previous revision, from an earlier `--emit-ir`. A paper that commits the IR
+  of each published revision can render R1's diff against R0 without the
+  pinned toolchain, by the same argument that lets it commit fragments.
+
+`--diff-context` says how much unchanged wording the result keeps. `changed`,
+the default, drops a top-level section with no change anywhere in it and keeps
+a changed one whole, unchanged paragraphs included: the full subclause as
+modified, which is what LWG reads. `all` keeps everything, for a paper that
+has to show nothing else moved. `items` goes one step further than `changed`:
+inside a changed section, each run of unchanged items collapses to one `[…]`
+paragraph. `generate --emit-ir` with a baseline writes the marked document, so
+`render --from-ir` renders the diff later with no baseline of its own; a
+document that already carries marks is refused beside a baseline, since a diff
+of a diff means nothing.
+
+What the diff matches is structural: sections by stable name, class synopses
+by class, items by what they declare (an overload set whose signature changed
+is one item with a marked signature; a renamed member is a removal and an
+addition), elements by kind, and paragraphs by how many words they share. The
+draft PR for the same change is the plain render, without a baseline: the
+paper's diff and the PR are the same source, and the diff is the PR's edit
+with the baseline's text folded in.
 
 Several headers form one paper, with one document per header; see
 [A paper proposing several headers](#a-paper-proposing-several-headers) below.
@@ -1046,7 +1098,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.15.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.16.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

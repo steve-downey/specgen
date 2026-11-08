@@ -109,7 +109,8 @@ inline std::string draft_change_prose(ir::Change change, std::string_view text) 
         change,
         foundation::when<ir::Change::Same>([&] { return std::string(text); }),
         foundation::when<ir::Change::Added>([&] { return "\\added{" + std::string(text) + '}'; }),
-        foundation::when<ir::Change::Removed>([&] { return "\\removed{" + std::string(text) + '}'; }));
+        foundation::when<ir::Change::Removed>([&] { return "\\removed{" + std::string(text) + '}'; }),
+        foundation::when<ir::Change::Elided>([&] { return std::string(text); }));
 }
 
 inline std::string draft_change_codeblock(ir::Change change, std::string_view text) {
@@ -124,7 +125,8 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
         change,
         foundation::when<ir::Change::Same>([] { return std::optional<std::string_view>{}; }),
         foundation::when<ir::Change::Added>([] { return std::optional<std::string_view>{"addedblock"}; }),
-        foundation::when<ir::Change::Removed>([] { return std::optional<std::string_view>{"removedblock"}; }));
+        foundation::when<ir::Change::Removed>([] { return std::optional<std::string_view>{"removedblock"}; }),
+        foundation::when<ir::Change::Elided>([] { return std::optional<std::string_view>{}; }));
 }
 
 // A code inline, in prose, as the draft writes one. Shared for the same

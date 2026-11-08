@@ -118,3 +118,13 @@ TEST_CASE("ir - change_of, with_change and all_marked reach the mark on a node o
     CHECK(change_of(with_change(nodes[0], Change::Added)) == Change::Added);
     CHECK(std::get<Section>(with_change(nodes[0], Change::Added)).stable_name == "s");
 }
+
+TEST_CASE("ir - block_change reads the mark on a block of either body") {
+    CHECK(block_change(BodyBlock{BodyParagraph{{TextInline{"p"}}, false, Change::Added}}) == Change::Added);
+    CHECK(block_change(BodyBlock{Itemize{{}, Change::Removed}}) == Change::Removed);
+    CHECK(block_change(BodyBlock{Note{{}, Change::Added}}) == Change::Added);
+    CHECK(block_change(BodyBlock{EquivalentTo{{"x;", {}}}}) == Change::Same);
+    CHECK(block_change(InformativeBlock{AuthoredCode{{"x;", {}}, Change::Removed}}) == Change::Removed);
+    CHECK(change_name(Change::Elided) == "elided");
+    CHECK(change_from_name("elided") == Change::Elided);
+}

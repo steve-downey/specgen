@@ -109,6 +109,25 @@ specgen_add_example_parity(
     GOLDEN paper_mode_org/expected.org
 )
 
+# The wording diff's captures reach the same bytes as the goldens over the
+# marked IR, by the one-pass route: the `.singlepass` sibling of diff_gadget is
+# the proof, and these three are its parity twins.
+specgen_add_example_parity(
+    wording_diff_mpark
+    CAPTURED 45-wording-diff/gadget-diff.md
+    GOLDEN diff_gadget_wording/expected.md
+)
+specgen_add_example_parity(
+    wording_diff_org
+    CAPTURED 45-wording-diff/gadget-diff.org
+    GOLDEN diff_gadget_wording/expected.org
+)
+specgen_add_example_parity(
+    wording_diff_items
+    CAPTURED 45-wording-diff/gadget-diff-items.md
+    GOLDEN diff_gadget_items_wording/expected.md
+)
+
 # The fragment captures: a manifest file and a directory of fragments per
 # backend, from the same split the fragments goldens pin.
 foreach(backend latex mpark org)
@@ -187,6 +206,7 @@ specgen_add_example_rerun(10-help)
 specgen_add_example_rerun(20-widget-ir)
 specgen_add_example_rerun(30-render-backends)
 specgen_add_example_rerun(40-paper-mode)
+specgen_add_example_rerun(45-wording-diff)
 specgen_add_example_rerun(50-fragments)
 specgen_add_example_rerun(55-paper)
 specgen_add_example_rerun(60-validate)

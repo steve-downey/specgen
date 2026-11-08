@@ -125,7 +125,8 @@ std::string wrap_code_run(ir::Change change, std::string_view text) {
         change,
         foundation::when<ir::Change::Same>([&] { return std::string(text); }),
         foundation::when<ir::Change::Added>([&] { return "@[" + std::string(text) + "]{.add}@"; }),
-        foundation::when<ir::Change::Removed>([&] { return "@[" + std::string(text) + "]{.rm}@"; }));
+        foundation::when<ir::Change::Removed>([&] { return "@[" + std::string(text) + "]{.rm}@"; }),
+        foundation::when<ir::Change::Elided>([&] { return std::string(text); }));
 }
 
 std::string render_code(const ir::CodeText& code) {
@@ -140,7 +141,8 @@ std::string wrap_div(ir::Change change, std::string text) {
     return foundation::match(change,
                              foundation::when<ir::Change::Same>([&] { return text; }),
                              foundation::when<ir::Change::Added>([&] { return "::: add\n\n" + text + "\n:::\n"; }),
-                             foundation::when<ir::Change::Removed>([&] { return "::: rm\n\n" + text + "\n:::\n"; }));
+                             foundation::when<ir::Change::Removed>([&] { return "::: rm\n\n" + text + "\n:::\n"; }),
+                             foundation::when<ir::Change::Elided>([&] { return text; }));
 }
 
 std::string render_codeblock(const ir::CodeText& code) { return "```cpp\n" + render_code(code) + "\n```\n"; }
@@ -195,7 +197,8 @@ std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
     return foundation::match(run.change,
                              foundation::when<ir::Change::Same>([&] { return inner; }),
                              foundation::when<ir::Change::Added>([&] { return '[' + inner + "]{.add}"; }),
-                             foundation::when<ir::Change::Removed>([&] { return '[' + inner + "]{.rm}"; }));
+                             foundation::when<ir::Change::Removed>([&] { return '[' + inner + "]{.rm}"; }),
+                             foundation::when<ir::Change::Elided>([&] { return inner; }));
 }
 
 std::string render_paragraph(const ir::Paragraph& para) {
@@ -297,7 +300,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
 std::string render_informative_body(const ir::InformativeBody& body);
 std::string render_informative_body(const ir::InformativeBody& body) {
     return body | std::views::transform([](const ir::InformativeBlock& block) {
-               return std::visit(overloaded{LeafBodyRenderer{false}}, block).text;
+               return wrap_div(ir::block_change(block), std::visit(overloaded{LeafBodyRenderer{false}}, block).text);
            }) |
            std::views::join_with('\n') | std::ranges::to<std::string>();
 }
@@ -324,12 +327,18 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optio
         body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
             auto       rendered = std::visit(overloaded{BodyRenderer{}}, block);
             const bool first    = out.empty();
+            // A marked block (the wording diff's) closes in its div alone:
+            // around its whole numbered paragraph when it opens one, so the
+            // number is inside the mark and an added paragraph takes the
+            // literal, and around just itself when it continues the paragraph
+            // before it.
+            const ir::Change change = ir::block_change(block);
             if (first || rendered.starts_paragraph) {
                 const std::string prefix =
                     first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
-                out.push_back("[#]{.pnum} " + prefix + rendered.text);
+                out.push_back(wrap_div(change, "[#]{.pnum} " + prefix + rendered.text));
             } else {
-                out.back() += '\n' + rendered.text;
+                out.back() += '\n' + wrap_div(change, rendered.text);
             }
             return out;
         });
@@ -480,7 +489,11 @@ struct MparkAlgebra {
 
     std::string operator()(const ir::Synopsis& v) const { return wrap_div(v.change, render_codeblock(v.code)); }
     std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
+    // An elided free paragraph (the wording diff's `items` context) is the
+    // ellipsis a paper writes for wording left out, with no paragraph number.
     std::string operator()(const ir::FreeParagraph& v) const {
+        if (v.change == ir::Change::Elided)
+            return "[…]\n";
         return wrap_div(v.change, "[#]{.pnum} " + render_paragraph(v.text) + '\n');
     }
 };
@@ -537,8 +550,23 @@ std::string wrap_wording(std::string text) { return "::: wording\n\n" + text + "
 // code, showed every paragraph as "x" (issue #57). Nothing can then refer to
 // one of them. Within a div the run was right, which is what made the reset
 // easy to miss.
-// One line's paragraph-number tokens, numbered on from `para`.
-std::string renumber_line(std::string_view line, unsigned& para) {
+// The renumbering walk's state: how many added paragraphs have been
+// numbered, and whether the paragraph most recently passed -- added or kept
+// -- was an added one, which decides what an added sublist item under it is
+// numbered from.
+struct Renumbering {
+    unsigned para       = 0;
+    bool     last_added = false;
+};
+
+// One line's paragraph-number tokens, numbered on from `state`. Inside an
+// added region a paragraph takes the literal `x`, `x+1`, ... and a sublist
+// item takes its lead-in paragraph's literal with `.#` after it -- when that
+// lead-in was itself added. An added item under a *kept* paragraph takes
+// `[#.x]{.pnum}` instead: the paragraph keeps the number the draft gives it,
+// and the new item is the literal beneath it, which is how mpark's filter
+// reads a literal part (it leaves the counter beside it alone).
+std::string renumber_line(std::string_view line, Renumbering& state) {
     constexpr std::string_view kPara = "[#]{.pnum}";
     constexpr std::string_view kItem = "[#.#]{.pnum}";
 
@@ -557,19 +585,29 @@ std::string renumber_line(std::string_view line, unsigned& para) {
         if (at == std::string::npos)
             break;
         out += line.substr(pos, at - pos);
-        // A sublist item belongs to the paragraph that introduced it, which is
-        // the one just counted -- `element_blocks` always emits a lead-in
-        // `[#]{.pnum}` before any `[#.#]`, so `para` is never 0 here.
-        const bool  is_item = at == at_item;
-        const auto  n       = is_item ? para - 1 : para;
-        std::string literal = n == 0 ? std::string{"x"} : std::format("x+{}", n);
-        out += std::format("[{}{}]{{.pnum}}", literal, is_item ? ".#" : "");
+        const bool is_item = at == at_item;
+        if (!is_item) {
+            out += std::format("[{}]{{.pnum}}", state.para == 0 ? std::string{"x"} : std::format("x+{}", state.para));
+            ++state.para;
+            state.last_added = true;
+        } else if (state.last_added) {
+            const auto n = state.para - 1;
+            out += std::format("[{}.#]{{.pnum}}", n == 0 ? std::string{"x"} : std::format("x+{}", n));
+        } else {
+            out += "[#.x]{.pnum}";
+        }
         pos = at + (is_item ? kItem.size() : kPara.size());
-        if (!is_item)
-            ++para;
     }
     out += line.substr(pos);
     return out;
+}
+
+// A line outside every added region passes through, but a paragraph token on
+// it is still a paragraph passed: the next added sublist item is under it.
+std::string pass_line(std::string_view line, Renumbering& state) {
+    if (line.contains("[#]{.pnum}"))
+        state.last_added = false;
+    return std::string(line);
 }
 
 // Under the wording diff only an *added* paragraph takes the literal: a
@@ -582,7 +620,7 @@ std::string renumber_line(std::string_view line, unsigned& para) {
 // ascending run over the whole document, as before (issue #57).
 std::string renumber_added(const std::string& text) {
     std::vector<std::string_view> open;
-    unsigned                      para = 0;
+    Renumbering                   state;
     std::string                   out;
     out.reserve(text.size());
     const bool             trailing_newline = text.ends_with('\n');
@@ -597,7 +635,7 @@ std::string renumber_added(const std::string& text) {
         else if (line == ":::" && !open.empty())
             open.pop_back();
         const bool added = std::ranges::find(open, std::string_view{"::: add"}) != open.end();
-        out += added ? renumber_line(line, para) : std::string(line);
+        out += added ? renumber_line(line, state) : pass_line(line, state);
         out += '\n';
     }
     if (!trailing_newline && !out.empty())
@@ -691,7 +729,10 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
     const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
     const std::vector<RenderedTop> rendered =
         nodes | std::views::transform([&ctx](const ir::Node& node) {
-            std::string text = render_node_to_string(ir::with_change(node, ir::Change::Same), ctx);
+            std::string text = render_node_to_string(
+                ir::with_change(node,
+                                ir::change_of(node) == ir::Change::Elided ? ir::Change::Elided : ir::Change::Same),
+                ctx);
             // A synopsis holds no numbered paragraph, so wrapping one would
             // put an empty wording div around a code fence. Every other node
             // kind either is a numbered paragraph or contains them.

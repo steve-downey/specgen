@@ -74,6 +74,15 @@ endif()
 if(COMPILE_COMMANDS_DIR)
     list(APPEND generate_args --compile-commands "${COMPILE_COMMANDS_DIR}")
 endif()
+# A diff case's one pass takes the baseline header; its two-pass side renders
+# the checked-in *marked* IR with no baseline, so the two agree only if the
+# driver's diff and the golden's are one and the same.
+if(BASELINE)
+    list(APPEND generate_args --baseline-header "${BASELINE}")
+endif()
+if(DIFF_CONTEXT)
+    list(APPEND generate_args --diff-context "${DIFF_CONTEXT}")
+endif()
 if(EXTRA_ARGS)
     separate_arguments(extra_args_list UNIX_COMMAND "${EXTRA_ARGS}")
     list(APPEND generate_args -- ${extra_args_list})

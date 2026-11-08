@@ -800,3 +800,29 @@ TEST_CASE("org - a braced title macro renders as heading code") {
     const auto out = org::render_to_string(doc);
     CHECK(out.find(R"(Class ~gadget~)") != std::string::npos);
 }
+
+TEST_CASE("org - a marked opening block closes its whole pnum, a continuation just itself") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body = {
+        BodyParagraph{{TextInline{"Kept."}}},
+        Itemize{{{TextInline{"new item"}}}, Change::Added},
+        BodyParagraph{{TextInline{"New."}}, false, Change::Added},
+    };
+    item.descr.elements.push_back(std::move(effects));
+    CHECK(org::render_to_string(item) == "#+begin_itemdecl\nvoid f();\n#+end_itemdecl\n\n"
+                                         "#+begin_pnum\n/Effects/: Kept.\n\n"
+                                         "#+begin_addedblock\n- new item\n#+end_addedblock\n#+end_pnum\n\n"
+                                         "#+begin_addedblock\n#+begin_pnum x\nNew.\n#+end_pnum\n#+end_addedblock\n");
+}
+
+TEST_CASE("org - an elided paragraph is the ellipsis outside any pnum") {
+    Document doc;
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"hidden"}}, Change::Elided}, FreeParagraph{{TextInline{"Kept."}}}}});
+    CHECK(org::render_to_string(doc) ==
+          "** S [g.s]\n:PROPERTIES:\n:CUSTOM_ID: g.s\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n\n"
+          "[…]\n\n#+begin_pnum\nKept.\n#+end_pnum\n");
+}

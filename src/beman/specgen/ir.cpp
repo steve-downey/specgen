@@ -72,7 +72,8 @@ inline constexpr auto kSpanKindNames =
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
-                                                               foundation::is<Change::Removed>("removed"sv));
+                                                               foundation::is<Change::Removed>("removed"sv),
+                                                               foundation::is<Change::Elided>("elided"sv));
 
 inline constexpr auto kIndexKindNames =
     foundation::table<IndexKind>(foundation::is<IndexKind::Global>("global"sv),
@@ -146,6 +147,26 @@ struct WithChange {
 } // namespace
 
 Change change_of(const Node& node) { return std::visit(foundation::overloaded{ChangeOf{}}, node); }
+
+namespace {
+
+// `block_change`'s dispatch over either body variant: the eight block kinds
+// each carry a `change`, and the five informative ones are a subset.
+struct BlockChange {
+    Change operator()(const BodyParagraph& b) const { return b.change; }
+    Change operator()(const Itemize& b) const { return b.change; }
+    Change operator()(const Table2D& b) const { return b.change; }
+    Change operator()(const Table1D& b) const { return b.change; }
+    Change operator()(const EquivalentTo& b) const { return b.change; }
+    Change operator()(const AuthoredCode& b) const { return b.change; }
+    Change operator()(const Note& b) const { return b.change; }
+    Change operator()(const Example& b) const { return b.change; }
+};
+
+} // namespace
+
+Change block_change(const BodyBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
+Change block_change(const InformativeBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
 
 Node with_change(Node node, Change change) {
     return std::visit(foundation::overloaded{WithChange{change}}, std::move(node));

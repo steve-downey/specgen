@@ -307,7 +307,8 @@ std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
     return foundation::match(run.change,
                              foundation::when<ir::Change::Same>([&] { return inner; }),
                              foundation::when<ir::Change::Added>([&] { return "[[insert:][" + inner + "]]"; }),
-                             foundation::when<ir::Change::Removed>([&] { return "[[delete:][" + inner + "]]"; }));
+                             foundation::when<ir::Change::Removed>([&] { return "[[delete:][" + inner + "]]"; }),
+                             foundation::when<ir::Change::Elided>([&] { return inner; }));
 }
 
 std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
@@ -424,7 +425,8 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots) {
     return body | std::views::transform([new_roots](const ir::InformativeBlock& block) {
-               return std::visit(overloaded{LeafBodyRenderer{new_roots}}, block).text;
+               return wrap_block(ir::block_change(block),
+                                 std::visit(overloaded{LeafBodyRenderer{new_roots}}, block).text);
            }) |
            std::views::join_with('\n') | std::ranges::to<std::string>();
 }
@@ -452,22 +454,33 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
 std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
                                      std::optional<ir::ElementKind> kind,
                                      std::span<const std::string>   new_roots) {
-    const std::string label  = kind ? std::format("/{}/", backend::element_label(*kind)) : std::string{};
-    auto              blocks = std::ranges::fold_left(
-        body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
-            auto       rendered = std::visit(overloaded{BodyRenderer{{new_roots}}}, block);
-            const bool first    = out.empty();
+    const std::string label = kind ? std::format("/{}/", backend::element_label(*kind)) : std::string{};
+    // One numbered paragraph's text and the mark of the block that opened it:
+    // a marked opening block closes its whole `pnum` in its special block, so
+    // the exporter's numbering sees the mark first (number_added_pnums reads
+    // it that way too), while a marked continuation block closes just itself
+    // inside the paragraph it continues.
+    struct Numbered {
+        std::string text;
+        ir::Change  change;
+    };
+    auto blocks = std::ranges::fold_left(
+        body, std::vector<Numbered>{}, [&](std::vector<Numbered> out, const ir::BodyBlock& block) {
+            auto             rendered = std::visit(overloaded{BodyRenderer{{new_roots}}}, block);
+            const bool       first    = out.empty();
+            const ir::Change change   = ir::block_change(block);
             if (first || rendered.starts_paragraph) {
                 const std::string prefix =
                     first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
-                out.push_back(prefix + rendered.text);
+                out.push_back(Numbered{prefix + rendered.text, change});
             } else {
-                out.back() += '\n' + rendered.text;
+                out.back().text += '\n' + wrap_block(change, rendered.text);
             }
             return out;
         });
-    std::ranges::transform(blocks, blocks.begin(), [](std::string b) { return wrap_pnum(std::move(b)); });
-    return blocks;
+    return blocks |
+           std::views::transform([](Numbered& b) { return wrap_block(b.change, wrap_pnum(std::move(b.text))); }) |
+           std::ranges::to<std::vector>();
 }
 
 std::vector<std::string> element_blocks(const ir::DescriptionElement& element, std::span<const std::string> new_roots);
@@ -583,7 +596,8 @@ struct SeededProjector {
                 s.change,
                 foundation::when<ir::Change::Same>([] { return std::string_view{}; }),
                 foundation::when<ir::Change::Added>([] { return std::string_view{":WG21_CHANGE: add\n"}; }),
-                foundation::when<ir::Change::Removed>([] { return std::string_view{":WG21_CHANGE: rm\n"}; })));
+                foundation::when<ir::Change::Removed>([] { return std::string_view{":WG21_CHANGE: rm\n"}; }),
+                foundation::when<ir::Change::Elided>([] { return std::string_view{}; })));
 
         const RenderCtx     child_ctx{ctx.level + 1, false};
         std::vector<Seeded> children =
@@ -627,7 +641,11 @@ struct OrgAlgebra {
         return wrap_block(v.change, render_block("codeblock", v.code));
     }
     std::string operator()(const ir::SpecItem& v) const { return render_item(v, new_roots); }
+    // An elided free paragraph (the wording diff's `items` context) is the
+    // ellipsis a paper writes for wording left out, outside any `pnum`.
     std::string operator()(const ir::FreeParagraph& v) const {
+        if (v.change == ir::Change::Elided)
+            return "[…]\n";
         return wrap_block(v.change, wrap_pnum(render_paragraph(v.text, new_roots) + '\n'));
     }
 };
@@ -661,8 +679,13 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
         nodes | std::views::transform([&](const ir::Node& node) {
             if (std::holds_alternative<ir::Section>(node))
                 return render_node_to_string(node, ctx, options.new_roots);
-            return wrap_block(ir::change_of(node),
-                              render_node_to_string(ir::with_change(node, ir::Change::Same), ctx, options.new_roots));
+            return wrap_block(
+                ir::change_of(node),
+                render_node_to_string(
+                    ir::with_change(node,
+                                    ir::change_of(node) == ir::Change::Elided ? ir::Change::Elided : ir::Change::Same),
+                    ctx,
+                    options.new_roots));
         }) |
         std::ranges::to<std::vector>();
     return number_added_pnums(rendered | std::views::join_with('\n') | std::ranges::to<std::string>());

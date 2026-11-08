@@ -151,6 +151,7 @@ struct json_descriptor<Table2D> {
         field("column1", &Table2D::column1),
         field("column2", &Table2D::column2),
         field("rows", &Table2D::rows),
+        defaulted_enum_field("change", &Table2D::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
 
@@ -170,28 +171,44 @@ struct json_descriptor<Table1D> {
         field("column1", &Table1D::column1),
         field("column2", &Table1D::column2),
         field("rows", &Table1D::rows),
+        defaulted_enum_field("change", &Table1D::change, Change::Same, change_name, change_from_name, "change"),
+    };
+};
+
+// Every block kind's `change` is omitted at `Same`, like a node's.
+template <>
+struct json_descriptor<ir::BodyParagraph> {
+    static constexpr auto members = std::tuple{
+        field("text", &ir::BodyParagraph::text),
+        field("continuation", &ir::BodyParagraph::continuation),
+        defaulted_enum_field(
+            "change", &ir::BodyParagraph::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
 
 template <>
-struct json_descriptor<ir::BodyParagraph> {
-    static constexpr auto members =
-        std::tuple{field("text", &ir::BodyParagraph::text), field("continuation", &ir::BodyParagraph::continuation)};
-};
-
-template <>
 struct json_descriptor<Itemize> {
-    static constexpr auto members = std::tuple{field("items", &Itemize::items)};
+    static constexpr auto members = std::tuple{
+        field("items", &Itemize::items),
+        defaulted_enum_field("change", &Itemize::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
 struct json_descriptor<EquivalentTo> {
-    static constexpr auto members = std::tuple{field("code", &EquivalentTo::code)};
+    static constexpr auto members = std::tuple{
+        field("code", &EquivalentTo::code),
+        defaulted_enum_field("change", &EquivalentTo::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
 struct json_descriptor<ir::AuthoredCode> {
-    static constexpr auto members = std::tuple{field("code", &ir::AuthoredCode::code)};
+    static constexpr auto members = std::tuple{
+        field("code", &ir::AuthoredCode::code),
+        defaulted_enum_field(
+            "change", &ir::AuthoredCode::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
@@ -207,12 +224,18 @@ struct json_descriptor<ir::InformativeBlock> {
 
 template <>
 struct json_descriptor<ir::Note> {
-    static constexpr auto members = std::tuple{field("body", &ir::Note::body)};
+    static constexpr auto members = std::tuple{
+        field("body", &ir::Note::body),
+        defaulted_enum_field("change", &ir::Note::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
 struct json_descriptor<ir::Example> {
-    static constexpr auto members = std::tuple{field("body", &ir::Example::body)};
+    static constexpr auto members = std::tuple{
+        field("body", &ir::Example::body),
+        defaulted_enum_field("change", &ir::Example::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
