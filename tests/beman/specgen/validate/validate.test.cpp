@@ -1062,7 +1062,7 @@ ir::Paragraph authored_paragraph(std::string subject, std::string polarity) {
 
 } // namespace
 
-TEST_CASE("validate - an authored Mandates duplicating its derived conjunct warns") {
+TEST_CASE("validate - an authored Mandates matching suppressed evidence is quiet") {
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
@@ -1074,11 +1074,7 @@ TEST_CASE("validate - an authored Mandates duplicating its derived conjunct warn
     item.descr.elements = {authored};
 
     const Diagnostics diags = validate(ir::Node{item});
-    REQUIRE(diags.size() == 1);
-    CHECK(diags.front().severity == Severity::Warning);
-    CHECK(diags.front().context == "mandates");
-    CHECK(diags.front().message.find("duplicates") != std::string::npos);
-    CHECK(diags.front().message.find("`is_copy_constructible_v<int>`") != std::string::npos);
+    CHECK(diags.empty());
 }
 
 TEST_CASE("validate - an authored Mandates contradicting its derived conjunct warns, naming both readings") {
@@ -1110,9 +1106,7 @@ TEST_CASE("validate - an authored Constraints element compares the same way") {
     item.descr.elements = {authored};
 
     const Diagnostics diags = validate(ir::Node{item});
-    REQUIRE(diags.size() == 1);
-    CHECK(diags.front().context == "constraints");
-    CHECK(diags.front().message.find("duplicates") != std::string::npos);
+    CHECK(diags.empty());
 }
 
 TEST_CASE("validate - drift comparison reads authored table cells") {
@@ -1125,7 +1119,7 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
         .column1     = {ir::TextInline{"yes"}},
         .column2     = {ir::TextInline{"no"}},
         .rows        = {{.header = {ir::TextInline{"T"}},
-                         .cell1  = authored_paragraph("copyable<T>", "true"),
+                         .cell1  = authored_paragraph("copyable<T>", "false"),
                          .cell2  = {ir::TextInline{"otherwise"}}}},
     });
 
@@ -1135,7 +1129,7 @@ TEST_CASE("validate - drift comparison reads authored table cells") {
 
     const Diagnostics diags = validate(ir::Node{item});
     REQUIRE(diags.size() == 1);
-    CHECK(diags.front().message.find("duplicates") != std::string::npos);
+    CHECK(diags.front().message.find("contradicts") != std::string::npos);
 }
 
 TEST_CASE("validate - drift comparison reads authored flat table cells") {
@@ -1147,7 +1141,7 @@ TEST_CASE("validate - drift comparison reads authored flat table cells") {
         .caption     = {ir::TextInline{"Conditions"}},
         .column1     = {ir::TextInline{"Constant"}},
         .column2     = {ir::TextInline{"Meaning"}},
-        .rows        = {{.cell1 = {ir::TextInline{"T"}}, .cell2 = authored_paragraph("copyable<T>", "true")}},
+        .rows        = {{.cell1 = {ir::TextInline{"T"}}, .cell2 = authored_paragraph("copyable<T>", "false")}},
     });
 
     ir::SpecItem item;
@@ -1156,7 +1150,7 @@ TEST_CASE("validate - drift comparison reads authored flat table cells") {
 
     const Diagnostics diags = validate(ir::Node{item});
     REQUIRE(diags.size() == 1);
-    CHECK(diags.front().message.find("duplicates") != std::string::npos);
+    CHECK(diags.front().message.find("contradicts") != std::string::npos);
 }
 
 TEST_CASE("validate - a derived conjunct absent from unrelated authored prose warns it has no authored counterpart") {
@@ -1202,10 +1196,9 @@ TEST_CASE("validate - a derived conjunct documented only in a sibling Remarks el
     CHECK(validate(ir::Node{item}).empty());
 }
 
-TEST_CASE("validate - one documented and one undocumented conjunct in the same requires-clause both get flagged") {
+TEST_CASE("validate - only the undocumented conjunct in a partially covered requires-clause warns") {
     // Two-conjunct requires-clause where only the first is echoed in prose:
-    // the duplicate check fires for the first, the missing-counterpart check
-    // fires for the second -- exactly the shape of the bug this guards.
+    // the missing-counterpart check fires only for the second.
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Constraints;
     authored.conjuncts = {conjunct_paragraph("is_constructible_v<T, U>", "true"),
@@ -1217,8 +1210,7 @@ TEST_CASE("validate - one documented and one undocumented conjunct in the same r
     item.descr.elements = {authored};
 
     const Diagnostics diags = validate(ir::Node{item});
-    REQUIRE(diags.size() == 2);
-    CHECK(std::ranges::any_of(diags, [](const auto& d) { return d.message.find("duplicates") != std::string::npos; }));
+    REQUIRE(diags.size() == 1);
     CHECK(std::ranges::any_of(diags, [](const auto& d) {
         return d.message.find("has no authored") != std::string::npos &&
                d.message.find("`is_same_v<U, int>`") != std::string::npos;
@@ -1518,4 +1510,129 @@ TEST_CASE("validate - format_diagnostic renders <context>: <severity>: <message>
 
     const Diagnostic note{Severity::Note, "ctx", "some note"};
     CHECK(format_diagnostic(note) == "ctx: note: some note");
+}
+
+TEST_CASE("validate - same-type prose matches predicates through local Let bindings") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    item.descr.leading.push_back(ir::BodyParagraph{{ir::TextInline{"Let "},
+                                                    ir::CodeInline{{"VT", {}}},
+                                                    ir::TextInline{" be "},
+                                                    ir::CodeInline{{"decay_t<T>", {}}},
+                                                    ir::TextInline{"."}}});
+    ir::DescriptionElement authored;
+    authored.kind      = ir::ElementKind::Mandates;
+    authored.conjuncts = {conjunct_paragraph("is_same_v<decay_t<T>, T>", "true")};
+    authored.body.push_back(ir::BodyParagraph{{ir::CodeInline{{"T", {}}},
+                                               ir::TextInline{" is the same type as "},
+                                               ir::CodeInline{{"VT", {}}},
+                                               ir::TextInline{"."}}});
+    item.descr.elements.push_back(authored);
+    CHECK(validate(ir::Node{item}).empty());
+    std::get<ir::TextInline>(std::get<ir::BodyParagraph>(item.descr.elements.front().body.front()).text[1]).text =
+        " is not the same type as ";
+    const auto contradiction = validate(ir::Node{item});
+    REQUIRE(contradiction.size() == 1);
+    CHECK(contradiction.front().message.find("contradicts") != std::string::npos);
+    item.descr.elements.front().conjuncts = {conjunct_paragraph("is_same_v<decay_t<T>, T>", "false")};
+    CHECK(validate(ir::Node{item}).empty());
+}
+
+TEST_CASE("validate - bindings substitute identifiers and ignore informative introductions") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    const ir::BodyParagraph binding{{ir::TextInline{"Let "},
+                                     ir::CodeInline{{"VT", {}}},
+                                     ir::TextInline{" be "},
+                                     ir::CodeInline{{"decay_t<T>", {}}},
+                                     ir::TextInline{"."}}};
+    item.descr.leading.push_back(binding);
+    ir::DescriptionElement authored;
+    authored.kind      = ir::ElementKind::Constraints;
+    authored.conjuncts = {conjunct_paragraph("callable<decay_t<T>>", "true")};
+    authored.body.push_back(ir::BodyParagraph{authored_paragraph("callable<VT>", "true")});
+    item.descr.elements.push_back(authored);
+    CHECK(validate(ir::Node{item}).empty());
+    item.descr.leading = {ir::Note{{binding}}};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+    item.descr.leading               = {binding};
+    item.descr.elements.front().body = {ir::BodyParagraph{authored_paragraph("callable<VT2>", "true")}};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+    item.descr.elements.front().body = {ir::BodyParagraph{authored_paragraph("callable<VT>", "true")}};
+    item.descr.leading.push_back(binding);
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+}
+
+TEST_CASE("validate - binding expansion is transitive, cycle-safe, and qualification-aware") {
+    const auto binding = [](std::string name, std::string value) -> ir::BodyBlock {
+        return ir::BodyParagraph{{ir::TextInline{"Let "},
+                                  ir::CodeInline{{std::move(name), {}}},
+                                  ir::TextInline{" be "},
+                                  ir::CodeInline{{std::move(value), {}}},
+                                  ir::TextInline{"."}}};
+    };
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    item.descr.leading = {binding("VT", "WT"), binding("WT", "::std :: decay_t<T>")};
+    ir::DescriptionElement authored;
+    authored.kind       = ir::ElementKind::Constraints;
+    authored.conjuncts  = {conjunct_paragraph("callable<decay_t<T>>", "true")};
+    authored.body       = {ir::BodyParagraph{authored_paragraph("callable<VT>", "true")}};
+    item.descr.elements = {authored};
+    CHECK(validate(ir::Node{item}).empty());
+    item.descr.leading = {binding("VT", "WT"), binding("WT", "VT")};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+    item.descr.leading               = {binding("VT", "decay_t<T>")};
+    item.descr.elements.front().body = {ir::BodyParagraph{authored_paragraph("callable<other::VT>", "true")}};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+}
+
+TEST_CASE("validate - agreement in one paragraph cannot hide a later contradiction") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    ir::DescriptionElement element;
+    element.kind        = ir::ElementKind::Constraints;
+    element.conjuncts   = {conjunct_paragraph("copyable<T>", "true")};
+    element.body        = {ir::BodyParagraph{authored_paragraph("copyable<T>", "true")},
+                           ir::BodyParagraph{authored_paragraph("copyable<T>", "false")}};
+    item.descr.elements = {element};
+    const auto findings = validate(ir::Node{item});
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().message.find("contradicts") != std::string::npos);
+}
+
+TEST_CASE("validate - every authored element checks same-kind suppressed evidence") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    ir::DescriptionElement first;
+    first.kind = ir::ElementKind::Constraints;
+    first.body = {ir::BodyParagraph{{ir::TextInline{"An additional condition applies."}}}};
+    ir::DescriptionElement second;
+    second.kind         = ir::ElementKind::Constraints;
+    second.conjuncts    = {conjunct_paragraph("copyable<T>", "true")};
+    second.body         = {ir::BodyParagraph{authored_paragraph("copyable<T>", "false")}};
+    item.descr.elements = {first, second};
+    const auto findings = validate(ir::Node{item});
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().message.find("contradicts") != std::string::npos);
+    item.descr.elements.front().conjuncts = std::move(item.descr.elements.back().conjuncts);
+    const auto shared_evidence            = validate(ir::Node{item});
+    REQUIRE(shared_evidence.size() == 1);
+    CHECK(shared_evidence.front().message.find("contradicts") != std::string::npos);
+}
+
+TEST_CASE("validate - code normalization preserves token boundaries and literal contents") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class T> void f();", {}});
+    ir::DescriptionElement element;
+    element.kind        = ir::ElementKind::Constraints;
+    element.conjuncts   = {conjunct_paragraph("trait<unsigned int>", "true")};
+    element.body        = {ir::BodyParagraph{authored_paragraph("trait<unsignedint>", "true")}};
+    item.descr.elements = {element};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
+    item.descr.elements.front().body = {ir::BodyParagraph{authored_paragraph("trait< unsigned  int >", "true")}};
+    CHECK(validate(ir::Node{item}).empty());
+    item.descr.elements.front().conjuncts = {conjunct_paragraph(R"(trait<"a b">)", "true")};
+    item.descr.elements.front().body      = {ir::BodyParagraph{authored_paragraph(R"(trait<"ab">)", "true")}};
+    CHECK_FALSE(validate(ir::Node{item}).empty());
 }

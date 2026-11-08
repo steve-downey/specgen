@@ -721,7 +721,7 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - `static_assert` messages are stripped.
 - An authored `\mandates` replaces the derived wording. The suppressed
   derivation's conjuncts remain validator-only evidence, so drift detection can
-  still warn when the authored text duplicates or contradicts a specific assert.
+  still warn when the authored text contradicts a specific assert or leaves one uncovered.
 - Every direct class-scope static_assert routes, in source order, to one sibling
   paragraph immediately after the class synopsis in the active *general*
   subclause — or to the section an `\at` on the class names, together with the
@@ -1145,7 +1145,13 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    and a wrong *Throws:* paragraph should not cost the whole document. No reverse check, per
    §5.4.
 4. **Mandates/Constraints drift** (Warning): authored prose vs. the suppressed derivation's
-   conjuncts (§5.2), located at the specific assert, firing on duplication or contradiction.
+   conjuncts (§5.2), located at the specific assert. Agreement with suppressed
+   derivation evidence is quiet; contradiction warns. Separately rendered
+   derived/authored duplicates still warn. Same-type prose (`X is [not] the
+   same type as Y`) matches `is_same_v<X, Y>` with the corresponding polarity.
+   Leading normative `Let X be Y.` bindings substitute complete code identifiers
+   within that item; duplicate introductions and cycles cannot establish a match.
+   Informative notes/examples supply neither bindings nor drift evidence.
    The reverse direction is checked too: a derived conjunct with no comparable reading
    anywhere in the item's wording — not just its paired element, so a conjunct legitimately
    documented in a sibling element (e.g. `\remarks` instead of `\constraints`) stays silent —

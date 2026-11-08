@@ -907,9 +907,11 @@ checks:
   set.
 - Local references in synopsis code must name generated sections. Prose `\iref`
   references may deliberately name external standard subclauses.
-- Authored *Constraints* and *Mandates* must neither duplicate nor contradict
-  the derived conjuncts they suppress, and a derived conjunct with no authored
-  counterpart anywhere in the description is reported as a warning.
+- Authored *Constraints* and *Mandates* are checked against the derived
+  conjuncts they suppress. Agreement is quiet; contradictions and conjuncts
+  without an authored counterpart warn. Separately rendered derived/authored
+  duplicates still warn. The validator recognizes same-type prose and local
+  normative `Let X be Y.` bindings; notes and examples supply no evidence.
 - An authored *Throws:* paragraph must not contradict an unconditionally
   `noexcept` signature, and *Throws:* Nothing on such a signature is reported
   as redundant. There is deliberately no check in the reverse direction.
@@ -1037,7 +1039,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.13.5 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.13.6 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

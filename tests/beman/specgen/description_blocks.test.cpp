@@ -188,8 +188,7 @@ TEST_CASE("description blocks - informative text cannot discharge a normative dr
     const auto normative            = beman::specgen::validate::validate(ir::Node{item});
     CHECK(std::ranges::none_of(normative,
                                [](const auto& diagnostic) { return diagnostic.message.contains("counterpart"); }));
-    CHECK(std::ranges::any_of(normative,
-                              [](const auto& diagnostic) { return diagnostic.message.contains("duplicates"); }));
+    CHECK(normative.empty());
 }
 
 TEST_CASE("description blocks - informative code and prose remain leakage sites") {

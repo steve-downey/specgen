@@ -1,0 +1,43 @@
+\rSec3[drift.functions]{Functions}
+
+\indexlibraryglobal{accept}%
+\begin{itemdecl}
+template<class F> void accept(F);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{VT} be \tcode{F}.
+
+\pnum
+\constraints
+\tcode{VT} is not the same type as \tcode{int}.
+\end{itemdescr}
+
+\indexlibraryglobal{construct}%
+\begin{itemdecl}
+template<class T> void construct();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{VT} be \tcode{decay_t<T>}.
+
+\pnum
+\mandates
+\tcode{VT} is the same type as \tcode{T}.
+\end{itemdescr}
+
+\indexlibraryglobal{invoke}%
+\begin{itemdecl}
+template<class F> void invoke(F);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{VT} be \tcode{decay_t<F>}.
+
+\pnum
+\constraints
+\tcode{callable<VT>} is \tcode{true}.
+\end{itemdescr}

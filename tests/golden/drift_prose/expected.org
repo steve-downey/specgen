@@ -1,0 +1,42 @@
+** Functions [drift.functions]
+:PROPERTIES:
+:CUSTOM_ID: drift.functions
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+template<class F> void accept(F);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~F~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/: ~VT~ is not the same type as ~int~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T> void construct();
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<T>~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~VT~ is the same type as ~T~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> void invoke(F);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<F>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/: ~callable<VT>~ is ~true~.
+#+end_pnum
