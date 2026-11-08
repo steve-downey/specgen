@@ -909,3 +909,29 @@ TEST_CASE("mpark - a braced title macro renders as heading code") {
     const auto out = mpark::render_to_string(doc);
     CHECK(out.find(R"(Class `gadget`)") != std::string::npos);
 }
+
+TEST_CASE("mpark - a marked block closes in its div, and an added paragraph takes the literal") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body = {
+        BodyParagraph{{TextInline{"Kept."}}},
+        Itemize{{{TextInline{"new item"}}}, Change::Added},
+        BodyParagraph{{TextInline{"New."}}, false, Change::Added},
+    };
+    item.descr.elements.push_back(std::move(effects));
+    CHECK(mpark::render_to_string(item) == "::: wording\n\n```cpp\nvoid f();\n```\n\n"
+                                           "[#]{.pnum} *Effects*: Kept.\n\n"
+                                           "::: add\n\n- [#.x]{.pnum} new item\n\n:::\n\n"
+                                           "::: add\n\n[x]{.pnum} New.\n\n:::\n"
+                                           "\n:::\n");
+}
+
+TEST_CASE("mpark - an elided paragraph is the unnumbered ellipsis") {
+    Document doc;
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"hidden"}}, Change::Elided}, FreeParagraph{{TextInline{"Kept."}}}}});
+    CHECK(mpark::render_to_string(doc) ==
+          "::: wording\n\n## S [g.s]{- .sref} {-}\n\n[…]\n\n[#]{.pnum} Kept.\n\n:::\n");
+}

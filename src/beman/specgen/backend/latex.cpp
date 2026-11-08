@@ -252,7 +252,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
 std::string render_informative_body(const ir::InformativeBody& body);
 std::string render_informative_body(const ir::InformativeBody& body) {
     return body | std::views::transform([](const ir::InformativeBlock& block) {
-               return std::visit(overloaded{LeafBodyRenderer{}}, block).text;
+               return wrap_block(ir::block_change(block), std::visit(overloaded{LeafBodyRenderer{}}, block).text);
            }) |
            std::views::join_with('\n') | std::ranges::to<std::string>();
 }
@@ -280,10 +280,15 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optio
         body, std::vector<std::string>{}, [&](std::vector<std::string> out, const ir::BodyBlock& block) {
             auto       rendered = std::visit(overloaded{BodyRenderer{}}, block);
             const bool first    = out.empty();
+            // A marked block (the wording diff's) closes in its environment
+            // alone: around its whole numbered paragraph when it opens one, so
+            // the number is inside the mark, and around just itself when it
+            // continues the paragraph before it.
+            const ir::Change change = ir::block_change(block);
             if (first || rendered.starts_paragraph) {
-                out.push_back("\\pnum\n" + (first ? label : std::string{}) + rendered.text);
+                out.push_back(wrap_block(change, "\\pnum\n" + (first ? label : std::string{}) + rendered.text));
             } else {
-                out.back() += rendered.text;
+                out.back() += wrap_block(change, rendered.text);
             }
             return out;
         });
@@ -445,8 +450,12 @@ struct LatexAlgebra {
     // A declared item: delegate to the item renderer, independent of depth.
     std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
 
-    // A free paragraph: one \pnum-numbered paragraph of prose.
+    // A free paragraph: one \pnum-numbered paragraph of prose. An elided one
+    // (the wording diff's `items` context) is the ellipsis the draft's own
+    // editing instructions write for wording left out, unnumbered.
     std::string operator()(const ir::FreeParagraph& v) const {
+        if (v.change == ir::Change::Elided)
+            return "[\\ldots]\n";
         return wrap_block(v.change, "\\pnum\n" + render_paragraph(v.text) + '\n');
     }
 };
@@ -481,8 +490,12 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
     const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
     const std::vector<RenderedTop> rendered =
         nodes | std::views::transform([&ctx](const ir::Node& node) {
-            return RenderedTop{ir::change_of(node),
-                               render_node_to_string(ir::with_change(node, ir::Change::Same), ctx)};
+            return RenderedTop{
+                ir::change_of(node),
+                render_node_to_string(
+                    ir::with_change(node,
+                                    ir::change_of(node) == ir::Change::Elided ? ir::Change::Elided : ir::Change::Same),
+                    ctx)};
         }) |
         std::ranges::to<std::vector>();
     return rendered |

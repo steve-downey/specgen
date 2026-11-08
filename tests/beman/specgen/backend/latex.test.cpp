@@ -612,3 +612,31 @@ TEST_CASE("latex - leading class prose and a labelled paragraph have no item wra
     item.change = Change::Removed;
     CHECK(latex::render_to_string(item) == "\\begin{removedblock}\n" + out + "\\end{removedblock}\n");
 }
+
+TEST_CASE("latex - a marked block closes in its block: a whole numbered paragraph, or just a continuation") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body = {
+        BodyParagraph{{TextInline{"Kept."}}},
+        Itemize{{{TextInline{"new item"}}}, Change::Added},
+        BodyParagraph{{TextInline{"New."}}, false, Change::Added},
+        BodyParagraph{{TextInline{"Gone."}}, false, Change::Removed},
+    };
+    item.descr.elements.push_back(std::move(effects));
+    CHECK(latex::render_to_string(item) ==
+          "\\begin{itemdecl}\nvoid f();\n\\end{itemdecl}\n\n\\begin{itemdescr}\n"
+          "\\pnum\n\\effects\nKept.\n"
+          "\\begin{addedblock}\n\\begin{itemize}\n\\item new item\n\\end{itemize}\n\\end{addedblock}\n"
+          "\n\\begin{addedblock}\n\\pnum\nNew.\n\\end{addedblock}\n"
+          "\n\\begin{removedblock}\n\\pnum\nGone.\n\\end{removedblock}\n"
+          "\\end{itemdescr}\n");
+}
+
+TEST_CASE("latex - an elided paragraph is the unnumbered ellipsis") {
+    Document doc;
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"hidden"}}, Change::Elided}, FreeParagraph{{TextInline{"Kept."}}}}});
+    CHECK(latex::render_to_string(doc) == "\\rSec3[g.s]{S}\n\n[\\ldots]\n\n\\pnum\nKept.\n");
+}

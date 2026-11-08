@@ -611,3 +611,44 @@ TEST_CASE("ir_json - explicit coverage and change marks survive the item-v4 boun
     CHECK(emit_json(*saved) == json);
     CHECK(parse_item(R"({"type":"item-v3","descr":{"elements":[]}})").has_value());
 }
+
+TEST_CASE("ir_json - block marks round-trip and are omitted at their default") {
+    SpecItem           item;
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body = {
+        BodyParagraph{{TextInline{"Kept."}}},
+        BodyParagraph{{TextInline{"New."}}, false, Change::Added},
+        Itemize{{{TextInline{"gone"}}}, Change::Removed},
+        Note{{BodyParagraph{{TextInline{"n"}}, false, Change::Added}}, Change::Same},
+    };
+    item.descr.elements.push_back(std::move(effects));
+    item.descr.leading.push_back(EquivalentTo{{"x;", {}}, Change::Removed});
+
+    const std::string json = emit_json(item);
+    CHECK(json.find(R"({"block":"paragraph","text":[{"t":"text","text":"Kept."}],"continuation":false})") !=
+          std::string::npos);
+    CHECK(json.find(R"("text":"New."}],"continuation":false,"change":"added"})") != std::string::npos);
+    CHECK(json.find(R"("change":"removed"})") != std::string::npos);
+
+    const auto back = parse_item(json);
+    REQUIRE(back.has_value());
+    const auto& body = back->descr.elements[0].body;
+    REQUIRE(body.size() == 4);
+    CHECK(block_change(body[0]) == Change::Same);
+    CHECK(block_change(body[1]) == Change::Added);
+    CHECK(block_change(body[2]) == Change::Removed);
+    CHECK(block_change(std::get<Note>(body[3]).body[0]) == Change::Added);
+    CHECK(block_change(back->descr.leading[0]) == Change::Removed);
+    CHECK(emit_json(*back) == json);
+}
+
+TEST_CASE("ir_json - an elided mark round-trips") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{TextInline{"hidden"}}, Change::Elided});
+    const std::string json = emit_json(doc);
+    CHECK(json.find("\"change\":\"elided\"") != std::string::npos);
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(std::get<FreeParagraph>(back->nodes[0]).change == Change::Elided);
+}

@@ -61,7 +61,12 @@ std::optional<SpanKind> span_kind_from_name(std::string_view);
 // `Same` sorts first so that a default-constructed node, and a hand-written
 // golden that omits the key, is unmarked -- the JSON schema omits the key at
 // this value, which is what keeps every pre-diff golden byte-identical.
-enum class Change { Same, Added, Removed };
+//
+// `Elided` is the fourth answer the `items` context gives: unchanged, and not
+// shown. The differ puts it on one FreeParagraph standing in for a run of
+// unchanged children inside a changed section, and a backend renders a node
+// so marked as its ellipsis line, whatever the node holds.
+enum class Change { Same, Added, Removed, Elided };
 
 } // namespace beman::specgen::ir
 
@@ -70,18 +75,24 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::Change::Same,
     beman::specgen::ir::Change::Added,
     beman::specgen::ir::Change::Removed,
+    beman::specgen::ir::Change::Elided,
 };
 
 namespace beman::specgen::ir {
 
-std::string_view      change_name(Change); // "same", "added", "removed"
+std::string_view      change_name(Change); // "same", "added", "removed", "elided"
 std::optional<Change> change_from_name(std::string_view);
 
+// Every IR struct compares structurally (defaulted `==`): the wording diff
+// asks whether two pieces of two documents are the same piece, and a test
+// asks whether a round trip gave back what it was handed.
 struct Span {
     std::size_t begin = 0; // byte offsets into CodeText::text, [begin, end)
     std::size_t end   = 0;
     SpanKind    kind  = SpanKind::ExposId;
     std::string payload;
+
+    friend bool operator==(const Span&, const Span&) = default;
 };
 
 // A run of changed bytes in a CodeText: a second table beside `spans` rather
@@ -101,23 +112,33 @@ struct CodeText {
     std::string            text;
     std::vector<Span>      spans;        // sorted by begin, non-overlapping
     std::vector<ChangeRun> changes = {}; // the wording diff's marks, usually none
+
+    friend bool operator==(const CodeText&, const CodeText&) = default;
 };
 
 // --- prose -----------------------------------------------------------------
 struct TextInline {
     std::string text;
+
+    friend bool operator==(const TextInline&, const TextInline&) = default;
 };
 struct CodeInline {
     CodeText code;
+
+    friend bool operator==(const CodeInline&, const CodeInline&) = default;
 }; // \tcode; spans allow exposid etc.
 struct RefInline {
     std::string stable_name;
+
+    friend bool operator==(const RefInline&, const RefInline&) = default;
 };
 // A library concept name, rendered with the draft's \libconcept macro (not
 // \tcode). Constraints prose uses the "`X` models `C`" form, where `C` is a
 // ConceptRef; see the Constraints derivation (design §5.1).
 struct ConceptRef {
     std::string name;
+
+    friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
@@ -133,6 +154,8 @@ using PlainInline = std::variant<TextInline, CodeInline, RefInline, ConceptRef>;
 struct ChangedInline {
     Change                   change = Change::Added;
     std::vector<PlainInline> inlines;
+
+    friend bool operator==(const ChangedInline&, const ChangedInline&) = default;
 };
 using Inline    = std::variant<TextInline, CodeInline, RefInline, ConceptRef, ChangedInline>;
 using Paragraph = std::vector<Inline>;
@@ -184,14 +207,24 @@ constexpr int canonical_rank(ElementKind k) { return static_cast<int>(k); }
 std::string_view           element_name(ElementKind); // "constraints", ...
 std::optional<ElementKind> element_from_name(std::string_view);
 
+// Every description-body block below carries the wording diff's mark on the
+// whole block (docs/plans/wording-diff.md): an added paragraph inside a kept
+// element, a removed table, a new note. A block's mark renders as the same
+// wrapper a node's does, placed around the block alone.
 struct EquivalentTo {
     CodeText code;
+    Change   change = Change::Same;
+
+    friend bool operator==(const EquivalentTo&, const EquivalentTo&) = default;
 };
 
 // A bulleted list. Conjunctions past the sentence threshold render this way,
 // and the draft uses it widely wherever a description enumerates conditions.
 struct Itemize {
     std::vector<Paragraph> items;
+    Change                 change = Change::Same;
+
+    friend bool operator==(const Itemize&, const Itemize&) = default;
 };
 
 // A draft two-dimensional library table (\lib2dtab2). Named fields make the
@@ -201,6 +234,8 @@ struct Table2DRow {
     Paragraph header;
     Paragraph cell1;
     Paragraph cell2;
+
+    friend bool operator==(const Table2DRow&, const Table2DRow&) = default;
 };
 
 struct Table2D {
@@ -209,6 +244,9 @@ struct Table2D {
     Paragraph               column1     = {};
     Paragraph               column2     = {};
     std::vector<Table2DRow> rows        = {};
+    Change                  change      = Change::Same;
+
+    friend bool operator==(const Table2D&, const Table2D&) = default;
 };
 
 // A draft flat two-column library table (\libtab2): one row per entry, no
@@ -219,6 +257,8 @@ struct Table2D {
 struct Table1DRow {
     Paragraph cell1;
     Paragraph cell2;
+
+    friend bool operator==(const Table1DRow&, const Table1DRow&) = default;
 };
 
 struct Table1D {
@@ -227,6 +267,9 @@ struct Table1D {
     Paragraph               column1     = {};
     Paragraph               column2     = {};
     std::vector<Table1DRow> rows        = {};
+    Change                  change      = Change::Same;
+
+    friend bool operator==(const Table1D&, const Table1D&) = default;
 };
 
 // A paragraph either opens a numbered paragraph or continues the paragraph
@@ -234,9 +277,15 @@ struct Table1D {
 struct BodyParagraph {
     Paragraph text;
     bool      continuation = false;
+    Change    change       = Change::Same;
+
+    friend bool operator==(const BodyParagraph&, const BodyParagraph&) = default;
 };
 struct AuthoredCode {
     CodeText code;
+    Change   change = Change::Same;
+
+    friend bool operator==(const AuthoredCode&, const AuthoredCode&) = default;
 };
 
 // Informative bodies have no recursive informative position: notes and
@@ -245,13 +294,23 @@ using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, 
 using InformativeBody  = std::vector<InformativeBlock>;
 struct Note {
     InformativeBody body;
+    Change          change = Change::Same;
+
+    friend bool operator==(const Note&, const Note&) = default;
 };
 struct Example {
     InformativeBody body;
+    Change          change = Change::Same;
+
+    friend bool operator==(const Example&, const Example&) = default;
 };
 
 using BodyBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, EquivalentTo, AuthoredCode, Note, Example>;
 using DescriptionBody = std::vector<BodyBlock>;
+
+// The wording diff's mark on a block of either body, whichever kind it is.
+Change block_change(const BodyBlock&);
+Change block_change(const InformativeBlock&);
 
 struct DescriptionElement {
     ElementKind     kind = ElementKind::Effects;
@@ -263,6 +322,8 @@ struct DescriptionElement {
     std::vector<Paragraph> coverage = {};
     // The wording diff's mark on the whole element (docs/plans/wording-diff.md).
     Change change = Change::Same;
+
+    friend bool operator==(const DescriptionElement&, const DescriptionElement&) = default;
 };
 
 // Views of all wording sites, in authored order. Code returned here is block
@@ -298,6 +359,8 @@ struct IndexEntry {
     IndexKind   kind = IndexKind::Global;
     std::string name;
     std::string parent; // class/second index component for two-argument kinds
+
+    friend bool operator==(const IndexEntry&, const IndexEntry&) = default;
 };
 
 struct ItemDecl {
@@ -310,11 +373,15 @@ struct ItemDecl {
     // the declarations rather than recovered from their formatted text: the
     // AST says what a declaration names (decision construct-recognition).
     std::vector<std::string> entities = {};
+
+    friend bool operator==(const ItemDecl&, const ItemDecl&) = default;
 };
 
 struct ItemDescr {
     std::vector<DescriptionElement> elements;
     DescriptionBody                 leading = {};
+
+    friend bool operator==(const ItemDescr&, const ItemDescr&) = default;
 };
 
 // One content predicate for rendering, routing, grouping, and coverage.
@@ -327,6 +394,8 @@ struct SpecItem {
     ItemDecl  decl;
     ItemDescr descr;
     Change    change = Change::Same; // the wording diff's mark on the whole item
+
+    friend bool operator==(const SpecItem&, const SpecItem&) = default;
 };
 
 // --- document structure ----------------------------------------------------
@@ -436,6 +505,8 @@ struct SynopsisEntry {
     // hand-written roster looks like and what every reader treats it as; only
     // the front end's fold has anything else to say.
     std::string parent = {};
+
+    friend bool operator==(const SynopsisEntry&, const SynopsisEntry&) = default;
 };
 
 struct Synopsis {
@@ -448,10 +519,14 @@ struct Synopsis {
     CodeText                   code;
     std::vector<SynopsisEntry> roster;                // empty for a forward declaration
     Change                     change = Change::Same; // the wording diff's mark on the whole synopsis
+
+    friend bool operator==(const Synopsis&, const Synopsis&) = default;
 };
 struct FreeParagraph {
     Paragraph text;
     Change    change = Change::Same; // the wording diff's mark on the whole paragraph
+
+    friend bool operator==(const FreeParagraph&, const FreeParagraph&) = default;
 }; // e.g. class-general Mandates prose
 
 struct Section;
@@ -462,6 +537,8 @@ struct Section {
     std::string       title;       // e.g. "Constructors"
     std::vector<Node> children;
     Change            change = Change::Same; // the wording diff's mark on the whole subtree
+
+    friend bool operator==(const Section&, const Section&) = default;
 };
 
 // The wording diff's mark on a node of any kind, and the node with its mark
@@ -487,6 +564,8 @@ std::vector<Node> all_marked(std::vector<Node> nodes, Change change);
 struct ForeignNamespace {
     std::string name;      // as the qualifier writes it: `detail`
     std::string qualified; // what it resolved to: `demo::detail`
+
+    friend bool operator==(const ForeignNamespace&, const ForeignNamespace&) = default;
 };
 
 // A bare (unqualified) name whose reference-resolved declaration this run
@@ -510,6 +589,8 @@ struct ForeignNamespace {
 struct ForeignDeclaration {
     std::string name;   // as used: `probe_witness`
     std::string header; // the header that actually declares it
+
+    friend bool operator==(const ForeignDeclaration&, const ForeignDeclaration&) = default;
 };
 
 // A class member named by the body of a documented function whose body the
@@ -530,6 +611,8 @@ struct ForeignDeclaration {
 struct BodyUse {
     std::string function;
     std::string member;
+
+    friend bool operator==(const BodyUse&, const BodyUse&) = default;
 };
 
 struct Document {
@@ -556,6 +639,8 @@ struct Document {
     // it. Sorted and deduplicated by (function, member) where the front end
     // builds it, so the emitted IR does not depend on decl visitation order.
     std::vector<BodyUse> unextracted_uses = {};
+
+    friend bool operator==(const Document&, const Document&) = default;
 };
 
 } // namespace beman::specgen::ir
