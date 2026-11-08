@@ -463,6 +463,93 @@ TEST_CASE("latex - a nested section descends from a non-default base") {
     CHECK(latex::render_to_string(doc, {.base_section_depth = 2}) == expected);
 }
 
+// --- the wording diff's marks (docs/plans/wording-diff.md) -----------------
+
+TEST_CASE("latex - a changed prose run is the draft's \\added or \\removed around the run") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(
+        BodyParagraph{{TextInline{"Sets "},
+                       ChangedInline{Change::Removed, {CodeInline{{"x", {}}}}},
+                       ChangedInline{Change::Added,
+                                     {CodeInline{{"y", {}}}, TextInline{" (see "}, RefInline{"a.b"}, TextInline{")"}}},
+                       TextInline{"."}}});
+    item.descr.elements.push_back(std::move(effects));
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.find("\\effects\nSets \\removed{\\tcode{x}}\\added{\\tcode{y} (see \\iref{a.b})}.\n") !=
+          std::string::npos);
+}
+
+TEST_CASE("latex - a changed run of code is one escape per line, its spans in their escaped form") {
+    Synopsis synopsis;
+    synopsis.code = CodeText{
+        "T VAL;\nU w;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}, {7, 11, Change::Removed}}};
+    Document doc;
+    doc.nodes.push_back(synopsis);
+    CHECK(latex::render_to_string(doc) ==
+          "\\begin{codeblock}\n@\\added{T \\exposidnc{val};}@\n@\\removed{U w;}@\n\\end{codeblock}\n");
+}
+
+TEST_CASE("latex - a marked top-level node sits in the draft's block environment") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}, .change = Change::Added});
+    doc.nodes.push_back(FreeParagraph{{TextInline{"Gone."}}, Change::Removed});
+    doc.nodes.push_back(Section{"g.s", "S", {FreeParagraph{{TextInline{"Kept."}}}}});
+    CHECK(latex::render_to_string(doc) ==
+          "\\begin{addedblock}\n\\begin{codeblock}\nclass g;\n\\end{codeblock}\n\\end{addedblock}\n"
+          "\n"
+          "\\begin{removedblock}\n\\pnum\nGone.\n\\end{removedblock}\n"
+          "\n"
+          "\\rSec3[g.s]{S}\n\n\\pnum\nKept.\n");
+}
+
+TEST_CASE("latex - a marked section or nested node closes in its block where it is") {
+    Document doc;
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"Kept."}}}, FreeParagraph{{TextInline{"New."}}, Change::Added}}});
+    doc.nodes.push_back(Section{"g.r", "R", {FreeParagraph{{TextInline{"Gone."}}}}, Change::Removed});
+    CHECK(latex::render_to_string(doc) ==
+          "\\rSec3[g.s]{S}\n\n\\pnum\nKept.\n\n\\begin{addedblock}\n\\pnum\nNew.\n\\end{addedblock}\n"
+          "\n"
+          "\\begin{removedblock}\n\\rSec3[g.r]{R}\n\n\\pnum\nGone.\n\\end{removedblock}\n");
+}
+
+TEST_CASE("latex - adjacent top-level nodes with one mark share a block, which is what paper mode renders") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}});
+    doc.nodes.push_back(FreeParagraph{{TextInline{"P."}}});
+    const std::string plain = latex::render_to_string(doc);
+    CHECK(plain == "\\begin{codeblock}\nclass g;\n\\end{codeblock}\n\n\\pnum\nP.\n");
+    const std::string paper = latex::render_to_string(doc, {.paper_mode = true});
+    CHECK(paper == "\\begin{addedblock}\n" + plain + "\\end{addedblock}\n");
+    Document marked;
+    marked.nodes = all_marked(doc.nodes, Change::Added);
+    CHECK(latex::render_to_string(marked) == paper);
+}
+
+TEST_CASE("latex - a marked element and a marked item take their own blocks") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement kept;
+    kept.kind = ElementKind::Effects;
+    kept.body = {BodyParagraph{{TextInline{"Kept."}}}};
+    DescriptionElement added;
+    added.kind          = ElementKind::Remarks;
+    added.body          = {BodyParagraph{{TextInline{"New."}}}};
+    added.change        = Change::Added;
+    item.descr.elements = {kept, added};
+    CHECK(latex::render_to_string(item) == "\\begin{itemdecl}\nvoid f();\n\\end{itemdecl}\n\n\\begin{itemdescr}\n"
+                                           "\\pnum\n\\effects\nKept.\n\n"
+                                           "\\begin{addedblock}\n\\pnum\n\\remarks\nNew.\n\\end{addedblock}\n"
+                                           "\\end{itemdescr}\n");
+    item.change = Change::Removed;
+    CHECK(latex::render_to_string(item).starts_with("\\begin{removedblock}\n\\begin{itemdecl}\n"));
+    CHECK(latex::render_to_string(item).ends_with("\\end{itemdescr}\n\\end{removedblock}\n"));
+    CHECK(latex::render_to_string(item, {.paper_mode = true}).starts_with("\\begin{addedblock}\n"));
+}
+
 TEST_CASE("latex - merged bodies preserve list continuations and table positions") {
     SpecItem           item;
     DescriptionElement first;
@@ -519,4 +606,9 @@ TEST_CASE("latex - leading class prose and a labelled paragraph have no item wra
     const auto out = latex::render_to_string(item);
     CHECK(out == "\\pnum\nThe class wraps a value.\n\n\\pnum\n\\recommended\nAvoid allocation.\n");
     CHECK(out.find("itemdescr") == std::string::npos);
+
+    item.change = Change::Added;
+    CHECK(latex::render_to_string(item) == "\\begin{addedblock}\n" + out + "\\end{addedblock}\n");
+    item.change = Change::Removed;
+    CHECK(latex::render_to_string(item) == "\\begin{removedblock}\n" + out + "\\end{removedblock}\n");
 }

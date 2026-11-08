@@ -25,6 +25,14 @@ struct Options {
     // a paper and this counts depth in the draft, and the two are not the same
     // number (decision wording-base-level).
     int base_section_depth = 3;
+
+    // Mark the whole fragment as added wording: every top-level node in the
+    // draft's own `addedblock` (macros.tex). Paper mode is the wording diff
+    // with an empty baseline (docs/plans/wording-diff.md), so this is the
+    // same rendering a diff gives a wholly new fragment; a diff's own marks
+    // render whether or not this is set. Once refused on this backend, for
+    // want of anything to emit; the draft's macros are the thing to emit.
+    bool paper_mode = false;
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once.

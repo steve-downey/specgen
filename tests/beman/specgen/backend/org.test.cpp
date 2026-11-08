@@ -693,6 +693,66 @@ TEST_CASE("org - paper mode wraps a bare synopsis") {
           "#+begin_addedblock\n#+begin_codeblock\nclass gadget;\n#+end_codeblock\n#+end_addedblock\n");
 }
 
+// --- the wording diff's marks (docs/plans/wording-diff.md) -----------------
+
+TEST_CASE("org - a changed prose run is an insert or delete link, a reference inside it the sref macro") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(
+        BodyParagraph{{TextInline{"Sets "},
+                       ChangedInline{Change::Removed, {CodeInline{{"x", {}}}}},
+                       ChangedInline{Change::Added,
+                                     {CodeInline{{"y", {}}}, TextInline{" (see "}, RefInline{"a.b"}, TextInline{")"}}},
+                       TextInline{"."}}});
+    item.descr.elements.push_back(std::move(effects));
+    const std::string out = org::render_to_string(item);
+    CHECK(out.find("/Effects/: Sets [[delete:][~x~]][[insert:][~y~ (see {{{sref(a.b)}}})]].\n") != std::string::npos);
+}
+
+TEST_CASE("org - a changed run of code is the draft's escape, the same bytes the LaTeX backend writes") {
+    Synopsis synopsis;
+    synopsis.code = CodeText{
+        "T VAL;\nU w;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}, {7, 11, Change::Removed}}};
+    Document doc;
+    doc.nodes.push_back(synopsis);
+    CHECK(org::render_to_string(doc) ==
+          "#+begin_codeblock\n@\\added{T \\exposidnc{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
+}
+
+TEST_CASE("org - a marked section says so in its properties, a marked leaf in a block, added pnums take labels") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}, .change = Change::Added});
+    doc.nodes.push_back(Section{"g.r", "R", {FreeParagraph{{TextInline{"Gone."}}}}, Change::Removed});
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"Kept."}}}, FreeParagraph{{TextInline{"New."}}, Change::Added}}});
+    CHECK(org::render_to_string(doc) ==
+          "#+begin_addedblock\n#+begin_codeblock\nclass g;\n#+end_codeblock\n#+end_addedblock\n"
+          "\n"
+          "** R [g.r]\n:PROPERTIES:\n:CUSTOM_ID: g.r\n:UNNUMBERED: t\n:WG21_WORDING: t\n:WG21_CHANGE: rm\n:END:\n\n"
+          "#+begin_pnum\nGone.\n#+end_pnum\n"
+          "\n"
+          "** S [g.s]\n:PROPERTIES:\n:CUSTOM_ID: g.s\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n\n"
+          "#+begin_pnum\nKept.\n#+end_pnum\n\n"
+          "#+begin_addedblock\n#+begin_pnum x\nNew.\n#+end_pnum\n#+end_addedblock\n");
+}
+
+TEST_CASE("org - paper mode is every top-level node marked added") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}});
+    doc.nodes.push_back(Section{"g.s", "S", {FreeParagraph{{TextInline{"P."}}}}});
+    Document marked;
+    marked.nodes            = all_marked(doc.nodes, Change::Added);
+    const std::string paper = org::render_to_string(doc, {.paper_mode = true});
+    CHECK(org::render_to_string(marked) == paper);
+    CHECK(paper ==
+          "#+begin_addedblock\n#+begin_codeblock\nclass g;\n#+end_codeblock\n#+end_addedblock\n"
+          "\n"
+          "** S [g.s]\n:PROPERTIES:\n:CUSTOM_ID: g.s\n:UNNUMBERED: t\n:WG21_WORDING: t\n:WG21_CHANGE: add\n:END:\n\n"
+          "#+begin_pnum x\nP.\n#+end_pnum\n");
+}
+
 TEST_CASE("org - merged bodies preserve list continuations and table positions") {
     SpecItem           item;
     DescriptionElement first;

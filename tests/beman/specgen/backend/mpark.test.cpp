@@ -791,6 +791,77 @@ TEST_CASE("mpark - a literal @ or $ in code text passes through unescaped") {
     CHECK(out.find('\\') == std::string::npos);
 }
 
+// --- the wording diff's marks (docs/plans/wording-diff.md) -----------------
+
+TEST_CASE("mpark - a changed prose run is the framework's add or rm span around the run") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement effects;
+    effects.kind = ElementKind::Effects;
+    effects.body.push_back(
+        BodyParagraph{{TextInline{"Sets "},
+                       ChangedInline{Change::Removed, {CodeInline{{"x", {}}}}},
+                       ChangedInline{Change::Added,
+                                     {CodeInline{{"y", {}}}, TextInline{" (see "}, RefInline{"a.b"}, TextInline{")"}}},
+                       TextInline{"."}}});
+    item.descr.elements.push_back(std::move(effects));
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.find("*Effects*: Sets [`x`]{.rm}[`y` (see ([a.b]{- .sref}))]{.add}.\n") != std::string::npos);
+}
+
+TEST_CASE("mpark - a changed run of code is the embedded-Markdown span, its spans unabbreviated inside it") {
+    Synopsis synopsis;
+    synopsis.code = CodeText{
+        "T VAL;\nU w;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}, {7, 11, Change::Removed}}};
+    Document doc;
+    doc.nodes.push_back(synopsis);
+    CHECK(mpark::render_to_string(doc) == "```cpp\n@[T *val*;]{.add}@\n@[U w;]{.rm}@\n```\n");
+}
+
+TEST_CASE("mpark - marked nodes take editing-instruction divs, and only added paragraphs take the literal") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}, .change = Change::Added});
+    doc.nodes.push_back(FreeParagraph{{TextInline{"Gone."}}, Change::Removed});
+    doc.nodes.push_back(Section{
+        "g.s", "S", {FreeParagraph{{TextInline{"Kept."}}}, FreeParagraph{{TextInline{"New."}}, Change::Added}}});
+    CHECK(mpark::render_to_string(doc) == "::: add\n\n```cpp\nclass g;\n```\n\n:::\n"
+                                          "\n"
+                                          "::: rm\n\n::: wording\n\n[#]{.pnum} Gone.\n\n:::\n\n:::\n"
+                                          "\n"
+                                          "::: wording\n\n## S [g.s]{- .sref} {-}\n\n[#]{.pnum} Kept.\n\n"
+                                          "::: add\n\n[x]{.pnum} New.\n\n:::\n\n:::\n");
+}
+
+TEST_CASE("mpark - paper mode is every top-level node marked added") {
+    Document doc;
+    doc.nodes.push_back(Synopsis{.name = "g", .code = {"class g;", {}}, .roster = {}});
+    doc.nodes.push_back(Section{"g.s", "S", {FreeParagraph{{TextInline{"P."}}}}});
+    Document marked;
+    marked.nodes            = all_marked(doc.nodes, Change::Added);
+    const std::string paper = mpark::render_to_string(doc, {.paper_mode = true});
+    CHECK(mpark::render_to_string(marked) == paper);
+    CHECK(
+        paper ==
+        "::: add\n\n```cpp\nclass g;\n```\n\n::: wording\n\n## S [g.s]{- .sref} {-}\n\n[x]{.pnum} P.\n\n:::\n\n:::\n");
+}
+
+TEST_CASE("mpark - a marked element takes its own div inside the wording div") {
+    SpecItem item;
+    item.decl.signatures.push_back({"void f();", {}});
+    DescriptionElement kept;
+    kept.kind = ElementKind::Effects;
+    kept.body = {BodyParagraph{{TextInline{"Kept."}}}};
+    DescriptionElement removed;
+    removed.kind        = ElementKind::Remarks;
+    removed.body        = {BodyParagraph{{TextInline{"Old."}}}};
+    removed.change      = Change::Removed;
+    item.descr.elements = {kept, removed};
+    CHECK(mpark::render_to_string(item) == "::: wording\n\n```cpp\nvoid f();\n```\n\n"
+                                           "[#]{.pnum} *Effects*: Kept.\n\n"
+                                           "::: rm\n\n[#]{.pnum} *Remarks*: Old.\n\n:::\n"
+                                           "\n:::\n");
+}
+
 TEST_CASE("mpark - merged bodies preserve list continuations and table positions") {
     SpecItem           item;
     DescriptionElement first;

@@ -675,12 +675,21 @@ Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsi
 // become `\tcode`. `RefInline` and `ConceptRef` name a stable name and a
 // library concept respectively, neither of which is a class-body
 // declaration, so neither is a leakage site.
+// A changed run (the wording diff's mark) is looked inside: what it holds is
+// prose of this document, marked or not.
 std::vector<const ir::CodeText*> paragraph_code(const ir::Paragraph& paragraph) {
-    return paragraph | std::views::transform([](const ir::Inline& inl) {
-               const auto* code = std::get_if<ir::CodeInline>(&inl);
-               return code != nullptr ? &code->code : nullptr;
+    const auto plain_code = [](const ir::PlainInline& inl) -> const ir::CodeText* {
+        const auto* code = std::get_if<ir::CodeInline>(&inl);
+        return code != nullptr ? &code->code : nullptr;
+    };
+    return paragraph | std::views::transform([&](const ir::Inline& inl) -> std::vector<const ir::CodeText*> {
+               if (const auto* run = std::get_if<ir::ChangedInline>(&inl))
+                   return run->inlines | std::views::transform(plain_code) | std::ranges::to<std::vector>();
+               if (const auto* code = std::get_if<ir::CodeInline>(&inl))
+                   return {&code->code};
+               return {};
            }) |
-           std::views::filter([](const ir::CodeText* code) { return code != nullptr; }) |
+           std::views::join | std::views::filter([](const ir::CodeText* code) { return code != nullptr; }) |
            std::ranges::to<std::vector>();
 }
 
@@ -699,19 +708,28 @@ check_paragraph_leakage(const std::string& context, const ir::Paragraph& paragra
         diagnostics_monoid);
 }
 
-bool paragraph_has_content(const ir::Paragraph& paragraph) {
-    const auto has_non_whitespace = [](std::string_view text) {
+// Whether one inline says anything. Five alternatives (decision
+// visitation-rules' >3 rule), so a named visitor. The changed-run case visits
+// `PlainInline`, a different and non-recursive variant, with this same
+// visitor: a run cannot hold a run, so this is dispatch, not recursion.
+struct InlineHasContent {
+    static bool has_non_whitespace(std::string_view text) {
         return std::ranges::any_of(text, [](char ch) { return ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r'; });
-    };
-    return std::ranges::any_of(paragraph, [&](const ir::Inline& inl) {
-        return std::visit(overloaded{
-                              [&](const ir::TextInline& text) { return has_non_whitespace(text.text); },
-                              [&](const ir::CodeInline& code) { return has_non_whitespace(code.code.text); },
-                              [&](const ir::RefInline& ref) { return has_non_whitespace(ref.stable_name); },
-                              [&](const ir::ConceptRef& ref) { return has_non_whitespace(ref.name); },
-                          },
-                          inl);
-    });
+    }
+
+    bool operator()(const ir::TextInline& text) const { return has_non_whitespace(text.text); }
+    bool operator()(const ir::CodeInline& code) const { return has_non_whitespace(code.code.text); }
+    bool operator()(const ir::RefInline& ref) const { return has_non_whitespace(ref.stable_name); }
+    bool operator()(const ir::ConceptRef& ref) const { return has_non_whitespace(ref.name); }
+    bool operator()(const ir::ChangedInline& run) const {
+        return std::ranges::any_of(
+            run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
+    }
+};
+
+bool paragraph_has_content(const ir::Paragraph& paragraph) {
+    return std::ranges::any_of(paragraph,
+                               [](const ir::Inline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
 }
 
 template <class Block>
@@ -974,6 +992,43 @@ struct Conjunct {
     ConjunctPolarity polarity;
 };
 
+// The four ordinary inline kinds stay one piece; a changed run contributes
+// its plain pieces. Marks annotate wording rather than hide drift evidence.
+struct UnmarkedPieces {
+    std::vector<ir::PlainInline> operator()(const ir::TextInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::CodeInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::RefInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::ConceptRef& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
+};
+
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TextInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::CodeInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RefInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ConceptRef& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
+
+std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
+
+std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph) {
+    auto pieces = paragraph | std::views::transform([](const ir::Inline& piece) {
+                      return std::visit(overloaded{UnmarkedPieces{}}, piece);
+                  }) |
+                  std::views::join;
+    // A word-level mark may split a relation or a Let introduction into
+    // adjacent text pieces; rejoin those before recognizing its phrasing.
+    return std::ranges::fold_left(pieces, std::vector<ir::PlainInline>{}, [](auto out, const ir::PlainInline& piece) {
+        if (const auto* text = std::get_if<ir::TextInline>(&piece); text != nullptr && !out.empty()) {
+            if (auto* previous = std::get_if<ir::TextInline>(&out.back())) {
+                previous->text += text->text;
+                return out;
+            }
+        }
+        out.push_back(piece);
+        return out;
+    });
+}
+
 // The subject and polarity of one derived conjunct, read off the
 // `phrase_conjunct` shape it was built from: a bool trait/negation conjunct
 // is `[CodeInline{subject}, TextInline{" is "}, CodeInline{"true"|"false"}]`,
@@ -981,7 +1036,8 @@ struct Conjunct {
 // `true`/`false` CodeInline, the polarity is right there too. A concept-id
 // or verbatim-fallback conjunct has no such trailing literal, so it reads
 // Unknown -- the drift check below skips those rather than guessing.
-std::optional<Conjunct> read_conjunct(const ir::Paragraph& paragraph) {
+std::optional<Conjunct> read_conjunct(const ir::Paragraph& input) {
+    const auto paragraph = unmarked_paragraph(input);
     if (paragraph.empty())
         return std::nullopt;
     const auto* subject = std::get_if<ir::CodeInline>(&paragraph.front());
@@ -1100,14 +1156,15 @@ Bindings description_bindings(const ir::ItemDescr& description) {
     Bindings              bindings;
     std::set<std::string> ambiguous;
     // substrate generic algorithm: collect local declarations with duplicate-name tracking.
-    for (const auto* paragraph : ir::body_paragraphs(description.leading, false)) {
-        if (paragraph->size() != 5)
+    for (const auto* input : ir::body_paragraphs(description.leading, false)) {
+        const auto paragraph = unmarked_paragraph(*input);
+        if (paragraph.size() != 5)
             continue;
-        const auto* let   = std::get_if<ir::TextInline>(&(*paragraph)[0]);
-        const auto* name  = std::get_if<ir::CodeInline>(&(*paragraph)[1]);
-        const auto* be    = std::get_if<ir::TextInline>(&(*paragraph)[2]);
-        const auto* value = std::get_if<ir::CodeInline>(&(*paragraph)[3]);
-        const auto* stop  = std::get_if<ir::TextInline>(&(*paragraph)[4]);
+        const auto* let   = std::get_if<ir::TextInline>(&paragraph[0]);
+        const auto* name  = std::get_if<ir::CodeInline>(&paragraph[1]);
+        const auto* be    = std::get_if<ir::TextInline>(&paragraph[2]);
+        const auto* value = std::get_if<ir::CodeInline>(&paragraph[3]);
+        const auto* stop  = std::get_if<ir::TextInline>(&paragraph[4]);
         if (let == nullptr || name == nullptr || be == nullptr || value == nullptr || stop == nullptr ||
             let->text != "Let " || be->text != " be " || stop->text != ".")
             continue;
@@ -1128,7 +1185,8 @@ Bindings description_bindings(const ir::ItemDescr& description) {
 // found but nothing nearby reads as a polarity, which the caller treats as
 // "found, but not comparable" rather than "not found".
 std::optional<ConjunctPolarity>
-find_subject(const ir::Paragraph& paragraph, const std::string& subject, const Bindings& bindings) {
+find_subject(const ir::Paragraph& input, const std::string& subject, const Bindings& bindings) {
+    const auto paragraph  = unmarked_paragraph(input);
     const auto normalized = predicate_subject(subject, bindings);
     // substrate generic algorithm: recognize a relation spanning two code inlines and the prose between them.
     for (std::size_t pos = 0; pos + 2 < paragraph.size(); ++pos) {
@@ -1144,7 +1202,7 @@ find_subject(const ir::Paragraph& paragraph, const std::string& subject, const B
                 normalized)
             return positive ? ConjunctPolarity::Positive : ConjunctPolarity::Negative;
     }
-    const auto is_named = [&](const ir::Inline& piece) {
+    const auto is_named = [&](const ir::PlainInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
         return code != nullptr && predicate_subject(code->code.text, bindings) == normalized;
     };
@@ -1158,7 +1216,7 @@ find_subject(const ir::Paragraph& paragraph, const std::string& subject, const B
     // `false` further along that must not be misread as this one's.
     constexpr std::ptrdiff_t window          = 3;
     const auto               window_end      = std::ranges::next(match, window + 1, paragraph.end());
-    const auto               is_bool_literal = [](const ir::Inline& piece) {
+    const auto               is_bool_literal = [](const ir::PlainInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
         return code != nullptr && (code->code.text == "true" || code->code.text == "false");
     };
@@ -1482,18 +1540,26 @@ bool every_signature_is_noexcept(const std::vector<ir::CodeText>& signatures) {
 // The text of a paragraph, with every inline flattened to what it names.
 // Only ever compared against "Nothing" below, so the markup distinctions the
 // backends draw between these four do not matter here.
+// Five alternatives, so a named visitor; the changed-run case dispatches the
+// non-recursive `PlainInline` with this same visitor, as InlineHasContent
+// does, and flattens the run's text into the paragraph's.
+struct InlineText {
+    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    std::string operator()(const ir::CodeInline& v) const { return v.code.text; }
+    std::string operator()(const ir::RefInline& v) const { return v.stable_name; }
+    std::string operator()(const ir::ConceptRef& v) const { return v.name; }
+    std::string operator()(const ir::ChangedInline& run) const {
+        return foundation::mconcat_map(
+            run.inlines,
+            [](const ir::PlainInline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
+            foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
+    }
+};
+
 std::string paragraph_text(const ir::Paragraph& paragraph) {
     return foundation::mconcat_map(
         paragraph,
-        [](const ir::Inline& piece) {
-            return std::visit(overloaded{
-                                  [](const ir::TextInline& v) { return v.text; },
-                                  [](const ir::CodeInline& v) { return v.code.text; },
-                                  [](const ir::RefInline& v) { return v.stable_name; },
-                                  [](const ir::ConceptRef& v) { return v.name; },
-                              },
-                              piece);
-        },
+        [](const ir::Inline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
         foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
 }
 

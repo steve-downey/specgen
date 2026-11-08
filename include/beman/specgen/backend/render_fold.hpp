@@ -44,6 +44,10 @@ template <typename A>
 struct RenderedSectionF {
     std::string    header;
     std::vector<A> children;
+    // The wording diff's mark on the section, carried to the algebra so the
+    // section's own wrapper (`::: add`, `addedblock`) can close around its
+    // rendered children, which only the algebra sees together.
+    ir::Change change = ir::Change::Same;
 };
 
 template <typename A>
@@ -66,6 +70,7 @@ struct RenderFMapper {
             s.header,
             s.children | std::views::transform([this](const A& child) { return fn(child); }) |
                 std::ranges::to<std::vector>(),
+            s.change,
         };
     }
 

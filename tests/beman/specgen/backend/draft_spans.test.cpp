@@ -34,3 +34,26 @@ TEST_CASE("draft_spans - draft_code_inline wraps a partial span in tcode but not
     CHECK(backend::draft_code_inline(CodeInline{{"x.val", {{2, 5, SpanKind::ExposId, "val"}}}}) ==
           "\\tcode{x.\\exposid{val}}");
 }
+
+// --- the draft's change marks (docs/plans/wording-diff.md) -----------------
+
+TEST_CASE("draft_spans - the escaped form is what the codeblock form wraps") {
+    const Span expos{0, 3, SpanKind::ExposId, "val"};
+    CHECK(backend::draft_span_escaped(expos, "VAL") == "\\exposidnc{val}");
+    CHECK(backend::draft_span_codeblock(expos, "VAL") == "@\\exposidnc{val}@");
+    const Span ref{0, 3, SpanKind::Ref, "a.b"};
+    CHECK(backend::draft_span_escaped(ref, "a.b") == "\\ref{a.b}");
+    CHECK(backend::draft_span_codeblock(ref, "a.b") == "\\ref{a.b}");
+}
+
+TEST_CASE("draft_spans - the change marks are macros.tex's own") {
+    CHECK(backend::draft_change_prose(Change::Same, "x") == "x");
+    CHECK(backend::draft_change_prose(Change::Added, "x") == "\\added{x}");
+    CHECK(backend::draft_change_prose(Change::Removed, "x") == "\\removed{x}");
+    CHECK(backend::draft_change_codeblock(Change::Same, "x") == "x");
+    CHECK(backend::draft_change_codeblock(Change::Added, "x") == "@\\added{x}@");
+    CHECK(backend::draft_change_codeblock(Change::Removed, "x") == "@\\removed{x}@");
+    CHECK(!backend::draft_change_environment(Change::Same).has_value());
+    CHECK(backend::draft_change_environment(Change::Added) == "addedblock");
+    CHECK(backend::draft_change_environment(Change::Removed) == "removedblock");
+}

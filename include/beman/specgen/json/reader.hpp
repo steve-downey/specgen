@@ -31,8 +31,11 @@ class Reader {
   public:
     explicit Reader(std::string_view text) : text_(text) {}
 
-    bool               failed() const { return failed_; }
-    std::size_t        offset() const { return error_offset_; }
+    bool        failed() const { return failed_; }
+    std::size_t offset() const { return error_offset_; }
+    // The unread tail, so a caller can re-read one value's bytes into a
+    // second destination (descriptor.hpp's shared-key variant parse).
+    std::string_view   remaining() const { return text_.substr(pos_); }
     const std::string& message() const { return message_; }
 
     bool fail(std::string msg) {

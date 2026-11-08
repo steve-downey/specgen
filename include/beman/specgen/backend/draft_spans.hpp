@@ -12,6 +12,7 @@
 #include <beman/specgen/ir.hpp>
 
 #include <format>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -75,12 +76,55 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
 // proper (`@\impdefnc@`). A Ref span only ever sits in a comment -- that is
 // what the enumerator means -- so it is the one kind that must not be
 // wrapped; wrapping it would typeset the delimiters.
+//
+// `draft_span_escaped` is the form *inside* an open `@...@`: what the
+// codeblock form wraps, which is also what a span inside a changed run of
+// code renders as, the run having opened the escape already
+// (docs/plans/wording-diff.md). The exposition identifier takes the
+// no-correction form there as it does in a codeblock; a Ref is the bare
+// `\ref` either way.
+inline std::string draft_span_escaped(const ir::Span& span, std::string_view spelling) {
+    if (span.kind == ir::SpanKind::ExposId)
+        return "\\exposidnc{" + span.payload + '}';
+    return draft_span_prose(span, spelling);
+}
+
 inline std::string draft_span_codeblock(const ir::Span& span, std::string_view spelling) {
     if (span.kind == ir::SpanKind::Ref)
         return draft_span_prose(span, spelling);
-    if (span.kind == ir::SpanKind::ExposId)
-        return "@\\exposidnc{" + span.payload + "}@";
-    return '@' + draft_span_prose(span, spelling) + '@';
+    return '@' + draft_span_escaped(span, spelling) + '@';
+}
+
+// --- the draft's own change marks (macros.tex) ------------------------------
+//
+// `\added{...}` and `\removed{...}` in prose; the same inside a code escape,
+// which is where a changed run of code goes; and the `addedblock` /
+// `removedblock` environments around a whole node. Shared with the org
+// backend for the reason the span spellings are: inside its code blocks the
+// bytes are the draft's, and its `#+begin_addedblock` is the special block
+// that exports to the environment of the same name.
+
+inline std::string draft_change_prose(ir::Change change, std::string_view text) {
+    return foundation::match(
+        change,
+        foundation::when<ir::Change::Same>([&] { return std::string(text); }),
+        foundation::when<ir::Change::Added>([&] { return "\\added{" + std::string(text) + '}'; }),
+        foundation::when<ir::Change::Removed>([&] { return "\\removed{" + std::string(text) + '}'; }));
+}
+
+inline std::string draft_change_codeblock(ir::Change change, std::string_view text) {
+    if (change == ir::Change::Same)
+        return std::string(text);
+    return '@' + draft_change_prose(change, text) + '@';
+}
+
+// The environment a marked node sits in, and nothing for an unmarked one.
+inline std::optional<std::string_view> draft_change_environment(ir::Change change) {
+    return foundation::match(
+        change,
+        foundation::when<ir::Change::Same>([] { return std::optional<std::string_view>{}; }),
+        foundation::when<ir::Change::Added>([] { return std::optional<std::string_view>{"addedblock"}; }),
+        foundation::when<ir::Change::Removed>([] { return std::optional<std::string_view>{"removedblock"}; }));
 }
 
 // A code inline, in prose, as the draft writes one. Shared for the same

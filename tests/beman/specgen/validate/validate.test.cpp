@@ -1703,3 +1703,51 @@ TEST_CASE("validate - explicit coverage checks exact targets and polarity throug
         CHECK(findings.front().message.find("`other<T>`") != std::string::npos);
     }
 }
+
+TEST_CASE("validate - draft constraint prose and bindings remain evidence inside change marks") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class F> void f(F);", {}});
+    item.descr.leading = {ir::BodyParagraph{{
+        ir::TextInline{"Let "},
+        ir::CodeInline{{"VT", {}}},
+        ir::TextInline{" be "},
+        ir::ChangedInline{ir::Change::Added, {ir::CodeInline{{"remove_cvref_t<F>", {}}}}},
+        ir::TextInline{"."},
+    }}};
+    ir::DescriptionElement element;
+    element.kind      = ir::ElementKind::Constraints;
+    element.conjuncts = {conjunct_paragraph("is_same_v<remove_cvref_t<F>, function>", "false"),
+                         conjunct_paragraph("callable<remove_cvref_t<F>>", "true")};
+    element.body      = {
+        ir::BodyParagraph{{ir::ChangedInline{ir::Change::Added,
+                                             {ir::CodeInline{{"function", {}}},
+                                              ir::TextInline{" is not the same type as "},
+                                              ir::CodeInline{{"remove_cvref_t<F>", {}}}}}}},
+        ir::BodyParagraph{{ir::ChangedInline{ir::Change::Added, {ir::CodeInline{{"callable<VT>", {}}}}},
+                           ir::TextInline{" is "},
+                           ir::CodeInline{{"true", {}}}}},
+    };
+    item.descr.elements = {element};
+
+    SECTION("matching prose stays quiet") { CHECK(validate(ir::Node{item}).empty()); }
+    SECTION("a word-level mark may split the relation's text") {
+        item.descr.elements.front().body.front() = ir::BodyParagraph{{
+            ir::CodeInline{{"function", {}}},
+            ir::TextInline{" is "},
+            ir::ChangedInline{ir::Change::Added, {ir::TextInline{"not"}}},
+            ir::TextInline{" the same type as "},
+            ir::CodeInline{{"remove_cvref_t<F>", {}}},
+        }};
+        CHECK(validate(ir::Node{item}).empty());
+    }
+    SECTION("a contradictory changed run still warns") {
+        item.descr.elements.front().body.front() =
+            ir::BodyParagraph{{ir::ChangedInline{ir::Change::Added,
+                                                 {ir::CodeInline{{"function", {}}},
+                                                  ir::TextInline{" is the same type as "},
+                                                  ir::CodeInline{{"remove_cvref_t<F>", {}}}}}}};
+        const auto findings = validate(ir::Node{item});
+        REQUIRE(findings.size() == 1);
+        CHECK(findings.front().message.find("contradicts") != std::string::npos);
+    }
+}

@@ -85,7 +85,18 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
     return backend::draft_span_codeblock(span, spelling);
 }
 
-std::string render_code(const ir::CodeText& code) { return backend::render_code_spans(code, escape_span); }
+// A span inside a changed run of code: the run has opened the `@...@`
+// escape already, so the span takes the draft's escaped form -- the same
+// bytes the LaTeX backend writes there, less the index it never builds.
+std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) {
+    if (span.kind == ir::SpanKind::LibraryIndex)
+        return std::string(spelling);
+    return backend::draft_span_escaped(span, spelling);
+}
+
+std::string render_code(const ir::CodeText& code) {
+    return backend::render_code_spans(code, escape_span, escape_span_in_run, backend::draft_change_codeblock);
+}
 
 // One special block. `env` is the draft environment name org will export to,
 // which is also the org block name -- that identity is the whole point of
@@ -99,22 +110,63 @@ std::string wrap_pnum(std::string text) {
     return "#+begin_pnum\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_pnum\n";
 }
 
-std::string wrap_added(std::string text) {
-    return "#+begin_addedblock\n" + text + (text.ends_with('\n') ? "" : "\n") + "#+end_addedblock\n";
-}
-
-std::string number_added_pnums_from(std::string text, std::size_t pos, std::size_t count) {
-    constexpr std::string_view marker = "#+begin_pnum\n";
-    pos                               = text.find(marker, pos);
-    if (pos == std::string::npos)
+// A marked node or element in the special block of the draft environment's
+// name, `addedblock` / `removedblock`, which org's stock export turns into
+// that environment (docs/plans/wording-diff.md); an unmarked one as it is.
+std::string wrap_block(ir::Change change, std::string text) {
+    const std::optional<std::string_view> environment = backend::draft_change_environment(change);
+    if (!environment)
         return text;
-    const std::string label       = count == 0 ? "x" : std::format("x+{}", count);
-    const std::string replacement = std::format("#+begin_pnum {}\n", label);
-    text.replace(pos, marker.size(), replacement);
-    return number_added_pnums_from(std::move(text), pos + replacement.size(), count + 1);
+    return std::format(
+        "#+begin_{}\n{}{}#+end_{}\n", *environment, text, text.ends_with('\n') ? "" : "\n", *environment);
 }
 
-std::string number_added_pnums(std::string text) { return number_added_pnums_from(std::move(text), 0, 0); }
+// Under the wording diff only an *added* paragraph takes the `x`, `x+1`
+// literal label: a retained or removed one keeps the counter wg21org gives
+// it. Which paragraphs are added is read back off the rendered text, as the
+// mpark backend reads its divs: a `#+begin_pnum` is added while an
+// `addedblock` is open, or under a heading whose properties say
+// `:WG21_CHANGE: add` -- until the next heading at that level or shallower.
+// One ascending run over the whole document.
+std::string number_added_pnums(const std::string& text) {
+    unsigned    count        = 0;
+    int         block_depth  = 0;
+    std::size_t added_level  = 0; // the level of the open added heading, 0 for none
+    std::size_t last_heading = 0;
+    std::string out;
+    out.reserve(text.size());
+    const bool             trailing_newline = text.ends_with('\n');
+    const std::string_view body = std::string_view(text).substr(0, text.size() - (trailing_newline ? 1 : 0));
+    // substrate generic algorithm: a line walk whose state is the open blocks,
+    // the open heading and the paragraph count together -- a fold with
+    // several accumulators, written as the loop it is.
+    for (auto&& piece : body | std::views::split('\n')) {
+        const std::string_view line(piece.begin(), piece.end());
+        const std::size_t      stars = line.find_first_not_of('*');
+        if (line.starts_with("#+begin_addedblock")) {
+            ++block_depth;
+        } else if (line.starts_with("#+end_addedblock")) {
+            block_depth = std::max(0, block_depth - 1);
+        } else if (stars != 0 && stars != std::string_view::npos && line[stars] == ' ') {
+            last_heading = stars;
+            if (added_level != 0 && stars <= added_level)
+                added_level = 0;
+        } else if (line == ":WG21_CHANGE: add" && added_level == 0) {
+            added_level = last_heading;
+        }
+        const bool added = block_depth > 0 || added_level != 0;
+        if (added && line == "#+begin_pnum") {
+            out += std::format("#+begin_pnum {}", count == 0 ? std::string{"x"} : std::format("x+{}", count));
+            ++count;
+        } else {
+            out += line;
+        }
+        out += '\n';
+    }
+    if (!trailing_newline && !out.empty())
+        out.pop_back();
+    return out;
+}
 
 // --- prose ------------------------------------------------------------------
 
@@ -221,7 +273,42 @@ struct PieceRenderer {
     // links; org has only the code font to offer, which is what `~...~` gives
     // -- the same trade the mpark backend makes with backticks.
     std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
+
+    // A changed run of prose (the wording diff's mark): wg21org's
+    // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
+    // after `RunPieceRenderer` below, which renders the run's contents.
+    std::string operator()(const ir::ChangedInline& run) const;
 };
+
+// The contents of a changed run, which is a link's description, where org
+// allows every inline but another link. A cross-reference inside a run is
+// therefore the `{{{sref(name)}}}` macro rather than the link PieceRenderer
+// writes, and wg21org expands the macro to the same target the link resolves
+// to (docs/plans/wording-diff.md, org-forms). The other three cases are
+// PieceRenderer's own: an export snippet and `~code~` are both allowed in a
+// description. Four alternatives of the non-recursive `PlainInline`, so a
+// named visitor of its own.
+struct RunPieceRenderer {
+    std::string operator()(const ir::TextInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::CodeInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::RefInline& v) const { return "{{{sref(" + v.stable_name + ")}}}"; }
+    std::string operator()(const ir::ConceptRef& v) const { return PieceRenderer{}(v); }
+};
+
+std::string render_run(const std::vector<ir::PlainInline>& inlines) {
+    return inlines | std::views::transform([](const ir::PlainInline& piece) {
+               return std::visit(overloaded{RunPieceRenderer{}}, piece);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
+    const std::string inner = render_run(run.inlines);
+    return foundation::match(run.change,
+                             foundation::when<ir::Change::Same>([&] { return inner; }),
+                             foundation::when<ir::Change::Added>([&] { return "[[insert:][" + inner + "]]"; }),
+                             foundation::when<ir::Change::Removed>([&] { return "[[delete:][" + inner + "]]"; }));
+}
 
 std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
     return para | std::views::transform([new_roots](const ir::Inline& piece) {
@@ -426,20 +513,25 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
     }
 
     if (!beman::specgen::ir::has_description(item.descr))
-        return out;
+        return wrap_block(item.change, std::move(out));
 
-    std::vector<std::string> blocks = body_blocks(item.descr.leading, std::nullopt, new_roots);
-    blocks.append_range(
-        item.descr.elements |
-        std::views::chunk_by(
-            [](const ir::DescriptionElement& a, const ir::DescriptionElement& b) { return a.kind == b.kind; }) |
-        std::views::transform([new_roots](auto&& group) { return element_group_blocks(group, new_roots); }) |
-        std::views::join | std::ranges::to<std::vector>());
+    // Grouped by mark as well as kind, each group in its own block when
+    // marked -- the same rule, for the same reason, as latex.cpp's render_item.
+    std::vector<std::string> groups = body_blocks(item.descr.leading, std::nullopt, new_roots);
+    groups.append_range(item.descr.elements |
+                        std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
+                            return a.kind == b.kind && a.change == b.change;
+                        }) |
+                        std::views::transform([new_roots](auto&& group) {
+                            return wrap_block(std::ranges::begin(group)->change,
+                                              element_group_blocks(group, new_roots) | std::views::join_with('\n') |
+                                                  std::ranges::to<std::string>());
+                        }));
 
     if (!out.empty())
         out += '\n';
-    out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
-    return out;
+    out += groups | std::views::join_with('\n') | std::ranges::to<std::string>();
+    return wrap_block(item.change, std::move(out));
 }
 
 // --- the direct algebra over backend::backend::RenderF ---------------------
@@ -450,7 +542,6 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
 struct RenderCtx {
     int  level;
     bool wording_root;
-    bool paper_mode;
 };
 
 // The fold's seed/handle type: a node paired with the RenderCtx its parent
@@ -481,17 +572,25 @@ struct SeededProjector {
             s.title.empty()
                 ? std::format("{} [{}]\n", stars, s.stable_name)
                 : std::format("{} {} [{}]\n", stars, backend::render_section_title(s.title, '~'), s.stable_name);
-        header += std::format(":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
-                              s.stable_name,
-                              ctx.wording_root ? ":WG21_WORDING: t\n" : "",
-                              ctx.wording_root && ctx.paper_mode ? ":WG21_CHANGE: add\n" : "");
+        // A marked section (the wording diff's) says so in its properties,
+        // `:WG21_CHANGE: add` or `rm`, rather than in a block around it: the
+        // exporter applies the change to the subtree it owns.
+        header += std::format(
+            ":PROPERTIES:\n:CUSTOM_ID: {}\n:UNNUMBERED: t\n{}{}:END:\n",
+            s.stable_name,
+            ctx.wording_root ? ":WG21_WORDING: t\n" : "",
+            foundation::match(
+                s.change,
+                foundation::when<ir::Change::Same>([] { return std::string_view{}; }),
+                foundation::when<ir::Change::Added>([] { return std::string_view{":WG21_CHANGE: add\n"}; }),
+                foundation::when<ir::Change::Removed>([] { return std::string_view{":WG21_CHANGE: rm\n"}; })));
 
-        const RenderCtx     child_ctx{ctx.level + 1, false, ctx.paper_mode};
+        const RenderCtx     child_ctx{ctx.level + 1, false};
         std::vector<Seeded> children =
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children), s.change};
     }
 
     // The three leaves render independently of outline level, so they pass
@@ -522,10 +621,14 @@ struct OrgAlgebra {
     // A synopsis is a `codeblock`, an itemdecl's signatures are an `itemdecl`
     // -- the same two environments the LaTeX backend picks, because they are
     // the same two environments.
-    std::string operator()(const ir::Synopsis& v) const { return render_block("codeblock", v.code); }
+    // A marked leaf (the wording diff's) closes in its block; a marked
+    // section carried its mark on its heading's properties instead.
+    std::string operator()(const ir::Synopsis& v) const {
+        return wrap_block(v.change, render_block("codeblock", v.code));
+    }
     std::string operator()(const ir::SpecItem& v) const { return render_item(v, new_roots); }
     std::string operator()(const ir::FreeParagraph& v) const {
-        return wrap_pnum(render_paragraph(v.text, new_roots) + '\n');
+        return wrap_block(v.change, wrap_pnum(render_paragraph(v.text, new_roots) + '\n'));
     }
 };
 
@@ -544,26 +647,32 @@ std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx, st
 } // namespace
 
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_heading_level, true, options.paper_mode};
-    const std::vector<std::string> rendered = doc.nodes | std::views::transform([&](const ir::Node& node) {
-                                                  std::string text =
-                                                      render_node_to_string(node, ctx, options.new_roots);
-                                                  if (options.paper_mode && !std::holds_alternative<ir::Section>(node))
-                                                      return wrap_added(std::move(text));
-                                                  return text;
-                                              }) |
-                                              std::ranges::to<std::vector>();
-    std::string                    out      = rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
-    if (options.paper_mode)
-        out = number_added_pnums(std::move(out));
-    return out;
+    const RenderCtx ctx{options.base_heading_level, true};
+    // Paper mode is the wording diff with an empty baseline
+    // (docs/plans/wording-diff.md): every top-level node marked added, and
+    // the marks then render exactly as a diff's would. A marked top-level
+    // section carries its mark on its heading, through the projector; a
+    // marked top-level leaf is rendered unmarked and closed in its block here,
+    // one block per node, which is where paper mode has always put it.
+    const std::optional<std::vector<ir::Node>> marked =
+        options.paper_mode ? std::optional{ir::all_marked(doc.nodes, ir::Change::Added)} : std::nullopt;
+    const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
+    const std::vector<std::string> rendered =
+        nodes | std::views::transform([&](const ir::Node& node) {
+            if (std::holds_alternative<ir::Section>(node))
+                return render_node_to_string(node, ctx, options.new_roots);
+            return wrap_block(ir::change_of(node),
+                              render_node_to_string(ir::with_change(node, ir::Change::Same), ctx, options.new_roots));
+        }) |
+        std::ranges::to<std::vector>();
+    return number_added_pnums(rendered | std::views::join_with('\n') | std::ranges::to<std::string>());
 }
 
 std::string render_to_string(const ir::SpecItem& item, const Options& options) {
-    std::string out = render_item(item, options.new_roots);
-    if (options.paper_mode)
-        out = wrap_added(number_added_pnums(std::move(out)));
-    return out;
+    const ir::Change change = options.paper_mode ? ir::Change::Added : item.change;
+    ir::SpecItem     copy   = item;
+    copy.change             = ir::Change::Same;
+    return number_added_pnums(wrap_block(change, render_item(copy, options.new_roots)));
 }
 
 } // namespace beman::specgen::backend::org

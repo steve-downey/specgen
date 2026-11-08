@@ -1,0 +1,90 @@
+\begin{codeblock}
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+@\added{  void reset(\exposidnc{val} v);}@
+@\removed{  void arm();}@
+};
+\end{codeblock}
+
+\rSec3[gadget.observe]{Observers}
+
+\begin{itemdecl}
+constexpr bool ready() const@\removed{ noexcept}@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_copy_constructible_v<T>} is \tcode{true},
+\item \tcode{is_move_constructible_v<T>} is \tcode{true}.
+\end{itemize}
+
+\pnum
+\returns
+\tcode{true} if and only if the gadget is \removed{ready}\added{armed (see \iref{gadget.mod})}.
+
+\begin{removedblock}
+\pnum
+\throws
+Nothing.
+\end{removedblock}
+
+\begin{addedblock}
+\pnum
+\remarks
+A remark the revision adds, naming \tcode{x.\exposid{val}}.
+\end{addedblock}
+\end{itemdescr}
+
+\begin{addedblock}
+\begin{itemdecl}
+void reset(@\exposidnc{val}@ v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Resets the gadget.
+\end{itemdescr}
+\end{addedblock}
+
+\begin{removedblock}
+\pnum
+A free paragraph the revision removes.
+\end{removedblock}
+
+\pnum
+A free paragraph the revision keeps.
+
+\begin{removedblock}
+\rSec3[gadget.arm]{Arming}
+
+\begin{itemdecl}
+void arm();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Arms the gadget.
+\end{itemdescr}
+\end{removedblock}
+
+\begin{addedblock}
+\rSec3[gadget.mod]{Modifiers}
+
+\begin{itemdecl}
+void reset(@\exposidnc{val}@ v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+@\exposidnc{val}@ = v;
+\end{codeblock}
+\end{itemdescr}
+\end{addedblock}

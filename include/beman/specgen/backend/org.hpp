@@ -41,9 +41,12 @@ struct Options {
     // (decision wording-base-level).
     int base_heading_level = 2;
 
-    // Mark the rendered fragment as newly added wording. Top-level section
-    // subtrees carry WG21_CHANGE=add; rootless nodes use addedblock. Paragraph
-    // labels form one x, x+1, ... run over the complete fragment.
+    // Mark the rendered fragment as newly added wording: every top-level
+    // node marked `ir::Change::Added`, so top-level section subtrees carry
+    // WG21_CHANGE=add, rootless nodes sit in addedblock, and paragraph labels
+    // form one x, x+1, ... run over the complete fragment. Paper mode is the
+    // wording diff with an empty baseline (docs/plans/wording-diff.md); a
+    // diff's own marks render whether or not this is set.
     bool paper_mode = false;
 
     // Stable-name roots introduced by this paper.  References beneath one of

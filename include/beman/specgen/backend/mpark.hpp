@@ -34,17 +34,15 @@ struct Options {
     // on the other's backends (decision wording-base-level).
     int base_heading_level = 2;
 
-    // Wrap the fragment in an `::: add` editing-instruction div and
-    // number its paragraphs with mpark's *placeholder* form (`x`, `x+1`, ...)
-    // instead of the auto-numbering `[#]{.pnum}`, so inserting the wording
-    // does not renumber the wording it is inserted into.
-    //
-    // Whole-fragment, not per-entity: which parts of a fragment are new is a
-    // property of the edit being proposed and the IR records nothing about it
-    // (design §7 puts add/rm markup behind a diff of two header revisions,
-    // "out of scope now, by hand at first"). The paper still authors the
-    // instruction that says where the wording goes; this supplies the div and
-    // the numbering, which are the mechanical halves.
+    // Mark the whole fragment as added wording: every top-level node marked
+    // `ir::Change::Added`, which renders as one `::: add` editing-instruction
+    // div around the fragment with its paragraphs numbered in mpark's
+    // *placeholder* form (`x`, `x+1`, ...) instead of the auto-numbering
+    // `[#]{.pnum}`, so inserting the wording does not renumber the wording it
+    // is inserted into. Paper mode is the wording diff with an empty baseline
+    // (docs/plans/wording-diff.md); a diff's own marks, on nodes, elements,
+    // prose runs and code runs, render whether or not this is set. The paper
+    // still authors the instruction that says where the wording goes.
     bool paper_mode = false;
 
     // The dotted prefixes rooting the paper's own proposed clauses, which are

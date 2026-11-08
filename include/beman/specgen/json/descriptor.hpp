@@ -114,6 +114,45 @@ optional_projected_field(std::string_view name, std::optional<Wrapper> C::* memb
     return OptionalProjectedField<C, Wrapper, Inner>{name, member, inner};
 }
 
+/// One JSON key <-> a data member that is *omitted* when it holds its
+/// value-initialized default, and left at that default when the key is
+/// absent. For a field added to a frozen schema after the fact (the wording
+/// diff's marks): every document emitted before the field existed, and every
+/// unmarked document after, serializes byte for byte as it always did.
+template <typename C, typename T>
+struct DefaultedField {
+    std::string_view name;
+    T C::* member;
+};
+
+template <typename C, typename T>
+constexpr DefaultedField<C, T> defaulted_field(std::string_view name, T C::* member) {
+    return DefaultedField<C, T>{name, member};
+}
+
+/// The enum twin of `defaulted_field`: omitted at `default_value`, which is
+/// named rather than value-initialized so the table says which enumerator is
+/// the silent one.
+template <typename C, typename E>
+struct DefaultedEnumField {
+    std::string_view name;
+    E C::* member;
+    E      default_value;
+    std::string_view (*to_name)(E);
+    std::optional<E> (*from_name)(std::string_view);
+    std::string_view label;
+};
+
+template <typename C, typename E>
+constexpr DefaultedEnumField<C, E> defaulted_enum_field(std::string_view name,
+                                                        E C::* member,
+                                                        E      default_value,
+                                                        std::string_view (*to_name)(E),
+                                                        std::optional<E> (*from_name)(std::string_view),
+                                                        std::string_view label) {
+    return DefaultedEnumField<C, E>{name, member, default_value, to_name, from_name, label};
+}
+
 /// One alternative of a tagged variant: the tag string it serializes under.
 template <typename T>
 struct Alt {
@@ -196,6 +235,18 @@ template <typename C, typename T>
 void emit_member(const C& value, json_object& obj, const OptionalField<C, T>& f) {
     if (const auto& wrapped = value.*f.member)
         emit_value(*wrapped, obj.key(f.name));
+}
+
+template <typename C, typename T>
+void emit_member(const C& value, json_object& obj, const DefaultedField<C, T>& f) {
+    if (!(value.*f.member == T{}))
+        emit_value(value.*f.member, obj.key(f.name));
+}
+
+template <typename C, typename E>
+void emit_member(const C& value, json_object& obj, const DefaultedEnumField<C, E>& f) {
+    if (value.*f.member != f.default_value)
+        write_json_string(f.to_name(value.*f.member), obj.key(f.name));
 }
 
 template <typename T, typename Members>
@@ -302,6 +353,23 @@ bool parse_member(Reader& r, C& out, const OptionalField<C, T>& f) {
         return false;
     out.*f.member = std::move(value);
     return true;
+}
+
+template <typename C, typename T>
+bool parse_member(Reader& r, C& out, const DefaultedField<C, T>& f) {
+    return parse_value(r, out.*f.member);
+}
+
+template <typename C, typename E>
+bool parse_member(Reader& r, C& out, const DefaultedEnumField<C, E>& f) {
+    std::string name;
+    if (!r.parse_string(name))
+        return false;
+    if (auto value = f.from_name(name)) {
+        out.*f.member = *value;
+        return true;
+    }
+    return r.fail("unknown " + std::string(f.label) + " '" + name + "'");
 }
 
 /// Tries every field's name against @p key; nullopt means none matched (the

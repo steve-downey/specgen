@@ -50,6 +50,33 @@ namespace beman::specgen::ir {
 std::string_view        span_kind_name(SpanKind); // "exposid", ...
 std::optional<SpanKind> span_kind_from_name(std::string_view);
 
+// --- change marks (docs/plans/wording-diff.md) -----------------------------
+// What a wording diff says about a piece of the document: unchanged, added by
+// the revision being rendered, or removed by it. A mark is an editing
+// instruction (mpark's `::: add`, the draft's `\added`), semantic to the
+// paper rather than typography, which is why it lives in the IR and not in a
+// backend. A mark on a node covers everything beneath it, and the descendants
+// of a marked node carry `Same`; marks never nest.
+//
+// `Same` sorts first so that a default-constructed node, and a hand-written
+// golden that omits the key, is unmarked -- the JSON schema omits the key at
+// this value, which is what keeps every pre-diff golden byte-identical.
+enum class Change { Same, Added, Removed };
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::Change> = std::array{
+    beman::specgen::ir::Change::Same,
+    beman::specgen::ir::Change::Added,
+    beman::specgen::ir::Change::Removed,
+};
+
+namespace beman::specgen::ir {
+
+std::string_view      change_name(Change); // "same", "added", "removed"
+std::optional<Change> change_from_name(std::string_view);
+
 struct Span {
     std::size_t begin = 0; // byte offsets into CodeText::text, [begin, end)
     std::size_t end   = 0;
@@ -57,9 +84,23 @@ struct Span {
     std::string payload;
 };
 
+// A run of changed bytes in a CodeText: a second table beside `spans` rather
+// than two more `SpanKind`s, because a change run *contains* semantic spans
+// whole and spans do not nest. Sorted by begin, non-overlapping, and never
+// crossing a line end: the draft's `@...@` escape, which a backend wraps a run
+// in, is line-local. A whole added line is one run.
+struct ChangeRun {
+    std::size_t begin  = 0;
+    std::size_t end    = 0;
+    Change      change = Change::Added;
+
+    friend bool operator==(const ChangeRun&, const ChangeRun&) = default;
+};
+
 struct CodeText {
-    std::string       text;
-    std::vector<Span> spans; // sorted by begin, non-overlapping
+    std::string            text;
+    std::vector<Span>      spans;        // sorted by begin, non-overlapping
+    std::vector<ChangeRun> changes = {}; // the wording diff's marks, usually none
 };
 
 // --- prose -----------------------------------------------------------------
@@ -78,7 +119,22 @@ struct RefInline {
 struct ConceptRef {
     std::string name;
 };
-using Inline    = std::variant<TextInline, CodeInline, RefInline, ConceptRef>;
+// The inlines a changed run can hold: everything but another run, because
+// marks do not nest. A separate variant rather than `Inline` recursing into
+// itself, so that a visitor over a run's contents dispatches a different,
+// non-recursive sum type and never drives recursion (decision
+// visitation-rules).
+using PlainInline = std::variant<TextInline, CodeInline, RefInline, ConceptRef>;
+
+// A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
+// One mark covers the whole run, so a backend writes one span per run rather
+// than one per word. A `\tcode` inside a run is marked whole or not at all;
+// the diff never splits one.
+struct ChangedInline {
+    Change                   change = Change::Added;
+    std::vector<PlainInline> inlines;
+};
+using Inline    = std::variant<TextInline, CodeInline, RefInline, ConceptRef, ChangedInline>;
 using Paragraph = std::vector<Inline>;
 
 // --- description elements --------------------------------------------------
@@ -205,6 +261,8 @@ struct DescriptionElement {
     std::vector<Paragraph> conjuncts = {};
     // Explicit authored correspondence claims, checked but never rendered.
     std::vector<Paragraph> coverage = {};
+    // The wording diff's mark on the whole element (docs/plans/wording-diff.md).
+    Change change = Change::Same;
 };
 
 // Views of all wording sites, in authored order. Code returned here is block
@@ -268,6 +326,7 @@ void canonicalize(ItemDescr&);
 struct SpecItem {
     ItemDecl  decl;
     ItemDescr descr;
+    Change    change = Change::Same; // the wording diff's mark on the whole item
 };
 
 // --- document structure ----------------------------------------------------
@@ -387,10 +446,12 @@ struct Synopsis {
     // does not name one.
     std::string                name = {};
     CodeText                   code;
-    std::vector<SynopsisEntry> roster; // empty for a forward declaration
+    std::vector<SynopsisEntry> roster;                // empty for a forward declaration
+    Change                     change = Change::Same; // the wording diff's mark on the whole synopsis
 };
 struct FreeParagraph {
     Paragraph text;
+    Change    change = Change::Same; // the wording diff's mark on the whole paragraph
 }; // e.g. class-general Mandates prose
 
 struct Section;
@@ -400,7 +461,20 @@ struct Section {
     std::string       stable_name; // e.g. "optional.ctor"
     std::string       title;       // e.g. "Constructors"
     std::vector<Node> children;
+    Change            change = Change::Same; // the wording diff's mark on the whole subtree
 };
+
+// The wording diff's mark on a node of any kind, and the node with its mark
+// replaced. A backend's document render reads a top-level node's mark, renders
+// the node unmarked, and closes its own wrapper around the result -- so that
+// adjacent marked nodes can share one wrapper, and so that mpark's wording div
+// sits inside the editing-instruction div as paper mode has always put it.
+Change change_of(const Node&);
+Node   with_change(Node, Change);
+
+// Every node marked `change`: the wording diff of an empty baseline against
+// `nodes` is this with `Change::Added`, which is what paper mode renders.
+std::vector<Node> all_marked(std::vector<Node> nodes, Change change);
 
 // A namespace qualifier that survived the reference-resolved mapping
 // (design §3.5): one resolving to a namespace that is neither `std` nor the

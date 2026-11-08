@@ -43,6 +43,11 @@ namespace beman::specgen::ir {
 namespace beman::specgen::json {
 
 using beman::specgen::ir::BodyUse;
+using beman::specgen::ir::Change;
+using beman::specgen::ir::change_from_name;
+using beman::specgen::ir::change_name;
+using beman::specgen::ir::ChangedInline;
+using beman::specgen::ir::ChangeRun;
 using beman::specgen::ir::CodeInline;
 using beman::specgen::ir::CodeText;
 using beman::specgen::ir::ConceptRef;
@@ -68,6 +73,7 @@ using beman::specgen::ir::member_kind_from_name;
 using beman::specgen::ir::member_kind_name;
 using beman::specgen::ir::MemberKind;
 using beman::specgen::ir::Node;
+using beman::specgen::ir::PlainInline;
 using beman::specgen::ir::RefInline;
 using beman::specgen::ir::Section;
 using beman::specgen::ir::Span;
@@ -93,8 +99,23 @@ struct json_descriptor<Span> {
 };
 
 template <>
+struct json_descriptor<ChangeRun> {
+    static constexpr auto members = std::tuple{
+        field("begin", &ChangeRun::begin),
+        field("end", &ChangeRun::end),
+        enum_field("change", &ChangeRun::change, change_name, change_from_name, "change"),
+    };
+};
+
+// `changes` is omitted when empty (docs/plans/wording-diff.md): the marks
+// are the one field added to this frozen schema after the fact, and an
+// unmarked document has to serialize exactly as it did before they existed.
+// The same holds for every `change` key below.
+template <>
 struct json_descriptor<CodeText> {
-    static constexpr auto members = std::tuple{field("text", &CodeText::text), field("spans", &CodeText::spans)};
+    static constexpr auto members = std::tuple{field("text", &CodeText::text),
+                                               field("spans", &CodeText::spans),
+                                               defaulted_field("changes", &CodeText::changes)};
 };
 
 template <>
@@ -221,6 +242,7 @@ struct ElementWire {
     bool                                      derived = false;
     std::vector<ir::Paragraph>                conjuncts;
     std::vector<ir::Paragraph>                coverage;
+    ir::Change                                change = ir::Change::Same; // the wording diff's mark
 };
 
 template <>
@@ -236,6 +258,7 @@ struct json_descriptor<ElementWire> {
         field("derived", &ElementWire::derived),
         field("conjuncts", &ElementWire::conjuncts),
         field("coverage", &ElementWire::coverage),
+        defaulted_enum_field("change", &ElementWire::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
 
@@ -253,6 +276,7 @@ ElementWire json_descriptor<DescriptionElement>::to_representation(const Descrip
     w.derived   = e.derived;
     w.conjuncts = e.conjuncts;
     w.coverage  = e.coverage;
+    w.change    = e.change;
     return w;
 }
 
@@ -264,6 +288,7 @@ bool json_descriptor<DescriptionElement>::from_representation(Reader& r, Element
     e.derived   = w.derived;
     e.conjuncts = std::move(w.conjuncts);
     e.coverage  = std::move(w.coverage);
+    e.change    = w.change;
     if (w.body) {
         e.body = std::move(*w.body);
     } else {
@@ -310,8 +335,10 @@ struct json_descriptor<ConceptRef> {
     static constexpr auto members = std::tuple{field("name", &ConceptRef::name)};
 };
 
+// A plain inline inside a changed run serializes exactly as the same inline
+// does outside one: the two variants share the tag key and the four tags.
 template <>
-struct json_descriptor<Inline> {
+struct json_descriptor<PlainInline> {
     static constexpr auto alts = alternatives("t",
                                               "inline type",
                                               alt<TextInline>("text"),
@@ -321,8 +348,31 @@ struct json_descriptor<Inline> {
 };
 
 template <>
+struct json_descriptor<ChangedInline> {
+    static constexpr auto members = std::tuple{
+        enum_field("change", &ChangedInline::change, change_name, change_from_name, "change"),
+        field("inlines", &ChangedInline::inlines),
+    };
+};
+
+template <>
+struct json_descriptor<Inline> {
+    static constexpr auto alts = alternatives("t",
+                                              "inline type",
+                                              alt<TextInline>("text"),
+                                              alt<CodeInline>("code"),
+                                              alt<RefInline>("ref"),
+                                              alt<ConceptRef>("concept"),
+                                              alt<ChangedInline>("changed"));
+};
+
+template <>
 struct json_descriptor<SpecItem> {
-    static constexpr auto members = std::tuple{field("decl", &SpecItem::decl), field("descr", &SpecItem::descr)};
+    static constexpr auto members = std::tuple{
+        field("decl", &SpecItem::decl),
+        field("descr", &SpecItem::descr),
+        defaulted_enum_field("change", &SpecItem::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>
@@ -331,6 +381,7 @@ struct json_descriptor<Section> {
         field("stable", &Section::stable_name),
         field("title", &Section::title),
         field("children", &Section::children),
+        defaulted_enum_field("change", &Section::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
 
@@ -351,12 +402,16 @@ struct json_descriptor<Synopsis> {
         field("name", &Synopsis::name),
         field("code", &Synopsis::code),
         field("roster", &Synopsis::roster),
+        defaulted_enum_field("change", &Synopsis::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
 
 template <>
 struct json_descriptor<FreeParagraph> {
-    static constexpr auto members = std::tuple{field("content", &FreeParagraph::text)};
+    static constexpr auto members = std::tuple{
+        field("content", &FreeParagraph::text),
+        defaulted_enum_field("change", &FreeParagraph::change, Change::Same, change_name, change_from_name, "change"),
+    };
 };
 
 template <>

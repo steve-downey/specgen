@@ -1,0 +1,98 @@
+#+begin_codeblock
+class gadget {
+public:
+  constexpr bool ready() const noexcept;
+@\added{  void reset(\exposidnc{val} v);}@
+@\removed{  void arm();}@
+};
+#+end_codeblock
+
+** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+constexpr bool ready() const@\removed{ noexcept}@;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_copy_constructible_v<T>~ is ~true~,
+- ~is_move_constructible_v<T>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~true~ if and only if the gadget is [[delete:][ready]][[insert:][armed (see {{{sref(gadget.mod)}}})]].
+#+end_pnum
+
+#+begin_removedblock
+#+begin_pnum
+/Throws/: Nothing.
+#+end_pnum
+#+end_removedblock
+
+#+begin_addedblock
+#+begin_pnum x
+/Remarks/: A remark the revision adds, naming @@latex:\tcode{x.\exposid{val}}@@@@html:<code>x.<var>val</var></code>@@.
+#+end_pnum
+#+end_addedblock
+
+#+begin_addedblock
+#+begin_itemdecl
+void reset(@\exposidnc{val}@ v);
+#+end_itemdecl
+
+#+begin_pnum x+1
+/Effects/: Resets the gadget.
+#+end_pnum
+#+end_addedblock
+
+#+begin_removedblock
+#+begin_pnum
+A free paragraph the revision removes.
+#+end_pnum
+#+end_removedblock
+
+#+begin_pnum
+A free paragraph the revision keeps.
+#+end_pnum
+
+** Arming [gadget.arm]
+:PROPERTIES:
+:CUSTOM_ID: gadget.arm
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: rm
+:END:
+
+#+begin_itemdecl
+void arm();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Arms the gadget.
+#+end_pnum
+
+** Modifiers [gadget.mod]
+:PROPERTIES:
+:CUSTOM_ID: gadget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
+
+#+begin_itemdecl
+void reset(@\exposidnc{val}@ v);
+#+end_itemdecl
+
+#+begin_pnum x+2
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+@\exposidnc{val}@ = v;
+#+end_codeblock
+#+end_pnum

@@ -40,6 +40,7 @@
 #include <optional>
 #include <ranges>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -65,9 +66,23 @@ using beman::specgen::foundation::overloaded;
 using backend::draft_span_codeblock;
 
 // Code text is the author's own tokens; it is never re-escaped. Only the
-// spans are substituted, via the shared substrate (backend/code_spans.hpp).
+// spans are substituted, via the shared substrate (backend/code_spans.hpp)
+// -- and the wording diff's change runs, each closed in the draft's own
+// `@\added{...}@` with the spans inside it in their escaped form, since the
+// run has opened the `@...@` already (docs/plans/wording-diff.md).
 std::string render_code_codeblock(const ir::CodeText& code) {
-    return backend::render_code_spans(code, draft_span_codeblock);
+    return backend::render_code_spans(
+        code, draft_span_codeblock, backend::draft_span_escaped, backend::draft_change_codeblock);
+}
+
+// A marked node or element in the draft's own environment for it,
+// `addedblock` / `removedblock` (macros.tex); an unmarked one as it is.
+std::string wrap_block(ir::Change change, std::string text) {
+    const std::optional<std::string_view> environment = backend::draft_change_environment(change);
+    if (!environment)
+        return text;
+    return std::format(
+        "\\begin{{{}}}\n{}{}\\end{{{}}}\n", *environment, text, text.ends_with('\n') ? "" : "\n", *environment);
 }
 
 std::string render_codeblock(const ir::CodeText& code) {
@@ -93,7 +108,25 @@ struct PieceRenderer {
 
     // A library concept name, rendered with \libconcept rather than \tcode.
     std::string operator()(const ir::ConceptRef& v) const { return "\\libconcept{" + v.name + '}'; }
+
+    // A changed run of prose (the wording diff's mark): the draft's own
+    // `\added{...}` / `\removed{...}` from macros.tex, around the run
+    // rendered as it would be unmarked. Defined after `render_run` below,
+    // which dispatches the run's `PlainInline`s -- a different, non-recursive
+    // variant -- through this same visitor's other four cases.
+    std::string operator()(const ir::ChangedInline& run) const;
 };
+
+std::string render_run(const std::vector<ir::PlainInline>& inlines) {
+    return inlines | std::views::transform([](const ir::PlainInline& piece) {
+               return std::visit(overloaded{PieceRenderer{}}, piece);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
+    return backend::draft_change_prose(run.change, render_run(run.inlines));
+}
 
 std::string render_paragraph(const ir::Paragraph& para) {
     return para | std::views::transform([](const ir::Inline& piece) {
@@ -295,24 +328,33 @@ std::string render_item(const ir::SpecItem& item) {
     }
 
     if (!beman::specgen::ir::has_description(item.descr))
-        return out;
+        return wrap_block(item.change, std::move(out));
 
-    std::vector<std::string> blocks = body_blocks(item.descr.leading, std::nullopt);
-    blocks.append_range(item.descr.elements |
+    // A run of same-kind elements folds into one group (merge_element_group)
+    // only when it shares one mark: an authored *Constraints* the diff added
+    // beside a derived one it kept is two groups, each in its own block, at
+    // the price of the label twice -- the honest rendering of that edit.
+    // Joining a group's blocks first and the groups after is the same join
+    // as joining every block flat, so an unmarked item renders as it did.
+    std::vector<std::string> groups = body_blocks(item.descr.leading, std::nullopt);
+    groups.append_range(item.descr.elements |
                         std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
-                            return a.kind == b.kind;
+                            return a.kind == b.kind && a.change == b.change;
                         }) |
-                        std::views::transform([](auto&& group) { return element_group_blocks(group); }) |
-                        std::views::join);
+                        std::views::transform([](auto&& group) {
+                            return wrap_block(std::ranges::begin(group)->change,
+                                              element_group_blocks(group) | std::views::join_with('\n') |
+                                                  std::ranges::to<std::string>());
+                        }));
 
     if (!out.empty())
         out += '\n';
     if (!item.decl.signatures.empty())
         out += "\\begin{itemdescr}\n";
-    out += blocks | std::views::join_with('\n') | std::ranges::to<std::string>();
+    out += groups | std::views::join_with('\n') | std::ranges::to<std::string>();
     if (!item.decl.signatures.empty())
         out += "\\end{itemdescr}\n";
-    return out;
+    return wrap_block(item.change, std::move(out));
 }
 
 // --- the direct algebra over backend::backend::RenderF ---------------------
@@ -361,7 +403,7 @@ struct SeededProjector {
             s.children |
             std::views::transform([&child_ctx](const ir::Node& child) { return Seeded{&child, child_ctx}; }) |
             std::ranges::to<std::vector>();
-        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children)};
+        return backend::RenderedSectionF<Seeded>{std::move(header), std::move(children), s.change};
     }
 
     // The three leaves render independently of depth, so -- exactly like
@@ -387,20 +429,26 @@ struct LatexAlgebra {
     // underneath it with a blank-line separator (the algebra's join-based
     // separation -- no `bool& first`, no recursion parameter threading
     // depth, no front-identity test).
+    //
+    // A marked section (the wording diff's) closes in its environment here,
+    // where header and children are first seen together.
     std::string operator()(const backend::RenderedSectionF<std::string>& s) const {
         if (s.children.empty())
-            return s.header;
-        return s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>());
+            return wrap_block(s.change, s.header);
+        return wrap_block(
+            s.change, s.header + "\n" + (s.children | std::views::join_with('\n') | std::ranges::to<std::string>()));
     }
 
     // A synopsis: its own codeblock, independent of section depth.
-    std::string operator()(const ir::Synopsis& v) const { return render_codeblock(v.code); }
+    std::string operator()(const ir::Synopsis& v) const { return wrap_block(v.change, render_codeblock(v.code)); }
 
     // A declared item: delegate to the item renderer, independent of depth.
     std::string operator()(const ir::SpecItem& v) const { return render_item(v); }
 
     // A free paragraph: one \pnum-numbered paragraph of prose.
-    std::string operator()(const ir::FreeParagraph& v) const { return "\\pnum\n" + render_paragraph(v.text) + '\n'; }
+    std::string operator()(const ir::FreeParagraph& v) const {
+        return wrap_block(v.change, "\\pnum\n" + render_paragraph(v.text) + '\n');
+    }
 };
 
 std::string render_layer(const backend::RenderF<std::string>& layer) {
@@ -414,14 +462,44 @@ std::string render_node_to_string(const ir::Node& node, const RenderCtx& ctx) {
 
 } // namespace
 
+// A top-level node rendered unmarked, beside the mark it carried: the
+// document render closes the wrapper itself, so that a run of adjacent
+// top-level nodes with one mark shares one environment -- a fragment that is
+// wholly new is one `addedblock`, not one per node.
+struct RenderedTop {
+    ir::Change  change;
+    std::string text;
+};
+
 std::string render_to_string(const ir::Document& doc, const Options& options) {
-    const RenderCtx                ctx{options.base_section_depth};
-    const std::vector<std::string> rendered =
-        doc.nodes | std::views::transform([&ctx](const ir::Node& node) { return render_node_to_string(node, ctx); }) |
+    const RenderCtx ctx{options.base_section_depth};
+    // Paper mode is the wording diff with an empty baseline
+    // (docs/plans/wording-diff.md): every top-level node marked added, and
+    // the marks then render exactly as a diff's would.
+    const std::optional<std::vector<ir::Node>> marked =
+        options.paper_mode ? std::optional{ir::all_marked(doc.nodes, ir::Change::Added)} : std::nullopt;
+    const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
+    const std::vector<RenderedTop> rendered =
+        nodes | std::views::transform([&ctx](const ir::Node& node) {
+            return RenderedTop{ir::change_of(node),
+                               render_node_to_string(ir::with_change(node, ir::Change::Same), ctx)};
+        }) |
         std::ranges::to<std::vector>();
-    return rendered | std::views::join_with('\n') | std::ranges::to<std::string>();
+    return rendered |
+           std::views::chunk_by([](const RenderedTop& a, const RenderedTop& b) { return a.change == b.change; }) |
+           std::views::transform([](auto&& chunk) {
+               return wrap_block(std::ranges::begin(chunk)->change,
+                                 chunk | std::views::transform(&RenderedTop::text) | std::views::join_with('\n') |
+                                     std::ranges::to<std::string>());
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
 }
 
-std::string render_to_string(const ir::SpecItem& item, const Options&) { return render_item(item); }
+std::string render_to_string(const ir::SpecItem& item, const Options& options) {
+    ir::SpecItem copy = item;
+    if (options.paper_mode)
+        copy.change = ir::Change::Added;
+    return render_item(copy);
+}
 
 } // namespace beman::specgen::backend::latex
