@@ -538,8 +538,18 @@ struct Section {
     std::vector<Node> children;
     Change            change = Change::Same; // the wording diff's mark on the whole subtree
 
-    friend bool operator==(const Section&, const Section&) = default;
+    // Declared here and defined below the class rather than defaulted in it:
+    // a defaulted comparison makes clang resolve `children == children`
+    // while `Section` is still incomplete, which instantiates `Node`'s
+    // variant with its default-constructor constraint evaluated against the
+    // incomplete type -- and caches that answer, so `Node node;` later fails
+    // under clang (the style gates' parser) though not under GCC.
+    friend bool operator==(const Section&, const Section&);
 };
+
+inline bool operator==(const Section& a, const Section& b) {
+    return a.stable_name == b.stable_name && a.title == b.title && a.children == b.children && a.change == b.change;
+}
 
 // The wording diff's mark on a node of any kind, and the node with its mark
 // replaced. A backend's document render reads a top-level node's mark, renders

@@ -14,6 +14,7 @@
 #include <optional>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -62,8 +63,12 @@ std::vector<std::string> words(std::string_view text) {
     while (pos < text.size()) {
         std::size_t end = pos;
         if (!is_space(text[pos]))
+            // substrate generic algorithm: the scan's inner step, to the end
+            // of the word.
             while (end < text.size() && !is_space(text[end]))
                 ++end;
+        // substrate generic algorithm: the scan's inner step, over the
+        // whitespace the word carries.
         while (end < text.size() && is_space(text[end]))
             ++end;
         out.emplace_back(text.substr(pos, end - pos));
@@ -73,6 +78,8 @@ std::vector<std::string> words(std::string_view text) {
 }
 
 std::string_view rstripped(std::string_view text) {
+    // substrate generic algorithm: a scan back over trailing whitespace is
+    // the trim itself.
     while (!text.empty() && is_space(text.back()))
         text.remove_suffix(1);
     return text;
@@ -294,6 +301,8 @@ std::vector<CodeToken> code_tokens(const Line& line) {
     std::size_t            pos        = 0;
     auto                   span       = line.spans.begin();
     const auto             take_space = [&](std::size_t end) {
+        // substrate generic algorithm: the lexer's inner step, over the
+        // whitespace a token carries.
         while (end < line.text.size() && is_space(line.text[end]))
             ++end;
         return end;
@@ -313,6 +322,8 @@ std::vector<CodeToken> code_tokens(const Line& line) {
         if (is_space(line.text[pos])) {
             end = take_space(pos);
         } else if (is_word_char(line.text[pos])) {
+            // substrate generic algorithm: the lexer's inner step, to the end
+            // of an identifier or number, stopping short of a span.
             while (end < line.text.size() && is_word_char(line.text[end]) &&
                    (span == line.spans.end() || end < span->begin))
                 ++end;
@@ -728,6 +739,8 @@ diff_nodes(const std::vector<ir::Node>& a, const std::vector<ir::Node>& b, const
         for (std::size_t i = 0; i < a.size(); ++i) {
             if (pair_a[i] != unpaired)
                 continue;
+            // substrate generic algorithm: the scatter's inner search for the
+            // first unpaired match, which writes into both tables.
             for (std::size_t j = 0; j < b.size(); ++j) {
                 if (pair_b[j] == unpaired && matches(i, j)) {
                     pair_a[i] = j;
