@@ -250,8 +250,9 @@ given to `render` *beside* a baseline is refused: diffing a diff means nothing.
   descriptors.
 - **Backend substrate** — `code_spans.hpp` walks two tables; `draft_spans.hpp` gains the change
   spellings; **the three backends** render every mark.
-- **Baseline tree** — `frontend/baseline_tree.hpp`/`.cpp`, Tier B: materialize a revision, remap
-  the header path and compile arguments, report a header missing at the revision.
+- **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`, `src/beman/specgen/baseline_tree.cpp`,
+  Tier A (clang-free; the parse of the remapped header is the front end's): materialize a revision,
+  remap the header path and compile arguments, report a header missing at the revision.
 - **Driver** — the three baseline flags, `--diff-context`, the pairing, the refusals; `compare`
   called in `emit_wording`/`emit_paper` after validation and before rendering, so `generate` and
   `render` agree byte for byte as they do for everything else.
