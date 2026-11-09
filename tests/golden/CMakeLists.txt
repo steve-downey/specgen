@@ -2504,6 +2504,25 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+specgen_add_golden(
+    macro_continuations
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_macro_continuations.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        macro_continuations
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/macro_continuations/expected.json"
+    )
+    specgen_add_golden(
+        macro_continuations_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/macro_continuations/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

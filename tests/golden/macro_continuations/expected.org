@@ -1,0 +1,64 @@
+** Macro continuations [macro.general]
+:PROPERTIES:
+:CUSTOM_ID: macro.general
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  class gadget {
+  public:
+    int size() const;
+  };
+}
+#+end_codeblock
+
+#+begin_pnum
+\placeholder{noex} is a placeholder in leading prose.
+#+end_pnum
+
+#+begin_itemdecl
+int size() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Preconditions/: ~T~ meets the \oldconcept{Destructible} and \oldconcept{CopyConstructible} requirements.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~0~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The following descriptions apply:
+
+- Meets \oldconcept{CopyConstructible} requirements.
+
+\placeholder{after} follows the list.
+
+#+name: macro.flat
+#+caption: Flat table \placeholder{caption}
+#+ATTR_WG21: :columns 25 67
+| Type \cv{} qualifier | Meaning |
+|-
+| A \placeholder{key} | Meets \oldconcept{Destructible} requirements. |
+
+#+name: macro.grid
+#+caption: Grid table
+#+ATTR_WG21: :columns 18 36 36
+| | A | B |
+|-
+| Type \cv{} qualifier | First \placeholder{value} | Second \placeholder{value} |
+
+\placeholder{resume} follows the tables.
+
+#+begin_note
+The type meets \oldconcept{Destructible} requirements.
+#+end_note
+
+#+begin_wgexample
+A \cv{} qualifier is written literally.
+#+end_wgexample
+#+end_pnum

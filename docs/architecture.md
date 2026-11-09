@@ -460,6 +460,13 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Only element tags, registered markers, and block keywords change docblock
+structure. Other line-leading commands with braced or optional arguments,
+starred commands, and control symbols continue as prose, including inside
+lists, tables, notes, and examples. Unknown bare commands still report an
+Error to catch misspelled tags, but their complete line is kept as prose.
+Code and terminal verbatim payloads retain their exact-text rules.
+
 Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
 by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
