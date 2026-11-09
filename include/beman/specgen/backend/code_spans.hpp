@@ -3,17 +3,18 @@
 //
 // specgen — rendering an `ir::CodeText` (decision backend-direct-algebra).
 // Every backend renders one the same way: the author's own tokens pass
-// through untouched, and only the byte-ranged spans are substituted, each with
+// through the literal-text hook, and the byte-ranged spans are substituted, each with
 // a backend-specific escape (LaTeX's `\exposid{...}` in prose and
 // `@\exposidnc{...}@` in code, the mpark backend's own convention, ...). That
-// walk is written once here rather than once per backend; a backend supplies
-// only `escape_span`, the one place its own macro/escape spelling lives.
+// walk is written once here rather than once per backend. `escape_span` owns
+// the macro spelling; `escape_text` defaults to identity for literal listings.
 #ifndef BEMAN_SPECGEN_BACKEND_CODE_SPANS_HPP
 #define BEMAN_SPECGEN_BACKEND_CODE_SPANS_HPP
 
 #include <beman/specgen/ir.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -27,15 +28,16 @@ namespace code_spans_detail {
 // The slice [from, to) of `code.text`, with every span inside it substituted
 // through `escape_span`; `next` is the first span not yet consumed and is
 // advanced past the slice. A span that is malformed, overlaps, or straddles
-// the slice's end is skipped and its text passes through raw -- the same
+// the slice's end is skipped and its text takes the literal-text hook -- the same
 // defence the single-table walk always had, now also protecting a change run
 // from a span the diff should never have let it cut.
-template <typename EscapeSpan>
+template <typename EscapeSpan, typename EscapeText>
 std::string render_slice(const ir::CodeText&                    code,
                          std::size_t                            from,
                          std::size_t                            to,
                          std::vector<ir::Span>::const_iterator& next,
-                         EscapeSpan&&                           escape_span) {
+                         EscapeSpan&&                           escape_span,
+                         EscapeText&&                           escape_text) {
     std::string out;
     std::size_t pos = from;
     // substrate generic algorithm: a position-tracking left-to-right walk
@@ -47,11 +49,11 @@ std::string render_slice(const ir::CodeText&                    code,
         if (span.begin > code.text.size() || span.end > code.text.size() || span.begin < pos ||
             span.end < span.begin || span.end > to)
             continue; // defensive: ignore a malformed, overlapping or straddling span
-        out += code.text.substr(pos, span.begin - pos);
+        out += escape_text(std::string_view(code.text).substr(pos, span.begin - pos));
         out += escape_span(span, std::string_view(code.text).substr(span.begin, span.end - span.begin));
         pos = span.end;
     }
-    out += code.text.substr(pos, to - pos);
+    out += escape_text(std::string_view(code.text).substr(pos, to - pos));
     return out;
 }
 
@@ -71,7 +73,7 @@ std::string wrap_run_lines(std::string_view interior, ir::Change change, WrapRun
 } // namespace code_spans_detail
 
 // Tree -> text for one CodeText, splicing each span's backend-supplied
-// escape between slices of the surrounding raw text.
+// escape between slices of the surrounding literal text.
 //
 // `escape_span` is the extension point every backend plugs into:
 // `(const ir::Span&, std::string_view) -> std::string`, mapping one span and
@@ -90,11 +92,15 @@ std::string wrap_run_lines(std::string_view interior, ir::Change change, WrapRun
 // and a span's codeblock form would close it early; `wrap_run(change, text)`
 // closes a run's rendered text in the backend's mark. Runs are sorted and
 // non-overlapping like spans, and a run contains its spans whole.
-template <typename EscapeSpan, typename EscapeSpanInRun, typename WrapRun>
+// `escape_text` handles literal slices before span macros are inserted. Code
+// blocks keep the identity default; inline code in LaTeX escapes text-mode
+// special characters without corrupting macros or their source offsets.
+template <typename EscapeSpan, typename EscapeSpanInRun, typename WrapRun, typename EscapeText = std::identity>
 std::string render_code_spans(const ir::CodeText& code,
                               EscapeSpan&&        escape_span,
                               EscapeSpanInRun&&   escape_span_in_run,
-                              WrapRun&&           wrap_run) {
+                              WrapRun&&           wrap_run,
+                              EscapeText&&        escape_text = {}) {
     std::string out;
     std::size_t pos  = 0;
     auto        next = code.spans.begin();
@@ -104,12 +110,14 @@ std::string render_code_spans(const ir::CodeText& code,
     for (const auto& run : code.changes) {
         if (run.begin > code.text.size() || run.end > code.text.size() || run.begin < pos || run.end < run.begin)
             continue; // defensive: ignore a malformed or overlapping run
-        out += code_spans_detail::render_slice(code, pos, run.begin, next, escape_span);
+        out += code_spans_detail::render_slice(code, pos, run.begin, next, escape_span, escape_text);
         out += code_spans_detail::wrap_run_lines(
-            code_spans_detail::render_slice(code, run.begin, run.end, next, escape_span_in_run), run.change, wrap_run);
+            code_spans_detail::render_slice(code, run.begin, run.end, next, escape_span_in_run, escape_text),
+            run.change,
+            wrap_run);
         pos = run.end;
     }
-    out += code_spans_detail::render_slice(code, pos, code.text.size(), next, escape_span);
+    out += code_spans_detail::render_slice(code, pos, code.text.size(), next, escape_span, escape_text);
     return out;
 }
 
@@ -117,10 +125,14 @@ std::string render_code_spans(const ir::CodeText& code,
 // as everything else and takes no mark. For code the diff never marks -- a
 // prose code inline, whose marks sit on the inline itself -- and for a test
 // of the span walk alone; a backend's code blocks use the full walk above.
-template <typename EscapeSpan>
-std::string render_code_spans(const ir::CodeText& code, EscapeSpan&& escape_span) {
+template <typename EscapeSpan, typename EscapeText = std::identity>
+std::string render_code_spans(const ir::CodeText& code, EscapeSpan&& escape_span, EscapeText&& escape_text = {}) {
     return render_code_spans(
-        code, escape_span, escape_span, [](ir::Change, std::string_view text) { return std::string(text); });
+        code,
+        escape_span,
+        escape_span,
+        [](ir::Change, std::string_view text) { return std::string(text); },
+        escape_text);
 }
 
 } // namespace beman::specgen::backend

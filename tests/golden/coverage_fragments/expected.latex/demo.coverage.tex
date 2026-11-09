@@ -10,7 +10,7 @@ template<class F>
 \pnum
 \constraints
 \begin{itemize}
-\item \tcode{remove_cvref_t<F>} is not a specialization of \tcode{in_place_type_t}.
+\item \tcode{remove\_cvref\_t<F>} is not a specialization of \tcode{in\_place\_type\_t}.
 \end{itemize}
 \end{itemdescr}
 
@@ -69,13 +69,13 @@ template<class F>
 
 \begin{itemdescr}
 \pnum
-Let \tcode{VT} be \tcode{decay_t<F>}.
+Let \tcode{VT} be \tcode{decay\_t<F>}.
 
 \pnum
 \constraints
 \begin{itemize}
-\item \tcode{remove_cvref_t<F>} is not the same type as \tcode{move_only_function}, and
-\item \tcode{remove_cvref_t<F>} is not a specialization of \tcode{in_place_type_t}, and
+\item \tcode{remove\_cvref\_t<F>} is not the same type as \tcode{move\_only\_function}, and
+\item \tcode{remove\_cvref\_t<F>} is not a specialization of \tcode{in\_place\_type\_t}, and
 \item \tcode{\exposid{is-callable-from}<VT>} is \tcode{true}.
 \end{itemize}
 \end{itemdescr}
@@ -88,7 +88,7 @@ template<class T>
 
 \begin{itemdescr}
 \pnum
-Let \tcode{VT} be \tcode{decay_t<T>}.
+Let \tcode{VT} be \tcode{decay\_t<T>}.
 
 \pnum
 \mandates

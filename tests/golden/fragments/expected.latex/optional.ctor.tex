@@ -20,7 +20,7 @@ constexpr optional(const optional& rhs);
 \begin{itemdescr}
 \pnum
 \constraints
-\tcode{is_copy_constructible_v<T>} is \tcode{true}.
+\tcode{is\_copy\_constructible\_v<T>} is \tcode{true}.
 
 \pnum
 \effects
@@ -28,7 +28,7 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 
 \pnum
 \ensures
-\tcode{has_value()} is equal to \tcode{rhs.has_value()}.
+\tcode{has\_value()} is equal to \tcode{rhs.has\_value()}.
 \end{itemdescr}
 
 \indexlibraryctor{optional}%
@@ -40,7 +40,7 @@ template<class... Args>
 \begin{itemdescr}
 \pnum
 \constraints
-\tcode{is_constructible_v<T, Args...>} is \tcode{true}.
+\tcode{is\_constructible\_v<T, Args...>} is \tcode{true}.
 
 \pnum
 \effects
@@ -48,7 +48,7 @@ Direct-non-list-initializes the contained value with \tcode{std::forward<Args>(a
 
 \pnum
 \ensures
-\tcode{has_value()} is \tcode{true}.
+\tcode{has\_value()} is \tcode{true}.
 \end{itemdescr}
 
 \indexlibraryctor{optional}%
@@ -61,10 +61,10 @@ template<class U>
 \pnum
 \constraints
 \begin{itemize}
-\item \tcode{is_constructible_v<T, const U&>} is \tcode{true},
-\item \tcode{is_convertible_v<U, T>} is \tcode{true},
-\item \tcode{is_same_v<T, U>} is \tcode{false},
-\item \tcode{is_constructible_v<T, optional<U>>} is \tcode{false}.
+\item \tcode{is\_constructible\_v<T, const U\&>} is \tcode{true},
+\item \tcode{is\_convertible\_v<U, T>} is \tcode{true},
+\item \tcode{is\_same\_v<T, U>} is \tcode{false},
+\item \tcode{is\_constructible\_v<T, optional<U>>} is \tcode{false}.
 \end{itemize}
 
 \pnum
@@ -73,5 +73,5 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 
 \pnum
 \ensures
-\tcode{has_value()} is equal to \tcode{rhs.has_value()}.
+\tcode{has\_value()} is equal to \tcode{rhs.has\_value()}.
 \end{itemdescr}

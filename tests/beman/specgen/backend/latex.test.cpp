@@ -19,6 +19,41 @@ TEST_CASE("latex - HeaderIsIdempotent") {
     REQUIRE(true);
 }
 
+TEST_CASE("latex - code inlines escape text-mode characters while listings remain literal") {
+    SpecItem item;
+    item.decl.signatures.push_back({"int& get(int& value);", {}});
+    item.descr.leading = {
+        BodyParagraph{{CodeInline{{"initializer_list<U>&", {}}}}},
+        Itemize{{{CodeInline{{"&", {}}}}, {CodeInline{{"&&", {}}}}}},
+        AuthoredCode{{R"(int& value = other; // @\tcode{\&}@)", {}}},
+        BodyParagraph{{ChangedInline{Change::Added, {CodeInline{{"&", {}}}}}}},
+    };
+    const auto out = latex::render_to_string(item);
+    CHECK(out.find("int& get(int& value);") != std::string::npos);
+    CHECK(out.find(R"(\tcode{initializer\_list<U>\&})") != std::string::npos);
+    CHECK(out.find("\\item \\tcode{\\&}\n\\item \\tcode{\\&\\&}\n") != std::string::npos);
+    CHECK(out.find(R"(int& value = other; // @\tcode{\&}@)") != std::string::npos);
+    CHECK(out.find(R"(\added{\tcode{\&}})") != std::string::npos);
+}
+
+TEST_CASE("latex - table cells escape code and prose ampersands once") {
+    const Paragraph cell{CodeInline{{"&&", {}}},
+                         TextInline{" & "},
+                         ChangedInline{Change::Added, {CodeInline{{"&", {}}}, TextInline{" & "}}}};
+    SpecItem        item;
+    item.descr.leading = {
+        Table1D{.stable_name = "demo.flat", .caption = cell, .column1 = cell, .column2 = cell, .rows = {{cell, cell}}},
+        Table2D{.stable_name = "demo.grid",
+                .caption     = cell,
+                .column1     = cell,
+                .column2     = cell,
+                .rows        = {{cell, cell, cell}}},
+    };
+    const auto out = latex::render_to_string(item);
+    CHECK(out.find(R"(\tcode{\&\&} \& \added{\tcode{\&} \& })") != std::string::npos);
+    CHECK(out.find(R"(\\&)") == std::string::npos);
+}
+
 // The end-to-end acceptance shape: hand-built IR for [optional.observe]/value_or
 // rendering to wording that would drop into the draft sources unchanged.
 TEST_CASE("latex - value_or golden") {
@@ -55,7 +90,7 @@ template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) cons
 \begin{itemdescr}
 \pnum
 \mandates
-\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_convertible_v<U, T>} is \tcode{true}.
+\tcode{is\_copy\_constructible\_v<T>} is \tcode{true} and \tcode{is\_convertible\_v<U, T>} is \tcode{true}.
 
 \pnum
 \effects
@@ -314,14 +349,14 @@ TEST_CASE("latex - an authored flat two-column table uses libtab2") {
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
-    CHECK(out.find("\\begin{libtab2}{\\tcode{whatwg_error} meanings}{demo.errors.tab}{lp{4.5in}}"
+    CHECK(out.find("\\begin{libtab2}{\\tcode{whatwg\\_error} meanings}{demo.errors.tab}{lp{4.5in}}"
                    "{Constant}{Meaning}\n"
                    "\n"
-                   "\\tcode{invalid_byte} &\n"
+                   "\\tcode{invalid\\_byte} &\n"
                    "the input holds an invalid byte. \\\\\n"
                    "\\rowsep\n"
                    "\n"
-                   "\\tcode{truncated_sequence} &\n"
+                   "\\tcode{truncated\\_sequence} &\n"
                    "the input ends mid-sequence. \\\\\n"
                    "\\end{libtab2}\n") != std::string::npos);
 }

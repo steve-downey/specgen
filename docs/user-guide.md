@@ -716,6 +716,12 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
+Write literal C++ characters inside backticks, including `&` and `&&`.
+The LaTeX backend escapes text-mode special characters inside `\tcode`;
+semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets
+use the same escaping. Code blocks and item declarations keep literal code
+and any authored `@...@` escapes.
+
 Labelled elements and leading unlabelled prose may contain authored itemizations:
 
 ```cpp
@@ -1123,7 +1129,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.17.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.18.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

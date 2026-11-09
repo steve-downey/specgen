@@ -65,7 +65,7 @@ using beman::specgen::foundation::overloaded;
 // The shared header says the rest.
 using backend::draft_span_codeblock;
 
-// Code text is the author's own tokens; it is never re-escaped. Only the
+// Listing code is the author's own tokens; it is never re-escaped. Only the
 // spans are substituted, via the shared substrate (backend/code_spans.hpp)
 // -- and the wording diff's change runs, each closed in the draft's own
 // `@\added{...}@` with the spans inside it in their escaped form, since the
@@ -95,8 +95,16 @@ std::string render_codeblock(const ir::CodeText& code) {
 // Four alternatives (decision visitation-rules' >3 rule), so a named
 // visitor struct rather than an overloaded-lambda set.
 struct PieceRenderer {
-    // Plain prose text, verbatim.
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    bool in_table = false;
+
+    // Plain prose; table text protects its alignment characters.
+    std::string operator()(const ir::TextInline& v) const {
+        if (!in_table)
+            return v.text;
+        return v.text |
+               std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
+               std::views::join | std::ranges::to<std::string>();
+    }
 
     // A code inline, with the whole-span shortcut the draft's macros need.
     // Shared with the org backend for the reason the span escapes
@@ -117,28 +125,28 @@ struct PieceRenderer {
     std::string operator()(const ir::ChangedInline& run) const;
 };
 
-std::string render_run(const std::vector<ir::PlainInline>& inlines) {
-    return inlines | std::views::transform([](const ir::PlainInline& piece) {
-               return std::visit(overloaded{PieceRenderer{}}, piece);
+std::string render_run(const std::vector<ir::PlainInline>& inlines, bool in_table) {
+    return inlines | std::views::transform([in_table](const ir::PlainInline& piece) {
+               return std::visit(overloaded{PieceRenderer{in_table}}, piece);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
 std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
-    return backend::draft_change_prose(run.change, render_run(run.inlines));
+    return backend::draft_change_prose(run.change, render_run(run.inlines, in_table));
 }
 
-std::string render_paragraph(const ir::Paragraph& para) {
-    return para | std::views::transform([](const ir::Inline& piece) {
-               return std::visit(overloaded{PieceRenderer{}}, piece);
+std::string render_paragraph(const ir::Paragraph& para, bool in_table = false) {
+    return para | std::views::transform([in_table](const ir::Inline& piece) {
+               return std::visit(overloaded{PieceRenderer{in_table}}, piece);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
 std::string render_table_field(const ir::Paragraph& paragraph) {
-    return render_paragraph(paragraph) |
-           std::views::transform([](const char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
-           std::views::join | std::ranges::to<std::string>();
+    // Escape text pieces before code macros are inserted; escaping the
+    // assembled field would escape a code inline's \\& a second time.
+    return render_paragraph(paragraph, true);
 }
 
 std::string render_table(const ir::Table2D& table) {
