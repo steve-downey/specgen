@@ -735,6 +735,18 @@ line closes the item. Another `\item` then continues the list; prose resumes
 the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
+To start a new numbered paragraph directly after a list, write two consecutive
+blank decorated lines. This works in leading prose and within an element:
+
+```cpp
+//! The first paragraph ends with a list:
+//! \item the first entry.
+//!
+//!
+//! The second paragraph has its own list:
+//! \item the second entry.
+```
+
 An element may also contain two-column tables:
 
 ```cpp
@@ -752,6 +764,9 @@ The table requires exactly two `\column` entries, one or more `\row` entries,
 and exactly two `\cell` entries per row. Lines without a tag continue the
 active caption, column heading, row heading, or cell. `\endlib2dtab2` is
 required. Prose after it resumes the element in the same numbered paragraph.
+One blank decorated line after the terminator preserves that continuation;
+two consecutive blank decorated lines start a new numbered paragraph.
+Blank lines within a table do not separate paragraphs.
 
 `\libtab2` produces a flat two-column table, such as an enumeration's meanings.
 Here the text on `\row` is the first column, and each row has one `\cell` for
@@ -1129,7 +1144,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.18.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.19.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

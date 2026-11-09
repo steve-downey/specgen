@@ -635,6 +635,80 @@ TEST_CASE("docblock - leading prose preserves lists and resumed paragraphs") {
     CHECK(parsed.block.elements.size() == 1);
 }
 
+TEST_CASE("docblock - two blank lines after a list start a new paragraph") {
+    for (const auto prefix : {"", "\\remarks "}) {
+        for (const int count : {1, 2, 3}) {
+            CAPTURE(prefix, count);
+            std::string blanks;
+            for (int i = 0; i < count; ++i)
+                blanks += "//!\n";
+            const auto parsed = parse_docblock(std::format(
+                "//! {}Choose one:\n//! \\item First.\n{}//! Choose again:\n//! \\item Second.\n", prefix, blanks));
+            REQUIRE(parsed.diags.empty());
+            const auto& body =
+                parsed.block.elements.empty() ? parsed.block.leading : parsed.block.elements.front().body;
+            REQUIRE(body.size() == 4);
+            CHECK(std::get<Itemize>(body[1]).items.size() == 1);
+            CHECK(std::get<BodyParagraph>(body[2]).continuation == (count == 1));
+            CHECK(std::get<Itemize>(body[3]).items.size() == 1);
+        }
+    }
+}
+
+TEST_CASE("docblock - two blank lines after either table kind start a new paragraph") {
+    for (const auto table : {"libtab2", "lib2dtab2"}) {
+        for (const int count : {0, 1, 2, 3}) {
+            CAPTURE(table, count);
+            std::string blanks;
+            for (int i = 0; i < count; ++i)
+                blanks += "//!\n";
+            const auto parsed = parse_docblock(
+                std::format("//! \\remarks A table follows:\n//! \\{}[demo.table]{{Caption}}\n"
+                            "//! \\column First\n//! \\column Second\n//! \\row Row\n//! \\cell Value\n{}"
+                            "//! \\end{}\n{}//! A paragraph follows.\n",
+                            table,
+                            std::string_view(table) == "lib2dtab2" ? "//! \\cell Other\n" : "",
+                            table,
+                            blanks));
+            REQUIRE(parsed.diags.empty());
+            const auto& body = parsed.block.elements.front().body;
+            REQUIRE(body.size() == 3);
+            CHECK(std::get<BodyParagraph>(body.back()).continuation == (count < 2));
+        }
+    }
+}
+
+TEST_CASE("docblock - blank counts reset between lists and element boundaries") {
+    const auto parsed = parse_docblock(
+        "//! First:\n//! \\item One.\n//!\n//!\n//! Second:\n//! \\item Two.\n//!\n//! Same paragraph.\n"
+        "//! \\remarks Third:\n//! \\item Three.\n//!\n//! Continuation.\n");
+    REQUIRE(parsed.diags.empty());
+    REQUIRE(parsed.block.leading.size() == 5);
+    CHECK_FALSE(std::get<BodyParagraph>(parsed.block.leading[2]).continuation);
+    CHECK(std::get<BodyParagraph>(parsed.block.leading[4]).continuation);
+    CHECK(std::get<BodyParagraph>(parsed.block.elements.front().body.back()).continuation);
+}
+
+TEST_CASE("docblock - doubled block-comment blanks preserve paragraph boundaries") {
+    const auto parsed = parse_docblock("/*! Choose one:\n * \\item First.\n *\n *\n * Choose again.\n */");
+    REQUIRE(parsed.diags.empty());
+    REQUIRE(parsed.block.leading.size() == 3);
+    CHECK_FALSE(std::get<BodyParagraph>(parsed.block.leading.back()).continuation);
+}
+
+TEST_CASE("docblock - doubled blanks within table cells and code stay literal") {
+    const auto parsed = parse_docblock(
+        "//! \\remarks A table follows:\n//! \\libtab2[demo.table]{Caption}\n"
+        "//! \\column First\n//! \\column Second\n//! \\row Row\n//! \\cell Cell\n//!\n//!\n//! continuation.\n"
+        "//! \\endlibtab2\n//! Same paragraph.\n//! \\codeblock\n//! first\n//!\n//!\n//! last\n//! \\endcodeblock\n");
+    REQUIRE(parsed.diags.empty());
+    const auto& body = parsed.block.elements.front().body;
+    REQUIRE(body.size() == 4);
+    CHECK(std::get<InlineText>(std::get<Table1D>(body[1]).rows.front().cell2.front()).text == "Cell continuation.");
+    CHECK(std::get<BodyParagraph>(body[2]).continuation);
+    CHECK(std::get<AuthoredCode>(body[3]).code.text == "first\n\n\nlast");
+}
+
 TEST_CASE("docblock - coverage claims belong to normative constraint elements") {
     const auto valid = parse_docblock("\\constraints\n\\covers !detail::trait<T>\nThe specified condition holds.");
     CHECK(valid.ok());

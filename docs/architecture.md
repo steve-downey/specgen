@@ -493,7 +493,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.
-  A further blank in resumed prose starts a new numbered paragraph.
+  Two consecutive blank decorated lines after the list start a new numbered
+  paragraph when prose follows. A further blank in resumed prose also starts
+  a new numbered paragraph.
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
@@ -503,7 +505,10 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   `\endlib2dtab2`. Non-tag lines continue the active caption, header, or cell.
   After the explicit terminator, prose resumes the element in its authored
   position without another paragraph number. Several tables may occur in one
-  element. Table prose participates in expos rewriting, leakage, drift, and
+  element. Two consecutive blank decorated lines after the terminator start
+  a new numbered paragraph when prose follows; one blank preserves the
+  continuation. Blanks inside a table do not separate paragraphs.
+  Table prose participates in expos rewriting, leakage, drift, and
   *Throws:* validation like every other authored paragraph.
 - `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
   current element (issue #74) -- the shape [fs.enum.file.type] and its

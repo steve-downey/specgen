@@ -1,0 +1,62 @@
+** Operations [paragraphs.operations]
+:PROPERTIES:
+:CUSTOM_ID: paragraphs.operations
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void operate();
+#+end_itemdecl
+
+#+begin_pnum
+Leading wording has a list:
+
+- the first entry.
+#+end_pnum
+
+#+begin_pnum
+Another leading paragraph has its own list:
+
+- the second entry.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: The operation has these effects:
+
+- the first effect.
+#+end_pnum
+
+#+begin_pnum
+A separate paragraph has these effects:
+
+- the second effect.
+
+This continues the second Effects paragraph.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The table describes the choices:
+
+#+name: paragraphs.choices
+#+caption: Choices
+#+ATTR_WG21: :columns 25 67
+| Choice | Meaning |
+|-
+| First | The first choice. |
+#+end_pnum
+
+#+begin_pnum
+This starts a new paragraph after the flat table.
+
+#+name: paragraphs.properties
+#+caption: Properties
+#+ATTR_WG21: :columns 18 36 36
+| | First property | Second property |
+|-
+| First choice | The first property applies. | The second property applies. |
+#+end_pnum
+
+#+begin_pnum
+This starts a new paragraph after the two-dimensional table.
+#+end_pnum

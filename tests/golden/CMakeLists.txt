@@ -2485,6 +2485,25 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+specgen_add_golden(
+    paragraph_breaks
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_paragraph_breaks.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        paragraph_breaks
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paragraph_breaks/expected.json"
+    )
+    specgen_add_golden(
+        paragraph_breaks_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/paragraph_breaks/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens
