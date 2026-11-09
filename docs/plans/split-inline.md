@@ -1,11 +1,15 @@
 # Plan: `split_inline`, moving in-class definitions out of line
 
-**Status:** PROPOSED, 2026-11-08. No issue yet; this document is the proposal. Two questions were settled with the
-user the same day and are recorded in place: the tool is `split_inline`, a separate executable rather than a
-`specgen` subcommand, so that specgen's own comment handling and the converter's never run in one process. A spike
-against the distribution's Clang 18 (not the pinned 23) checked every source-location claim below, and the numbers
-and the excerpt are from that run. The remaining questions at the end are the taste calls the user owns; each
-records the recommendation it is asked with.
+**Status:** IN PROGRESS, 2026-11-09. Stages 1 to 3 are on the branch: `tools/split_inline/` builds the executable
+from this tree against `beman::specgen.frontend`, both comment modes are implemented as designed below, and
+`tests/split_inline/` holds the cases, including the three corpus headers whose wording must not change. Stage 4
+is partly done (the user guide, the inventory, the release scripts and the wheel carry the second executable); the
+decision record and an `examples/cli` capture remain. Two questions were settled with the user on 2026-11-08 and
+are recorded in place: the tool is `split_inline`, a separate executable rather than a `specgen` subcommand, so
+that specgen's own comment handling and the converter's never run in one process. The remaining questions at the
+end were executed on their recommendations and stay open to be overridden. A spike against the distribution's
+Clang 18 (not the pinned 23) checked every source-location claim below before the tool was written; the numbers and
+the excerpt are from that run.
 
 specgen's input contract (design §1) is a declaration-only class body with the definitions following it, out of
 line. A header written the ordinary way defines its members where it declares them. Restructuring one by hand is
@@ -155,7 +159,8 @@ which is still valid C++. Exit status 1 when anything was refused.
 - A definition inside a conditional-compilation region that does not enclose the whole class. The preprocessor's
   skipped ranges are already recorded during the parse (§3.1, `SkippedRanges` in `frontend/file_views.hpp`); the
   taken branches' extents are the one addition. Moving a member out of its `#if` would drop the guard.
-- A member of a local class or of an unnamed class: there is no qualified name to write.
+- A member of an unnamed class: there is no qualified name to write. A local class is never reached, since the tool
+  reads namespace-scope classes only, so its members stay without a diagnostic.
 - A member of an anonymous struct or union.
 
 Deduced return types (`auto f() { ... }`) are not refused: an in-class body is already parsed after the class is
@@ -281,9 +286,11 @@ The spike's output keeps the body's original indentation and spacing; formatting
 Each stage lands green on its own: full ctest, `make lint`, goldens regenerated in the same commit, and, in this
 tree, the version bumped (a minor bump when the executable first ships).
 
-1. **The rewriter.** One component, `split_inline/rewrite.hpp`/`.cpp` (per
-   [component-recipe](../decisions/component-recipe.md) if it lives here): given a parsed header, the list of moved
-   members, the refusals, and the edits as `{offset range, replacement}` pairs over the main file, with the
+1. **The rewriter.** One component, `include/beman/specgen/split_inline/rewrite.hpp` and
+   `src/beman/specgen/split_inline/rewrite.cpp`, its own library on the front end (per
+   [component-recipe](../decisions/component-recipe.md), outside the module umbrella as the front end is): given
+   a parsed header, the list of moved members, the refusals, and the edits as `{offset range, replacement}` pairs
+   over the main file, with the
    out-of-line text for each member; with `--move-comments`, also the comment lines that travel, the section each
    definition lands in, and the headers to write. Pure over the AST; Catch2 tests parse snippets the way specgen's
    front-end component tests do. The splice is `spliced_tail_begin`; the comment split follows the marker-line
@@ -291,13 +298,14 @@ tree, the version bumped (a minor bump when the executable first ships).
 2. **The executable.** `split_inline` with the options above, `-o -` as the default, refusals on standard error,
    the re-parse guard, and the exit codes. Its compile arguments resolve exactly as `specgen generate`'s do, so a
    header that specgen can parse, `split_inline` can parse with the same command tail.
-3. **Goldens.** `tests/golden/split_inline/<case>/input.hpp` and `expected.hpp`, compared with
-   `cmake -E compare_files` as the others are, with a `.compiles` sibling that parses `expected.hpp` through the
-   pinned Clang, a `.fixed_point` sibling, and, for the specgen-form cases converted with `--move-comments`, a
-   `.same_wording` sibling comparing `specgen generate` over the two. Inputs for the cases the spike covered, each
-   refusal, and the comment table row by row: the blank line, the access specifier, the trailing comment, the
-   marker-only block, Doxygen above markup, a group with an existing section holding out-of-line siblings on both
-   sides of the moved member, and a group with none.
+3. **Goldens.** `tests/split_inline/cases/<case>/input.hpp` and `expected.hpp`, compared with
+   `cmake -E compare_files` as the driver's are (`tests/split_inline/run-case.cmake`), with a `.compiles` sibling
+   that parses `expected.hpp` through the pinned Clang, a `.fixed_point` sibling, and, for the specgen-form cases
+   converted with `--move-comments`, a `.same_wording` sibling comparing `specgen generate` over the two. Inputs for
+   the cases the spike covered, each refusal, and the comment table row by row: the blank line, the access
+   specifier, the trailing comment, the marker-only block, Doxygen above markup, a group with an existing section
+   holding out-of-line siblings on both sides of the moved member, and a group with none. The Clang-free half,
+   `apply_edits`, has a Catch2 test of its own.
 4. **Documentation.** `docs/user-guide.md` gains a short *Converting an existing header* section pointing at the
    tool, placed before the authoring loop since it is the step that produces the shape *Start with one header*
    shows; and one decision record, `split-inline-in-place-namespace`: definitions stay in the class's own
@@ -321,7 +329,8 @@ Doxygen documents the declaration, specgen drops it from the synopsis regardless
 ### tree
 
 Whether `split_inline` builds from this tree, under `tools/split_inline/` linking `beman::specgen.frontend`, or
-from a repository of its own. **Recommendation: this tree.** It gets the LLVM pin, the compile-argument
+from a repository of its own. **Recommendation: this tree**, and the branch does that; moving it out later is a
+matter of porting the two helpers. It gets the LLVM pin, the compile-argument
 precedence, `spliced_tail_begin`, the corpus, the golden harness, and the release binary's build for free, and the
 `.same_wording` oracle needs both executables in one ctest anyway. Its own repository is the right answer if the
 tool is meant to serve projects that never see specgen; then the two shared helpers are ported, provenance noted,

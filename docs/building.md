@@ -202,9 +202,10 @@ The `manylinux-release` preset is the build, and only works inside the image:
 the image's own `cc`/`c++`. Scripts in `tools/release/` do the rest, and the
 workflow runs them the same way a local build does:
 
-- `stage.sh <build> <out>` installs the `specgen_Runtime` component, adds
-  `LICENSE` and the archive's README (`packaging/release/README.md`), splits
-  out and compresses the debug information, strips the driver, and writes the
+- `stage.sh <build> <out>` installs the `specgen_Runtime` component (the
+  driver and `split_inline`), adds `LICENSE` and the archive's README
+  (`packaging/release/README.md`), splits out and compresses each
+  executable's debug information, strips the executables, and writes the
   archives and their checksums. Every file in an archive carries the
   commit's time, or `SOURCE_DATE_EPOCH` when that is set, so staging one build
   twice gives the same bytes.
@@ -266,7 +267,8 @@ returns 404. Production publication remains pending, tracked by
 
 The [cutover checklist](plans/pypi-cutover.md) ties publication to the tested,
 merged fixes and verification of the trusted publisher. Once published,
-`uv tool install beman-specgen` will install the `specgen` command.
+`uv tool install beman-specgen` will install the `specgen` and `split_inline`
+commands.
 
 The release workflow builds and checks the wheel on every run and uploads it
 as the `beman-specgen-wheel` artifact. It publishes only when the repository

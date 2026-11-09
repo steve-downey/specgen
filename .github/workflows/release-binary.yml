@@ -158,6 +158,7 @@ jobs:
             dist/specgen-manylinux_2_34_x86_64.tar.xz
             dist/specgen-manylinux_2_34_x86_64.tar.xz.sha256
             dist/specgen.debug.xz
+            dist/split_inline.debug.xz
 
   # The archive as a user gets it, on stock images with that distribution's own
   # g++: the only place the host-libstdc++ requirement (std-headers-at-run-time)
@@ -242,7 +243,8 @@ jobs:
               echo
               echo "\`specgen-manylinux_2_34_x86_64.tar.xz\` runs on x86_64 Linux with glibc 2.34 or newer"
               echo "(Ubuntu 22.04, Debian 12, Fedora 35, RHEL 9, or later) and needs the host's g++ for"
-              echo "the C++ standard library headers. \`specgen.debug.xz\` resolves a crash report's offsets."
+              echo "the C++ standard library headers. It carries \`specgen\` and \`split_inline\`; the"
+              echo "\`.debug.xz\` files resolve a crash report's offsets."
           } > notes.md
           gh release create "$tag" dist/* \
               --repo "$GITHUB_REPOSITORY" \

@@ -1,0 +1,3 @@
+split_inline: input.hpp:25: refused: the definition touches a macro expansion
+split_inline: input.hpp:27: refused: the definition is inside a conditional-compilation region (line 26) that does not enclose the whole class
+split_inline: input.hpp:32: refused: the class is unnamed, so its members have no qualified name

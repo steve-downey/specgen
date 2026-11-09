@@ -21,7 +21,9 @@ if(NOT IS_DIRECTORY "${BEMAN_SPECGEN_STAGE}/bin")
 endif()
 
 install(
-    PROGRAMS "${BEMAN_SPECGEN_STAGE}/bin/specgen"
+    PROGRAMS
+        "${BEMAN_SPECGEN_STAGE}/bin/specgen"
+        "${BEMAN_SPECGEN_STAGE}/bin/split_inline"
     DESTINATION beman_specgen/data/bin
 )
 install(DIRECTORY "${BEMAN_SPECGEN_STAGE}/lib" DESTINATION beman_specgen/data)

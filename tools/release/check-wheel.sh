@@ -27,3 +27,9 @@ if [ "$alias_version" != "$version" ]; then
     echo "beman-specgen reports '$alias_version', specgen '$version'" >&2
     exit 1
 fi
+# The second executable: same version, same wheel.
+split_version=$("$work/venv/bin/split_inline" --version)
+if [ "${split_version#split_inline }" != "${version#specgen }" ]; then
+    echo "split_inline reports '$split_version', specgen '$version'" >&2
+    exit 1
+fi

@@ -65,3 +65,6 @@ add_subdirectory(vendor)
 
 # Tier B tests: the Clang front end's own.
 add_subdirectory(frontend)
+
+# The split_inline rewrite, which builds on the front end.
+add_subdirectory(split_inline)

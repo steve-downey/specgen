@@ -18,6 +18,10 @@ repos:
     hooks:
     - id: clang-format
       types_or: [c++, c]
+      # split_inline's expected outputs are what the tool printed, compared
+      # byte for byte (tests/split_inline); its inputs are formatted like any
+      # other header, the way tests/corpus is.
+      exclude: ^tests/split_inline/cases/.*/expected\.hpp$
 
     # CMake linting and formatting
   - repo: https://github.com/BlankSpruce/gersemi-pre-commit

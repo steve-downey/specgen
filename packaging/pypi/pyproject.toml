@@ -48,6 +48,7 @@ Issues = "https://github.com/steve-downey/specgen/issues"
 [project.scripts]
 specgen = "beman_specgen:main"
 beman-specgen = "beman_specgen:main"
+split_inline = "beman_specgen:split_inline"
 
 [tool.scikit-build]
 minimum-version = "build-system.requires"
