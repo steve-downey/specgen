@@ -382,10 +382,11 @@ ParseResult parse_docblock(std::string_view raw) {
 
     std::vector<std::string> para_lines; // pending paragraph, joined on flush
     std::vector<std::string> item_lines; // pending authored item, joined on flush
-    int                      para_line  = 0;
-    int                      item_line  = 0;
-    bool                     in_itemize = false;
-    bool                     item_open  = false;
+    int                      para_line   = 0;
+    int                      item_line   = 0;
+    bool                     in_itemize  = false;
+    bool                     item_open   = false;
+    int                      blank_lines = 0;
     using detail::TablePart;
     bool                     in_table          = false;
     bool                     continuation_next = false;
@@ -639,8 +640,16 @@ ParseResult parse_docblock(std::string_view raw) {
                 flush_item();
             else
                 flush_paragraph();
+            // One blank ends an item while preserving the enclosing
+            // paragraph. Two end that paragraph, including after a table
+            // terminator, so following prose starts a new one (issue #249).
+            if (++blank_lines >= 2) {
+                in_itemize        = false;
+                continuation_next = false;
+            }
             continue;
         }
+        blank_lines = 0;
 
         std::string_view stripped = trim(line);
         auto             tag      = parse::opt(tag_head())(parse::cursor{stripped});
