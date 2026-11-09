@@ -36,10 +36,12 @@ TEST_CASE("draft_spans - draft_code_inline wraps a partial span in tcode but not
 }
 
 TEST_CASE("draft_spans - inline code escapes literal text without escaping span macros") {
+    CHECK(backend::draft_code_inline(CodeInline{{"is_constructible_v<VT, F>", {}}}) ==
+          R"(\tcode{is_constructible_v<VT, F>})");
     CHECK(backend::draft_code_inline(CodeInline{{R"(& && # % _ { } ~ ^ $ \)", {}}}) ==
-          R"(\tcode{\& \&\& \# \% \_ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}})");
+          R"(\tcode{\& \&\& \# \% _ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}})");
     CHECK(backend::draft_code_inline(CodeInline{{"&VAL_", {{1, 4, SpanKind::ExposId, "value-name"}}}}) ==
-          R"(\tcode{\&\exposid{value-name}\_})");
+          R"(\tcode{\&\exposid{value-name}_})");
     CHECK(backend::draft_code_inline(CodeInline{{"VAL", {{0, 3, SpanKind::ExposId, "value-name"}}}}) ==
           R"(\exposid{value-name})");
 }

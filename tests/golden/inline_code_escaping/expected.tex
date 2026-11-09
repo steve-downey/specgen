@@ -6,7 +6,7 @@ A reference qualifier is one of the following:
 \item \tcode{\&}, or
 \item \tcode{\&\&}.
 \end{itemize}
-Special characters in code are literal: \tcode{\# \% \_ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}}.
+Special characters in code are literal: \tcode{\# \% _ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}}.
 
 \rSec3[escaping.references]{References}
 
@@ -16,6 +16,10 @@ inline int& alias(int& value);
 \end{itemdecl}
 
 \begin{itemdescr}
+\pnum
+\mandates
+\tcode{is_constructible_v<int\&, int\&>} is \tcode{true}.
+
 \pnum
 \returns
 \tcode{value}.

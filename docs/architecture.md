@@ -1074,8 +1074,9 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters
-  (`&`, `#`, `%`, `_`, braces, `$`, `~`, `^`, and backslash) before inserting
-  semantic span macros. The shared span walk accepts a literal-text escape
+  (`&`, `#`, `%`, braces, `$`, `~`, `^`, and backslash) before inserting
+  semantic span macros. The draft loads the `underscore` package, so `_` stays
+  literal in both code inlines and prose. The shared span walk accepts a literal-text escape
   hook for this purpose; listings keep its identity default. Table prose
   escapes its own ampersands before assembly, so a code inline is escaped
   once. Org's LaTeX inline snippets use the same `draft_code_inline` helper.

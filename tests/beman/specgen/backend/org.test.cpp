@@ -219,7 +219,7 @@ TEST_CASE("org - inline LaTeX snippets escape literals around semantic spans") {
     SpecItem item;
     item.descr.leading = {BodyParagraph{{CodeInline{{"&VAL_", {{1, 4, SpanKind::ExposId, "value-name"}}}}}}};
     const auto out     = org::render_to_string(item);
-    CHECK(out.find(R"(@@latex:\tcode{\&\exposid{value-name}\_}@@@@html:<code>&amp;<var>value-name</var>_</code>@@)") !=
+    CHECK(out.find(R"(@@latex:\tcode{\&\exposid{value-name}_}@@@@html:<code>&amp;<var>value-name</var>_</code>@@)") !=
           std::string::npos);
 }
 

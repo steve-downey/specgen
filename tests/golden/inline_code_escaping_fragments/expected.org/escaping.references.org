@@ -10,6 +10,10 @@ inline int& alias(int& value);
 #+end_itemdecl
 
 #+begin_pnum
+/Mandates/: ~is_constructible_v<int&, int&>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
 /Returns/: ~value~.
 #+end_pnum
 
