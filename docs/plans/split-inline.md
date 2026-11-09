@@ -3,12 +3,14 @@
 **Status:** IN PROGRESS, 2026-11-09. Stages 1 to 3 are on the branch: `tools/split_inline/` builds the executable
 from this tree against `beman::specgen.frontend`, both comment modes are implemented as designed below, and
 `tests/split_inline/` holds the cases, including the three corpus headers whose wording must not change. Stage 4
-is partly done (the user guide, the inventory, the release scripts and the wheel carry the second executable); the
-decision record and an `examples/cli` capture remain. Two questions were settled with the user on 2026-11-08 and
-are recorded in place: the tool is `split_inline`, a separate executable rather than a `specgen` subcommand, so
-that specgen's own comment handling and the converter's never run in one process. The remaining questions at the
-end were executed on their recommendations and stay open to be overridden. A spike against the distribution's
-Clang 18 (not the pinned 23) checked every source-location claim below before the tool was written; the numbers and
+is done but for an `examples/cli` capture, which needs a full build to record: the user guide, the inventory, the
+release scripts and the wheel carry the second executable, and the decision is recorded in
+[decisions/split-inline-in-place-namespace.md](../decisions/split-inline-in-place-namespace.md). Two questions
+were settled with the user on 2026-11-08 and are recorded in place: the tool is `split_inline`, a separate
+executable rather than a `specgen` subcommand, so that specgen's own comment handling and the converter's never
+run in one process. The remaining questions at the end were executed on their recommendations and stay open to be
+overridden. A spike against the distribution's Clang 18 (not the pinned 23) checked every source-location claim
+below before the tool was written; the numbers and
 the excerpt are from that run.
 
 specgen's input contract (design §1) is a declaration-only class body with the definitions following it, out of
