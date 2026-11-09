@@ -2466,6 +2466,25 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+specgen_add_golden(
+    inline_code_escaping
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_inline_code_escaping.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        inline_code_escaping
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_code_escaping/expected.json"
+    )
+    specgen_add_golden(
+        inline_code_escaping_fragments
+        MODE split
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_code_escaping/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

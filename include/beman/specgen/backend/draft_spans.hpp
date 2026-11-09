@@ -13,6 +13,7 @@
 
 #include <format>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 
@@ -129,6 +130,39 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
         foundation::when<ir::Change::Elided>([] { return std::optional<std::string_view>{}; }));
 }
 
+// Literal code inside a text-mode macro argument (issue #248). The span
+// walker applies this only to source slices, before inserting draft macros.
+// Listings payloads and author-supplied @...@ escapes use the identity hook.
+inline std::string draft_escape_code_text(std::string_view text) {
+    return text | std::views::transform([](char ch) -> std::string {
+               switch (ch) {
+               case '&':
+                   return "\\&";
+               case '#':
+                   return "\\#";
+               case '%':
+                   return "\\%";
+               case '_':
+                   return "\\_";
+               case '{':
+                   return "\\{";
+               case '}':
+                   return "\\}";
+               case '$':
+                   return "\\$";
+               case '~':
+                   return "\\textasciitilde{}";
+               case '^':
+                   return "\\textasciicircum{}";
+               case '\\':
+                   return "\\textbackslash{}";
+               default:
+                   return std::string(1, ch);
+               }
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
 // A code inline, in prose, as the draft writes one. Shared for the same
 // reason the two above are: the org backend emits this exact text inside an
 // `@@latex:...@@` export snippet, because org's own `~code~` markup is
@@ -143,7 +177,7 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
         v.code.spans.size() == 1 && v.code.spans.front().begin == 0 && v.code.spans.front().end == v.code.text.size();
     if (whole_span)
         return draft_span_prose(v.code.spans.front(), v.code.text);
-    return "\\tcode{" + render_code_spans(v.code, draft_span_prose) + '}';
+    return "\\tcode{" + render_code_spans(v.code, draft_span_prose, draft_escape_code_text) + '}';
 }
 
 } // namespace beman::specgen::backend

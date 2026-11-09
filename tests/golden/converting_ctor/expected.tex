@@ -7,10 +7,10 @@ template<class U> constexpr explicit(@\seebelow@) optional(const optional<U>& rh
 \pnum
 \constraints
 \begin{itemize}
-\item \tcode{is_constructible_v<T, const U&>} is \tcode{true},
-\item \tcode{is_constructible_v<T, optional<U>&>} is \tcode{false},
-\item \tcode{is_constructible_v<T, optional<U>>} is \tcode{false},
-\item \tcode{is_convertible_v<optional<U>&, T>} is \tcode{false}.
+\item \tcode{is\_constructible\_v<T, const U\&>} is \tcode{true},
+\item \tcode{is\_constructible\_v<T, optional<U>\&>} is \tcode{false},
+\item \tcode{is\_constructible\_v<T, optional<U>>} is \tcode{false},
+\item \tcode{is\_convertible\_v<optional<U>\&, T>} is \tcode{false}.
 \end{itemize}
 
 \pnum
@@ -19,5 +19,5 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 
 \pnum
 \remarks
-The expression inside \tcode{explicit} is equivalent to \tcode{!is_convertible_v<const U&, T>}, see \iref{optional.general}.
+The expression inside \tcode{explicit} is equivalent to \tcode{!is\_convertible\_v<const U\&, T>}, see \iref{optional.general}.
 \end{itemdescr}

@@ -1068,6 +1068,12 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   respectively, and the parentheses belong to the prose form only. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
+- The draft's `\tcode` argument is text mode. Escape literal code characters
+  (`&`, `#`, `%`, `_`, braces, `$`, `~`, `^`, and backslash) before inserting
+  semantic span macros. The shared span walk accepts a literal-text escape
+  hook for this purpose; listings keep its identity default. Table prose
+  escapes its own ampersands before assembly, so a code inline is escaped
+  once. Org's LaTeX inline snippets use the same `draft_code_inline` helper.
   The wg21org HTML exporter resolves that same `\ref{x}` to a local `CUSTOM_ID` when the
   paper defines `x`, and to `eel.is/c++draft/x` otherwise.
 - The org backend has **no escape convention of its own**, because its code blocks are not
