@@ -5,7 +5,8 @@
 // --move-comments: a docblock across a blank line moves; one above an access
 // specifier stays; a trailing comment on one definition's line never opens
 // the next member's run; a `/*! */` block moves; Doxygen above a docblock
-// stays while the docblock moves; a markers-only block stays; a plain line
+// stays while the docblock moves; a block of markers only moves too, since
+// the driver reads `\omit` and `\merge` from the definition; a plain line
 // below the docblock moves with it; a directive between comment and
 // declaration keeps them apart.
 

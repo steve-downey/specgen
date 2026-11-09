@@ -117,15 +117,17 @@ their third character is, so the block is split by line:
 | Lines | Disposition |
 | --- | --- |
 | `//!` and `/*! ... */`, from the first such line to the end of the block | move with the definition |
-| a block of bare declaration markers only | stays; §3.3 allows those on the declaration |
 | `///` and `/** ... */` above the first markup line | stay; Doxygen documents the declaration |
 | a plain `//` line above the first markup line, the `// \ref{...}` group header among them | stays |
 | a plain `//` line below the first markup line | moves; it is inside the chunk specgen reads either way |
 | a trailing comment, code before it on its own line | stays, and never opens a moved run |
 
-The declaration markers are the six §3.3 lists: `\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, and
-`\freestanding`. A block of only those stays because the author put it there and specgen reads it there; Doxygen
-stays because a synopsis drops it anyway (§1).
+A block made only of markers (`\omit`, `\merge`, `\elsewhere`, `\expos`, `\seebelow`, `\freestanding`) moves like
+any other. The first design kept it on the declaration, since §3.3 says such a block there is not an error, and
+the `.same_wording` case for `spec_inclass_template.hpp` showed that to be wrong: `//! \merge` left on an in-class
+declaration whose definition is out of line does not merge the member, while the same marker on the out-of-line
+definition does (checked against the driver with a two-line header each way). The pre-pass sets of §3.3 read the
+definition, so that is where the markers go. Doxygen stays because a synopsis drops it anyway (§1).
 
 The last row is a trap the spike fell into: `void h() {} //! three.` followed on the next line by `/*! four */`
 over `i()` coalesces into one comment attached to `i`, and the naive split moved `three` onto `i`'s definition. A
@@ -305,7 +307,7 @@ tree, the version bumped (a minor bump when the executable first ships).
    that parses `expected.hpp` through the pinned Clang, a `.fixed_point` sibling, and, for the specgen-form cases
    converted with `--move-comments`, a `.same_wording` sibling comparing `specgen generate` over the two. Inputs for
    the cases the spike covered, each refusal, and the comment table row by row: the blank line, the access
-   specifier, the trailing comment, the marker-only block, Doxygen above markup, a group with an existing section
+   specifier, the trailing comment, a block of markers only, Doxygen above markup, a group with an existing section
    holding out-of-line siblings on both sides of the moved member, and a group with none. The Clang-free half,
    `apply_edits`, has a Catch2 test of its own.
 4. **Documentation.** `docs/user-guide.md` gains a short *Converting an existing header* section pointing at the

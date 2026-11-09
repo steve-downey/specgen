@@ -13,11 +13,9 @@ class converter {
     int convert(T value);
 
     /** @brief Constructs an empty converter. */
-    //! \merge
     converter(int);
 
     /** @brief A merged implementation overload. */
-    //! \merge
     template <class T>
     void merged(T);
 };
@@ -30,8 +28,10 @@ int converter::convert(T value) {
     return static_cast<int>(value);
 }
 
+//! \merge
 inline converter::converter(int) {}
 
+//! \merge
 template <class T>
 void converter::merged(T) {}
 

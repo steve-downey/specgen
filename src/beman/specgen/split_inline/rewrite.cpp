@@ -26,6 +26,7 @@
 #include <llvm/Support/Casting.h>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <format>
 #include <functional>
@@ -212,32 +213,6 @@ std::string dedent(std::string_view text, std::string_view indent) {
 bool starts_markup(std::string_view line) {
     const std::string t = trim(line);
     return t.starts_with("//!") || t.starts_with("/*!");
-}
-
-// A `//!` line holding nothing but one of the markers §3.3 allows on the
-// in-class declaration. A block made only of these stays where the author
-// put it.
-bool is_declaration_marker_line(std::string_view line) {
-    std::string t = trim(line);
-    if (t.starts_with("//!"))
-        t = trim(t.substr(3));
-    if (t.empty())
-        return true;
-    constexpr std::array markers{
-        std::string_view("\\omit"),
-        std::string_view("\\merge"),
-        std::string_view("\\elsewhere"),
-        std::string_view("\\expos"),
-        std::string_view("\\seebelow"),
-        std::string_view("\\freestanding"),
-    };
-    const auto is_marker = [&](std::string_view marker) {
-        if (!t.starts_with(marker))
-            return false;
-        const std::string_view rest = std::string_view(t).substr(marker.size());
-        return rest.empty() || rest.front() == ' ' || rest.front() == '\t' || rest.front() == '-';
-    };
-    return std::ranges::any_of(markers, is_marker);
 }
 
 // `// \ref{stable}, title` -> the title, capitalized, or empty.
@@ -797,9 +772,10 @@ class Planner {
 
     // The lines of the comment attached to `fn` that travel with the
     // definition under --move-comments, as the byte range of whole lines, or
-    // nothing: the block from its first `//!`/`/*!` line to its end, unless
-    // that block is declaration markers only, the comment is not directly
-    // above the declaration, or it is a trailing comment.
+    // nothing: the block from its first `//!`/`/*!` line to its end, markers
+    // included (the front end's pre-pass sets read `\omit` and `\merge` from
+    // the definition), unless the comment is not directly above the
+    // declaration or it is a trailing comment.
     std::optional<Region> moving_comment_lines(const clang::Decl* whole, unsigned decl_begin) const {
         // Looked up through the described template, as the front end does
         // (docblock_lookup.hpp explains the anchor rule).
@@ -828,9 +804,6 @@ class Planner {
         const auto first_markup =
             std::ranges::find_if(candidates, [&](unsigned start) { return starts_markup(line_text(start)); });
         if (first_markup == candidates.end())
-            return std::nullopt;
-        const std::span moving(first_markup, candidates.end());
-        if (std::ranges::all_of(moving, [&](unsigned start) { return is_declaration_marker_line(line_text(start)); }))
             return std::nullopt;
         return Region{*first_markup, src_.next_line_start(ce)};
     }
