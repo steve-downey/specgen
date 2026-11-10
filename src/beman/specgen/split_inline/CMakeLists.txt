@@ -24,3 +24,12 @@ target_link_libraries(
     PUBLIC beman::specgen.frontend beman::specgen
 )
 target_compile_features(beman.specgen.split_inline PUBLIC cxx_std_26)
+
+# Match the LLVM build's RTTI setting, exactly as the front end does: against
+# a no-RTTI LLVM (the official release binaries CI links), the typeinfo our
+# `llvm::Expected` uses emit references base-class typeinfo the LLVM
+# libraries never define, and the Debug link fails on
+# `typeinfo for llvm::ErrorInfoBase`.
+if(NOT LLVM_ENABLE_RTTI)
+    target_compile_options(beman.specgen.split_inline PRIVATE -fno-rtti)
+endif()

@@ -12,6 +12,10 @@ add_executable(split_inline)
 target_sources(split_inline PRIVATE main.cpp)
 target_link_libraries(split_inline PRIVATE beman::specgen.split_inline)
 target_compile_features(split_inline PRIVATE cxx_std_26)
+# The same RTTI match the libraries make (src/beman/specgen/split_inline).
+if(NOT LLVM_ENABLE_RTTI)
+    target_compile_options(split_inline PRIVATE -fno-rtti)
+endif()
 target_compile_definitions(
     split_inline
     PRIVATE
