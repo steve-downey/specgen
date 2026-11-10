@@ -44,3 +44,4 @@ and cite the design document as `docs/architecture.md` §N.
 | [nested-namespace-rendering](nested-namespace-rendering.md) | A nested namespace is dropped, `\specified`, or foreign; specified ones render as the draft writes them |
 | [explicit-constraint-coverage](explicit-constraint-coverage.md) | Element-scoped checked coverage claims; visible old-reader rejection |
 | [ir-level-diff](ir-level-diff.md) | The wording diff is a diff of the IR, carried as marks in the IR |
+| [split-inline-in-place-namespace](split-inline-in-place-namespace.md) | `split_inline` is its own executable; definitions stay in the class's namespace block, hidden friends in the class |

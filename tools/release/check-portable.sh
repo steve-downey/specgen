@@ -37,45 +37,56 @@ fail() {
     status=1
 }
 
-[ -x "$specgen" ] || {
-    echo "check-portable: no executable at $specgen" >&2
-    exit 1
+# check_binary <executable>: the portability rules above, for one of the
+# executables the tree carries. Both specgen and split_inline are static
+# against Clang, so both have to pass; the smoke test is the driver's alone.
+check_binary() {
+    exe=$1
+    echo "== $exe"
+    [ -x "$exe" ] || {
+        echo "check-portable: no executable at $exe" >&2
+        exit 1
+    }
+    allowed='libgcc_s.so.1 libstdc++.so.6 libm.so.6 libdl.so.2 librt.so.1 libc.so.6
+    libnsl.so.1 libutil.so.1 libpthread.so.0 libresolv.so.2 libz.so.1 libexpat.so.1
+    ld-linux-x86-64.so.2'
+    needed=$(readelf -d "$exe" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
+    echo "needed: $(echo $needed)"
+    for lib in $needed; do
+        echo "$allowed" | tr ' ' '\n' | grep -qxF "$lib" ||
+            fail "needs $lib, which manylinux_2_34 does not allow"
+    done
+
+    # newest <prefix>: the highest <prefix>_x.y.z version the dynamic symbol table
+    # references, or nothing.
+    newest() {
+        objdump -T "$exe" | grep -o "$1_[0-9][0-9.]*" | sed "s/^$1_//" | sort -Vu | tail -1
+    }
+    # check_version <prefix> <ceiling>
+    check_version() {
+        v=$(newest "$1")
+        echo "newest $1: ${v:-none} (ceiling $2)"
+        if [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$v" "$2" | sort -V | tail -1)" != "$2" ]; then
+            fail "references $1_$v, newer than $1_$2"
+        fi
+    }
+    check_version GLIBC 2.34
+    check_version GLIBCXX 3.4.29
+    check_version CXXABI 1.3.13
+
+    isa=$(readelf -n "$exe" | sed -n 's/.*x86 ISA needed: //p')
+    echo "x86 ISA needed: ${isa:-none}"
+    case "$isa" in
+        *v3* | *v4*) fail "needs an instruction set beyond x86-64-v2: $isa" ;;
+    esac
 }
+
 ls -d "$stage"/lib/clang/*/include/stddef.h >/dev/null 2>&1 ||
     fail "no Clang resource directory under $stage/lib/clang"
 
-allowed='libgcc_s.so.1 libstdc++.so.6 libm.so.6 libdl.so.2 librt.so.1 libc.so.6
-libnsl.so.1 libutil.so.1 libpthread.so.0 libresolv.so.2 libz.so.1 libexpat.so.1
-ld-linux-x86-64.so.2'
-needed=$(readelf -d "$specgen" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p')
-echo "needed: $(echo $needed)"
-for lib in $needed; do
-    echo "$allowed" | tr ' ' '\n' | grep -qxF "$lib" ||
-        fail "needs $lib, which manylinux_2_34 does not allow"
+for exe in "$stage"/bin/*; do
+    check_binary "$exe"
 done
-
-# newest <prefix>: the highest <prefix>_x.y.z version the dynamic symbol table
-# references, or nothing.
-newest() {
-    objdump -T "$specgen" | grep -o "$1_[0-9][0-9.]*" | sed "s/^$1_//" | sort -Vu | tail -1
-}
-# check_version <prefix> <ceiling>
-check_version() {
-    v=$(newest "$1")
-    echo "newest $1: ${v:-none} (ceiling $2)"
-    if [ -n "$v" ] && [ "$(printf '%s\n%s\n' "$v" "$2" | sort -V | tail -1)" != "$2" ]; then
-        fail "references $1_$v, newer than $1_$2"
-    fi
-}
-check_version GLIBC 2.34
-check_version GLIBCXX 3.4.29
-check_version CXXABI 1.3.13
-
-isa=$(readelf -n "$specgen" | sed -n 's/.*x86 ISA needed: //p')
-echo "x86 ISA needed: ${isa:-none}"
-case "$isa" in
-    *v3* | *v4*) fail "needs an instruction set beyond x86-64-v2: $isa" ;;
-esac
 
 "$(dirname "$0")/smoke.sh" "$specgen" "$expected_commit" "$@" || status=1
 

@@ -45,6 +45,12 @@ Gotchas that bite:
   generate-mode golden's `.singlepass` sibling says so.
 - `generate` reports docblock findings on stderr and still produces output on an
   Error; read stderr instead of trusting the exit code.
+- `split_inline <header>` (`tools/split_inline/`, plan `docs/plans/split-inline.md`)
+  moves in-class member definitions out of line, into the class's own namespace
+  block; `--move-comments` carries `//!` docblocks along and places definitions
+  under their `\rSec` sections. Its cases are `ctest -R split_inline`
+  (`tests/split_inline/cases/`); regenerate an `expected.hpp` by running the tool
+  from the case directory, never by hand.
 - The "No raw loops" doctrine (docs/CODING_RULES.md) is gated by
   `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy plugin check
   over the compile database (~45 s), scope `src/`, `tools/`, `examples/`,

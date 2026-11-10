@@ -33,7 +33,8 @@ bin/specgen generate my_header.hpp
 
 The crash report names the version and commit and prints a stack trace of
 offsets. The release that this archive came from also carries
-`specgen.debug.xz`, the driver's debug information, which resolves them:
+`specgen.debug.xz` and `split_inline.debug.xz`, each executable's debug
+information, which resolves them:
 
 ```sh
 unxz specgen.debug.xz

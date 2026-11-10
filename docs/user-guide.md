@@ -168,6 +168,46 @@ library, omit `--no-compile-commands` so that specgen uses the library's
 compilation database, or supply a fixed argument list after `--` that names its
 include and generated-header directories.
 
+## Converting an existing header
+
+A header written the ordinary way defines its members where it declares them.
+`split_inline`, installed beside `specgen`, restructures it into the shape
+above: every in-class member function definition moves out of line, after the
+class and inside the namespace block that already encloses it, so nothing is
+reopened and no free function can silently become a new one. Hidden friends,
+`= default` and `= delete` members stay in the class, as the input contract
+wants them.
+
+```sh
+split_inline widget.hpp -o widget.split.hpp
+split_inline widget.hpp --in-place
+```
+
+Compile arguments resolve exactly as `specgen generate`'s do: a `--` tail, a
+`--compile-commands` directory, or the database found above the header.
+Without further options every comment stays with its declaration, which is
+the form to run before any specgen markup is written: convert first, then
+document the definitions. For a header that already carries `//!` docblocks on
+in-class definitions, `--move-comments` carries each docblock to the
+definition it documents, places the definition under the `\rSec` section its
+`\ref` group names, and writes a `// \rSec3[stable]{Title}` header for a group
+that has none yet, so `specgen generate` renders the same wording from the
+converted header as from the original. Doxygen and plain `//` comments never
+move.
+
+What the tool writes takes the `.clang-format` found above the header, as
+clang-format would lay it out; the declarations left in the class keep their
+bytes, and so does everything when no configuration is found. `--no-format`
+leaves the inserted text as copied.
+
+A member the tool will not move is reported on standard error with its line
+and left in the class: one spelled through a macro, one inside an `#if` the
+class is not inside, or one of an unnamed class. The rest of the header is
+still converted, and the exit status is then 1. Before writing, the tool
+parses its own output again under the same arguments and refuses to write a
+result that no longer parses; `--unchecked` writes it anyway for inspection.
+The design is in [`docs/plans/split-inline.md`](plans/split-inline.md).
+
 ## The authoring loop
 
 Establish the document structure first and the entities second. This order
@@ -1147,7 +1187,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.21.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.22.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

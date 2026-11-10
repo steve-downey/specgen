@@ -1521,6 +1521,19 @@ The build assembles the tool from these components, each following the shared CM
   empty document when the revision lacks it, noted on stderr), is diffed after validation and
   before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir` makes
   the emitted IR the marked document. A run takes one kind of baseline.
+- **split_inline** — `include/beman/specgen/split_inline/rewrite.hpp`,
+  `src/beman/specgen/split_inline/rewrite.cpp` (its own library, on the front end),
+  `tools/split_inline/main.cpp`, cases under `tests/split_inline/`
+  ([plans/split-inline.md](plans/split-inline.md)). A
+  second executable, not a driver command, that turns a header with in-class member
+  definitions into the §1 shape: the class body left declaration-only by the §3.4 splice
+  (`spliced_tail_begin`), each definition written after the class inside its own namespace
+  block with the template heads, qualifier and `inline` an out-of-line definition needs, and
+  hidden friends and defaulted or deleted members untouched. `--move-comments` carries `//!`
+  docblocks to the definitions (`attached_raw_comment`, the §3.1 anchor rule) and places each
+  under the `\rSec` section its `\ref` group names, so `generate` renders the same wording
+  from either form. Links `beman::specgen.frontend` for the parse and the compile-argument
+  precedence; produces no IR.
 - **Dependency fragment** — `depfile.hpp`/`.cpp`. Make escaping, the one-rule target list
   and the `-MP` block. Tier A and clang-free: *which* files a parse read is the front end's
   answer (`frontend::DocumentBuild::sources`) and which were written is the driver's, but

@@ -56,22 +56,27 @@ stage=$out/$name
 
 # Clear obsolete gzip artifacts too when an output directory is reused.
 rm -rf "$stage" "$out/$archive" "$out/$archive.xz" "$out/$archive.xz.sha256" "$out/$archive.gz" \
-    "$out/$archive.gz.sha256" "$out/specgen.debug" "$out/specgen.debug.xz"
+    "$out/$archive.gz.sha256" "$out"/*.debug "$out"/*.debug.xz
 mkdir -p "$out"
 cmake --install "$build" --component specgen_Runtime --prefix "$stage"
 cp "$source_dir/LICENSE" "$stage/"
 cp "$source_dir/packaging/release/README.md" "$stage/"
 
-objcopy --only-keep-debug "$stage/bin/specgen" "$out/specgen.debug"
-objcopy --strip-all --add-gnu-debuglink="$out/specgen.debug" "$stage/bin/specgen"
-xz -T4 "$out/specgen.debug"
+# Every executable the component installs: specgen, and split_inline beside it.
+# Each one's debug information is its own asset, named for it.
+for exe in "$stage"/bin/*; do
+    debug=$out/$(basename "$exe").debug
+    objcopy --only-keep-debug "$exe" "$debug"
+    objcopy --strip-all --add-gnu-debuglink="$debug" "$exe"
+    xz -T4 "$debug"
+done
 
 # Owner, order and times fixed, so the archive's bytes depend on its contents alone.
 tar -C "$out" --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$epoch" -cf "$out/$archive" "$name"
 xz -T4 "$out/$archive"
 (cd "$out" && sha256sum "$archive.xz" >"$archive.xz.sha256")
 
-ls -l "$stage/bin/specgen" "$out/$archive.xz" "$out/specgen.debug.xz"
+ls -l "$stage"/bin/* "$out/$archive.xz" "$out"/*.debug.xz
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "version=$version" >>"$GITHUB_OUTPUT"
     echo "stage=$stage" >>"$GITHUB_OUTPUT"

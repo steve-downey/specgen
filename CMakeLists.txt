@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.21.1
+    VERSION 0.22.0
 )
 
 # `specgen --version` identifies both the release and the exact source
@@ -311,6 +311,8 @@ else()
 endif()
 
 add_subdirectory(src/beman/specgen/frontend)
+# The split_inline rewrite, on the front end (docs/plans/split-inline.md).
+add_subdirectory(src/beman/specgen/split_inline)
 
 # The clang-tidy plugin rides the probe above, not BEMAN_SPECGEN_BUILD_TOOLS:
 # it is lint infrastructure, not the driver, and its CMakeLists returns
@@ -319,6 +321,7 @@ add_subdirectory(tools/tidy)
 
 if(BEMAN_SPECGEN_BUILD_TOOLS)
     add_subdirectory(tools/specgen)
+    add_subdirectory(tools/split_inline)
 endif()
 
 if(BEMAN_SPECGEN_BUILD_TESTS)
@@ -455,6 +458,7 @@ if(BEMAN_SPECGEN_BUILD_TESTS)
                 "${PROJECT_SOURCE_DIR}/tests/run-standard-streams.cmake"
         )
         add_subdirectory(tests/golden)
+        add_subdirectory(tests/split_inline)
     endif()
     add_subdirectory(tests/examples)
 endif()
