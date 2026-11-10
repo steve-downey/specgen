@@ -64,6 +64,16 @@ TEST_CASE("code_spans - render_code_spans defensively skips a malformed span") {
     CHECK(backend::render_code_spans(code, bracket_escape) == "abc");
 }
 
+TEST_CASE("code_spans - literal escaping preserves span offsets and inserted macros") {
+    const CodeText code{"&VAL&", {{1, 4, SpanKind::ExposId, "value"}}};
+    const auto     escape_text = [](std::string_view text) {
+        return text.empty() ? std::string{} : "literal(" + std::string(text) + ')';
+    };
+    CHECK(backend::render_code_spans(code, bracket_escape, escape_text) == "literal(&)[expos:value]literal(&)");
+    CHECK(backend::render_code_spans(CodeText{"&", {{0, 8, SpanKind::ExposId, "bad"}}}, bracket_escape, escape_text) ==
+          "literal(&)");
+}
+
 // --- the wording diff's change runs (docs/plans/wording-diff.md) -----------
 
 namespace {

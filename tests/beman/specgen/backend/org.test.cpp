@@ -208,10 +208,19 @@ TEST_CASE("org - a code inline containing a tilde falls back to a snippet") {
     item.descr.elements.push_back(std::move(effects));
 
     const std::string out = org::render_to_string(item);
-    CHECK(out.find("Calls @@latex:\\tcode{~optional()}@@@@html:<code>~optional()</code>@@.") != std::string::npos);
+    CHECK(out.find("Calls @@latex:\\tcode{\\textasciitilde{}optional()}@@@@html:<code>~optional()</code>@@.") !=
+          std::string::npos);
     // The naive rendering would have closed org's code run at the second
     // character and spilled the rest into prose.
     CHECK(out.find("~~optional()~") == std::string::npos);
+}
+
+TEST_CASE("org - inline LaTeX snippets escape literals around semantic spans") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{CodeInline{{"&VAL_", {{1, 4, SpanKind::ExposId, "value-name"}}}}}}};
+    const auto out     = org::render_to_string(item);
+    CHECK(out.find(R"(@@latex:\tcode{\&\exposid{value-name}_}@@@@html:<code>&amp;<var>value-name</var>_</code>@@)") !=
+          std::string::npos);
 }
 
 TEST_CASE("org - a RefInline links to the draft or a proposed clause") {

@@ -1,0 +1,15 @@
+** General [escaping.general]
+:PROPERTIES:
+:CUSTOM_ID: escaping.general
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+A reference qualifier is one of the following:
+
+- ~&~, or
+- ~&&~.
+
+Special characters in code are literal: @@latex:\tcode{\# \% _ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}}@@@@html:<code># % _ { } ~ ^ $ \</code>@@.
+#+end_pnum

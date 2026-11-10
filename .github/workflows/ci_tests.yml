@@ -70,24 +70,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
-      # The official release binaries ship the CMake package configs, the
-      # compiler the clang lanes use, and a shared libclang-cpp; LLVM itself is
-      # static in that distribution, but libclang-cpp re-exports the LLVM
-      # symbols, so a libLLVM.so shim pointing at it satisfies the front end's
-      # `clang-cpp LLVM` link on this layout too. The symlinks into /usr/lib64
-      # put both on the default linker and loader paths.
+      # Download (cached), unpack, and link the pinned LLVM release; see the
+      # action for why each piece is there.
       - name: Install LLVM/Clang 23 (dev)
-        run: |
-          set -eux
-          mkdir -p /opt/llvm23
-          curl -sSL \
-            https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-Linux-X64.tar.xz \
-            | tar -xJ -C /opt/llvm23 --strip-components=1
-          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libclang-cpp.so.23.1
-          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libLLVM.so
-          ln -s /opt/llvm23/bin/clang /usr/local/bin/clang
-          ln -s /opt/llvm23/bin/clang++ /usr/local/bin/clang++
-          test -f /opt/llvm23/lib/cmake/clang/ClangConfig.cmake
+        uses: ./.github/actions/install-llvm
 
       - name: Configure
         run: >
@@ -117,15 +103,7 @@ jobs:
 
       # Same install as the build lanes; the container already ships gcovr.
       - name: Install LLVM/Clang 23 (dev)
-        run: |
-          set -eux
-          mkdir -p /opt/llvm23
-          curl -sSL \
-            https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-Linux-X64.tar.xz \
-            | tar -xJ -C /opt/llvm23 --strip-components=1
-          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libclang-cpp.so.23.1
-          ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libLLVM.so
-          test -f /opt/llvm23/lib/cmake/clang/ClangConfig.cmake
+        uses: ./.github/actions/install-llvm
 
       # The coverage flags go on the preset rather than through the Makefile's
       # Gcov configuration, so this lane configures the same way every other

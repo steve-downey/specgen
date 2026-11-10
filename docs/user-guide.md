@@ -301,16 +301,41 @@ paragraph, with `@[...]{.add}@` inside code; the draft's `addedblock`,
 `org`. A retained paragraph keeps its paragraph number; an added one takes the
 `x`, `x+1` literal, as under `--paper`. A baseline implies `--paper`.
 
-The baseline is one of two things, one per document and pairing with the
-documents in order:
+The baseline is one of three things, and a run takes one kind:
 
+- `--baseline-rev <rev>` (`generate` only): a git revision of the repository
+  the headers live in, named once for the whole paper. `specgen` checks the
+  revision out into a scratch tree for the run (through a temporary index, so
+  the working tree and the index are not touched) and parses each header's own
+  path there, with every `-I` and `-isystem` under the repository remapped into
+  the tree, so the baseline's includes are the baseline's. A header the
+  revision does not have is new wording: it renders as all added, with a note
+  on stderr. `git` must be on the `PATH`, and the revision must be in the
+  clone, so a shallow checkout needs the history fetched first.
 - `--baseline-header <path>` (`generate` only): the previous revision of the
-  header, parsed with the compile flags that resolve for *its* path, so a
-  checkout of the old revision beside the new one works as it is.
+  header checked out somewhere, one per document and pairing with the
+  documents in order, parsed with the compile flags that resolve for *its*
+  path. A header that includes a sibling by a relative path needs the sibling
+  there too, which is what `--baseline-rev` arranges.
 - `--baseline-ir <file>` (`generate` and `render`): the saved IR of the
-  previous revision, from an earlier `--emit-ir`. A paper that commits the IR
-  of each published revision can render R1's diff against R0 without the
-  pinned toolchain, by the same argument that lets it commit fragments.
+  previous revision, from an earlier `--emit-ir`, one per document in order.
+  A paper that commits the IR of each published revision can render R1's diff
+  against R0 without the pinned toolchain, by the same argument that lets it
+  commit fragments.
+
+The one-source workflow, then, is a tag per published revision:
+
+```sh
+specgen generate include/beman/example/example.hpp \
+  --baseline-rev example-r0 --backend mpark \
+  -o papers/wording/example.md -- -Iinclude
+specgen generate include/beman/example/example.hpp \
+  --backend latex -o draft/example.tex -- -Iinclude
+```
+
+The first is R1's wording diff for the paper; the second is the plain render
+the draft PR carries. Both come from the header as it is now, and the only
+other input is the revision the paper says it supersedes.
 
 `--diff-context` says how much unchanged wording the result keeps. `changed`,
 the default, drops a top-level section with no change anywhere in it and keeps
@@ -714,7 +739,10 @@ conditions* for `\errors`, and *Recommended practice* for `\recommended`.
 Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
-error.
+error, and its line is kept as prose. Other LaTeX commands with braced or
+optional arguments, starred commands, and control symbols continue as prose
+when they start a line, just as they do in the middle of one. This also applies
+inside lists, tables, notes, and examples.
 
 Prose before the first element tag is an unlabelled description. It may be
 the entire description, or lead into labelled requirements. Blank decorated
@@ -725,6 +753,12 @@ Text after a tag begins the element's first paragraph. A blank decorated line
 separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
+
+Write literal C++ characters inside backticks, including `&` and `&&`.
+The LaTeX backend escapes text-mode special characters inside `\tcode`;
+semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets
+use the same escaping. Code blocks and item declarations keep literal code
+and any authored `@...@` escapes.
 
 Labelled elements and leading unlabelled prose may contain authored itemizations:
 
@@ -738,6 +772,18 @@ Each nonblank line that follows an item continues that item. A blank decorated
 line closes the item. Another `\item` then continues the list; prose resumes
 the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
+
+To start a new numbered paragraph directly after a list, write two consecutive
+blank decorated lines. This works in leading prose and within an element:
+
+```cpp
+//! The first paragraph ends with a list:
+//! \item the first entry.
+//!
+//!
+//! The second paragraph has its own list:
+//! \item the second entry.
+```
 
 An element may also contain two-column tables:
 
@@ -756,6 +802,9 @@ The table requires exactly two `\column` entries, one or more `\row` entries,
 and exactly two `\cell` entries per row. Lines without a tag continue the
 active caption, column heading, row heading, or cell. `\endlib2dtab2` is
 required. Prose after it resumes the element in the same numbered paragraph.
+One blank decorated line after the terminator preserves that continuation;
+two consecutive blank decorated lines start a new numbered paragraph.
+Blank lines within a table do not separate paragraphs.
 
 `\libtab2` produces a flat two-column table, such as an enumeration's meanings.
 Here the text on `\row` is the first column, and each row has one `\cell` for
@@ -1133,7 +1182,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.17.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.22.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

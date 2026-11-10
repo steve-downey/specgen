@@ -87,8 +87,9 @@ stops at the IR and serializes it; `render --from-ir - --backend {latex,mpark,or
 serialized document back up. `--backend`, `--validate` (§9), `--paper` and
 `--split <dir> [--root <name>]` (§8) mean the same thing on both rendering commands, which
 share one back half, so single-pass wording equals two-pass wording byte for byte;
-`--baseline-ir` (and, on `generate`, `--baseline-header`) with `--diff-context` turn either
-render into the wording diff of §7, one baseline per document in order;
+`--baseline-ir` (and, on `generate`, `--baseline-header` and `--baseline-rev`) with
+`--diff-context` turn either render into the wording diff of §7, one baseline per document in
+order, or one git revision for the whole paper;
 `dump-decls` is a front-end debugging aid. The end-to-end smoke test is
 `specgen generate --emit-ir <header> | specgen render --from-ir -`.
 `specgen --version` reports both the project version and the exact Git commit
@@ -459,6 +460,13 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Only element tags, registered markers, and block keywords change docblock
+structure. Other line-leading commands with braced or optional arguments,
+starred commands, and control symbols continue as prose, including inside
+lists, tables, notes, and examples. Unknown bare commands still report an
+Error to catch misspelled tags, but their complete line is kept as prose.
+Code and terminal verbatim payloads retain their exact-text rules.
+
 Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
 by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
@@ -492,7 +500,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.
-  A further blank in resumed prose starts a new numbered paragraph.
+  Two consecutive blank decorated lines after the list start a new numbered
+  paragraph when prose follows. A further blank in resumed prose also starts
+  a new numbered paragraph.
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
@@ -502,7 +512,10 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   `\endlib2dtab2`. Non-tag lines continue the active caption, header, or cell.
   After the explicit terminator, prose resumes the element in its authored
   position without another paragraph number. Several tables may occur in one
-  element. Table prose participates in expos rewriting, leakage, drift, and
+  element. Two consecutive blank decorated lines after the terminator start
+  a new numbered paragraph when prose follows; one blank preserves the
+  continuation. Blanks inside a table do not separate paragraphs.
+  Table prose participates in expos rewriting, leakage, drift, and
   *Throws:* validation like every other authored paragraph.
 - `\libtab2[stable.name]{caption}` starts a *flat* two-column table on the
   current element (issue #74) -- the shape [fs.enum.file.type] and its
@@ -1067,6 +1080,13 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   respectively, and the parentheses belong to the prose form only. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
+- The draft's `\tcode` argument is text mode. Escape literal code characters
+  (`&`, `#`, `%`, braces, `$`, `~`, `^`, and backslash) before inserting
+  semantic span macros. The draft loads the `underscore` package, so `_` stays
+  literal in both code inlines and prose. The shared span walk accepts a literal-text escape
+  hook for this purpose; listings keep its identity default. Table prose
+  escapes its own ampersands before assembly, so a code inline is escaped
+  once. Org's LaTeX inline snippets use the same `draft_code_inline` helper.
   The wg21org HTML exporter resolves that same `\ref{x}` to a local `CUSTOM_ID` when the
   paper defines `x`, and to `eel.is/c++draft/x` otherwise.
 - The org backend has **no escape convention of its own**, because its code blocks are not
@@ -1394,6 +1414,15 @@ The build assembles the tool from these components, each following the shared CM
 - **Wording diff** — `include/beman/specgen/diff.hpp`, `src/beman/specgen/diff.cpp`, Tier A.
   §7's `diff::compare`: the prose and code tokenizers, the structural matcher over nodes,
   elements and blocks, the three `Context` levels, and `has_marks`.
+- **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`,
+  `src/beman/specgen/baseline_tree.cpp`, Tier A. `--baseline-rev`'s git revision checked out
+  into a scratch tree for the run (`read-tree` into a temporary index, then `checkout-index`:
+  neither the real index nor the worktree list is touched), with the remap of a header path and
+  of the path-taking compile arguments under the repository's top level into that tree, and
+  the "exists at the revision" question. Git is the tool's one subprocess, driven without a
+  shell; a path outside the repository is left alone. Unit-tested against a throwaway
+  `git init` repository, never a golden: the corpus is hermetic
+  ([hermetic-corpus](decisions/hermetic-corpus.md)).
 - **Fragment split** — `include/beman/specgen/fragments.hpp`,
   `src/beman/specgen/fragments.cpp`. `fragments::split` per §8; backend-agnostic, with
   `usable_as_file_name` as the path boundary.
@@ -1485,11 +1514,13 @@ The build assembles the tool from these components, each following the shared CM
 - **Driver** — `tools/specgen/main.cpp`. The §2 CLI: `generate` (`--emit-ir` or the
   single-pass render), `render` (`--from-ir`), the wording options both share
   (`--backend`, `--validate`, `--split`/`--root`, `--paper`, `--depfile`/`--dep-target`,
-  and the wording diff's `--baseline-ir`, `--baseline-header` on `generate` alone, and
-  `--diff-context`) in `emit_wording` for one document and `emit_paper` for several (§2.1),
-  and `dump-decls`. A baseline pairs with the documents in order, is diffed after validation
-  and before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir`
-  makes the emitted IR the marked document.
+  and the wording diff's `--baseline-ir`, `--baseline-header` and `--baseline-rev` on
+  `generate` alone, and `--diff-context`) in `emit_wording` for one document and `emit_paper`
+  for several (§2.1), and `dump-decls`. A baseline pairs with the documents in order (a
+  revision names every document's baseline at once: its own path in the baseline tree, or the
+  empty document when the revision lacks it, noted on stderr), is diffed after validation and
+  before rendering, implies `--paper` and replaces its mechanism, and with `--emit-ir` makes
+  the emitted IR the marked document. A run takes one kind of baseline.
 - **split_inline** — `include/beman/specgen/split_inline/rewrite.hpp`,
   `src/beman/specgen/split_inline/rewrite.cpp` (its own library, on the front end),
   `tools/split_inline/main.cpp`, cases under `tests/split_inline/`

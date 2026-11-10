@@ -19,6 +19,41 @@ TEST_CASE("latex - HeaderIsIdempotent") {
     REQUIRE(true);
 }
 
+TEST_CASE("latex - code inlines escape text-mode characters while listings remain literal") {
+    SpecItem item;
+    item.decl.signatures.push_back({"int& get(int& value);", {}});
+    item.descr.leading = {
+        BodyParagraph{{CodeInline{{"initializer_list<U>&", {}}}}},
+        Itemize{{{CodeInline{{"&", {}}}}, {CodeInline{{"&&", {}}}}}},
+        AuthoredCode{{R"(int& value = other; // @\tcode{\&}@)", {}}},
+        BodyParagraph{{ChangedInline{Change::Added, {CodeInline{{"&", {}}}}}}},
+    };
+    const auto out = latex::render_to_string(item);
+    CHECK(out.find("int& get(int& value);") != std::string::npos);
+    CHECK(out.find(R"(\tcode{initializer_list<U>\&})") != std::string::npos);
+    CHECK(out.find("\\item \\tcode{\\&}\n\\item \\tcode{\\&\\&}\n") != std::string::npos);
+    CHECK(out.find(R"(int& value = other; // @\tcode{\&}@)") != std::string::npos);
+    CHECK(out.find(R"(\added{\tcode{\&}})") != std::string::npos);
+}
+
+TEST_CASE("latex - table cells escape code and prose ampersands once") {
+    const Paragraph cell{CodeInline{{"&&", {}}},
+                         TextInline{" prose_text & "},
+                         ChangedInline{Change::Added, {CodeInline{{"value_&", {}}}, TextInline{" prose_text & "}}}};
+    SpecItem        item;
+    item.descr.leading = {
+        Table1D{.stable_name = "demo.flat", .caption = cell, .column1 = cell, .column2 = cell, .rows = {{cell, cell}}},
+        Table2D{.stable_name = "demo.grid",
+                .caption     = cell,
+                .column1     = cell,
+                .column2     = cell,
+                .rows        = {{cell, cell, cell}}},
+    };
+    const auto out = latex::render_to_string(item);
+    CHECK(out.find(R"(\tcode{\&\&} prose_text \& \added{\tcode{value_\&} prose_text \& })") != std::string::npos);
+    CHECK(out.find(R"(\\&)") == std::string::npos);
+}
+
 // The end-to-end acceptance shape: hand-built IR for [optional.observe]/value_or
 // rendering to wording that would drop into the draft sources unchanged.
 TEST_CASE("latex - value_or golden") {

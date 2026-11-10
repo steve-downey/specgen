@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# Installs the pinned LLVM/Clang release into /opt/llvm23 for the CI lanes.
+#
+# The official release binaries ship the CMake package configs, the compiler
+# the clang lanes use, and a shared libclang-cpp; LLVM itself is static in that
+# distribution, but libclang-cpp re-exports the LLVM symbols, so a libLLVM.so
+# shim pointing at it satisfies the front end's `clang-cpp LLVM` link on this
+# layout too. The symlinks into /usr/lib64 put both on the default linker and
+# loader paths.
+#
+# The release tarball is about 2 GB and every lane needs it, so the downloaded
+# file is cached under a key naming the release: one fetch from the LLVM
+# project per version instead of one per lane per run. On a miss, curl fails
+# on an HTTP error and retries rather than piping an error page into tar.
+
+name: Install LLVM/Clang
+description: Download (cached) and unpack the pinned LLVM release into /opt/llvm23.
+
+# Moving to a new LLVM touches every 23.1 below, the lanes' Clang_DIR, and
+# BEMAN_SPECGEN_LLVM_VERSION together (decision llvm-toolchain-pin).
+
+runs:
+  using: composite
+  steps:
+    - name: Cache LLVM release tarball
+      id: cache
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: /opt/llvm-dist/LLVM-23.1.0-Linux-X64.tar.xz
+        key: llvm-release-23.1.0-Linux-X64
+
+    - name: Download LLVM release tarball
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: sh
+      run: |
+        set -eux
+        mkdir -p /opt/llvm-dist
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 \
+          -o /opt/llvm-dist/LLVM-23.1.0-Linux-X64.tar.xz \
+          https://github.com/llvm/llvm-project/releases/download/llvmorg-23.1.0/LLVM-23.1.0-Linux-X64.tar.xz
+
+    - name: Unpack and link LLVM
+      shell: sh
+      run: |
+        set -eux
+        mkdir -p /opt/llvm23
+        tar -xJf /opt/llvm-dist/LLVM-23.1.0-Linux-X64.tar.xz \
+          -C /opt/llvm23 --strip-components=1
+        ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libclang-cpp.so.23.1
+        ln -s /opt/llvm23/lib/libclang-cpp.so.23.1 /usr/lib64/libLLVM.so
+        ln -s /opt/llvm23/bin/clang /usr/local/bin/clang
+        ln -s /opt/llvm23/bin/clang++ /usr/local/bin/clang++
+        test -f /opt/llvm23/lib/cmake/clang/ClangConfig.cmake

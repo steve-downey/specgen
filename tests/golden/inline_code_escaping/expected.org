@@ -1,0 +1,45 @@
+** General [escaping.general]
+:PROPERTIES:
+:CUSTOM_ID: escaping.general
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+A reference qualifier is one of the following:
+
+- ~&~, or
+- ~&&~.
+
+Special characters in code are literal: @@latex:\tcode{\# \% _ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}}@@@@html:<code># % _ { } ~ ^ $ \</code>@@.
+#+end_pnum
+
+** References [escaping.references]
+:PROPERTIES:
+:CUSTOM_ID: escaping.references
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline int& alias(int& value);
+#+end_itemdecl
+
+#+begin_pnum
+/Mandates/: ~is_constructible_v<int&, int&>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~value~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A reference is written ~int&~.
+
+#+name: escaping.tokens
+#+caption: Reference tokens ~&~ and ~&&~
+#+ATTR_WG21: :columns 25 67
+| Token | Meaning & spelling |
+|-
+| ~&&~ | The tokens ~&~ & ~&&~ denote reference qualifiers. |
+#+end_pnum

@@ -27,6 +27,7 @@
 #include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/backend/mpark.hpp>
 #include <beman/specgen/backend/org.hpp>
+#include <beman/specgen/baseline_tree.hpp>
 #include <beman/specgen/depfile.hpp>
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
@@ -68,13 +69,14 @@
 
 namespace {
 
-namespace fragments = beman::specgen::fragments;
-namespace ir        = beman::specgen::ir;
-namespace diff      = beman::specgen::diff;
-namespace latex     = beman::specgen::backend::latex;
-namespace mpark     = beman::specgen::backend::mpark;
-namespace org       = beman::specgen::backend::org;
-namespace validate  = beman::specgen::validate;
+namespace fragments     = beman::specgen::fragments;
+namespace ir            = beman::specgen::ir;
+namespace diff          = beman::specgen::diff;
+namespace baseline_tree = beman::specgen::baseline_tree;
+namespace latex         = beman::specgen::backend::latex;
+namespace mpark         = beman::specgen::backend::mpark;
+namespace org           = beman::specgen::backend::org;
+namespace validate      = beman::specgen::validate;
 
 constexpr std::string_view kVersion   = BEMAN_SPECGEN_VERSION;
 constexpr std::string_view kGitCommit = BEMAN_SPECGEN_GIT_COMMIT;
@@ -136,6 +138,10 @@ generate options:
   --baseline-header <path>  the wording diff against this header's wording,
                              parsed with the same compile flags as the header
                              it pairs with, in order. May be repeated
+  --baseline-rev <rev>      the wording diff against the headers as they were
+                             at this git revision of their repository, checked
+                             out into a scratch tree for the run; a header the
+                             revision lacks is new wording. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
@@ -293,11 +299,21 @@ struct WordingOptions {
     // not it was spelled; it also *replaces* paper mode's own "everything is
     // added", which is the empty-baseline diff, so `paper` is cleared by
     // `settle_baseline` once a baseline is known.
+    // --baseline-rev <rev> is the third kind, `generate` only: one revision for
+    // the whole paper, each header's baseline being its own path at that
+    // revision (baseline_tree.hpp).
     std::vector<std::string>     baseline_irs;
     std::vector<std::string>     baseline_headers;
+    std::optional<std::string>   baseline_rev;
     std::optional<diff::Context> diff_context;
 
-    bool has_baseline() const { return !baseline_irs.empty() || !baseline_headers.empty(); }
+    bool has_baseline() const {
+        return !baseline_irs.empty() || !baseline_headers.empty() || baseline_rev.has_value();
+    }
+    // How many of the three baseline kinds were spelled; a run takes one.
+    int baseline_kinds() const {
+        return int(!baseline_irs.empty()) + int(!baseline_headers.empty()) + int(baseline_rev.has_value());
+    }
     // Where a top-level section starts, in the two units the backends measure
     // it in: --base-heading-level <n> (mpark and org) and
     // --base-section-depth <n> (latex). Two options rather than one because
@@ -471,9 +487,11 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // The wording diff's options describe a baseline, so without one they are
     // wording the author believes was diffed.
     if (options.diff_context && !options.has_baseline())
-        return std::string("specgen: --diff-context applies with a baseline (--baseline-ir or --baseline-header)");
-    if (!options.baseline_irs.empty() && !options.baseline_headers.empty())
-        return std::string("specgen: a run takes one kind of baseline, --baseline-ir or --baseline-header, not both");
+        return std::string(
+            "specgen: --diff-context applies with a baseline (--baseline-ir, --baseline-header or --baseline-rev)");
+    if (options.baseline_kinds() > 1)
+        return std::string("specgen: a run takes one kind of baseline, --baseline-ir, --baseline-header or "
+                           "--baseline-rev, not several");
     // The two base-level options measure two different things, so each is a
     // usage error where the other one belongs -- and each message names the
     // one that does. Accepting either spelling everywhere would be the flag
@@ -1254,6 +1272,18 @@ int generate_command(const std::vector<std::string>& args) {
             if (!next(baseline))
                 return 2;
             (arg == "--baseline-ir" ? wording.baseline_irs : wording.baseline_headers).push_back(std::move(baseline));
+        } else if (arg == "--baseline-rev") {
+            // One revision for the whole paper: every header's baseline is
+            // its own path at that revision, so a second one has nothing to
+            // pair with.
+            std::string revision;
+            if (!next(revision))
+                return 2;
+            if (wording.baseline_rev) {
+                std::println(stderr, "specgen: --baseline-rev names one revision for the run; it was given twice");
+                return 2;
+            }
+            wording.baseline_rev = std::move(revision);
         } else if (arg == "--diff-context") {
             std::string text;
             if (!next(text))
@@ -1453,6 +1483,56 @@ int generate_command(const std::vector<std::string>& args) {
         std::vector<ir::Document> documents;
         std::vector<std::string>  sources;
     };
+    //
+    // A revision baseline (--baseline-rev) checks the headers' repository out
+    // at that revision into a scratch tree that lives for this lambda, and
+    // parses each header's path there with the header's own flags remapped
+    // into the tree, so the baseline's includes are the baseline's. A header
+    // the revision lacks is new wording: an empty baseline, which the diff
+    // marks as all added, noted on stderr. Nothing of it joins the
+    // prerequisites: a revision is immutable, and the scratch tree is gone
+    // before any build reads the fragment.
+    const auto build_revision_baselines = [&](const std::string& revision) -> std::expected<Baselines, std::string> {
+        return baseline_tree::Tree::materialize(revision, headers.front())
+            .transform_error([](const std::string& why) { return std::format("specgen: --baseline-rev: {}", why); })
+            .and_then([&](baseline_tree::Tree tree) {
+                return beman::specgen::foundation::fold_left_short(
+                    headers,
+                    Baselines{},
+                    [&](Baselines acc, const std::string& header) -> std::expected<Baselines, std::string> {
+                        // Every header of a paper is in the one repository the
+                        // revision names; a header elsewhere has no such
+                        // revision.
+                        const auto top = baseline_tree::top_level_of(header);
+                        if (!top)
+                            return std::unexpected(std::format("specgen: --baseline-rev: {}", top.error()));
+                        std::error_code ec;
+                        if (!std::filesystem::equivalent(*top, tree.top_level(), ec))
+                            return std::unexpected(std::format(
+                                "specgen: --baseline-rev: '{}' is in a different repository ({}) from '{}' ({})",
+                                header,
+                                top->string(),
+                                headers.front(),
+                                tree.top_level().string()));
+                        if (!tree.has(header)) {
+                            std::println(
+                                stderr, "specgen: '{}' does not exist at {}; its wording is new", header, revision);
+                            acc.documents.push_back(ir::Document{});
+                            return acc;
+                        }
+                        frontend::ParseOptions options = resolve_for(header);
+                        options.extra_args             = tree.remap_args(options.extra_args);
+                        return frontend::build_document_with_sources(tree.remap(header), options, {})
+                            .transform_error([&](const frontend::BuildFailure& failure) {
+                                return std::format("specgen: baseline at {}: {}", revision, failure.message);
+                            })
+                            .transform([&](frontend::DocumentBuild one) {
+                                acc.documents.push_back(std::move(one.result.document));
+                                return std::move(acc);
+                            });
+                    });
+            });
+    };
     const auto build_baselines =
         [&](const std::vector<frontend::DocumentBuild>&) -> std::expected<Baselines, std::string> {
         if (!wording.baseline_irs.empty()) {
@@ -1460,6 +1540,8 @@ int generate_command(const std::vector<std::string>& args) {
                 return Baselines{std::move(documents), wording.baseline_irs};
             });
         }
+        if (wording.baseline_rev)
+            return build_revision_baselines(*wording.baseline_rev);
         return beman::specgen::foundation::fold_left_short(
             wording.baseline_headers,
             Baselines{},

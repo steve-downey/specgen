@@ -1,0 +1,35 @@
+\rSec3[escaping.general]{General}
+
+\pnum
+A reference qualifier is one of the following:
+\begin{itemize}
+\item \tcode{\&}, or
+\item \tcode{\&\&}.
+\end{itemize}
+Special characters in code are literal: \tcode{\# \% _ \{ \} \textasciitilde{} \textasciicircum{} \$ \textbackslash{}}.
+
+\rSec3[escaping.references]{References}
+
+\indexlibraryglobal{alias}%
+\begin{itemdecl}
+inline int& alias(int& value);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\mandates
+\tcode{is_constructible_v<int\&, int\&>} is \tcode{true}.
+
+\pnum
+\returns
+\tcode{value}.
+
+\pnum
+\remarks
+A reference is written \tcode{int\&}.
+\begin{libtab2}{Reference tokens \tcode{\&} and \tcode{\&\&}}{escaping.tokens}{lp{4.5in}}{Token}{Meaning \& spelling}
+
+\tcode{\&\&} &
+The tokens \tcode{\&} \& \tcode{\&\&} denote reference qualifiers. \\
+\end{libtab2}
+\end{itemdescr}

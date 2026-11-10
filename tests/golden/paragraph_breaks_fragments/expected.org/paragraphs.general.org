@@ -1,0 +1,22 @@
+** General [paragraphs.general]
+:PROPERTIES:
+:CUSTOM_ID: paragraphs.general
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+The header provides these choices:
+
+- the first choice, or
+- the second choice.
+#+end_pnum
+
+#+begin_pnum
+Each choice has these properties:
+
+- the first property, and
+- the second property.
+
+This continues the second paragraph.
+#+end_pnum
