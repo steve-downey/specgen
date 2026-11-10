@@ -145,7 +145,11 @@ Three laws, pinned by unit tests over hand-built IR:
 - identity: `compare(d, d)` carries no marks and equals `d` under `all` context;
 - empty baseline: `compare({}, d)` marks every top-level node Added and nothing beneath;
 - restoration: stripping the Removed material and the marks from `compare(a, b)` gives `b`, and
-  stripping the Added material gives `a`.
+  stripping the Added material gives `a`, up to runs of whitespace. A mark spans the changed
+  tokens and leaves the whitespace around them outside, as hand-written diffs do
+  (`\added{constexpr} R`, issue #258), so a word added between two others leaves the baseline
+  side two separators where it had one. A removal directly followed by an addition abuts it,
+  `[a]{.rm}[b]{.add}`, the removal's trailing whitespace dropped.
 
 ### Marks in the IR
 
@@ -218,7 +222,9 @@ rather not page through wording that did not move
 ([diff-context-default](#diff-context-default), [diff-context-items](#diff-context-items)). The
 ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
 form papers write by hand; a first cut, signed off on the golden. A changed item still renders
-whole under `items`: the unit of elision is a node, not a paragraph. The editing instruction sentence
+whole under `items`: the unit of elision is a node, not a paragraph. Where two elisions would
+render one after the other -- a changed subsection ending in elided children, then an unchanged
+sibling subsection -- they are one ellipsis (issue #259). The editing instruction sentence
 ("Modify [gadget.observe] as indicated:") stays the paper's, as it is under `--paper` today
 ([editing-instructions](#editing-instructions)).
 
