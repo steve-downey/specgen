@@ -133,6 +133,7 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
 // Literal code inside a text-mode macro argument (issue #248). The span
 // walker applies this only to source slices, before inserting draft macros.
 // Listings payloads and author-supplied @...@ escapes use the identity hook.
+// The draft loads the underscore package: `_` stays literal (issue #252).
 inline std::string draft_escape_code_text(std::string_view text) {
     return text | std::views::transform([](char ch) -> std::string {
                switch (ch) {
@@ -142,8 +143,6 @@ inline std::string draft_escape_code_text(std::string_view text) {
                    return "\\#";
                case '%':
                    return "\\%";
-               case '_':
-                   return "\\_";
                case '{':
                    return "\\{";
                case '}':

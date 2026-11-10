@@ -1,4 +1,5 @@
 spec_declaration_docblocks.hpp:30: error: the documented declaration of `insert` produces no wording: markup belongs at its definition, line 56, which places a member's wording (design §3.3)
 spec_declaration_docblocks.hpp:33: error: the documented declaration of `erase` produces no wording: markup is read from a member's definition (design §3.3), and this translation unit has none; name the source file that defines it with --source
-spec_declaration_docblocks.hpp:38: error: unknown tag \effect
+spec_declaration_docblocks.hpp:38: error: unknown tag \effect; line kept as prose
+spec_declaration_docblocks.hpp:39: error: the documented declaration of `clear` produces no wording: markup belongs at its definition, line 62, which places a member's wording (design §3.3)
 spec_declaration_docblocks.hpp:42: error: a documented data member produces no wording: describe `stride` in its class's description

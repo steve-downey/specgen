@@ -117,10 +117,153 @@ TEST_CASE("docblock - the ordering note names the highest-ranked predecessor, no
     CHECK(has_diag(r, Severity::Note, "\\effects appears after \\remarks"));
 }
 
-TEST_CASE("docblock - unknown tag is an error") {
+TEST_CASE("docblock - unknown tag is an error and its line is retained") {
     auto r = parse_docblock("//! \\bogus stuff\n");
     CHECK(!r.ok());
-    CHECK(has_diag(r, Severity::Error, "unknown tag \\bogus"));
+    CHECK(has_diag(r, Severity::Error, "unknown tag \\bogus; line kept as prose"));
+    REQUIRE(r.block.leading.size() == 1);
+    const auto& text = std::get<BodyParagraph>(r.block.leading.front()).text;
+    REQUIRE(text.size() == 1);
+    CHECK(std::get<InlineText>(text.front()).text == "\\bogus stuff");
+}
+
+TEST_CASE("docblock - raw LaTeX commands are independent of line wrapping") {
+    for (const auto command : {R"(\oldconcept{CopyConstructible})",
+                               R"(\placeholder{noex})",
+                               R"(\cv{})",
+                               R"(\custom[opt]{value})",
+                               R"(\custom*{value})",
+                               R"(\,)"}) {
+        CAPTURE(command);
+        const auto joined  = parse_docblock(std::format("//! \\expects Before {} after.\n", command));
+        const auto wrapped = parse_docblock(std::format("//! \\expects Before\n//! {} after.\n", command));
+        REQUIRE(joined.diags.empty());
+        REQUIRE(wrapped.diags.empty());
+        REQUIRE(wrapped.block.elements.size() == 1);
+        REQUIRE(paragraph_count(wrapped.block.elements.front()) == 1);
+        CHECK(std::get<InlineText>(paragraph(wrapped.block.elements.front()).front()).text ==
+              std::get<InlineText>(paragraph(joined.block.elements.front()).front()).text);
+    }
+}
+
+TEST_CASE("docblock - macro-led leading prose and list continuations stay in their blocks") {
+    const auto leading = parse_docblock("//! \\placeholder{noex} is a value.\n");
+    REQUIRE(leading.diags.empty());
+    REQUIRE(leading.block.leading.size() == 1);
+    CHECK(std::get<InlineText>(std::get<BodyParagraph>(leading.block.leading.front()).text.front()).text ==
+          R"(\placeholder{noex} is a value.)");
+
+    const auto list = parse_docblock("//! \\remarks Before:\n//! \\item Meets\n"
+                                     "//! \\oldconcept{CopyConstructible} requirements.\n//!\n"
+                                     "//! \\placeholder{after} follows.\n");
+    REQUIRE(list.diags.empty());
+    REQUIRE(list.block.elements.size() == 1);
+    const auto& element = list.block.elements.front();
+    REQUIRE(items(element).size() == 1);
+    CHECK(std::get<InlineText>(items(element).front().front()).text ==
+          R"(Meets \oldconcept{CopyConstructible} requirements.)");
+    CHECK(std::get<InlineText>(paragraph(element, 1).front()).text == R"(\placeholder{after} follows.)");
+    CHECK(std::get<BodyParagraph>(element.body.back()).continuation);
+}
+
+TEST_CASE("docblock - raw macros continue every table field and resume prose") {
+    for (const auto kind : {"libtab2", "lib2dtab2"}) {
+        CAPTURE(kind);
+        const auto input = std::format(
+            "//! \\remarks Table:\n//! \\{}[demo.macros]{{Caption}}\n//! \\placeholder{{caption}}\n"
+            "//! \\column First\n//! \\cv{{}} type\n//! \\column Second\n//! \\oldconcept{{Destructible}}\n"
+            "//! \\row Head\n//! \\placeholder{{row}}\n//! \\cell Value\n//! \\placeholder{{cell}}\n{}"
+            "//! \\end{}\n//! \\placeholder{{resume}} follows.\n",
+            kind,
+            std::string_view(kind) == "lib2dtab2" ? "//! \\cell Other\n//! \\cv{} type\n" : "",
+            kind);
+        const auto parsed = parse_docblock(input);
+        REQUIRE(parsed.diags.empty());
+        REQUIRE(parsed.block.elements.size() == 1);
+        const auto& element      = parsed.block.elements.front();
+        const auto  check_fields = [](const auto& table) {
+            CHECK(std::get<InlineText>(table.caption.front()).text == R"(Caption \placeholder{caption})");
+            CHECK(std::get<InlineText>(table.column1.front()).text == R"(First \cv{} type)");
+            CHECK(std::get<InlineText>(table.column2.front()).text == R"(Second \oldconcept{Destructible})");
+            REQUIRE(table.rows.size() == 1);
+        };
+        if (std::string_view(kind) == "libtab2") {
+            const auto* table = first<Table1D>(element);
+            REQUIRE(table != nullptr);
+            check_fields(*table);
+            CHECK(std::get<InlineText>(table->rows.front().cell1.front()).text == R"(Head \placeholder{row})");
+            CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text == R"(Value \placeholder{cell})");
+        } else {
+            const auto* table = first<Table2D>(element);
+            REQUIRE(table != nullptr);
+            check_fields(*table);
+            CHECK(std::get<InlineText>(table->rows.front().header.front()).text == R"(Head \placeholder{row})");
+            CHECK(std::get<InlineText>(table->rows.front().cell1.front()).text == R"(Value \placeholder{cell})");
+            CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text == R"(Other \cv{} type)");
+        }
+        CHECK(std::get<InlineText>(paragraph(element, 1).front()).text == R"(\placeholder{resume} follows.)");
+        CHECK(std::get<BodyParagraph>(element.body.back()).continuation);
+    }
+}
+
+TEST_CASE("docblock - macro-led text continues informative bodies") {
+    for (const auto kind : {"note", "example"}) {
+        CAPTURE(kind);
+        const auto parsed = parse_docblock(
+            std::format("//! \\{} Before\n//! \\oldconcept{{Destructible}} requirements.\n//! \\end{}\n", kind, kind));
+        REQUIRE(parsed.diags.empty());
+        REQUIRE(parsed.block.leading.size() == 1);
+        const auto& block = parsed.block.leading.front();
+        const auto& body =
+            std::string_view(kind) == "note" ? std::get<Note>(block).body : std::get<Example>(block).body;
+        REQUIRE(body.size() == 1);
+        CHECK(std::get<InlineText>(std::get<BodyParagraph>(body.front()).text.front()).text ==
+              R"(Before \oldconcept{Destructible} requirements.)");
+    }
+}
+
+TEST_CASE("docblock - unknown commands retain text in paragraphs lists and tables") {
+    const auto prose = parse_docblock("//! \\effects Before\n//! \\effect kept `code`.\n//! After.\n");
+    CHECK(has_diag(prose, Severity::Error, "unknown tag \\effect; line kept as prose"));
+    REQUIRE(prose.block.elements.size() == 1);
+    const auto& text = paragraph(prose.block.elements.front());
+    REQUIRE(text.size() == 3);
+    CHECK(std::get<InlineText>(text.front()).text == "Before \\effect kept ");
+    CHECK(std::get<InlineCode>(text[1]).code == "code");
+    CHECK(std::get<InlineText>(text.back()).text == ". After.");
+
+    const auto list = parse_docblock("//! \\effects List:\n//! \\item Before\n//! \\effect kept.\n");
+    CHECK(has_diag(list, Severity::Error, "unknown tag \\effect"));
+    REQUIRE(list.block.elements.size() == 1);
+    REQUIRE(items(list.block.elements.front()).size() == 1);
+    CHECK(std::get<InlineText>(items(list.block.elements.front()).front().front()).text == "Before \\effect kept.");
+
+    const auto table = parse_docblock("//! \\remarks Table:\n//! \\libtab2[demo.unknown]{Caption}\n"
+                                      "//! \\column A\n//! \\column B\n//! \\row Key\n//! \\cell Before\n"
+                                      "//! \\effect kept.\n//! \\endlibtab2\n");
+    CHECK(has_diag(table, Severity::Error, "unknown tag \\effect"));
+    REQUIRE(table.block.elements.size() == 1);
+    const auto* flat = first<Table1D>(table.block.elements.front());
+    REQUIRE(flat != nullptr);
+    REQUIRE(flat->rows.size() == 1);
+    CHECK(std::get<InlineText>(flat->rows.front().cell2.front()).text == "Before \\effect kept.");
+}
+
+TEST_CASE("docblock - exact payloads bypass command classification") {
+    constexpr auto payload = "\\oldconcept{Destructible}\n\\effect kept.";
+    const auto     code    = parse_docblock("//! \\codeblock\n//! \\oldconcept{Destructible}\n"
+                                            "//! \\effect kept.\n//! \\endcodeblock\n");
+    REQUIRE(code.diags.empty());
+    REQUIRE(code.block.leading.size() == 1);
+    CHECK(std::get<AuthoredCode>(code.block.leading.front()).code.text == payload);
+    for (const auto kind : {"verbatim-synopsis", "verbatim-itemdecl"}) {
+        CAPTURE(kind);
+        const auto parsed =
+            parse_docblock(std::format("//! \\{}\n//! \\oldconcept{{Destructible}}\n//! \\effect kept.\n", kind));
+        REQUIRE(parsed.diags.empty());
+        CHECK((std::string_view(kind) == "verbatim-synopsis" ? parsed.block.verbatim_synopsis
+                                                             : parsed.block.verbatim_itemdecl) == payload);
+    }
 }
 
 TEST_CASE("docblock - recommended follows errors and reports ordering and duplicates") {

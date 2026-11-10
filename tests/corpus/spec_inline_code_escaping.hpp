@@ -16,6 +16,7 @@ namespace demo {
 
 // \rSec3[escaping.references]{References}
 
+//! \mandates `is_constructible_v<int&, int&>` is `true`.
 //! \returns `value`.
 //! \remarks A reference is written `int&`.
 //! \libtab2[escaping.tokens]{Reference tokens `&` and `&&`}

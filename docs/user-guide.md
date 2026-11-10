@@ -704,7 +704,10 @@ conditions* for `\errors`, and *Recommended practice* for `\recommended`.
 Authored order does not determine output order: an
 element out of order produces a note, and the output is put in canonical order.
 A duplicated element produces a warning and is retained. An unknown tag is an
-error.
+error, and its line is kept as prose. Other LaTeX commands with braced or
+optional arguments, starred commands, and control symbols continue as prose
+when they start a line, just as they do in the middle of one. This also applies
+inside lists, tables, notes, and examples.
 
 Prose before the first element tag is an unlabelled description. It may be
 the entire description, or lead into labelled requirements. Blank decorated
@@ -1144,7 +1147,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.19.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.21.1 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

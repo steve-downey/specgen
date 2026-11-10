@@ -266,6 +266,28 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
 
 bool is_tag_char(char c) { return static_cast<bool>(std::isalnum(static_cast<unsigned char>(c))) || c == '-'; }
 
+// Only the specgen vocabulary drives block state. Other LaTeX commands must
+// follow the same prose path wherever an author wraps the line (issue #253).
+bool is_docblock_tag(std::string_view name) {
+    constexpr std::string_view block_tags[]{"item",
+                                            "lib2dtab2",
+                                            "libtab2",
+                                            "endlib2dtab2",
+                                            "endlibtab2",
+                                            "column",
+                                            "row",
+                                            "cell",
+                                            "note",
+                                            "endnote",
+                                            "example",
+                                            "endexample",
+                                            "codeblock",
+                                            "endcodeblock",
+                                            "returns-equiv"};
+    return ir::element_from_name(name).has_value() || find_marker(name) != nullptr ||
+           std::ranges::contains(block_tags, name);
+}
+
 // Scans a `\name` tag head: the backslash, then a run of letters, digits and
 // hyphens. Every element tag and marker spelling shares the leading `\`
 // (and several share letters beyond it), so — per the shared-prefix hazard
@@ -654,6 +676,16 @@ ParseResult parse_docblock(std::string_view raw) {
         std::string_view stripped = trim(line);
         auto             tag      = parse::opt(tag_head())(parse::cursor{stripped});
 
+        if (tag->value && *tag->value != "iref" && !is_docblock_tag(*tag->value)) {
+            const auto after = trim(tag->rest.remaining());
+            // Argument syntax distinguishes raw macros from likely misspelled
+            // tags. Both recover as prose, without flushing the active block.
+            if (!tag->value->empty() && !after.starts_with('{') && !after.starts_with('[') && !after.starts_with('*'))
+                diags.push_back(
+                    {Severity::Error, lineno, std::format("unknown tag \\{}; line kept as prose", *tag->value)});
+            tag->value.reset();
+        }
+
         if (tag->value && in_table && *tag->value != "iref") {
             const std::string_view name  = *tag->value;
             const std::string_view after = trim(tag->rest.remaining());
@@ -931,8 +963,6 @@ ParseResult parse_docblock(std::string_view raw) {
                                  "\\returns-equiv is renamed \\returns-expr, which renders the expression of a "
                                  "body that is one `return E;` as *Returns*: `E`; for an Equivalent to: block, "
                                  "use \\effects-equiv"});
-            } else {
-                diags.push_back({Severity::Error, lineno, "unknown tag \\" + std::string(name)});
             }
             continue;
         }
