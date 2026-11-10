@@ -15,8 +15,8 @@
 //   static one, whose Remarks have no itemdescr to become. A documented static
 //   data member that is not `\expos` is an item of its own (issue #148).
 // - `reserve` and `limit_` carry markers only, and stay silent.
-// - `clear` misspells its element, so the docblock asks for nothing, but its
-//   grammar finding is still reported: nothing else reads this docblock.
+// - `clear` misspells its element. The grammar preserves the text and reports
+//   an Error; the declaration therefore also has misplaced wording.
 
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_DECLARATION_DOCBLOCKS_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_DECLARATION_DOCBLOCKS_HPP

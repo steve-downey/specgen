@@ -1,0 +1,57 @@
+\rSec3[macro.general]{Macro continuations}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{gadget}@ {
+  public:
+    int size() const;
+  };
+}
+\end{codeblock}
+
+\pnum
+\placeholder{noex} is a placeholder in leading prose.
+
+\indexlibrarymember{size}{gadget}%
+\begin{itemdecl}
+int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\tcode{T} meets the \oldconcept{Destructible} and \oldconcept{CopyConstructible} requirements.
+
+\pnum
+\returns
+\tcode{0}.
+
+\pnum
+\remarks
+The following descriptions apply:
+\begin{itemize}
+\item Meets \oldconcept{CopyConstructible} requirements.
+\end{itemize}
+\placeholder{after} follows the list.
+\begin{libtab2}{Flat table \placeholder{caption}}{macro.flat}{lp{4.5in}}{Type \cv{} qualifier}{Meaning}
+
+A \placeholder{key} &
+Meets \oldconcept{Destructible} requirements. \\
+\end{libtab2}
+\begin{lib2dtab2}{Grid table}{macro.grid}
+{A}
+{B}
+
+\rowhdr{Type \cv{} qualifier} &
+First \placeholder{value} &
+Second \placeholder{value} \\
+\end{lib2dtab2}
+\placeholder{resume} follows the tables.
+\begin{note}
+The type meets \oldconcept{Destructible} requirements.
+\end{note}
+\begin{example}
+A \cv{} qualifier is written literally.
+\end{example}
+\end{itemdescr}

@@ -30,7 +30,7 @@ TEST_CASE("latex - code inlines escape text-mode characters while listings remai
     };
     const auto out = latex::render_to_string(item);
     CHECK(out.find("int& get(int& value);") != std::string::npos);
-    CHECK(out.find(R"(\tcode{initializer\_list<U>\&})") != std::string::npos);
+    CHECK(out.find(R"(\tcode{initializer_list<U>\&})") != std::string::npos);
     CHECK(out.find("\\item \\tcode{\\&}\n\\item \\tcode{\\&\\&}\n") != std::string::npos);
     CHECK(out.find(R"(int& value = other; // @\tcode{\&}@)") != std::string::npos);
     CHECK(out.find(R"(\added{\tcode{\&}})") != std::string::npos);
@@ -38,8 +38,8 @@ TEST_CASE("latex - code inlines escape text-mode characters while listings remai
 
 TEST_CASE("latex - table cells escape code and prose ampersands once") {
     const Paragraph cell{CodeInline{{"&&", {}}},
-                         TextInline{" & "},
-                         ChangedInline{Change::Added, {CodeInline{{"&", {}}}, TextInline{" & "}}}};
+                         TextInline{" prose_text & "},
+                         ChangedInline{Change::Added, {CodeInline{{"value_&", {}}}, TextInline{" prose_text & "}}}};
     SpecItem        item;
     item.descr.leading = {
         Table1D{.stable_name = "demo.flat", .caption = cell, .column1 = cell, .column2 = cell, .rows = {{cell, cell}}},
@@ -50,7 +50,7 @@ TEST_CASE("latex - table cells escape code and prose ampersands once") {
                 .rows        = {{cell, cell, cell}}},
     };
     const auto out = latex::render_to_string(item);
-    CHECK(out.find(R"(\tcode{\&\&} \& \added{\tcode{\&} \& })") != std::string::npos);
+    CHECK(out.find(R"(\tcode{\&\&} prose_text \& \added{\tcode{value_\&} prose_text \& })") != std::string::npos);
     CHECK(out.find(R"(\\&)") == std::string::npos);
 }
 
@@ -90,7 +90,7 @@ template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) cons
 \begin{itemdescr}
 \pnum
 \mandates
-\tcode{is\_copy\_constructible\_v<T>} is \tcode{true} and \tcode{is\_convertible\_v<U, T>} is \tcode{true}.
+\tcode{is_copy_constructible_v<T>} is \tcode{true} and \tcode{is_convertible_v<U, T>} is \tcode{true}.
 
 \pnum
 \effects
@@ -349,14 +349,14 @@ TEST_CASE("latex - an authored flat two-column table uses libtab2") {
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
-    CHECK(out.find("\\begin{libtab2}{\\tcode{whatwg\\_error} meanings}{demo.errors.tab}{lp{4.5in}}"
+    CHECK(out.find("\\begin{libtab2}{\\tcode{whatwg_error} meanings}{demo.errors.tab}{lp{4.5in}}"
                    "{Constant}{Meaning}\n"
                    "\n"
-                   "\\tcode{invalid\\_byte} &\n"
+                   "\\tcode{invalid_byte} &\n"
                    "the input holds an invalid byte. \\\\\n"
                    "\\rowsep\n"
                    "\n"
-                   "\\tcode{truncated\\_sequence} &\n"
+                   "\\tcode{truncated_sequence} &\n"
                    "the input ends mid-sequence. \\\\\n"
                    "\\end{libtab2}\n") != std::string::npos);
 }

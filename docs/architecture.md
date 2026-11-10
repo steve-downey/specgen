@@ -460,6 +460,13 @@ duplicate-element Warning, the **unknown-tag Error**), and `generate` prints the
 way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
 not fail on it, so read stderr instead of trusting the exit code.
 
+Only element tags, registered markers, and block keywords change docblock
+structure. Other line-leading commands with braced or optional arguments,
+starred commands, and control symbols continue as prose, including inside
+lists, tables, notes, and examples. Unknown bare commands still report an
+Error to catch misspelled tags, but their complete line is kept as prose.
+Code and terminal verbatim payloads retain their exact-text rules.
+
 Detached specgen docblocks are parsed too (issues #216, #217). A block consumed
 by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
@@ -1074,8 +1081,9 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters
-  (`&`, `#`, `%`, `_`, braces, `$`, `~`, `^`, and backslash) before inserting
-  semantic span macros. The shared span walk accepts a literal-text escape
+  (`&`, `#`, `%`, braces, `$`, `~`, `^`, and backslash) before inserting
+  semantic span macros. The draft loads the `underscore` package, so `_` stays
+  literal in both code inlines and prose. The shared span walk accepts a literal-text escape
   hook for this purpose; listings keep its identity default. Table prose
   escapes its own ampersands before assembly, so a code inline is escaped
   once. Org's LaTeX inline snippets use the same `draft_code_inline` helper.
