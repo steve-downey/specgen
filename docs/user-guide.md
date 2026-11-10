@@ -195,6 +195,11 @@ that has none yet, so `specgen generate` renders the same wording from the
 converted header as from the original. Doxygen and plain `//` comments never
 move.
 
+What the tool writes takes the `.clang-format` found above the header, as
+clang-format would lay it out; the declarations left in the class keep their
+bytes, and so does everything when no configuration is found. `--no-format`
+leaves the inserted text as copied.
+
 A member the tool will not move is reported on standard error with its line
 and left in the class: one spelled through a macro, one inside an `#if` the
 class is not inside, or one of an unnamed class. The rest of the header is

@@ -284,7 +284,8 @@ template <class T, class Alloc>
 auto optional<T, Alloc>::begin() -> iterator { return iterator{&value_}; }
 ```
 
-The spike's output keeps the body's original indentation and spacing; formatting is an open question below.
+The spike's output keeps the body's original indentation and spacing; the tool formats what it inserts (the
+formatting question below).
 
 ## Stages
 
@@ -370,10 +371,13 @@ golden harness and a reviewer want a stream.
 
 ### formatting
 
-Whether the tool formats what it writes. **Recommendation: copy bytes, then run the header's own `.clang-format`
-over the inserted region**, through `clang::format::getStyle("file", ...)` and the formatting library the front end
-already links (§3.6), with `--no-format` to skip it. The draft style `format_draft` applies to wording, not to a
-user's source, so it is the wrong style here; laying the text out by hand would be a second formatter.
+Whether the tool formats what it writes. **Decided 2026-11-10: copy bytes, then run the header's own
+`.clang-format` over the inserted spans**, through `clang::format::getStyle("file", ...)` and the formatting library
+the front end already links (§3.6), with `--no-format` to skip it. Only insertions are formatted (the definition
+blocks and section headers), never the declarations left in the class, so a class whose members are aligned stays
+aligned; a header with no `.clang-format` above it keeps its bytes. The draft style `format_draft` applies to
+wording, not to a user's source, so it is the wrong style here; laying the text out by hand would be a second
+formatter.
 
 ### conditional-compilation
 

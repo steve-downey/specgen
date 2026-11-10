@@ -76,8 +76,28 @@ struct Rewrite {
 // file are considered; included files are never edited.
 Rewrite plan_rewrite(clang::ASTUnit& ast, const Options& options);
 
-// `source` with `edits` applied. Pure: no Clang.
+// A byte range of the converted text.
+struct Span {
+    unsigned begin                         = 0;
+    unsigned end                           = 0;
+    bool     operator==(const Span&) const = default;
+};
+
+// `source` with `edits` applied, and where each *insertion* (an edit with
+// begin == end: a definition block, a section header) landed in the result.
+// Pure: no Clang.
+struct Applied {
+    std::string       text;
+    std::vector<Span> inserted;
+};
+Applied     apply_edits_tracked(std::string_view source, const std::vector<Edit>& edits);
 std::string apply_edits(std::string_view source, const std::vector<Edit>& edits);
+
+// `text` with the `.clang-format` found above `header_path` applied to the
+// inserted spans only: what the tool wrote takes the header's own style, and
+// what it did not touch keeps its bytes. Unchanged when no configuration is
+// found above the header, or when formatting fails.
+std::string format_inserted(std::string_view header_path, std::string text, const std::vector<Span>& inserted);
 
 } // namespace beman::specgen::split_inline
 

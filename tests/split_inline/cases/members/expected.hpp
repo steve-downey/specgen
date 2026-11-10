@@ -86,7 +86,9 @@ auto optional<T, Alloc>::iterator::operator++() -> iterator& {
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-T& optional<T, Alloc>::iterator::operator*() const { return *p_; }
+T& optional<T, Alloc>::iterator::operator*() const {
+    return *p_;
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
@@ -104,27 +106,39 @@ constexpr optional<T, Alloc>::optional(U&& u) : engaged_(true), value_(static_ca
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-optional<T, Alloc>::~optional() { reset(); }
+optional<T, Alloc>::~optional() {
+    reset();
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-constexpr bool optional<T, Alloc>::has_value() const noexcept { return engaged_; }
+constexpr bool optional<T, Alloc>::has_value() const noexcept {
+    return engaged_;
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-constexpr optional<T, Alloc>::operator bool() const noexcept { return engaged_; }
+constexpr optional<T, Alloc>::operator bool() const noexcept {
+    return engaged_;
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-auto optional<T, Alloc>::begin() -> iterator { return iterator{&value_}; }
+auto optional<T, Alloc>::begin() -> iterator {
+    return iterator{&value_};
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-auto optional<T, Alloc>::self() -> optional& { return *this; }
+auto optional<T, Alloc>::self() -> optional& {
+    return *this;
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-constexpr int optional<T, Alloc>::max_size(int hint, bool strict) { return hint + (strict ? 0 : 1); }
+constexpr int optional<T, Alloc>::max_size(int hint, bool strict) {
+    return hint + (strict ? 0 : 1);
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
@@ -132,13 +146,16 @@ void optional<T, Alloc>::poke() {}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
-void optional<T, Alloc>::reset() noexcept { engaged_ = false; }
+void optional<T, Alloc>::reset() noexcept {
+    engaged_ = false;
+}
 
 template <class T, class Alloc>
     requires std::is_copy_constructible_v<T>
 template <class... Args>
 T& optional<T, Alloc>::emplace(Args&&... args)
-    requires std::is_copy_constructible_v<T> {
+    requires std::is_copy_constructible_v<T>
+{
     engaged_ = true;
     value_   = T(static_cast<Args&&>(args)...);
     return value_;
@@ -154,7 +171,9 @@ class optional<T*, A> {
 };
 
 template <class T, class A>
-bool optional<T*, A>::has_value() const { return p_ != nullptr; }
+bool optional<T*, A>::has_value() const {
+    return p_ != nullptr;
+}
 
 template <>
 class optional<char, char> {

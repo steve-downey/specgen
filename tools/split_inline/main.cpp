@@ -58,6 +58,9 @@ options:
   --section-depth <n>       the `\rSec` depth of a header the tool writes when
                              no sibling section is there to copy it from
                              (default 3)
+  --no-format               leave what the tool writes as copied bytes; by
+                             default the inserted definitions take the
+                             `.clang-format` found above <header>
   --unchecked               write the result even if it no longer parses
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
                              compile_commands.json
@@ -84,6 +87,7 @@ struct Arguments {
     std::string              output    = "-";
     bool                     in_place  = false;
     bool                     unchecked = false;
+    bool                     no_format = false;
     split_inline::Options    options;
     std::string              compile_commands_dir;
     bool                     no_compile_commands = false;
@@ -182,6 +186,8 @@ std::optional<Arguments> parse_arguments(const std::vector<std::string>& argv, i
             args.options.comments = split_inline::Comments::Move;
         } else if (arg == "--unchecked") {
             args.unchecked = true;
+        } else if (arg == "--no-format") {
+            args.no_format = true;
         } else if (arg == "--section-depth") {
             std::string depth;
             if (!next(depth)) {
@@ -263,8 +269,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    const split_inline::Rewrite plan   = split_inline::plan_rewrite(*parsed_header.ast, args.options);
-    const std::string           result = split_inline::apply_edits(*source, plan.edits);
+    const split_inline::Rewrite plan    = split_inline::plan_rewrite(*parsed_header.ast, args.options);
+    const split_inline::Applied applied = split_inline::apply_edits_tracked(*source, plan.edits);
+    const std::string           result =
+        args.no_format ? applied.text : split_inline::format_inserted(args.header, applied.text, applied.inserted);
     std::ranges::for_each(plan.refusals, [&](const split_inline::Refusal& r) {
         std::println(stderr, "split_inline: {}:{}: refused: {}", args.header, r.line, r.reason);
     });

@@ -20,11 +20,14 @@
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
 #include <clang/Basic/TokenKinds.h>
+#include <clang/Format/Format.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/Token.h>
+#include <clang/Tooling/Core/Replacement.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
+#include <llvm/Support/Error.h>
 
 #include <algorithm>
 #include <array>
@@ -999,22 +1002,54 @@ namespace beman::specgen::split_inline {
 
 Rewrite plan_rewrite(clang::ASTUnit& ast, const Options& options) { return Planner(ast, options).run(); }
 
-std::string apply_edits(std::string_view source, const std::vector<Edit>& edits) {
+Applied apply_edits_tracked(std::string_view source, const std::vector<Edit>& edits) {
     struct State {
-        std::string out;
-        unsigned    cursor = 0;
+        Applied  applied;
+        unsigned cursor = 0;
     };
     const auto apply = [&](State s, const Edit& e) {
         if (e.begin < s.cursor || e.end > source.size() || e.end < e.begin)
             return s; // overlapping or out of range: the planner never emits one
-        s.out += source.substr(s.cursor, e.begin - s.cursor);
-        s.out += e.text;
+        s.applied.text += source.substr(s.cursor, e.begin - s.cursor);
+        const auto at = static_cast<unsigned>(s.applied.text.size());
+        s.applied.text += e.text;
+        if (e.begin == e.end)
+            s.applied.inserted.push_back({at, static_cast<unsigned>(s.applied.text.size())});
         s.cursor = e.end;
         return s;
     };
     State s = std::ranges::fold_left(edits, State{}, apply);
-    s.out += source.substr(s.cursor);
-    return std::move(s.out);
+    s.applied.text += source.substr(s.cursor);
+    return std::move(s.applied);
+}
+
+std::string apply_edits(std::string_view source, const std::vector<Edit>& edits) {
+    return apply_edits_tracked(source, edits).text;
+}
+
+std::string format_inserted(std::string_view header_path, std::string text, const std::vector<Span>& inserted) {
+    if (inserted.empty())
+        return text;
+    // "file" with a "none" fallback: the `.clang-format` above the header, or
+    // the no-op style when there is none, so a header outside any project
+    // keeps its bytes rather than taking a style nobody chose.
+    llvm::Expected<clang::format::FormatStyle> style = clang::format::getStyle("file", header_path, "none");
+    if (!style) {
+        llvm::consumeError(style.takeError());
+        return text;
+    }
+    if (style->DisableFormat)
+        return text;
+    const auto to_range = [](const Span& span) { return clang::tooling::Range(span.begin, span.end - span.begin); };
+    const std::vector<clang::tooling::Range> ranges =
+        inserted | std::views::transform(to_range) | std::ranges::to<std::vector>();
+    const clang::tooling::Replacements replacements = clang::format::reformat(*style, text, ranges, header_path);
+    llvm::Expected<std::string>        formatted    = clang::tooling::applyAllReplacements(text, replacements);
+    if (!formatted) {
+        llvm::consumeError(formatted.takeError());
+        return text;
+    }
+    return std::move(*formatted);
 }
 
 } // namespace beman::specgen::split_inline
