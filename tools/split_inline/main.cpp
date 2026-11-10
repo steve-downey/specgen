@@ -11,6 +11,7 @@
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/parse_header.hpp>
 
+#include <llvm/ADT/SmallString.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_ostream.h>
@@ -18,12 +19,11 @@
 #include <algorithm>
 #include <charconv>
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
+#include <ios>
 #include <iterator>
 #include <optional>
 #include <print>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>

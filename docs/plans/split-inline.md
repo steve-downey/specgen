@@ -2,7 +2,8 @@
 
 **Status:** IN PROGRESS, 2026-11-09. Stages 1 to 3 are on the branch: `tools/split_inline/` builds the executable
 from this tree against `beman::specgen.frontend`, both comment modes are implemented as designed below, and
-`tests/split_inline/` holds the cases, including the three corpus headers whose wording must not change. Stage 4
+`tests/split_inline/` holds the cases, including the three corpus headers whose wording must not change. The
+full suite, style gates included, passes on GCC 16 with LLVM 23.1.6. Stage 4
 is done but for an `examples/cli` capture, which needs a full build to record: the user guide, the inventory, the
 release scripts and the wheel carry the second executable, and the decision is recorded in
 [decisions/split-inline-in-place-namespace.md](../decisions/split-inline-in-place-namespace.md). Two questions

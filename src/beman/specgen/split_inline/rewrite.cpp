@@ -3,6 +3,7 @@
 
 #include <beman/specgen/split_inline/rewrite.hpp>
 
+#include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/record_members.hpp>
 #include <beman/specgen/rsec.hpp>
@@ -28,6 +29,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstddef>
 #include <format>
 #include <functional>
 #include <initializer_list>
@@ -40,6 +42,20 @@
 #include <string_view>
 #include <utility>
 #include <vector>
+
+namespace beman::specgen::split_inline {
+
+// Where blocks are inserted. A point after a class's `;` takes "\n\n" + block;
+// a point at the start of a line takes block + "\n\n".
+enum class PointKind { AfterClass, AtLineStart };
+
+} // namespace beman::specgen::split_inline
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::split_inline::PointKind> = std::array{
+    beman::specgen::split_inline::PointKind::AfterClass,
+    beman::specgen::split_inline::PointKind::AtLineStart,
+};
 
 namespace beman::specgen::split_inline {
 
@@ -249,10 +265,6 @@ struct Moved {
     std::string          block;     // comment lines, then the definition
     std::optional<Group> group;
 };
-
-// Where blocks are inserted. A point after a class's `;` takes "\n\n" + block;
-// a point at the start of a line takes block + "\n\n".
-enum class PointKind { AfterClass, AtLineStart };
 
 struct Insertion {
     unsigned                 offset = 0;
@@ -623,9 +635,11 @@ class Planner {
             if (last == toks.end())
                 last = std::prev(toks.end());
             unsigned skip_to = last->end;
-            // and the blank after it, so `static int f` reads `int f`
+            // and the blank after it, so `static int f` reads `int f`.
+            // substrate generic algorithm: a find_if_not over bytes, inline
+            // for the offset it leaves behind.
             while (skip_to < end && (src_.buffer()[skip_to] == ' ' || src_.buffer()[skip_to] == '\t'))
-                ++skip_to; // substrate generic algorithm: a find_if_not over bytes, inline for the offset it leaves
+                ++skip_to;
             cursor = skip_to;
             it     = last;
         }
@@ -980,12 +994,6 @@ class Planner {
 } // namespace
 
 } // namespace beman::specgen::split_inline
-
-template <>
-inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::split_inline::PointKind> = std::array{
-    beman::specgen::split_inline::PointKind::AfterClass,
-    beman::specgen::split_inline::PointKind::AtLineStart,
-};
 
 namespace beman::specgen::split_inline {
 
