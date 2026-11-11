@@ -163,14 +163,17 @@ ir::Inline widen(ir::PlainInline piece) {
     return std::visit([](auto&& v) -> ir::Inline { return std::forward<decltype(v)>(v); }, std::move(piece));
 }
 
-void append_inline(ir::Paragraph& out, ir::PlainInline piece) {
+// Appends one inline of a paragraph, joining two adjacent text inlines.
+void append_widened(ir::Paragraph& out, ir::Inline piece) {
     auto* text = std::get_if<ir::TextInline>(&piece);
     auto* last = out.empty() ? nullptr : std::get_if<ir::TextInline>(&out.back());
     if (text != nullptr && last != nullptr)
         last->text += text->text;
     else
-        out.push_back(widen(std::move(piece)));
+        out.push_back(std::move(piece));
 }
+
+void append_inline(ir::Paragraph& out, ir::PlainInline piece) { append_widened(out, widen(std::move(piece))); }
 
 // The paragraph a token script spells: kept tokens as plain inlines, each
 // change run as one marked run -- deletions first, then insertions, which is
@@ -208,12 +211,68 @@ ir::Paragraph assemble_paragraph(const std::vector<ProseToken>& a,
     return std::move(state.out);
 }
 
+// The whitespace at one end of a run's text, cut off it; an inline emptied
+// by the cut leaves the run.
+std::string take_leading_space(std::vector<ir::PlainInline>& run) {
+    auto* text = run.empty() ? nullptr : std::get_if<ir::TextInline>(&run.front());
+    if (text == nullptr)
+        return {};
+    const std::size_t cut   = std::min(text->text.size(), text->text.find_first_not_of(" \t\n\r"));
+    std::string       space = text->text.substr(0, cut);
+    text->text.erase(0, cut);
+    if (text->text.empty())
+        run.erase(run.begin());
+    return space;
+}
+
+std::string take_trailing_space(std::vector<ir::PlainInline>& run) {
+    auto* text = run.empty() ? nullptr : std::get_if<ir::TextInline>(&run.back());
+    if (text == nullptr)
+        return {};
+    const std::size_t keep  = rstripped(text->text).size();
+    std::string       space = text->text.substr(keep);
+    text->text.resize(keep);
+    if (text->text.empty())
+        run.pop_back();
+    return space;
+}
+
+// A paragraph's changed runs with the whitespace at their ends moved outside
+// them: a mark spans the changed words and not the space separating them
+// from their neighbours (issue #258). A removed run directly followed by an
+// added one is a replacement, and the two marks abut, as
+// `[a]{.rm}[b]{.add}` is written: the removal's trailing whitespace is
+// dropped, and the addition's separates the pair from what follows.
+ir::Paragraph settle_whitespace(ir::Paragraph in) {
+    ir::Paragraph out;
+    std::ranges::for_each(std::views::iota(std::size_t{0}, in.size()), [&](std::size_t i) {
+        auto* run = std::get_if<ir::ChangedInline>(&in[i]);
+        if (run == nullptr) {
+            append_widened(out, std::move(in[i]));
+            return;
+        }
+        const std::string lead  = take_leading_space(run->inlines);
+        const std::string trail = take_trailing_space(run->inlines);
+        const auto*       next  = i + 1 < in.size() ? std::get_if<ir::ChangedInline>(&in[i + 1]) : nullptr;
+        const bool        replaced =
+            run->change == ir::Change::Removed && next != nullptr && next->change == ir::Change::Added;
+        if (!lead.empty())
+            append_widened(out, ir::TextInline{lead});
+        if (!run->inlines.empty())
+            out.push_back(std::move(*run));
+        if (!trail.empty() && !replaced)
+            append_widened(out, ir::TextInline{trail});
+    });
+    return out;
+}
+
 ir::Paragraph diff_paragraph(const ir::Paragraph& a, const ir::Paragraph& b, const Options& options) {
     if (a == b)
         return b;
     const std::vector<ProseToken> ta = prose_tokens(a);
     const std::vector<ProseToken> tb = prose_tokens(b);
-    return assemble_paragraph(ta, tb, join_islands(edit_script(ta, tb, same_prose), options.island));
+    return settle_whitespace(
+        assemble_paragraph(ta, tb, join_islands(edit_script(ta, tb, same_prose), options.island)));
 }
 
 // A whole paragraph marked, as one run holding everything it says.
@@ -222,7 +281,7 @@ ir::Paragraph marked_paragraph(const ir::Paragraph& paragraph, ir::Change change
     std::ranges::for_each(prose_tokens(paragraph), [&](const ProseToken& t) { append_plain(run, t); });
     if (run.empty())
         return {};
-    return {ir::ChangedInline{change, std::move(run)}};
+    return settle_whitespace({ir::ChangedInline{change, std::move(run)}});
 }
 
 // Paragraph lists (list items, table rows' cells by row): paired by
@@ -344,6 +403,12 @@ std::vector<std::string> code_keys(const std::vector<CodeToken>& tokens) {
 
 // A CodeText under construction: text, spans and change runs with absolute
 // offsets, lines joined by '\n' as they come.
+//
+// A change run covers the changed tokens and not the whitespace around them:
+// `@\added{constexpr}@ R`, the way a hand-written diff marks a keyword, and
+// not `@\added{constexpr }@R`, whose underline runs on across the space
+// (issue #258). Two changed tokens of one kind separated only by the first
+// one's spacing are still one run.
 struct BuiltCode {
     ir::CodeText code;
 
@@ -355,42 +420,56 @@ struct BuiltCode {
             span->end += at;
             code.spans.push_back(*span);
         }
-        if (change == ir::Change::Same || text.empty())
+        const std::size_t marked = rstripped(text).size();
+        if (change == ir::Change::Same || marked == 0)
             return;
-        if (!code.changes.empty() && code.changes.back().end == at && code.changes.back().change == change)
-            code.changes.back().end = at + text.size();
+        if (!code.changes.empty() && code.changes.back().change == change &&
+            std::string_view(code.text)
+                    .substr(code.changes.back().end, at - code.changes.back().end)
+                    .find_first_not_of(" \t") == std::string_view::npos)
+            code.changes.back().end = at + marked;
         else
-            code.changes.push_back(ir::ChangeRun{at, at + text.size(), change});
+            code.changes.push_back(ir::ChangeRun{at, at + marked, change});
     }
-    // A whole line marked: the mark starts after the indentation, so a
-    // backend's escape wraps the line's text and not the spaces before it.
+    // A whole line marked: the mark starts after the indentation and stops
+    // before any trailing space, so a backend's escape wraps the line's text
+    // and not the spaces around it.
     void append_line(const Line& line, ir::Change change) {
         const std::size_t at     = code.text.size();
         const std::size_t indent = std::min(line.text.size(), line.text.find_first_not_of(" \t"));
+        const std::size_t stop   = rstripped(line.text).size();
         code.text += line.text;
         code.spans.append_range(line.spans | std::views::transform([at](ir::Span s) {
                                     s.begin += at;
                                     s.end += at;
                                     return s;
                                 }));
-        if (change != ir::Change::Same && indent < line.text.size())
-            code.changes.push_back(ir::ChangeRun{at + indent, at + line.text.size(), change});
+        if (change != ir::Change::Same && indent < stop)
+            code.changes.push_back(ir::ChangeRun{at + indent, at + stop, change});
     }
     void newline() { code.text += '\n'; }
 };
 
-// Two similar lines, token by token.
+// Two similar lines, token by token. A removal directly followed by an
+// addition is a replacement, and its two marks abut, as `[a]{.rm}[b]{.add}`
+// is written: the removal's trailing whitespace is dropped, and the
+// addition's separates the pair from what follows.
 void append_merged_line(BuiltCode& out, const Line& a, const Line& b, const Options& options) {
     const std::vector<CodeToken> ta     = code_tokens(a);
     const std::vector<CodeToken> tb     = code_tokens(b);
     const std::vector<Edit>      script = join_islands(edit_script(ta, tb, same_code_token), options.island);
-    std::ranges::for_each(script, [&](const Edit& e) {
-        if (e.op == Op::Keep)
+    std::ranges::for_each(std::views::iota(std::size_t{0}, script.size()), [&](std::size_t k) {
+        const Edit& e = script[k];
+        if (e.op == Op::Keep) {
             out.append(tb[e.b].text, tb[e.b].span, ir::Change::Same);
-        else if (e.op == Op::Delete)
-            out.append(ta[e.a].text, ta[e.a].span, ir::Change::Removed);
-        else
+        } else if (e.op == Op::Delete) {
+            const bool replaced = k + 1 < script.size() && script[k + 1].op == Op::Insert;
+            out.append(replaced ? rstripped(ta[e.a].text) : std::string_view(ta[e.a].text),
+                       ta[e.a].span,
+                       ir::Change::Removed);
+        } else {
             out.append(tb[e.b].text, tb[e.b].span, ir::Change::Added);
+        }
     });
 }
 
@@ -834,23 +913,49 @@ bool node_changed(const ir::Node& node) { return std::visit(overloaded{NodeChang
 
 // --- context -----------------------------------------------------------------------
 
+bool is_elision(const ir::Node& node) {
+    const auto* paragraph = std::get_if<ir::FreeParagraph>(&node);
+    return paragraph != nullptr && paragraph->change == ir::Change::Elided;
+}
+
+// Whether the last thing a node renders is an elision: the node itself, or
+// the last descendant of a section, which renders after its heading and
+// everything else in it.
+bool ends_elided(const ir::Node& node) {
+    if (const auto* section = std::get_if<ir::Section>(&node))
+        return !section->children.empty() && ends_elided(section->children.back());
+    return is_elision(node);
+}
+
 // Inside a changed section, each maximal run of unchanged children collapses
 // to one elided paragraph; a changed child section is treated the same way
-// inside.
+// inside. An elision that would render directly after another -- an
+// unchanged run following a changed child section whose own last children
+// were elided -- is dropped: two ellipses in a row say no more than one
+// (issue #259).
 ir::Node elide_unchanged(ir::Node node) {
     auto* section = std::get_if<ir::Section>(&node);
     if (section == nullptr)
         return node;
-    section->children =
-        std::move(section->children) | std::views::as_rvalue |
-        std::views::chunk_by([](const ir::Node& x, const ir::Node& y) { return node_changed(x) == node_changed(y); }) |
-        std::views::transform([](auto&& chunk) -> std::vector<ir::Node> {
-            if (!node_changed(*chunk.begin()))
-                return {ir::FreeParagraph{{}, ir::Change::Elided}};
-            return chunk | std::views::transform([](ir::Node child) { return elide_unchanged(std::move(child)); }) |
-                   std::ranges::to<std::vector>();
-        }) |
-        std::views::join | std::ranges::to<std::vector>();
+    section->children = std::ranges::fold_left(std::move(section->children) | std::views::as_rvalue |
+                                                   std::views::chunk_by([](const ir::Node& x, const ir::Node& y) {
+                                                       return node_changed(x) == node_changed(y);
+                                                   }) |
+                                                   std::views::transform([](auto&& chunk) -> std::vector<ir::Node> {
+                                                       if (!node_changed(*chunk.begin()))
+                                                           return {ir::FreeParagraph{{}, ir::Change::Elided}};
+                                                       return chunk | std::views::transform([](ir::Node child) {
+                                                                  return elide_unchanged(std::move(child));
+                                                              }) |
+                                                              std::ranges::to<std::vector>();
+                                                   }) |
+                                                   std::views::join,
+                                               std::vector<ir::Node>{},
+                                               [](std::vector<ir::Node> out, ir::Node child) {
+                                                   if (!(is_elision(child) && !out.empty() && ends_elided(out.back())))
+                                                       out.push_back(std::move(child));
+                                                   return out;
+                                               });
     return node;
 }
 
