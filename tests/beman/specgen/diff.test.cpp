@@ -343,6 +343,111 @@ TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {
         CHECK(code.text.substr(run.begin, run.end - run.begin).find('\n') == std::string::npos);
 }
 
+TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
+    // Issue #258: a keyword added before a declaration is marked
+    // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.
+    Document before               = gadget();
+    Document after                = gadget();
+    auto&    ready                = std::get<SpecItem>(std::get<Section>(after.nodes[1]).children[0]);
+    ready.decl.signatures[0].text = "constexpr static bool ready() const;";
+    const auto marked             = [](const CodeText& code) {
+        std::vector<std::string> out;
+        for (const ChangeRun& run : code.changes)
+            out.push_back(code.text.substr(run.begin, run.end - run.begin));
+        return out;
+    };
+    {
+        const Document out = diff::compare(before, after);
+        const auto&    sig = std::get<SpecItem>(std::get<Section>(out.nodes[0]).children[0]).decl.signatures[0];
+        CHECK(sig.text == "constexpr static bool ready() const;");
+        CHECK(marked(sig) == std::vector<std::string>{"constexpr static"});
+        CHECK(sig.changes[0].change == Change::Added);
+    }
+    {
+        const Document out = diff::compare(after, before);
+        const auto&    sig = std::get<SpecItem>(std::get<Section>(out.nodes[0]).children[0]).decl.signatures[0];
+        CHECK(marked(sig) == std::vector<std::string>{"constexpr static"});
+        CHECK(sig.changes[0].change == Change::Removed);
+    }
+    // A replaced token: the two marks abut, and the addition's spacing
+    // separates the pair from what follows.
+    Document consteval_after = gadget();
+    std::get<SpecItem>(std::get<Section>(consteval_after.nodes[1]).children[0]).decl.signatures[0].text =
+        "consteval bool ready() const;";
+    Document constexpr_before = gadget();
+    std::get<SpecItem>(std::get<Section>(constexpr_before.nodes[1]).children[0]).decl.signatures[0].text =
+        "constexpr bool ready() const;";
+    const Document out = diff::compare(constexpr_before, consteval_after);
+    const auto&    sig = std::get<SpecItem>(std::get<Section>(out.nodes[0]).children[0]).decl.signatures[0];
+    CHECK(sig.text == "constexprconsteval bool ready() const;");
+    CHECK(marked(sig) == std::vector<std::string>{"constexpr", "consteval"});
+}
+
+TEST_CASE("diff - a prose mark spans the changed words, not the whitespace around them") {
+    Document before = gadget();
+    Document after  = gadget();
+    auto&    reset  = std::get<SpecItem>(std::get<Section>(after.nodes[1]).children[1]);
+    std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = text("Resets the whole gadget.");
+    const auto para_of                                            = [](const Document& d) {
+        return std::get<BodyParagraph>(
+                   std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[1]).descr.elements[0].body[0])
+            .text;
+    };
+    {
+        const Paragraph para = para_of(diff::compare(before, after));
+        REQUIRE(para.size() == 3);
+        CHECK(std::get<TextInline>(para[0]).text == "Resets the ");
+        const auto& added = std::get<ChangedInline>(para[1]);
+        CHECK(added.change == Change::Added);
+        CHECK(added.inlines == std::vector<PlainInline>{TextInline{"whole"}});
+        CHECK(std::get<TextInline>(para[2]).text == " gadget.");
+    }
+    {
+        const Paragraph para = para_of(diff::compare(after, before));
+        REQUIRE(para.size() == 3);
+        CHECK(std::get<ChangedInline>(para[1]).change == Change::Removed);
+        CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"whole"}});
+        CHECK(std::get<TextInline>(para[2]).text == " gadget.");
+    }
+    // A replaced word: removal and addition abut.
+    Document replaced = gadget();
+    std::get<BodyParagraph>(
+        std::get<SpecItem>(std::get<Section>(replaced.nodes[1]).children[1]).descr.elements[0].body[0])
+        .text                                                     = text("Resets the widget fully.");
+    std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = text("Resets the gizmo fully.");
+    const Paragraph para                                          = para_of(diff::compare(replaced, after));
+    REQUIRE(para.size() == 4);
+    CHECK(std::get<TextInline>(para[0]).text == "Resets the ");
+    CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"widget"}});
+    CHECK(std::get<ChangedInline>(para[2]).inlines == std::vector<PlainInline>{TextInline{"gizmo"}});
+    CHECK(std::get<TextInline>(para[3]).text == " fully.");
+}
+
+TEST_CASE("diff - the items context renders one ellipsis where elisions meet across a section end") {
+    // Issue #259: a changed subsection ending in elided children, followed by
+    // an unchanged sibling subsection, is one ellipsis, not two.
+    const auto doc = [](std::string first_line) {
+        Document d;
+        d.nodes.push_back(Section{
+            "top",
+            "Top",
+            {Section{
+                 "top.a", "A", {FreeParagraph{text(std::move(first_line))}, FreeParagraph{text("Unchanged in a.")}}},
+             Section{"top.b", "B", {FreeParagraph{text("Unchanged b.")}}},
+             Section{"top.c", "C", {FreeParagraph{text("Also unchanged.")}}}}});
+        return d;
+    };
+    const Document out = diff::compare(
+        doc("The first line, before."), doc("The first line, after."), {.context = diff::Context::Items});
+    REQUIRE(out.nodes.size() == 1);
+    const auto& top = std::get<Section>(out.nodes[0]);
+    REQUIRE(top.children.size() == 1);
+    const auto& a = std::get<Section>(top.children[0]);
+    REQUIRE(a.children.size() == 2);
+    CHECK(std::get<FreeParagraph>(a.children[0]).change == Change::Same);
+    CHECK(std::get<FreeParagraph>(a.children[1]).change == Change::Elided);
+}
+
 TEST_CASE("diff - restoration law: stripping either side of the marks gives back that document") {
     Document before                                               = gadget();
     Document after                                                = gadget();
@@ -355,14 +460,27 @@ TEST_CASE("diff - restoration law: stripping either side of the marks gives back
     std::get<SpecItem>(observe.children[1]).decl.entities           = {"clear"};
     std::get<SpecItem>(observe.children[1]).decl.signatures[0].text = "void clear();";
     std::get<Synopsis>(after.nodes[0]).code.text = "class gadget {\n  bool ready() const noexcept;\n};";
+    std::get<BodyParagraph>(std::get<SpecItem>(observe.children[1]).descr.elements[0].body[0]).text =
+        text("Resets the whole gadget.");
 
     const Document out = diff::compare(before, after, {.context = diff::Context::All});
     const Document restored_after{strip_nodes(out.nodes, Change::Added)};
     const Document restored_before{strip_nodes(out.nodes, Change::Removed)};
     CHECK(code_texts(restored_after) == code_texts(after));
     CHECK(code_texts(restored_before) == code_texts(before));
-    // Prose, element lists and node marks restore exactly.
-    const auto prose_of = [](const Document& d) {
+    // Prose, element lists and node marks restore exactly up to runs of
+    // whitespace: a mark spans words and not the space around them, so a
+    // word added or removed between two others leaves the side without it
+    // two separators where it had one.
+    const auto squeezed = [](Paragraph p) {
+        for (Inline& piece : p)
+            if (auto* t = std::get_if<TextInline>(&piece)) {
+                auto [first, last] = std::ranges::unique(t->text, [](char x, char y) { return x == ' ' && y == ' '; });
+                t->text.erase(first, last);
+            }
+        return p;
+    };
+    const auto prose_of = [&](const Document& d) {
         std::vector<Paragraph> out;
         for (const Node& n : d.nodes)
             if (const auto* sec = std::get_if<Section>(&n))
@@ -371,7 +489,7 @@ TEST_CASE("diff - restoration law: stripping either side of the marks gives back
                         for (const DescriptionElement& e : it->descr.elements)
                             for (const BodyBlock& b : e.body)
                                 if (const auto* p = std::get_if<BodyParagraph>(&b))
-                                    out.push_back(p->text);
+                                    out.push_back(squeezed(p->text));
         return out;
     };
     CHECK(prose_of(restored_after) == prose_of(after));

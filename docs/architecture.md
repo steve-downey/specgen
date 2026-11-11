@@ -972,11 +972,14 @@ have no independent item description.
   with code inlines and references atomic, code line by line and then token by token with
   spans atomic, a run never crossing a line end. Whatever the baseline had and the current
   lacks is carried over marked `Removed`, so the marked document holds both revisions' text;
-  kept tokens take the current revision's spacing. Three laws hold and are tested: a document
+  kept tokens take the current revision's spacing. A mark spans the changed tokens and not the
+  whitespace around them (`\added{constexpr} R`), and a removal directly followed by an
+  addition abuts it (`\removed{a}\added{b}`). Three laws hold and are tested: a document
   against itself under `all` is itself, an empty baseline marks every top-level node `Added`
   and nothing beneath (which is paper mode), and stripping either side of the marks gives back
-  that revision. `Context` is `changed` (drop unchanged top-level nodes; the default), `all`,
-  or `items` (also elide unchanged children of a changed section).
+  that revision, up to runs of whitespace. `Context` is `changed` (drop unchanged top-level
+  nodes; the default), `all`, or `items` (also elide unchanged children of a changed section,
+  one ellipsis wherever elisions would meet, across a section's end as well).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
 labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
