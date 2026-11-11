@@ -91,9 +91,15 @@ elseif(MODE STREQUAL "rerun")
     file(REMOVE_RECURSE "${SCRATCH}")
     file(MAKE_DIRECTORY "${SCRATCH}")
 
+    # SPLIT_INLINE is the converter's build-tree path; env.sh otherwise looks
+    # for it beside the driver, which only holds in an install tree.
+    set(split_inline_env "")
+    if(SPLIT_INLINE)
+        set(split_inline_env "SPLIT_INLINE=${SPLIT_INLINE}")
+    endif()
     execute_process(
         COMMAND
-            "${CMAKE_COMMAND}" -E env "SPECGEN=${SPECGEN}"
+            "${CMAKE_COMMAND}" -E env "SPECGEN=${SPECGEN}" ${split_inline_env}
             "EXAMPLES_OUT=${SCRATCH}" "${SCRIPT}"
         RESULT_VARIABLE script_result
         ERROR_VARIABLE script_error

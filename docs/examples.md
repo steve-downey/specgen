@@ -10,6 +10,7 @@
 - [Validation](#validation)
 - [Explicit Include Path](#explicit-include-path)
 - [Declaration Interleave](#declaration-interleave)
+- [Converting a Header](#converting-a-header)
 - [Larger Header Example](#larger-header-example)
 
 <!-- markdownlint-disable -->
@@ -42,6 +43,8 @@ The ordinary way to use specgen is a single `generate` command, which parses a h
 | `-- <clang args>...`              | Explicit include path                 |
 | `--compile-commands <dir>`        | Explicit include path                 |
 | `dump-decls`                      | Declaration interleave                |
+| `split_inline <header>`           | Converting a header                   |
+| `split_inline --move-comments`    | Converting a header                   |
 | `render --from-ir <file>`         | The three backends                    |
 | `render --from-ir -`              | Minimal header                        |
 | `--backend latex`, `mpark`, `org` | The three backends                    |
@@ -1218,6 +1221,373 @@ cd "$REPO_ROOT"
 [1522] DECL CXXMethod empty
 [1576] COMMENT // namespace demo
 [1602] COMMENT // BEMAN_SPECGEN_CORPUS_SPEC_WIDGET_HPP
+```
+
+
+<a id="converting-a-header"></a>
+
+# Converting a Header
+
+`split_inline`, installed beside `specgen`, turns a header with in-class member definitions into the shape specgen reads: the class body declaration-only, each definition after the class inside the namespace block that already encloses it, hidden friends and defaulted or deleted members untouched. Without options every comment stays with its declaration; `--move-comments` carries the `//!` docblocks to the definitions and places each under the `\rSec` section its `\ref` group names, so `generate` renders the same wording from the converted header as from the original. The scripts find it beside the driver; `SPLIT_INLINE` names another location.
+
+```sh
+#!/bin/sh
+# examples/cli/85-split-inline.sh                                     -*-sh-*-
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# `split_inline` turns a header with in-class member definitions into the
+# shape specgen reads: the class body declaration-only, the definitions after
+# the class inside its own namespace block. Two conversions: a header already
+# in specgen form, whose `//!` docblocks travel with the definitions under
+# `--move-comments`; and a plain class template, whose definitions take the
+# template heads, qualifier and `inline` an out-of-line definition needs.
+#
+# Both outputs equal the expected files of the tool's own cases
+# (tests/split_inline/cases), which is what the examples.parity cases check.
+. "$(dirname -- "$0")/env.sh"
+
+if [ ! -x "$SPLIT_INLINE" ]; then
+    printf 'split_inline not found at %s\n' "$SPLIT_INLINE" >&2
+    printf 'Run `make install-release`, or set SPLIT_INLINE to a build-tree binary.\n' >&2
+    exit 1
+fi
+
+OUT=$(out_dir 85-split-inline)
+cd "$REPO_ROOT"
+
+# A specgen-form header with in-class definitions: the docblocks move to the
+# definitions, under the `\rSec3` section their `\ref` group names.
+"$SPLIT_INLINE" tests/corpus/spec_inclass.hpp \
+    --no-compile-commands --move-comments \
+    -o "$OUT/inclass.hpp"
+
+# A constrained class template, converted without touching its comments.
+"$SPLIT_INLINE" tests/split_inline/cases/members/input.hpp \
+    --no-compile-commands \
+    -o "$OUT/members.hpp"
+```
+
+A specgen-form header with two in-class definitions, before and after:
+
+```cpp
+// tests/corpus/spec_inclass.hpp                                    -*-C++-*-
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+// Hand-curated corpus header (design §3.3 sub-case, §6: in-class-
+// defined members and hidden friends). Under one `\rSec3` section, three
+// members declared in class-body order exercise the two attachment paths that
+// interleave: `front()` is an ordinary out-of-line member (itemdecl from the
+// in-class declaration, markup at out-of-line definition — the chain path);
+// `size()` is an in-class-defined member (the compiler-bug shape: body and
+// `//!` docblock both in the class); `operator==` is a hidden friend (in-class
+// by nature, `friend` kept in the itemdecl). All three sit under one
+// `\ref{buffer.access}` group, so their itemdescrs must land in the
+// `buffer.access` section in class-body order — front(), size(), operator== —
+// with the injected in-class items sorted against the out-of-line sibling.
+// Self-contained (no #includes) and built from bool/int only, so it parses
+// standalone under -std=c++2c.
+
+#ifndef BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+#define BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+
+namespace demo {
+
+class buffer {
+  public:
+    // \ref{buffer.access}, access
+    int& front();
+
+    //! \returns The number of elements.
+    int size() const { return count_; }
+
+    //! \returns `true` when the two buffers have equal size.
+    friend bool operator==(buffer a, buffer b) { return a.count_ == b.count_; }
+
+  private:
+    int count_ = 0;
+};
+
+// \rSec3[buffer.access]{Access}
+
+//! \effects Returns a reference to the first element.
+int& buffer::front() { return count_; }
+
+} // namespace demo
+
+#endif // BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+```
+
+```cpp
+// tests/corpus/spec_inclass.hpp                                    -*-C++-*-
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+// Hand-curated corpus header (design §3.3 sub-case, §6: in-class-
+// defined members and hidden friends). Under one `\rSec3` section, three
+// members declared in class-body order exercise the two attachment paths that
+// interleave: `front()` is an ordinary out-of-line member (itemdecl from the
+// in-class declaration, markup at out-of-line definition — the chain path);
+// `size()` is an in-class-defined member (the compiler-bug shape: body and
+// `//!` docblock both in the class); `operator==` is a hidden friend (in-class
+// by nature, `friend` kept in the itemdecl). All three sit under one
+// `\ref{buffer.access}` group, so their itemdescrs must land in the
+// `buffer.access` section in class-body order — front(), size(), operator== —
+// with the injected in-class items sorted against the out-of-line sibling.
+// Self-contained (no #includes) and built from bool/int only, so it parses
+// standalone under -std=c++2c.
+
+#ifndef BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+#define BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+
+namespace demo {
+
+class buffer {
+  public:
+    // \ref{buffer.access}, access
+    int& front();
+
+    int size() const;
+
+    //! \returns `true` when the two buffers have equal size.
+    friend bool operator==(buffer a, buffer b) { return a.count_ == b.count_; }
+
+  private:
+    int count_ = 0;
+};
+
+// \rSec3[buffer.access]{Access}
+
+//! \effects Returns a reference to the first element.
+int& buffer::front() { return count_; }
+
+//! \returns The number of elements.
+inline int buffer::size() const { return count_; }
+
+} // namespace demo
+
+#endif // BEMAN_SPECGEN_CORPUS_SPEC_INCLASS_HPP
+```
+
+The class template of the tool's own `members` case, converted without touching its comments:
+
+```cpp
+// tests/split_inline/cases/members/input.hpp                      -*-C++-*-
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+// Every member shape the plan's spike covered (docs/plans/split-inline.md),
+// in one hermetic header: a constrained class template with a defaulted
+// parameter, constructors with mem-initializers, a destructor, a conversion
+// function, operators, a static and a virtual member, member templates with
+// their own constraints, a partial and an explicit specialization, a nested
+// class whose members return nested types, hidden friends, and defaulted and
+// deleted members. The `std` declarations are local stand-ins.
+
+#ifndef BEMAN_SPECGEN_SPLIT_INLINE_MEMBERS_INPUT_HPP
+#define BEMAN_SPECGEN_SPLIT_INLINE_MEMBERS_INPUT_HPP
+
+namespace std {
+template <class T>
+constexpr bool is_copy_constructible_v = true;
+template <class T, class U>
+constexpr bool is_convertible_v = true;
+} // namespace std
+
+namespace demo::inner {
+inline namespace v1 {
+
+struct nullopt_t {
+    explicit constexpr nullopt_t(int);
+};
+
+constexpr nullopt_t::nullopt_t(int) {}
+
+template <class T, class Alloc = int>
+    requires std::is_copy_constructible_v<T>
+class optional {
+  public:
+    using value_type = T;
+    struct iterator {
+        T*        p_;
+        iterator& operator++();
+        T& operator*() const;
+    };
+
+    // \ref{optional.ctor}, constructors
+    //! \effects Constructs a disengaged optional.
+    constexpr optional() noexcept;
+    /// Doxygen on a converting constructor; stays with the declaration.
+    explicit constexpr optional(const T& v);
+    template <class U = T>
+        requires std::is_convertible_v<U, T>
+    constexpr optional(U&& u);
+    optional(const optional&) = default;
+    optional(optional&&)      = delete;
+
+    // \ref{optional.dtor}, destructor
+    ~optional();
+
+    // \ref{optional.observe}, observers
+    [[nodiscard]] constexpr bool has_value() const noexcept;
+    constexpr explicit           operator bool() const noexcept;
+    iterator                     begin();
+    optional&                    self();
+    static constexpr int         max_size(int hint = 42, bool strict = false);
+    virtual void                 poke();
+    friend bool                  operator==(const optional& a, const optional& b) { return a.engaged_ == b.engaged_; }
+    template <class U>
+    friend bool operator==(const optional& a, const U& b) {
+        return a.engaged_ && a.value_ == b;
+    }
+
+    // \ref{optional.mod}, modifiers
+    void reset() noexcept;
+    template <class... Args>
+    T& emplace(Args&&... args)
+        requires std::is_copy_constructible_v<T>;
+
+  private:
+    bool engaged_;
+    T    value_;
+};
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+auto optional<T, Alloc>::iterator::operator++() -> iterator& {
+    ++p_;
+    return *this;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+T& optional<T, Alloc>::iterator::operator*() const {
+    return *p_;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+constexpr optional<T, Alloc>::optional() noexcept : engaged_(false), value_() {}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+constexpr optional<T, Alloc>::optional(const T& v) : engaged_(true), value_(v) {}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+template <class U>
+    requires std::is_convertible_v<U, T>
+constexpr optional<T, Alloc>::optional(U&& u) : engaged_(true), value_(static_cast<T>(u)) {}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+optional<T, Alloc>::~optional() {
+    reset();
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+constexpr bool optional<T, Alloc>::has_value() const noexcept {
+    return engaged_;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+constexpr optional<T, Alloc>::operator bool() const noexcept {
+    return engaged_;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+auto optional<T, Alloc>::begin() -> iterator {
+    return iterator{&value_};
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+auto optional<T, Alloc>::self() -> optional& {
+    return *this;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+constexpr int optional<T, Alloc>::max_size(int hint, bool strict) {
+    return hint + (strict ? 0 : 1);
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+void optional<T, Alloc>::poke() {}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+void optional<T, Alloc>::reset() noexcept {
+    engaged_ = false;
+}
+
+template <class T, class Alloc>
+    requires std::is_copy_constructible_v<T>
+template <class... Args>
+T& optional<T, Alloc>::emplace(Args&&... args)
+    requires std::is_copy_constructible_v<T>
+{
+    engaged_ = true;
+    value_   = T(static_cast<Args&&>(args)...);
+    return value_;
+}
+
+template <class T, class A>
+class optional<T*, A> {
+  public:
+    bool has_value() const;
+
+  private:
+    T* p_ = nullptr;
+};
+
+template <class T, class A>
+bool optional<T*, A>::has_value() const {
+    return p_ != nullptr;
+}
+
+template <>
+class optional<char, char> {
+  public:
+    int get() const;
+};
+
+inline int optional<char, char>::get() const { return 7; }
+
+class widget {
+  public:
+    widget();
+    explicit widget(int value);
+    bool         empty() const;
+    void         bump();
+    virtual void poke();
+
+  private:
+    int value_ = 0;
+};
+
+inline widget::widget() : value_(0) {}
+
+inline widget::widget(int value) : value_(value) {}
+
+inline bool widget::empty() const { return value_ == 0; }
+
+inline void widget::bump() { ++value_; }
+
+inline void widget::poke() {}
+
+class gadget : public widget {
+  public:
+    void poke() override;
+};
+
+inline void gadget::poke() { bump(); }
+
+} // namespace v1
+} // namespace demo::inner
+
+#endif // BEMAN_SPECGEN_SPLIT_INLINE_MEMBERS_INPUT_HPP
 ```
 
 

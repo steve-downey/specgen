@@ -45,6 +45,8 @@ That route is a debugging aid rather than an authoring workflow, but it lets an 
 | =-- <clang args>...= | Explicit include path |
 | =--compile-commands <dir>= | Explicit include path |
 | =dump-decls= | Declaration interleave |
+| =split_inline <header>= | Converting a header |
+| =split_inline --move-comments= | Converting a header |
 | =render --from-ir <file>= | The three backends |
 | =render --from-ir -= | Minimal header |
 | =--backend latex=, =mpark=, =org= | The three backends |
@@ -247,6 +249,27 @@ It is the first tool to consult when a section is unexpectedly empty.
 #+transclude: [[file:../examples/cli/80-dump-decls.sh]] :src sh
 
 #+transclude: [[file:../examples/cli/output/80-dump-decls/widget-decls.txt]] :src text
+
+* Converting a Header
+:PROPERTIES:
+:CUSTOM_ID: converting-a-header
+:END:
+
+=split_inline=, installed beside =specgen=, turns a header with in-class member definitions into the shape specgen reads: the class body declaration-only, each definition after the class inside the namespace block that already encloses it, hidden friends and defaulted or deleted members untouched.
+Without options every comment stays with its declaration; =--move-comments= carries the =//!= docblocks to the definitions and places each under the =\rSec= section its =\ref= group names, so =generate= renders the same wording from the converted header as from the original.
+The scripts find it beside the driver; =SPLIT_INLINE= names another location.
+
+#+transclude: [[file:../examples/cli/85-split-inline.sh]] :src sh
+
+A specgen-form header with two in-class definitions, before and after:
+
+#+transclude: [[file:../tests/corpus/spec_inclass.hpp]] :src cpp
+
+#+transclude: [[file:../examples/cli/output/85-split-inline/inclass.hpp]] :src cpp
+
+The class template of the tool's own =members= case, converted without touching its comments:
+
+#+transclude: [[file:../examples/cli/output/85-split-inline/members.hpp]] :src cpp
 
 * Larger Header Example
 :PROPERTIES:

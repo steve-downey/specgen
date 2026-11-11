@@ -62,12 +62,18 @@ function(specgen_add_example_rerun section)
     if(NOT TARGET specgen)
         return()
     endif()
+    # The converter rides along where it is built, so 85-split-inline finds it
+    # in this build tree rather than beside the driver.
+    set(split_inline_arg "")
+    if(TARGET split_inline)
+        set(split_inline_arg "-DSPLIT_INLINE=$<TARGET_FILE:split_inline>")
+    endif()
     add_test(
         NAME examples.rerun.${section}
         COMMAND
             "${CMAKE_COMMAND}" -DMODE=rerun "-DSPECGEN=$<TARGET_FILE:specgen>"
-            "-DSCRIPT=${EXAMPLES_CLI}/${section}.sh" "-DSECTION=${section}"
-            "-DCAPTURED=${EXAMPLES_OUT}/${section}"
+            ${split_inline_arg} "-DSCRIPT=${EXAMPLES_CLI}/${section}.sh"
+            "-DSECTION=${section}" "-DCAPTURED=${EXAMPLES_OUT}/${section}"
             "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/scratch/${section}" -P
             "${CMAKE_CURRENT_SOURCE_DIR}/run-example.cmake"
     )
@@ -199,6 +205,18 @@ specgen_add_example_parity(
     CAPTURED 90-optional/optional.md
     GOLDEN optional/expected.md
 )
+# split_inline's goldens live with its own cases, not under tests/golden, so
+# the twin is named relative to that directory.
+specgen_add_example_parity(
+    split_inline_inclass
+    CAPTURED 85-split-inline/inclass.hpp
+    GOLDEN ../split_inline/cases/corpus_inclass/expected.hpp
+)
+specgen_add_example_parity(
+    split_inline_members
+    CAPTURED 85-split-inline/members.hpp
+    GOLDEN ../split_inline/cases/members/expected.hpp
+)
 
 # --- Rerun: everything each script writes, against this build's driver -------
 
@@ -213,4 +231,5 @@ specgen_add_example_rerun(60-validate)
 specgen_add_example_rerun(65-diagnostics)
 specgen_add_example_rerun(70-include-path)
 specgen_add_example_rerun(80-dump-decls)
+specgen_add_example_rerun(85-split-inline)
 specgen_add_example_rerun(90-optional)

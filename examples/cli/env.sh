@@ -23,6 +23,12 @@ if [ ! -x "$SPECGEN" ]; then
     exit 1
 fi
 
+# The converter, split_inline: an explicit $SPLIT_INLINE wins, otherwise the
+# one installed beside the driver. In a build tree the two live in different
+# directories, so the ctest rerun cases set both. Only the script that runs it
+# checks that it is there; the rest need the driver alone.
+SPLIT_INLINE=${SPLIT_INLINE:-$(dirname -- "$SPECGEN")/split_inline}
+
 # Where captures land. The rerun tests point this at a scratch directory and
 # diff the result against the checked-in tree; a plain run rewrites the
 # checked-in tree in place.
