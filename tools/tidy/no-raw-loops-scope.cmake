@@ -35,8 +35,16 @@
 # multi-config database (the Makefile lane) lists every file once per
 # configuration, and clang-tidy would parse it once per entry, reporting
 # each finding that many times over; the first entry in the database is the
-# one kept. The pass driver points clang-tidy's -p at DB_OUT's directory
+# one kept. The style gates point clang-tidy's -p at DB_OUT's directory
 # instead of the build's.
+#
+# EXPECTED, when given, names the scope the style gates' edges were written
+# for at configure time (tools/tidy/style-gates.cmake), one file per line.
+# The two lists must agree: a TU the database compiles but no edge checks
+# would pass unchecked, and one the edges name but the database lacks has no
+# command to parse with. Both outputs are rewritten only when their content
+# changes, so the edges that depend on DB_OUT rerun only when a compile
+# command moved.
 
 if(NOT DEFINED COMPILE_DB)
     message(FATAL_ERROR "pass -DCOMPILE_DB=<build>/compile_commands.json")
@@ -104,9 +112,36 @@ if(_kept EQUAL 0)
     message(FATAL_ERROR "${COMPILE_DB} yields an empty scope; nothing to gate")
 endif()
 
+# Writes content to path only when it differs from what is there, so the
+# file's timestamp moves only when its content does.
+function(_write_if_different path content)
+    file(WRITE "${path}.tmp" "${content}")
+    file(COPY_FILE "${path}.tmp" "${path}" ONLY_IF_DIFFERENT)
+    file(REMOVE "${path}.tmp")
+endfunction()
+
+if(DEFINED EXPECTED)
+    file(STRINGS "${EXPECTED}" _expected)
+    set(_unchecked ${_files})
+    list(REMOVE_ITEM _unchecked ${_expected})
+    set(_uncompiled ${_expected})
+    list(REMOVE_ITEM _uncompiled ${_files})
+    if(_unchecked OR _uncompiled)
+        list(JOIN _unchecked "\n  " _unchecked)
+        list(JOIN _uncompiled "\n  " _uncompiled)
+        message(
+            FATAL_ERROR
+            "the style gates' scope disagrees with ${COMPILE_DB}:\n"
+            "in the database, no edge:\n  ${_unchecked}\n"
+            "an edge, not in the database:\n  ${_uncompiled}\n"
+            "(tools/tidy/style-gates.cmake lists the TUs at configure time)"
+        )
+    endif()
+endif()
+
 if(DEFINED OUT)
     list(JOIN _files "\n" _joined)
-    file(WRITE "${OUT}" "${_joined}\n")
+    _write_if_different("${OUT}" "${_joined}\n")
 else()
     foreach(_file IN LISTS _files)
         message(NOTICE "${_file}")
@@ -114,5 +149,5 @@ else()
 endif()
 
 if(DEFINED DB_OUT)
-    file(WRITE "${DB_OUT}" "[\n${_db_entries}\n]\n")
+    _write_if_different("${DB_OUT}" "[\n${_db_entries}\n]\n")
 endif()

@@ -1,5 +1,12 @@
 # Plan: the no-raw-loops gate as a clang-tidy plugin
 
+**Superseded in part (2026-11-11):** the pass no longer runs `run-clang-tidy` from a ctest case. That driver
+starts one clang-tidy per CPU, so each gate hid a machine's worth of processes inside one ctest slot, and three
+gates under a parallel ctest crashed a 20-core box. The gates are now build edges, one clang-tidy per check per
+TU under the build tool's `-j`, with a depfile per edge (`tools/tidy/style-gates.cmake`; `docs/building.md`,
+"Lint"). The check, its scope, and the scrubbed database below are unchanged; read "The pass" for what is
+checked, not for how it is launched.
+
 **Status:** EXECUTED (2026-09-12, stages landing 2026-09-11 through 2026-09-12). All six stages are done:
 `style.no-raw-loops` runs the `specgen-no-raw-loops` clang-tidy plugin check over the compile database, the text
 scan `tools/check-raw-loops.cmake` is deleted, and `docs/CODING_RULES.md` ("No raw loops"), `docs/building.md`, and

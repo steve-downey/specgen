@@ -52,10 +52,15 @@ Gotchas that bite:
   (`tests/split_inline/cases/`); regenerate an `expected.hpp` by running the tool
   from the case directory, never by hand.
 - The "No raw loops" doctrine (docs/CODING_RULES.md) is gated by
-  `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy plugin check
-  over the compile database (~45 s), scope `src/`, `tools/`, `examples/`,
-  and every `FILE_SET` header as its own TU. A new loop needs its marker
-  before the suite is green.
+  `style.no-raw-loops`: the `specgen-no-raw-loops` clang-tidy plugin check,
+  scope `src/`, `tools/`, `examples/`, and every `FILE_SET` header as its own
+  TU. A new loop needs its marker before the suite is green.
+- The clang-tidy gates are **build edges** (`tools/tidy/style-gates.cmake`,
+  target `style`): one clang-tidy per check per TU, under the build's `-j`
+  like the compiler; `make style` runs them, `make test` runs them before
+  ctest. Never run clang-tidy, a compiler, or any per-file tool through
+  something that fans out on its own (`run-clang-tidy`, `xargs -P`):
+  `run-clang-tidy` inside three ctest cases once took the machine down.
 - A `switch` over an enumeration is a defect, gated by `style.no-raw-switch`
   (the `specgen-no-raw-switch` check): use `foundation::table` or
   `foundation::match` (`foundation/enumeration.hpp`) so a missing enumerator is

@@ -206,8 +206,19 @@ regenerate: check-llvm ## Rerun cmake if the build tree is stale
 ctest: regenerate ## Run CTest on current build
 	$(CTEST) --test-dir $(_build_path) --output-on-failure -C $(CONFIG)
 
+# The clang-tidy style gates are build edges (tools/tidy/style-gates.cmake),
+# one clang-tidy per check per TU under the build's own -j, so they cost what
+# a compile of the same TUs costs and rerun only what an edit touched.
+.PHONY: style
+style: compile ## Run the clang-tidy style gates under the build's -j
+	$(CMAKE) --build $(_build_path) --config $(CONFIG) --target style -- -k 0
+
+# `test` runs the gates as part of the build but does not stop on a finding:
+# the ctest cases style.* rebuild just the failing edges, serially, and report
+# them beside every other result.
 .PHONY: ctest_
 ctest_ : compile
+	-$(CMAKE) --build $(_build_path) --config $(CONFIG) --target style -- -k 0
 	$(CTEST) --test-dir $(_build_path) --output-on-failure -C $(CONFIG)
 
 .PHONY: test

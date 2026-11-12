@@ -228,12 +228,13 @@ plugin (`tools/tidy/`, loaded into the pinned LLVM's own `clang-tidy`) that
 matches every `for`, range-`for`, `while`, and `do` outside template
 instantiations — at the expansion location, so a loop a macro produces is a
 site at the macro's use — and reads the marker rule off the raw source
-buffer. It is wired into ctest as **`style.no-raw-loops`** (`ctest -R style`
-selects it) through `tools/tidy/run-no-raw-loops.cmake`, which runs the
-pinned `run-clang-tidy` over the compile database with specgen findings
-promoted to errors; when configure's toolchain probe found no clang-tidy
-plugin toolchain, the case fails loudly naming what is missing rather than
-going silently green.
+buffer. It runs as build edges, one clang-tidy per TU under the build's own
+`-j` with specgen findings promoted to errors (`tools/tidy/style-gates.cmake`,
+target `style.specgen-no-raw-loops`), and the ctest case
+**`style.no-raw-loops`** (`ctest -R style` selects it) builds that target
+serially; when configure's toolchain probe found no clang-tidy plugin
+toolchain, the case fails loudly naming what is missing rather than going
+silently green.
 
 Its scope is the compile database itself: every production translation unit
 under `src/`, `tools/`, and `examples/`, plus every `FILE_SET` header as its
