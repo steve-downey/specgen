@@ -498,6 +498,29 @@ TEST_CASE("latex - a nested section descends from a non-default base") {
     CHECK(latex::render_to_string(doc, {.base_section_depth = 2}) == expected);
 }
 
+// A top-level section given its draft number (issue #265) is preceded by the
+// guarded \clausenumber hook; a nested section is not, since the counters
+// carry on from its parent, and a top-level section without a number is
+// untouched. The number reaches each `--split` fragment the same way, because
+// a fragment is rendered as a document of its own.
+TEST_CASE("latex - a numbered top-level section is preceded by the guarded clausenumber hook") {
+    Document doc;
+    doc.nodes.push_back(
+        Section{"func.wrap.move", "Move-only wrapper", {Section{"func.wrap.move.general", "General", {}}}});
+    doc.nodes.push_back(Section{"func.wrap.copy", "Copyable wrapper", {}});
+    const std::string expected = R"(\ifdefined\clausenumber\clausenumber{22.10.17.4}\fi
+\rSec3[func.wrap.move]{Move-only wrapper}
+
+\rSec4[func.wrap.move.general]{General}
+
+\rSec3[func.wrap.copy]{Copyable wrapper}
+)";
+    CHECK(latex::render_to_string(doc, {.section_numbers = {{"func.wrap.move", "22.10.17.4"}}}) == expected);
+    // A number for a section nested under the top level numbers nothing.
+    CHECK(latex::render_to_string(doc, {.section_numbers = {{"func.wrap.move.general", "22.10.17.4.1"}}})
+              .find("clausenumber") == std::string::npos);
+}
+
 // --- the wording diff's marks (docs/plans/wording-diff.md) -----------------
 
 TEST_CASE("latex - a changed prose run is the draft's \\added or \\removed around the run") {

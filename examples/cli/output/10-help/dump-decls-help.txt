@@ -67,6 +67,11 @@ generate options:
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
                              descend from it (latex only; 3 by default, the
                              draft's library split granularity)
+  --section-number <name>=<number>
+                            the draft number of the top-level section <name>,
+                             as func.wrap.move=22.10.17.4, written ahead of its
+                             \rSec as \clausenumber{...} (latex only). May be
+                             repeated, once per top-level section
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -135,6 +140,11 @@ render options:
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
                              descend from it (latex only; 3 by default, the
                              draft's library split granularity)
+  --section-number <name>=<number>
+                            the draft number of the top-level section <name>,
+                             as func.wrap.move=22.10.17.4, written ahead of its
+                             \rSec as \clausenumber{...} (latex only). May be
+                             repeated, once per top-level section
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
