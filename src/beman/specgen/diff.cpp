@@ -927,35 +927,46 @@ bool ends_elided(const ir::Node& node) {
     return is_elision(node);
 }
 
-// Inside a changed section, each maximal run of unchanged children collapses
-// to one elided paragraph; a changed child section is treated the same way
-// inside. An elision that would render directly after another -- an
-// unchanged run following a changed child section whose own last children
-// were elided -- is dropped: two ellipses in a row say no more than one
-// (issue #259).
+// A child that `elide_unchanged` keeps as a heading rather than folding it
+// into a run of elided wording: an unchanged subsection.
+bool keeps_heading(const ir::Node& node) { return std::holds_alternative<ir::Section>(node) && !node_changed(node); }
+
+// Inside a changed section, each maximal run of unchanged children other
+// than subsections collapses to one elided paragraph, and every child
+// section, changed or not, is treated the same way inside. An unchanged
+// subsection therefore keeps its heading, at any depth, over an ellipsis for
+// its own wording (issue #263): a `\ref` to it from retained wording still
+// resolves, the reader sees which subclause was left out, and the subclause
+// counters step as they do in the draft. An elision that would render
+// directly after another -- an unchanged run of a section's own paragraphs
+// following a child section whose last children were elided -- is dropped:
+// two ellipses in a row say no more than one (issue #259); between two
+// subsections a heading always separates them.
 ir::Node elide_unchanged(ir::Node node) {
     auto* section = std::get_if<ir::Section>(&node);
     if (section == nullptr)
         return node;
-    section->children = std::ranges::fold_left(std::move(section->children) | std::views::as_rvalue |
-                                                   std::views::chunk_by([](const ir::Node& x, const ir::Node& y) {
-                                                       return node_changed(x) == node_changed(y);
-                                                   }) |
-                                                   std::views::transform([](auto&& chunk) -> std::vector<ir::Node> {
-                                                       if (!node_changed(*chunk.begin()))
-                                                           return {ir::FreeParagraph{{}, ir::Change::Elided}};
-                                                       return chunk | std::views::transform([](ir::Node child) {
-                                                                  return elide_unchanged(std::move(child));
-                                                              }) |
-                                                              std::ranges::to<std::vector>();
-                                                   }) |
-                                                   std::views::join,
-                                               std::vector<ir::Node>{},
-                                               [](std::vector<ir::Node> out, ir::Node child) {
-                                                   if (!(is_elision(child) && !out.empty() && ends_elided(out.back())))
-                                                       out.push_back(std::move(child));
-                                                   return out;
-                                               });
+    section->children = std::ranges::fold_left(
+        std::move(section->children) | std::views::as_rvalue |
+            std::views::chunk_by([](const ir::Node& x, const ir::Node& y) {
+                return !keeps_heading(x) && !keeps_heading(y) && node_changed(x) == node_changed(y);
+            }) |
+            std::views::transform([](auto&& chunk) -> std::vector<ir::Node> {
+                if (keeps_heading(*chunk.begin()))
+                    return {elide_unchanged(std::move(*chunk.begin()))};
+                if (!node_changed(*chunk.begin()))
+                    return {ir::FreeParagraph{{}, ir::Change::Elided}};
+                return chunk |
+                       std::views::transform([](ir::Node child) { return elide_unchanged(std::move(child)); }) |
+                       std::ranges::to<std::vector>();
+            }) |
+            std::views::join,
+        std::vector<ir::Node>{},
+        [](std::vector<ir::Node> out, ir::Node child) {
+            if (!(is_elision(child) && !out.empty() && ends_elided(out.back())))
+                out.push_back(std::move(child));
+            return out;
+        });
     return node;
 }
 

@@ -222,9 +222,13 @@ rather not page through wording that did not move
 ([diff-context-default](#diff-context-default), [diff-context-items](#diff-context-items)). The
 ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
 form papers write by hand; a first cut, signed off on the golden. A changed item still renders
-whole under `items`: the unit of elision is a node, not a paragraph. Where two elisions would
-render one after the other -- a changed subsection ending in elided children, then an unchanged
-sibling subsection -- they are one ellipsis (issue #259). The editing instruction sentence
+whole under `items`: the unit of elision is a node, not a paragraph. An unchanged subsection
+keeps its own heading over one ellipsis for its wording, and so does each subsection nested in
+it, at any depth (issue #263). A `\ref` to it from retained wording then still resolves, the reader sees which
+subclause was left out, and the next sibling's number comes from that level's counter as in the
+draft. Where two elisions would render one after the other -- a changed subsection ending in
+elided children, then an unchanged run of its parent's paragraphs -- they are one ellipsis
+(issue #259); between two subsections a heading always separates them. The editing instruction sentence
 ("Modify [gadget.observe] as indicated:") stays the paper's, as it is under `--paper` today
 ([editing-instructions](#editing-instructions)).
 

@@ -348,7 +348,9 @@ a changed one whole, unchanged paragraphs included: the full subclause as
 modified, which is what LWG reads. `all` keeps everything, for a paper that
 has to show nothing else moved. `items` goes one step further than `changed`:
 inside a changed section, each run of unchanged items collapses to one `[…]`
-paragraph. `generate --emit-ir` with a baseline writes the marked document, so
+paragraph, and an unchanged subsection keeps its heading over one `[…]`, so a
+reference to it still resolves and the sections after it keep their draft
+numbers. `generate --emit-ir` with a baseline writes the marked document, so
 `render --from-ir` renders the diff later with no baseline of its own; a
 document that already carries marks is refused beside a baseline, since a diff
 of a diff means nothing.
@@ -1187,7 +1189,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.22.3 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.22.4 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

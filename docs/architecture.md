@@ -979,7 +979,8 @@ have no independent item description.
   and nothing beneath (which is paper mode), and stripping either side of the marks gives back
   that revision, up to runs of whitespace. `Context` is `changed` (drop unchanged top-level
   nodes; the default), `all`, or `items` (also elide unchanged children of a changed section,
-  one ellipsis wherever elisions would meet, across a section's end as well).
+  an unchanged subsection keeping its own heading over one ellipsis, and one ellipsis wherever
+  elisions would meet, across a section's end as well).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
 labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
