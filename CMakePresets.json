@@ -200,7 +200,8 @@
       "jobs": 0,
       "targets": [
         "all_verify_interface_header_sets",
-        "all"
+        "all",
+        "style"
       ]
     },
     {

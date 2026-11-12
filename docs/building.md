@@ -123,24 +123,38 @@ lane locally.
 markdownlint, and the rest).
 
 The "No raw loops" and "No raw switch over an enumeration" doctrines
-(`docs/CODING_RULES.md`) are enforced separately, as the ctest cases
-`style.no-raw-loops` and `style.no-raw-switch`, the same run with a different
-check (`-DCHECK=specgen-no-raw-switch`), and the rule against relying on a
-transitive include as `style.include-cleaner` (`-DCHECK=misc-include-cleaner`).
-Described for the first: the `specgen-no-raw-loops` clang-tidy plugin check run
-by the pinned `run-clang-tidy` over the compile database — every production TU
-plus every `FILE_SET` header as its own verification TU,
-which is why `CMAKE_VERIFY_INTERFACE_HEADER_SETS` is on in the `gcc-release`
-preset, the one the lint runs from. It needs the pinned LLVM's `clang-tidy`
+(`docs/CODING_RULES.md`) are enforced separately, by the clang-tidy plugin
+checks `specgen-no-raw-loops` and `specgen-no-raw-switch`, and the rule against
+relying on a transitive include by `misc-include-cleaner`. They are **build
+edges** (`tools/tidy/style-gates.cmake`): one clang-tidy process per check per
+TU, each writing a stamp, scheduled by the build tool under its own `-j`
+exactly like the compiler. The targets are `style.<check>` and `style`, which
+the build presets build beside `all` and `make test` builds before it runs
+ctest (`make style` builds them alone). A clang-tidy depfile tracks the headers
+each TU includes, so an edit reruns only the checks it can affect. Nothing in
+the gates fans out on its own: an earlier version ran `run-clang-tidy` from
+inside a ctest case, one process per CPU per gate, and three gates under a
+parallel ctest took a 20-core machine down.
+
+The ctest cases `style.no-raw-loops`, `style.no-raw-switch` and
+`style.include-cleaner` build their check's target with `--parallel 1`: a no-op
+when the build already ran the edges, a serial rerun of the failing ones
+otherwise, so a finding is reported beside every other test result. They share
+a resource lock, because two builds in one build tree at once are not safe.
+
+The scope is every production TU under `src/`, `tools/` and `examples/` plus
+every `FILE_SET` header as its own verification TU, listed at configure time
+from the targets and checked against the compile database at build time (a TU
+the two disagree on fails the build). It needs the pinned LLVM's `clang-tidy`
 and the clang-tools-extra headers; configure's
-`beman.specgen: clang-tidy plugin toolchain` STATUS line says whether the
-probe found them, and without them the case fails naming the missing piece
-rather than going silently green. The pass re-parses with clang against a
+`beman.specgen: clang-tidy plugin toolchain` STATUS line says whether the probe
+found them, and without them the ctest cases fail naming the missing piece
+rather than going silently green. The edges re-parse with clang against a
 scrubbed copy of the compile database: instrumentation flags, `-Werror`, and
 the GCC module-scanning flags are removed, and a multi-config database (the
-Makefile lane) is reduced to one entry per file, so the gate gives one answer
-per lane and parses each TU once. Budget ~45 s per run; `ctest -R style`
-selects it, and `ctest -R tidy.` runs the check's own probe battery.
+Makefile lane) is reduced to one entry per file, so the gates give one answer
+per lane and parse each TU once. `ctest -R tidy.` runs the checks' own probe
+battery.
 
 Two pre-commit gotchas:
 

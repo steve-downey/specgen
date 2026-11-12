@@ -9,7 +9,7 @@ project(
     beman.specgen
     DESCRIPTION "Standard-library description wording generator"
     LANGUAGES CXX
-    VERSION 0.22.2
+    VERSION 0.22.3
 )
 
 # `specgen --version` identifies both the release and the exact source
@@ -245,7 +245,7 @@ message(STATUS "beman.specgen: Clang front end (LLVM ${LLVM_PACKAGE_VERSION})")
 
 # The clang-tidy plugin toolchain (docs/plans/no-raw-loops-tidy-plugin.md,
 # decision llvm-toolchain-pin: the pin covers clang-tidy and any plugin built
-# against it). Three probes against the *pinned* LLVM, never PATH: a plugin
+# against it). Two probes against the *pinned* LLVM, never PATH: a plugin
 # built against one LLVM's headers and loaded into another's binary fails to
 # load at best and crashes at worst. The binaries ship with every install of
 # the pin; the clang-tidy headers come from clang-tools-extra, which some
@@ -259,23 +259,13 @@ find_program(
     PATHS ${LLVM_TOOLS_BINARY_DIR}
     NO_DEFAULT_PATH
 )
-find_program(
-    BEMAN_SPECGEN_RUN_CLANG_TIDY
-    run-clang-tidy
-    PATHS ${LLVM_TOOLS_BINARY_DIR}
-    NO_DEFAULT_PATH
-)
 find_path(
     BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR
     clang-tidy/ClangTidyCheck.h
     PATHS ${CLANG_INCLUDE_DIRS}
     NO_DEFAULT_PATH
 )
-if(
-    BEMAN_SPECGEN_CLANG_TIDY
-    AND BEMAN_SPECGEN_RUN_CLANG_TIDY
-    AND BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR
-)
+if(BEMAN_SPECGEN_CLANG_TIDY AND BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR)
     set(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN TRUE)
     message(
         STATUS
@@ -288,12 +278,6 @@ else()
         list(
             APPEND _specgen_tidy_missing
             "clang-tidy in ${LLVM_TOOLS_BINARY_DIR}"
-        )
-    endif()
-    if(NOT BEMAN_SPECGEN_RUN_CLANG_TIDY)
-        list(
-            APPEND _specgen_tidy_missing
-            "run-clang-tidy in ${LLVM_TOOLS_BINARY_DIR}"
         )
     endif()
     if(NOT BEMAN_SPECGEN_CLANG_TIDY_INCLUDE_DIR)
@@ -327,77 +311,44 @@ endif()
 if(BEMAN_SPECGEN_BUILD_TESTS)
     enable_testing()
 
-    # The "no raw loops" gate (docs/CODING_RULES.md), as the clang-tidy pass
-    # (docs/plans/no-raw-loops-tidy-plugin.md, ctest-gate):
-    # tools/tidy/run-no-raw-loops.cmake filters the compile database and runs
-    # the pinned run-clang-tidy with the specgen plugin, findings as errors.
-    # `ctest -R style` selects it. Without the plugin toolchain the case
-    # fails loudly naming what is missing, never a silent green. The
-    # ;-list must not split the test's command line; the driver splits it
-    # back on the |.
-    if(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN)
-        string(
-            REPLACE ";"
-            "|"
-            _specgen_gate_implicit_dirs
-            "${CMAKE_CXX_IMPLICIT_INCLUDE_DIRECTORIES}"
-        )
-        add_test(
-            NAME style.no-raw-loops
-            COMMAND
-                ${CMAKE_COMMAND}
-                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
-                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
-                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
-                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
-                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
-        )
-        add_test(
-            NAME style.no-raw-switch
-            COMMAND
-                ${CMAKE_COMMAND} "-DCHECK=specgen-no-raw-switch"
-                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
-                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
-                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
-                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
-                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
-        )
-        # Every symbol a TU uses comes from a header it includes itself, not
-        # through a transitive include (docs/CODING_RULES.md).
-        add_test(
-            NAME style.include-cleaner
-            COMMAND
-                ${CMAKE_COMMAND} "-DCHECK=misc-include-cleaner"
-                "-DRUN_CLANG_TIDY=${BEMAN_SPECGEN_RUN_CLANG_TIDY}"
-                "-DCLANG_TIDY=${BEMAN_SPECGEN_CLANG_TIDY}"
-                "-DPLUGIN=$<TARGET_FILE:beman.specgen.tidy>"
-                "-DBUILD_DIR=${CMAKE_BINARY_DIR}"
-                "-DIMPLICIT_DIRS=${_specgen_gate_implicit_dirs}" -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/run-no-raw-loops.cmake"
-        )
-        unset(_specgen_gate_implicit_dirs)
-    else()
-        add_test(
-            NAME style.no-raw-loops
-            COMMAND
-                ${CMAKE_COMMAND} -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
-        )
-        add_test(
-            NAME style.no-raw-switch
-            COMMAND
-                ${CMAKE_COMMAND} -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
-        )
-        add_test(
-            NAME style.include-cleaner
-            COMMAND
-                ${CMAKE_COMMAND} -P
-                "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
-        )
-    endif()
+    # The clang-tidy style gates (docs/CODING_RULES.md): "no raw loops", "no
+    # raw switch", and include-what-you-use. The work is build edges, one
+    # clang-tidy per check per TU, scheduled by the build tool like any
+    # compile (tools/tidy/style-gates.cmake, included below once every target
+    # exists). Each case builds its check's target with -j 1: a no-op when
+    # the build already ran the edges, a serial rerun of the stale ones
+    # otherwise -- never a fan-out hidden inside one ctest slot. The cases
+    # share a lock because two builds in one build tree at once are not safe.
+    # Without the plugin toolchain each fails loudly naming what is missing,
+    # never a silent green.
+    foreach(_check IN ITEMS no-raw-loops no-raw-switch include-cleaner)
+        if(BEMAN_SPECGEN_TIDY_PLUGIN_TOOLCHAIN)
+            if(_check STREQUAL "include-cleaner")
+                set(_target style.misc-include-cleaner)
+            else()
+                set(_target style.specgen-${_check})
+            endif()
+            add_test(
+                NAME style.${_check}
+                COMMAND
+                    ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}" --config
+                    $<CONFIG> --target ${_target} --parallel 1
+            )
+            set_tests_properties(
+                style.${_check}
+                PROPERTIES RESOURCE_LOCK specgen-build-tree
+            )
+        else()
+            add_test(
+                NAME style.${_check}
+                COMMAND
+                    ${CMAKE_COMMAND} -P
+                    "${PROJECT_SOURCE_DIR}/tools/tidy/no-raw-loops-unavailable.cmake"
+            )
+        endif()
+    endforeach()
+    unset(_check)
+    unset(_target)
 
     # The plugin-load smoke (docs/plans/no-raw-loops-tidy-plugin.md, stage
     # tidy-plugin-target): the pinned clang-tidy dlopens the plugin and lists
@@ -466,6 +417,9 @@ endif()
 if(BEMAN_SPECGEN_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
+
+# The clang-tidy style gates' build edges, after every target they scan.
+include(tools/tidy/style-gates.cmake)
 
 # Coverage
 configure_file("cmake/gcovr.cfg.in" gcovr.cfg @ONLY)
