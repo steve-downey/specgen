@@ -274,6 +274,7 @@ struct Table1D {
 
 // A paragraph either opens a numbered paragraph or continues the paragraph
 // containing the preceding list/table (decision ordered-description-bodies).
+// An Elided paragraph is an unnumbered ellipsis, including in an itemdescr.
 struct BodyParagraph {
     Paragraph text;
     bool      continuation = false;

@@ -30,7 +30,8 @@ using namespace std::string_view_literals;
 
 inline constexpr auto kContextNames = foundation::table<Context>(foundation::is<Context::Changed>("changed"sv),
                                                                  foundation::is<Context::All>("all"sv),
-                                                                 foundation::is<Context::Items>("items"sv));
+                                                                 foundation::is<Context::Items>("items"sv),
+                                                                 foundation::is<Context::Decls>("decls"sv));
 
 // --- similarity -------------------------------------------------------------
 
@@ -890,6 +891,12 @@ bool blocks_changed(const std::vector<Block>& body) {
     return std::ranges::any_of(body, [](const Block& b) { return std::visit(overloaded{BlockChanged{}}, b); });
 }
 
+bool description_changed(const ir::ItemDescr& descr) {
+    return blocks_changed(descr.leading) || std::ranges::any_of(descr.elements, [](const ir::DescriptionElement& e) {
+               return e.change != ir::Change::Same || blocks_changed(e.body);
+           });
+}
+
 bool node_changed(const ir::Node& node);
 
 struct NodeChanged {
@@ -899,10 +906,7 @@ struct NodeChanged {
     bool operator()(const ir::Synopsis& s) const { return s.change != ir::Change::Same || code_changed(s.code); }
     bool operator()(const ir::SpecItem& s) const {
         return s.change != ir::Change::Same || std::ranges::any_of(s.decl.signatures, code_changed) ||
-               blocks_changed(s.descr.leading) ||
-               std::ranges::any_of(s.descr.elements, [](const ir::DescriptionElement& e) {
-                   return e.change != ir::Change::Same || blocks_changed(e.body);
-               });
+               description_changed(s.descr);
     }
     bool operator()(const ir::FreeParagraph& s) const {
         return s.change != ir::Change::Same || paragraph_changed(s.text);
@@ -942,7 +946,16 @@ bool keeps_heading(const ir::Node& node) { return std::holds_alternative<ir::Sec
 // following a child section whose last children were elided -- is dropped:
 // two ellipses in a row say no more than one (issue #259); between two
 // subsections a heading always separates them.
-ir::Node elide_unchanged(ir::Node node) {
+ir::Node elide_unchanged(ir::Node node, Context context) {
+    // Whole added/removed nodes carry their mark at the parent: their
+    // descendants are intentionally unmarked and must remain complete.
+    if (context == Context::Decls && ir::change_of(node) != ir::Change::Same)
+        return node;
+    if (auto* item = std::get_if<ir::SpecItem>(&node); context == Context::Decls && item != nullptr &&
+                                                       ir::has_description(item->descr) &&
+                                                       !description_changed(item->descr)) {
+        item->descr = {.elements = {}, .leading = {ir::BodyParagraph{{}, false, ir::Change::Elided}}};
+    }
     auto* section = std::get_if<ir::Section>(&node);
     if (section == nullptr)
         return node;
@@ -951,13 +964,14 @@ ir::Node elide_unchanged(ir::Node node) {
             std::views::chunk_by([](const ir::Node& x, const ir::Node& y) {
                 return !keeps_heading(x) && !keeps_heading(y) && node_changed(x) == node_changed(y);
             }) |
-            std::views::transform([](auto&& chunk) -> std::vector<ir::Node> {
+            std::views::transform([context](auto&& chunk) -> std::vector<ir::Node> {
                 if (keeps_heading(*chunk.begin()))
-                    return {elide_unchanged(std::move(*chunk.begin()))};
+                    return {elide_unchanged(std::move(*chunk.begin()), context)};
                 if (!node_changed(*chunk.begin()))
                     return {ir::FreeParagraph{{}, ir::Change::Elided}};
-                return chunk |
-                       std::views::transform([](ir::Node child) { return elide_unchanged(std::move(child)); }) |
+                return chunk | std::views::transform([context](ir::Node child) {
+                           return elide_unchanged(std::move(child), context);
+                       }) |
                        std::ranges::to<std::vector>();
             }) |
             std::views::join,
@@ -971,18 +985,19 @@ ir::Node elide_unchanged(ir::Node node) {
 }
 
 std::vector<ir::Node> apply_context(std::vector<ir::Node> nodes, Context context) {
+    const auto elide = [&] {
+        return std::move(nodes) | std::views::as_rvalue | std::views::filter(node_changed) |
+               std::views::transform([context](ir::Node node) { return elide_unchanged(std::move(node), context); }) |
+               std::ranges::to<std::vector>();
+    };
     return foundation::match(context,
                              foundation::when<Context::All>([&] { return std::move(nodes); }),
                              foundation::when<Context::Changed>([&] {
                                  return std::move(nodes) | std::views::as_rvalue | std::views::filter(node_changed) |
                                         std::ranges::to<std::vector>();
                              }),
-                             foundation::when<Context::Items>([&] {
-                                 return std::move(nodes) | std::views::as_rvalue | std::views::filter(node_changed) |
-                                        std::views::transform(
-                                            [](ir::Node node) { return elide_unchanged(std::move(node)); }) |
-                                        std::ranges::to<std::vector>();
-                             }));
+                             foundation::when<Context::Items>(elide),
+                             foundation::when<Context::Decls>(elide));
 }
 
 } // namespace

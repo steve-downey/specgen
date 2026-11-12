@@ -33,7 +33,9 @@ namespace beman::specgen::diff {
 // unchanged subsection, at any depth, keeps its heading over one such
 // paragraph, so a `\ref` to it resolves and its siblings number as in the
 // draft.
-enum class Context { Changed, All, Items };
+// `Decls` also replaces an unchanged, nonempty description of a retained
+// item with one ellipsis. A changed description stays whole.
+enum class Context { Changed, All, Items, Decls };
 
 } // namespace beman::specgen::diff
 
@@ -42,11 +44,12 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::di
     beman::specgen::diff::Context::Changed,
     beman::specgen::diff::Context::All,
     beman::specgen::diff::Context::Items,
+    beman::specgen::diff::Context::Decls,
 };
 
 namespace beman::specgen::diff {
 
-std::string_view       context_name(Context); // "changed", "all", "items"
+std::string_view       context_name(Context); // "changed", "all", "items", "decls"
 std::optional<Context> context_from_name(std::string_view);
 
 struct Options {

@@ -58,7 +58,8 @@ generate options:
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
-                             changed section
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -125,7 +126,8 @@ render options:
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
-                             changed section
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's

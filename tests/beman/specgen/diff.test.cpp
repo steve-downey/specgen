@@ -207,7 +207,8 @@ std::string code_texts(const Document& d) {
 TEST_CASE("diff - HeaderIsIdempotent") { REQUIRE(true); }
 
 TEST_CASE("diff - context names round-trip") {
-    for (const diff::Context c : {diff::Context::Changed, diff::Context::All, diff::Context::Items}) {
+    for (const diff::Context c :
+         {diff::Context::Changed, diff::Context::All, diff::Context::Items, diff::Context::Decls}) {
         const auto back = diff::context_from_name(diff::context_name(c));
         REQUIRE(back.has_value());
         CHECK(*back == c);
@@ -546,4 +547,62 @@ TEST_CASE("diff - restoration law: stripping either side of the marks gives back
     };
     CHECK(prose_of(restored_after) == prose_of(after));
     CHECK(prose_of(restored_before) == prose_of(before));
+}
+
+TEST_CASE("diff - decls elides only unchanged nonempty descriptions") {
+    const Document before         = gadget();
+    Document       after          = before;
+    auto&          section        = std::get<Section>(after.nodes[1]);
+    auto&          ready          = std::get<SpecItem>(section.children[0]);
+    ready.decl.signatures[0].text = "constexpr bool ready() const;";
+    ready.descr.leading           = {BodyParagraph{text("Unchanged introductory text.")}};
+    Document baseline             = before;
+    std::get<SpecItem>(std::get<Section>(baseline.nodes[1]).children[0]).descr.leading = ready.descr.leading;
+    const auto  result   = diff::compare(baseline, after, {.context = diff::Context::Decls});
+    const auto& retained = std::get<SpecItem>(std::get<Section>(result.nodes[0]).children[0]);
+    CHECK(!retained.decl.signatures[0].changes.empty());
+    CHECK(retained.descr.elements.empty());
+    REQUIRE(retained.descr.leading.size() == 1);
+    CHECK(std::get<BodyParagraph>(retained.descr.leading[0]).change == Change::Elided);
+    const auto full = diff::compare(baseline, after, {.context = diff::Context::Items});
+    CHECK(std::get<SpecItem>(std::get<Section>(full.nodes[0]).children[0]).descr == ready.descr);
+
+    SECTION("changed description remains whole") {
+        ready.descr.leading = {BodyParagraph{text("Changed introductory text.")}};
+        const auto  changed = diff::compare(baseline, after, {.context = diff::Context::Decls});
+        const auto& descr   = std::get<SpecItem>(std::get<Section>(changed.nodes[0]).children[0]).descr;
+        CHECK(!descr.elements.empty());
+        CHECK(std::get<BodyParagraph>(descr.leading[0]).change != Change::Elided);
+    }
+    SECTION("an item without a description gains none") {
+        ready.descr                                                                = {};
+        std::get<SpecItem>(std::get<Section>(baseline.nodes[1]).children[0]).descr = {};
+        const auto empty = diff::compare(baseline, after, {.context = diff::Context::Decls});
+        CHECK(!has_description(std::get<SpecItem>(std::get<Section>(empty.nodes[0]).children[0]).descr));
+    }
+    SECTION("top-level items are elided too") {
+        baseline.nodes = {std::get<SpecItem>(std::get<Section>(baseline.nodes[1]).children[0])};
+        after.nodes    = {ready};
+        const auto top = diff::compare(baseline, after, {.context = diff::Context::Decls});
+        CHECK(std::get<SpecItem>(top.nodes[0]).descr.elements.empty());
+    }
+}
+
+TEST_CASE("diff - decls preserves whole added and removed sections and items") {
+    const Document doc   = gadget();
+    const Document added = diff::compare({}, doc, {.context = diff::Context::Decls});
+    CHECK(std::get<Section>(added.nodes[1]).children == std::get<Section>(doc.nodes[1]).children);
+    const Document removed = diff::compare(doc, {}, {.context = diff::Context::Decls});
+    CHECK(std::get<Section>(removed.nodes[1]).children == std::get<Section>(doc.nodes[1]).children);
+    Document after    = doc;
+    auto&    children = std::get<Section>(after.nodes[1]).children;
+    children.erase(children.begin());
+    children.push_back(item(
+        "void start();", {"start"}, {element(ElementKind::Effects, {BodyParagraph{text("Starts the gadget.")}})}));
+    const auto  out     = diff::compare(doc, after, {.context = diff::Context::Decls});
+    const auto& changed = std::get<Section>(out.nodes[0]);
+    CHECK(std::get<SpecItem>(changed.children.front()).change == Change::Removed);
+    CHECK(has_description(std::get<SpecItem>(changed.children.front()).descr));
+    CHECK(std::get<SpecItem>(changed.children.back()).change == Change::Added);
+    CHECK(has_description(std::get<SpecItem>(changed.children.back()).descr));
 }
