@@ -425,7 +425,8 @@ TEST_CASE("diff - a prose mark spans the changed words, not the whitespace aroun
 
 TEST_CASE("diff - the items context renders one ellipsis where elisions meet across a section end") {
     // Issue #259: a changed subsection ending in elided children, followed by
-    // an unchanged sibling subsection, is one ellipsis, not two.
+    // an unchanged sibling subsection, is one ellipsis, not two: the
+    // sibling's heading (issue #263) stands between them.
     const auto doc = [](std::string first_line) {
         Document d;
         d.nodes.push_back(Section{
@@ -441,11 +442,62 @@ TEST_CASE("diff - the items context renders one ellipsis where elisions meet acr
         doc("The first line, before."), doc("The first line, after."), {.context = diff::Context::Items});
     REQUIRE(out.nodes.size() == 1);
     const auto& top = std::get<Section>(out.nodes[0]);
-    REQUIRE(top.children.size() == 1);
+    REQUIRE(top.children.size() == 3);
     const auto& a = std::get<Section>(top.children[0]);
     REQUIRE(a.children.size() == 2);
     CHECK(std::get<FreeParagraph>(a.children[0]).change == Change::Same);
     CHECK(std::get<FreeParagraph>(a.children[1]).change == Change::Elided);
+    const auto& b = std::get<Section>(top.children[1]);
+    CHECK(b.stable_name == "top.b");
+    REQUIRE(b.children.size() == 1);
+    CHECK(std::get<FreeParagraph>(b.children[0]).change == Change::Elided);
+    const auto& c = std::get<Section>(top.children[2]);
+    CHECK(c.stable_name == "top.c");
+    REQUIRE(c.children.size() == 1);
+    CHECK(std::get<FreeParagraph>(c.children[0]).change == Change::Elided);
+}
+
+TEST_CASE("diff - the items context keeps an unchanged subsection's heading over one ellipsis") {
+    // Issue #263: a synopsis that refers to an unchanged subclause by stable
+    // name still finds its heading. So does a reference to one of that
+    // subclause's own subsections, and the next sibling keeps its heading,
+    // so every subclause numbers as in the draft.
+    const auto doc = [](std::string synopsis) {
+        Document d;
+        d.nodes.push_back(
+            Section{"top",
+                    "Top",
+                    {Synopsis{.name = "top", .code = {std::move(synopsis), {}}, .roster = {}},
+                     FreeParagraph{text("Unchanged after the synopsis.")},
+                     Section{"top.ctor",
+                             "Constructors",
+                             {FreeParagraph{text("Unchanged ctor.")},
+                              Section{"top.ctor.more", "More", {FreeParagraph{text("Nested and unchanged.")}}}}},
+                     Section{"top.inv", "Invocation", {FreeParagraph{text("Unchanged inv.")}}}}});
+        return d;
+    };
+    const Document out = diff::compare(doc("// \\ref{top.ctor}, constructors\nint old_name;"),
+                                       doc("// \\ref{top.ctor}, constructors\nint new_name;"),
+                                       {.context = diff::Context::Items});
+    REQUIRE(out.nodes.size() == 1);
+    const auto& top = std::get<Section>(out.nodes[0]);
+    REQUIRE(top.children.size() == 4);
+    CHECK_FALSE(std::get<Synopsis>(top.children[0]).code.changes.empty());
+    CHECK(std::get<FreeParagraph>(top.children[1]).change == Change::Elided);
+    const auto& ctor = std::get<Section>(top.children[2]);
+    CHECK(ctor.stable_name == "top.ctor");
+    CHECK(ctor.title == "Constructors");
+    CHECK(ctor.change == Change::Same);
+    REQUIRE(ctor.children.size() == 2);
+    CHECK(std::get<FreeParagraph>(ctor.children[0]).change == Change::Elided);
+    const auto& more = std::get<Section>(ctor.children[1]);
+    CHECK(more.stable_name == "top.ctor.more");
+    REQUIRE(more.children.size() == 1);
+    CHECK(std::get<FreeParagraph>(more.children[0]).change == Change::Elided);
+    const auto& inv = std::get<Section>(top.children[3]);
+    CHECK(inv.stable_name == "top.inv");
+    REQUIRE(inv.children.size() == 1);
+    CHECK(std::get<FreeParagraph>(inv.children[0]).change == Change::Elided);
 }
 
 TEST_CASE("diff - restoration law: stripping either side of the marks gives back that document") {

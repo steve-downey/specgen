@@ -29,7 +29,10 @@ namespace beman::specgen::diff {
 // full subclause as modified. `All` keeps everything, for the paper that has
 // to show nothing else moved. `Items` goes one step past `Changed`: inside a
 // changed section, each maximal run of unchanged children collapses to one
-// elided paragraph, the `[...]` a paper writes for wording left out.
+// elided paragraph, the `[...]` a paper writes for wording left out, and an
+// unchanged subsection, at any depth, keeps its heading over one such
+// paragraph, so a `\ref` to it resolves and its siblings number as in the
+// draft.
 enum class Context { Changed, All, Items };
 
 } // namespace beman::specgen::diff
