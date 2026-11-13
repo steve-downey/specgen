@@ -264,6 +264,8 @@ struct LeafBodyRenderer {
 };
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const {
+    if (p.change == ir::Change::Elided)
+        return {"[…]\n", false, false};
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
@@ -333,7 +335,9 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optio
             // literal, and around just itself when it continues the paragraph
             // before it.
             const ir::Change change = ir::block_change(block);
-            if (first || rendered.starts_paragraph) {
+            if (change == ir::Change::Elided) {
+                out.push_back(rendered.text);
+            } else if (first || rendered.starts_paragraph) {
                 const std::string prefix =
                     first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
                 out.push_back(wrap_div(change, "[#]{.pnum} " + prefix + rendered.text));

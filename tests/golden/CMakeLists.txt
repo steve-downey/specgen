@@ -2523,6 +2523,23 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+# Declaration-only changes keep their signatures and elide their unchanged
+# descriptions, including through the serialized IR and all three backends.
+specgen_add_golden(
+    diff_gadget_decls
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.decls.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/gadget.before.hpp"
+    DIFF_CONTEXT decls
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        diff_gadget_decls_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_decls/expected.json"
+    )
+endforeach()
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

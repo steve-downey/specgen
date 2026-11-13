@@ -395,6 +395,8 @@ struct LeafBodyRenderer {
 };
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const {
+    if (p.change == ir::Change::Elided)
+        return {"[…]\n", false, false};
     return {render_paragraph(p.text, new_roots) + '\n', !p.continuation, true};
 }
 
@@ -469,7 +471,9 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
             auto             rendered = std::visit(overloaded{BodyRenderer{{new_roots}}}, block);
             const bool       first    = out.empty();
             const ir::Change change   = ir::block_change(block);
-            if (first || rendered.starts_paragraph) {
+            if (change == ir::Change::Elided) {
+                out.push_back(Numbered{rendered.text, change});
+            } else if (first || rendered.starts_paragraph) {
                 const std::string prefix =
                     first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
                 out.push_back(Numbered{prefix + rendered.text, change});
@@ -478,8 +482,10 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
             }
             return out;
         });
-    return blocks |
-           std::views::transform([](Numbered& b) { return wrap_block(b.change, wrap_pnum(std::move(b.text))); }) |
+    return blocks | std::views::transform([](Numbered& b) {
+               return b.change == ir::Change::Elided ? std::move(b.text)
+                                                     : wrap_block(b.change, wrap_pnum(std::move(b.text)));
+           }) |
            std::ranges::to<std::vector>();
 }
 

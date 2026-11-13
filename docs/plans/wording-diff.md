@@ -213,7 +213,7 @@ subclause's first paragraph, which it does when the baseline covers the subclaus
 `\pnum` has no literal form; inside `addedblock` it numbers on, which is all the draft's macros
 offer.
 
-What to emit for unchanged material is `--diff-context`, three levels, all supported: `changed`
+What to emit for unchanged material is `--diff-context`, four levels, all supported: `changed`
 (the default) drops a top-level node with no change anywhere in it and renders a changed one
 whole, unchanged paragraphs included; `all` renders everything, for the paper that has to *show*
 nothing else changed; and `items` goes one step further than `changed`, collapsing each maximal
@@ -222,7 +222,10 @@ rather not page through wording that did not move
 ([diff-context-default](#diff-context-default), [diff-context-items](#diff-context-items)). The
 ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
 form papers write by hand; a first cut, signed off on the golden. A changed item still renders
-whole under `items`: the unit of elision is a node, not a paragraph. An unchanged subsection
+whole under `items`: the unit of elision is a node, not a paragraph. `decls`
+applies the same section elision and also replaces an unchanged, nonempty description
+of a retained item with one unnumbered ellipsis (issue #264). A changed description
+stays whole, and added or removed items stay whole. An unchanged subsection
 keeps its own heading over one ellipsis for its wording, and so does each subsection nested in
 it, at any depth (issue #263). A `\ref` to it from retained wording then still resolves, the reader sees which
 subclause was left out, and the next sibling's number comes from that level's counter as in the

@@ -232,6 +232,8 @@ struct LeafBodyRenderer {
 };
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const {
+    if (p.change == ir::Change::Elided)
+        return {"[\\ldots]\n", false, false};
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
@@ -293,7 +295,9 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optio
             // the number is inside the mark, and around just itself when it
             // continues the paragraph before it.
             const ir::Change change = ir::block_change(block);
-            if (first || rendered.starts_paragraph) {
+            if (change == ir::Change::Elided) {
+                out.push_back(rendered.text);
+            } else if (first || rendered.starts_paragraph) {
                 out.push_back(wrap_block(change, "\\pnum\n" + (first ? label : std::string{}) + rendered.text));
             } else {
                 out.back() += wrap_block(change, rendered.text);

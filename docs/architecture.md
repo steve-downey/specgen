@@ -959,7 +959,8 @@ have no independent item description.
   `all_marked` reach the mark on a node of any kind; paper mode is `all_marked(..., Added)`,
   the diff of an empty baseline. `Elided` is the `items` context's fourth answer: unchanged
   and not shown, on one `FreeParagraph` standing in for a run of unchanged children, which
-  every backend renders as its unnumbered ellipsis line.
+  every backend renders as its unnumbered ellipsis line. Under `decls`, an elided
+  `BodyParagraph` similarly replaces an unchanged item description without a label or number.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a
@@ -980,7 +981,9 @@ have no independent item description.
   that revision, up to runs of whitespace. `Context` is `changed` (drop unchanged top-level
   nodes; the default), `all`, or `items` (also elide unchanged children of a changed section,
   an unchanged subsection keeping its own heading over one ellipsis, and one ellipsis wherever
-  elisions would meet, across a section's end as well).
+  elisions would meet, across a section's end as well), or `decls` (the same section
+  elision, plus one unnumbered ellipsis for a retained item's unchanged, nonempty
+  description; changed descriptions and added or removed items stay whole).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
 labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`
