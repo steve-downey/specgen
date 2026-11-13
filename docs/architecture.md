@@ -1003,6 +1003,15 @@ document owns framing. Fragment paths derive from stable names
 Rendering the same document is idempotent, but split output is not pruned: the
 ordered manifest is the caller's source of truth for reconciling stale files.
 
+**A top-level section's draft number** comes from the author, since nothing in
+a header says where its subclause sits in the draft: `--section-number
+<name>=<number>` (repeated) reaches `latex::Options::section_numbers`, and the
+LaTeX backend writes `\ifdefined\clausenumber\clausenumber{<number>}\fi`
+ahead of that section's `\rSec`, for the paper's stdtex to set the sectioning
+counters from (issue #265). Nested sections take their numbers from those
+counters. mpark and org have no hook for it; there the driver reports the
+option as having no effect rather than refusing it.
+
 **Where a top-level section starts is two options, not one**, because it is two
 quantities: `--base-section-depth` is the LaTeX backend's `\rSec` depth (3 by
 default, the split granularity above), and `--base-heading-level` is the

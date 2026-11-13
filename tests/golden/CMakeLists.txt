@@ -77,6 +77,9 @@ endif()
 # `file(GENERATE ...)`/`configure_file()` before registering the case that
 # names it.
 #
+# SECTION_NUMBERS (render and split modes): repeated stable-name=number
+# assignments passed as --section-number, joined with | across the test command.
+#
 # BASELINE (generate mode) and BASELINE_IR (render mode): the wording diff's
 # baseline (docs/plans/wording-diff.md), a corpus header the INPUT header is
 # diffed against, or an IR JSON the INPUT IR is. The compared output is then
@@ -159,7 +162,7 @@ function(specgen_add_golden case)
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_INPUT;SOURCE"
+        "ROOT;ALSO_INPUT;SOURCE;SECTION_NUMBERS"
         ${ARGN}
     )
 
@@ -251,6 +254,10 @@ function(specgen_add_golden case)
     endif()
     if(ARG_BASELINE_IR)
         list(APPEND case_args "-DBASELINE_IR=${ARG_BASELINE_IR}")
+    endif()
+    if(ARG_SECTION_NUMBERS)
+        string(REPLACE ";" "|" _section_numbers "${ARG_SECTION_NUMBERS}")
+        list(APPEND case_args "-DSECTION_NUMBERS=${_section_numbers}")
     endif()
     if(ARG_DIFF_CONTEXT)
         list(APPEND case_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
@@ -2539,6 +2546,29 @@ foreach(backend latex mpark org)
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_decls/expected.json"
     )
 endforeach()
+
+# A number precedes only the named top-level heading, both as a whole
+# document and in each fragment. Nested headings retain ordinary counters.
+specgen_add_golden(
+    section_numbers
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
+    SECTION_NUMBERS gadget.observe=22.10.17.4
+)
+specgen_add_golden(
+    section_numbers_fragments
+    MODE split
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
+    SECTION_NUMBERS gadget.observe=22.10.17.4
+)
+add_test(
+    NAME cli.section-number
+    COMMAND
+        ${CMAKE_COMMAND} "-DSPECGEN=$<TARGET_FILE:specgen>"
+        "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/section-number-cli" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-section-number.cmake"
+)
 
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(

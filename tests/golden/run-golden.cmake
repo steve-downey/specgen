@@ -74,6 +74,15 @@ if(NOT MODE)
     set(MODE render)
 endif()
 
+# Section numbering is a rendering option shared by whole and split output.
+set(section_number_args "")
+if(SECTION_NUMBERS)
+    string(REPLACE "|" ";" section_numbers "${SECTION_NUMBERS}")
+    foreach(number IN LISTS section_numbers)
+        list(APPEND section_number_args --section-number "${number}")
+    endforeach()
+endif()
+
 if(MODE STREQUAL "generate")
     # --no-compile-commands is unconditional (see the mode's note
     # above); COMPILE_COMMANDS_DIR and EXTRA_ARGS are each this case's own
@@ -219,8 +228,8 @@ elseif(MODE STREQUAL "render")
 
     execute_process(
         COMMAND
-            "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
-            ${paper_args} ${level_args} -o "${ACTUAL}"
+            "${SPECGEN}" render ${input_args} ${section_number_args} --backend
+            "${BACKEND}" ${paper_args} ${level_args} -o "${ACTUAL}"
         RESULT_VARIABLE render_result
         ERROR_VARIABLE render_error
     )
@@ -261,8 +270,8 @@ elseif(MODE STREQUAL "split")
 
     execute_process(
         COMMAND
-            "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
-            ${root_args} --split wording
+            "${SPECGEN}" render ${input_args} ${section_number_args} --backend
+            "${BACKEND}" ${root_args} --split wording
         WORKING_DIRECTORY "${ACTUAL}"
         RESULT_VARIABLE render_result
         OUTPUT_FILE "${ACTUAL}/manifest.first"
@@ -271,8 +280,8 @@ elseif(MODE STREQUAL "split")
     if(render_result EQUAL 0)
         execute_process(
             COMMAND
-                "${SPECGEN}" render ${input_args} --backend "${BACKEND}"
-                ${root_args} --split wording
+                "${SPECGEN}" render ${input_args} ${section_number_args}
+                --backend "${BACKEND}" ${root_args} --split wording
             WORKING_DIRECTORY "${ACTUAL}"
             RESULT_VARIABLE render_result
             OUTPUT_FILE "${ACTUAL}/manifest"

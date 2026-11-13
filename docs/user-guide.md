@@ -255,6 +255,7 @@ specgen generate <header> [--source <file>...]...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
+                 [--section-number <name>=<number>...]
                  [--split <dir>] [--root <name>]
                  [-o|--output <file>]
                  [--depfile <file>] [--dep-target <name>]
@@ -443,6 +444,43 @@ measure in its unit. Both take a whole number of at least 1; under `mpark` the
 level may not exceed 6, the deepest markdown heading. The base moves only the
 outermost section: nested sections still descend one step at a time from it,
 and `--split` starts every fragment at the same base as a whole render.
+
+### Draft numbers for top-level sections
+
+specgen does not know where a fragment's top-level subclause sits in the
+draft, and inside wg21-latex's `wording` environment an unknown number prints
+as a `?` glyph, so a fragment for [func.wrap.move] heads as `?.?.0.3`. The
+author knows the number, and `--section-number <name>=<number>` supplies it,
+once per top-level section:
+
+```sh
+specgen generate ... --section-number func.wrap.move=22.10.17.4 \
+                     --section-number func.wrap.copy=22.10.17.5
+```
+
+The `latex` backend then writes a hook ahead of that section's `\rSec`:
+
+```latex
+\ifdefined\clausenumber\clausenumber{22.10.17.4}\fi
+\rSec3[func.wrap.move]{Move-only wrapper}
+```
+
+`\clausenumber` belongs to the paper's stdtex (or wg21-latex): it sets the
+sectioning counters from the dotted number and restores the `\thesection`
+forms the `wording` environment replaces.
+[Issue #265](https://github.com/steve-downey/specgen/issues/265) has a working
+definition. The guard means a fragment still builds where the macro is not
+defined, with the unknown-number glyph it would have had anyway. Nested
+sections need no number of their own, since the counters carry on from the
+top-level one; under `--diff-context items` an elided subclause keeps its
+heading, so the counters still step as they do in the draft.
+
+A number is meaningful only against one draft revision, so name that revision
+in the paper. The number is dotted decimal, and a name may be given only once.
+A name that is not a top-level section of the wording is reported on stderr and
+numbers nothing (a top-level section a diff context drops as unchanged is not
+reported). `mpark` and `org` have no numbering hook yet: on those backends the
+option is reported as having no effect.
 
 ### Proposed stable names in mpark and wg21org papers
 
@@ -1154,6 +1192,7 @@ specgen render --from-ir <file|-> [--from-ir <file>...]
                [--validate]
                [--paper] [--new-root <name>]
                [--base-heading-level <n>] [--base-section-depth <n>]
+               [--section-number <name>=<number>...]
                [-o|--output <file>]
                [--split <dir>] [--root <name>...]
                [--depfile <file>] [--dep-target <name>]
@@ -1193,7 +1232,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.23.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.24.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

@@ -53,6 +53,7 @@
 #include <filesystem>
 #include <format>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <optional>
@@ -65,6 +66,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -154,6 +156,11 @@ generate options:
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
                              descend from it (latex only; 3 by default, the
                              draft's library split granularity)
+  --section-number <name>=<number>
+                            the draft number of the top-level section <name>,
+                             as func.wrap.move=22.10.17.4, written ahead of its
+                             \rSec as \clausenumber{...} (latex only). May be
+                             repeated, once per top-level section
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -222,6 +229,11 @@ render options:
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
                              descend from it (latex only; 3 by default, the
                              draft's library split granularity)
+  --section-number <name>=<number>
+                            the draft number of the top-level section <name>,
+                             as func.wrap.move=22.10.17.4, written ahead of its
+                             \rSec as \clausenumber{...} (latex only). May be
+                             repeated, once per top-level section
   --split <dir>             write one fragment per top-level section into <dir>,
                              named from its stable name (optional.ctor.tex), and
                              list the paths written on standard output
@@ -332,6 +344,10 @@ struct WordingOptions {
     // render_document below, which reads it off a default-constructed Options.
     std::optional<int> base_heading_level;
     std::optional<int> base_section_depth;
+    // --section-number <stable-name>=<number>, accumulated: a top-level
+    // section's number in the draft, which the latex backend writes ahead of
+    // its `\rSec` (latex::Options::section_numbers, issue #265).
+    std::map<std::string, std::string, std::less<>> section_numbers = {};
     // --depfile <path>: where to write the Makefile dependency fragment
     // (depfile.hpp), and --dep-target <name>, accumulated, for the targets to
     // name in it instead of the files actually written. The override exists
@@ -360,6 +376,28 @@ std::expected<int, std::string> parse_level(std::string_view option, const std::
     if (value < 1)
         return std::unexpected(std::format("specgen: {} must be at least 1, not {}", option, value));
     return value;
+}
+
+// --section-number <stable-name>=<number>, parsed once for both commands. The
+// number is dotted decimal, one component per sectioning level, because the
+// macro that consumes it sets one LaTeX counter per component; a name given
+// twice is refused rather than letting the later one quietly win.
+std::expected<void, std::string> add_section_number(WordingOptions& options, std::string_view text) {
+    const std::size_t      eq     = text.find('=');
+    const std::string_view name   = eq == std::string_view::npos ? std::string_view{} : text.substr(0, eq);
+    const std::string_view number = eq == std::string_view::npos ? std::string_view{} : text.substr(eq + 1);
+    const bool             dotted_decimal =
+        !number.empty() && std::ranges::all_of(number | std::views::split('.'), [](auto&& part) {
+            return !std::ranges::empty(part) &&
+                   std::ranges::all_of(part, [](char ch) { return ch >= '0' && ch <= '9'; });
+        });
+    if (name.empty() || !dotted_decimal)
+        return std::unexpected(std::format("specgen: --section-number takes <stable-name>=<number>, as in "
+                                           "func.wrap.move=22.10.17.4, not '{}'",
+                                           text));
+    if (!options.section_numbers.emplace(std::string(name), std::string(number)).second)
+        return std::unexpected(std::format("specgen: --section-number gives '{}' a number twice", name));
+    return {};
 }
 
 // `render`'s options, as the accumulator of the fold below. `awaiting` is the
@@ -436,6 +474,12 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
             opts.awaiting.clear();
             return opts;
         }
+        if (opts.awaiting == "--section-number") {
+            if (const std::expected<void, std::string> added = add_section_number(opts.wording, arg); !added)
+                return std::unexpected(OptionError{added.error()});
+            opts.awaiting.clear();
+            return opts;
+        }
         // The two base-level options are settled here for the same kind of
         // reason: the reference chain below can only name a `std::string&`,
         // and these carry a number, whose failure to be one has to leave the
@@ -468,7 +512,8 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
     }
     if (arg == "--from-ir" || arg == "--backend" || arg == "--split" || arg == "--root" || arg == "--new-root" ||
         arg == "--base-heading-level" || arg == "--base-section-depth" || arg == "-o" || arg == "--output" ||
-        arg == "--depfile" || arg == "--dep-target" || arg == "--baseline-ir" || arg == "--diff-context") {
+        arg == "--depfile" || arg == "--dep-target" || arg == "--baseline-ir" || arg == "--diff-context" ||
+        arg == "--section-number") {
         opts.awaiting = arg;
         return opts;
     }
@@ -587,6 +632,43 @@ std::expected<void, std::string> validate_document(const ir::Document& document,
                            std::views::join_with('\n') | std::ranges::to<std::string>());
 }
 
+// The option combinations reported but not refused (issue #265). A section
+// number numbers a latex heading; mpark and org have no hook for one yet, so
+// on those backends the option is said to do nothing rather than left to look
+// as if it did, and rendering goes on.
+std::optional<std::string> wording_option_warning(const WordingOptions& options) {
+    if (!options.section_numbers.empty() && options.backend != "latex")
+        return std::format("specgen: {}: --section-number numbers latex headings only; the {} backend ignores it",
+                           beman::specgen::severity_label(beman::specgen::Severity::Warning),
+                           options.backend);
+    return std::nullopt;
+}
+
+// A --section-number naming no top-level section of the documents as they came
+// numbers nothing, which is worth saying: it is most likely a misspelled stable
+// name, or a nested section, which takes its number from the counters. Checked
+// before any diff, so a top-level section that a diff context then drops as
+// unchanged is not reported.
+void warn_unnumbered(std::span<const ir::Document> documents, const WordingOptions& options) {
+    if (options.backend != "latex" || options.section_numbers.empty())
+        return;
+    const std::set<std::string_view> top_level =
+        documents | std::views::transform(&ir::Document::nodes) | std::views::join |
+        std::views::filter([](const ir::Node& node) { return std::holds_alternative<ir::Section>(node); }) |
+        std::views::transform(
+            [](const ir::Node& node) -> std::string_view { return std::get<ir::Section>(node).stable_name; }) |
+        std::ranges::to<std::set>();
+    // substrate generic algorithm: report one warning per unmatched option.
+    for (const auto& name : options.section_numbers | std::views::keys |
+                                std::views::filter([&](const std::string& key) { return !top_level.contains(key); })) {
+        std::println(stderr,
+                     "specgen: {}: --section-number names '{}', which is not a top-level "
+                     "section of the wording, so it numbers nothing",
+                     beman::specgen::severity_label(beman::specgen::Severity::Warning),
+                     name);
+    }
+}
+
 // The backend seam (decision ir-boundary): one IR, one call, chosen by
 // name. Validated by wording_option_error above, so there is no fourth
 // case. A free function rather than a detail of emit_wording because the
@@ -620,7 +702,8 @@ std::string render_wording(const ir::Document& fragment, const WordingOptions& o
     return latex::render_to_string(
         fragment,
         {.base_section_depth = options.base_section_depth.value_or(latex::Options{}.base_section_depth),
-         .paper_mode         = options.paper});
+         .paper_mode         = options.paper,
+         .section_numbers    = options.section_numbers});
 }
 
 // The extension is the only part of design §8's fragment-path scheme
@@ -782,6 +865,7 @@ emit_wording(const ir::Document& document, const WordingOptions& options, const 
     // Validate, then diff, then render (decision expected-error-taxonomy): an
     // error-severity finding short-circuits the rest, which is what "aborts the
     // render" means.
+    warn_unnumbered(std::span(&document, 1), options);
     return validate_document(document, options.validate)
         .and_then([&]() -> std::expected<std::optional<ir::Document>, std::string> {
             if (baseline == nullptr)
@@ -891,6 +975,7 @@ std::expected<Written, std::string> emit_paper(const std::vector<std::string>&  
                                                std::span<const ir::Document>    baselines = {}) {
     // Validate the paper as it came; what is then written is each document's
     // diff against its baseline when there is one (docs/plans/wording-diff.md).
+    warn_unnumbered(current, options);
     return validate_paper(labels, current, options.validate)
         .and_then([&] { return diffed_all(baselines, current, options); })
         .and_then([&](const std::optional<std::vector<ir::Document>>& marked) -> std::expected<Written, std::string> {
@@ -1096,6 +1181,8 @@ int render_command(const std::vector<std::string>& args) {
         std::println(stderr, "{}", *error);
         return 2;
     }
+    if (const std::optional<std::string> warning = wording_option_warning(wording))
+        std::println(stderr, "{}", *warning);
     wording = output_dash_is_stdout(std::move(wording));
 
     // Read and parse every input before anything validates or renders: a
@@ -1313,6 +1400,15 @@ int generate_command(const std::vector<std::string>& args) {
             std::optional<int>& target =
                 arg == "--base-heading-level" ? wording.base_heading_level : wording.base_section_depth;
             target = *level;
+        } else if (arg == "--section-number") {
+            wording_only();
+            std::string text;
+            if (!next(text))
+                return 2;
+            if (const std::expected<void, std::string> added = add_section_number(wording, text); !added) {
+                std::println(stderr, "{}", added.error());
+                return 2;
+            }
         } else if (arg == "--depfile") {
             // Not a wording-only option: it describes what this run produced,
             // which --emit-ir produces too (the IR file is as much a build
@@ -1425,6 +1521,8 @@ int generate_command(const std::vector<std::string>& args) {
         std::println(stderr, "{}", *error);
         return 2;
     }
+    if (const std::optional<std::string> warning = wording_option_warning(wording))
+        std::println(stderr, "{}", *warning);
     wording = output_dash_is_stdout(std::move(wording));
 
     // Probing defaults on for the driver -- it is what makes

@@ -13,6 +13,8 @@
 
 #include <beman/specgen/ir.hpp>
 
+#include <functional>
+#include <map>
 #include <string>
 
 namespace beman::specgen::backend::latex {
@@ -33,6 +35,22 @@ struct Options {
     // render whether or not this is set. Once refused on this backend, for
     // want of anything to emit; the draft's macros are the thing to emit.
     bool paper_mode = false;
+
+    // A top-level section's number in the draft, by stable name
+    // (`func.wrap.move` -> `22.10.17.4`), from the driver's repeated
+    // `--section-number` (issue #265). specgen cannot know where a fragment's
+    // top-level subclause sits in the draft, and inside wg21-latex's `wording`
+    // environment an unknown number prints as the `\ucr` glyph. A numbered
+    // section's `\rSec` is preceded by
+    //
+    //   \ifdefined\clausenumber\clausenumber{22.10.17.4}\fi
+    //
+    // a macro the paper's stdtex (or wg21-latex) defines to set the sectioning
+    // counters, and to restore the `\thesection` forms the environment
+    // replaces. Guarded, so a fragment still builds where the macro is not
+    // defined, with the unknown-number glyph it would have had anyway. Nested
+    // sections need nothing: the counters carry on from the top-level number.
+    std::map<std::string, std::string, std::less<>> section_numbers = {};
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once.
