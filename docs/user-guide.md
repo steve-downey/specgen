@@ -255,6 +255,7 @@ specgen generate <header> [--source <file>...]...
                  [--backend latex|mpark|org]
                  [--validate] [--paper] [--new-root <name>]
                  [--base-heading-level <n>] [--base-section-depth <n>]
+                 [--section-number <name>=<number>]...
                  [--split <dir>] [--root <name>]
                  [-o|--output <file>]
                  [--depfile <file>] [--dep-target <name>]
@@ -443,6 +444,37 @@ measure in its unit. Both take a whole number of at least 1; under `mpark` the
 level may not exceed 6, the deepest markdown heading. The base moves only the
 outermost section: nested sections still descend one step at a time from it,
 and `--split` starts every fragment at the same base as a whole render.
+
+### Numbering a fragment's top-level sections (latex)
+
+A fragment starts at `\rSec3`, and specgen does not know which subclause of the
+draft that is. Inside the draft macros' `wording` environment an unknown number
+prints as a `?` glyph, so a heading reads `?.?.0.3` and every `\ref` to it with
+it. `--section-number <stable-name>=<number>`, repeatable, gives a top-level
+section the number the author knows:
+
+```sh
+specgen generate ... --section-number func.wrap.move=22.10.17.4 \
+                     --section-number func.wrap.copy=22.10.17.5
+```
+
+The latex backend writes the number ahead of that section's `\rSec`:
+
+```latex
+\ifdefined\clausenumber\clausenumber{22.10.17.4}\fi
+\rSec3[func.wrap.move]{Move-only wrapper}
+```
+
+`\clausenumber` is a macro the draft macros (wg21-latex) define: it sets the
+chapter, section and subsection counters from the dotted number and redefines
+`\thesection` and `\thesubsection` to print them. The `\ifdefined` guard lets a
+fragment build against macros that lack it, with the headings unnumbered as
+before. Nested sections need nothing more, since the counters carry on from the
+top-level number; under `--diff-context items` or `decls` an elided subclause
+keeps its heading and so still steps them. A number is only meaningful against
+one revision of the draft, so the paper names that revision. The option is
+refused under `mpark` and `org`, and a name that matches no top-level section of
+the output is an error.
 
 ### Proposed stable names in mpark and wg21org papers
 
@@ -1154,6 +1186,7 @@ specgen render --from-ir <file|-> [--from-ir <file>...]
                [--validate]
                [--paper] [--new-root <name>]
                [--base-heading-level <n>] [--base-section-depth <n>]
+               [--section-number <name>=<number>]...
                [-o|--output <file>]
                [--split <dir>] [--root <name>...]
                [--depfile <file>] [--dep-target <name>]

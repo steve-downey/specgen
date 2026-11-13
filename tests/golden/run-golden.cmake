@@ -193,6 +193,15 @@ elseif(MODE STREQUAL "render")
         list(APPEND level_args --base-section-depth "${BASE_SECTION_DEPTH}")
     endif()
 
+    # SECTION_NUMBERS arrives |-joined, one `name=number` per entry: each
+    # becomes its own --section-number (issue #265).
+    if(SECTION_NUMBERS)
+        string(REPLACE "|" ";" _numbers "${SECTION_NUMBERS}")
+        foreach(_number IN LISTS _numbers)
+            list(APPEND level_args --section-number "${_number}")
+        endforeach()
+    endif()
+
     # ALSO_INPUTS arrives |-joined (a ;-list would not survive the test command
     # line): the extra inputs become further --from-ir occurrences, and several
     # documents with no --split render as one joined output -- the assembled

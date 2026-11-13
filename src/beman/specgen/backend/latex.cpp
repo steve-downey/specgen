@@ -492,6 +492,20 @@ struct RenderedTop {
     std::string text;
 };
 
+// The line that gives a top-level section its draft number (issue #265):
+// `\clausenumber{N}`, guarded so that output builds against draft macros that
+// do not define it, or nothing when the node is not a section the options
+// number.
+std::string section_number_line(const ir::Node&                                         node,
+                                const std::vector<std::pair<std::string, std::string>>& numbers) {
+    const auto* section = std::get_if<ir::Section>(&node);
+    if (section == nullptr)
+        return {};
+    const auto found = std::ranges::find(numbers, section->stable_name, &std::pair<std::string, std::string>::first);
+    return found == numbers.end() ? std::string{}
+                                  : std::format("\\ifdefined\\clausenumber\\clausenumber{{{}}}\\fi\n", found->second);
+}
+
 std::string render_to_string(const ir::Document& doc, const Options& options) {
     const RenderCtx ctx{options.base_section_depth};
     // Paper mode is the wording diff with an empty baseline
@@ -501,13 +515,14 @@ std::string render_to_string(const ir::Document& doc, const Options& options) {
         options.paper_mode ? std::optional{ir::all_marked(doc.nodes, ir::Change::Added)} : std::nullopt;
     const std::vector<ir::Node>&   nodes = marked ? *marked : doc.nodes;
     const std::vector<RenderedTop> rendered =
-        nodes | std::views::transform([&ctx](const ir::Node& node) {
-            return RenderedTop{
-                ir::change_of(node),
-                render_node_to_string(
-                    ir::with_change(node,
-                                    ir::change_of(node) == ir::Change::Elided ? ir::Change::Elided : ir::Change::Same),
-                    ctx)};
+        nodes | std::views::transform([&ctx, &options](const ir::Node& node) {
+            return RenderedTop{ir::change_of(node),
+                               section_number_line(node, options.section_numbers) +
+                                   render_node_to_string(ir::with_change(node,
+                                                                         ir::change_of(node) == ir::Change::Elided
+                                                                             ? ir::Change::Elided
+                                                                             : ir::Change::Same),
+                                                         ctx)};
         }) |
         std::ranges::to<std::vector>();
     return rendered |

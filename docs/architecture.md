@@ -1016,6 +1016,16 @@ step below its parent, mpark saturates that *descent* at markdown's sixth
 heading and org has no such limit — and since a fragment *is* a document, a
 `--split` fragment starts at the same base a whole render does.
 
+**A top-level section's draft number is the author's to give**
+(`--section-number <stable-name>=<number>`, latex only, issue #265): a fragment
+cannot know which subclause it is, and inside the draft macros' `wording`
+environment an unknown number prints as a glyph. The latex backend writes
+`\clausenumber{N}` ahead of the section's `\rSec`, guarded by `\ifdefined`;
+the macro itself belongs to the draft macros. This is the one wording form not
+yet in all three backends, because mpark and org have no macro to call; the
+option is a usage error there, not an ignored flag. A name that matches no
+top-level section of what is rendered is an error, the same rule `--root` has.
+
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
