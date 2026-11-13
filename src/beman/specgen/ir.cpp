@@ -300,6 +300,15 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
 
 bool has_description(const ItemDescr& d) { return !d.leading.empty() || !d.elements.empty(); }
 
+ItemDescr elided_description() { return {.elements = {}, .leading = {BodyParagraph{{}, false, Change::Elided}}}; }
+
+bool is_elided(const ItemDescr& d) {
+    if (!d.elements.empty() || d.leading.size() != 1)
+        return false;
+    const auto* paragraph = std::get_if<BodyParagraph>(&d.leading.front());
+    return paragraph != nullptr && paragraph->change == Change::Elided;
+}
+
 void canonicalize(ItemDescr& d) {
     // Within one kind (design §5.2), a derived element sorts ahead of
     // an authored one ("derived conjuncts first, authored prose appended"),

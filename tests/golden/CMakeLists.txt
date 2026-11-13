@@ -571,6 +571,32 @@ specgen_add_golden(
     BASELINE_IR "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_before/expected.json"
 )
 
+# The `decls` context (docs/plans/wording-diff.md): a pair where `constexpr`
+# is added across an interface. `size()` and `empty()` change only their
+# declaration, so their descriptions collapse to the ellipsis; `front()`'s
+# *Preconditions* changed too, so its description renders whole.
+specgen_add_golden(
+    diff_qualifier_decls
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.after.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.before.hpp"
+    DIFF_CONTEXT decls
+)
+specgen_add_golden(
+    diff_qualifier_decls_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_qualifier_decls/expected.json"
+)
+specgen_add_golden(
+    diff_qualifier_decls_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_qualifier_decls/expected.json"
+)
+specgen_add_golden(
+    diff_qualifier_decls_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_qualifier_decls/expected.json"
+)
+
 # The wording diff's marks (docs/plans/wording-diff.md), rendered by all three
 # backends from one hand-marked IR: an added and a removed section, item,
 # element and free paragraph; a prose run holding a code inline and a

@@ -530,7 +530,11 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
 
     // Grouped by mark as well as kind, each group in its own block when
     // marked -- the same rule, for the same reason, as latex.cpp's render_item.
-    std::vector<std::string> groups = body_blocks(item.descr.leading, std::nullopt, new_roots);
+    // The `decls` context's elided description: the ellipsis line alone,
+    // unnumbered, in place of every paragraph.
+    std::vector<std::string> groups = beman::specgen::ir::is_elided(item.descr)
+                                          ? std::vector<std::string>{"[…]\n"}
+                                          : body_blocks(item.descr.leading, std::nullopt, new_roots);
     groups.append_range(item.descr.elements |
                         std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
                             return a.kind == b.kind && a.change == b.change;

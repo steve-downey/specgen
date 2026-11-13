@@ -350,7 +350,11 @@ has to show nothing else moved. `items` goes one step further than `changed`:
 inside a changed section, each run of unchanged items collapses to one `[…]`
 paragraph, and an unchanged subsection keeps its heading over one `[…]`, so a
 reference to it still resolves and the sections after it keep their draft
-numbers. `generate --emit-ir` with a baseline writes the marked document, so
+numbers. `decls` goes one step further than `items`: an item whose declaration
+changed but whose description did not, as when a paper adds `constexpr` or
+`noexcept` across an interface, keeps the marked declaration and shows its
+description as one `[…]`; an item whose description changed still renders it
+whole. `generate --emit-ir` with a baseline writes the marked document, so
 `render --from-ir` renders the diff later with no baseline of its own; a
 document that already carries marks is refused beside a baseline, since a diff
 of a diff means nothing.

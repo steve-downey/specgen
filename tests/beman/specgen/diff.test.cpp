@@ -207,7 +207,8 @@ std::string code_texts(const Document& d) {
 TEST_CASE("diff - HeaderIsIdempotent") { REQUIRE(true); }
 
 TEST_CASE("diff - context names round-trip") {
-    for (const diff::Context c : {diff::Context::Changed, diff::Context::All, diff::Context::Items}) {
+    for (const diff::Context c :
+         {diff::Context::Changed, diff::Context::All, diff::Context::Items, diff::Context::Decls}) {
         const auto back = diff::context_from_name(diff::context_name(c));
         REQUIRE(back.has_value());
         CHECK(*back == c);
@@ -323,6 +324,36 @@ TEST_CASE("diff - the items context elides unchanged children of a changed secti
     CHECK(std::get<FreeParagraph>(sec.children[0]).change == Change::Elided);
     CHECK(std::get<FreeParagraph>(sec.children[1]).change == Change::Same);
     CHECK(diff::has_marks(out));
+}
+
+TEST_CASE("diff - the decls context elides an unchanged description under a changed declaration") {
+    DescriptionElement returns;
+    returns.kind = ElementKind::Returns;
+    returns.body.push_back(BodyParagraph{text("The number of elements.")});
+
+    Document before = gadget();
+    Document after  = gadget();
+    auto&    sec    = std::get<Section>(before.nodes[1]);
+    sec.children.insert(sec.children.begin(), item("int size() const;", {"size"}, {returns}));
+    auto& sec_after = std::get<Section>(after.nodes[1]);
+    sec_after.children.insert(sec_after.children.begin(), item("constexpr int size() const;", {"size"}, {returns}));
+
+    const auto size_item = [](const Document& d) {
+        return std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[0]);
+    };
+
+    const Document decls = diff::compare(before, after, {.context = diff::Context::Decls});
+    CHECK(is_elided(size_item(decls).descr));
+    CHECK(size_item(decls).decl.signatures.size() == 1);
+
+    const Document items = diff::compare(before, after, {.context = diff::Context::Items});
+    CHECK(!is_elided(size_item(items).descr));
+
+    // A description that changed too is kept whole.
+    auto& changed = std::get<SpecItem>(std::get<Section>(after.nodes[1]).children[0]);
+    std::get<BodyParagraph>(changed.descr.elements[0].body[0]).text = text("The count.");
+    const Document both = diff::compare(before, after, {.context = diff::Context::Decls});
+    CHECK(!is_elided(size_item(both).descr));
 }
 
 TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {

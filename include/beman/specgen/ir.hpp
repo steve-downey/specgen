@@ -387,6 +387,13 @@ struct ItemDescr {
 // One content predicate for rendering, routing, grouping, and coverage.
 bool has_description(const ItemDescr&);
 
+// The description the `decls` diff context leaves an item whose wording did
+// not change: one paragraph marked `Elided`, which a backend renders as the
+// ellipsis line in place of the whole description. Built and recognized here
+// so the differ and the three backends agree on the one shape.
+ItemDescr elided_description();
+bool      is_elided(const ItemDescr&);
+
 // Stable-sort elements into canonical order (authored order is irrelevant).
 void canonicalize(ItemDescr&);
 

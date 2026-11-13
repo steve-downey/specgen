@@ -222,7 +222,9 @@ rather not page through wording that did not move
 ([diff-context-default](#diff-context-default), [diff-context-items](#diff-context-items)). The
 ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
 form papers write by hand; a first cut, signed off on the golden. A changed item still renders
-whole under `items`: the unit of elision is a node, not a paragraph. An unchanged subsection
+whole under `items`: the unit of elision is a node, not a paragraph; `decls`
+([diff-context-decls](#diff-context-decls)) goes inside a changed item and elides a description
+that did not change. An unchanged subsection
 keeps its own heading over one ellipsis for its wording, and so does each subsection nested in
 it, at any depth (issue #263). A `\ref` to it from retained wording then still resolves, the reader sees which
 subclause was left out, and the next sibling's number comes from that level's counter as in the
@@ -311,6 +313,19 @@ nor the draft macros have an elision form. The user's answer: LWG prefers not to
 unchanged wording, and it is also sometimes necessary to show that nothing changed, so both ends
 are needed. The ellipsis form is specgen's own convention, written the way papers write it by
 hand; see the rendering section.
+
+### diff-context-decls
+
+**Question.** A level past `items` that elides the unchanged description of an item whose only
+change is its declaration (issue #264)?
+**Status.** DECIDED: `--diff-context decls`, alongside `changed`, `all` and `items`.
+**Decision.** `decls` is `items` plus one rule: an item with a description, none of which changed,
+renders its marked declaration over a description of one unnumbered ellipsis. An item whose
+description changed renders the description whole, the node-as-unit rule `items` already follows.
+The elided description is an `ItemDescr` holding one `BodyParagraph` marked `Elided`
+(`ir::elided_description`, `ir::is_elided`), so the IR schema is unchanged and a marked IR round
+trips. Papers adding `constexpr`, `noexcept` or `[[nodiscard]]` across an interface are the case.
+**Decided by.** the user, in issue #264.
 
 ### paired-paragraph-threshold
 

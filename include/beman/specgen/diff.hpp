@@ -32,8 +32,12 @@ namespace beman::specgen::diff {
 // elided paragraph, the `[...]` a paper writes for wording left out, and an
 // unchanged subsection, at any depth, keeps its heading over one such
 // paragraph, so a `\ref` to it resolves and its siblings number as in the
-// draft.
-enum class Context { Changed, All, Items };
+// draft. `Decls` goes one step past `Items`: an item whose declaration
+// changed but whose description did not (a paper that adds `constexpr` or
+// `noexcept` across an interface) keeps the declaration and shows its
+// description as one elision. An item whose description changed renders it
+// whole, as under `Items`.
+enum class Context { Changed, All, Items, Decls };
 
 } // namespace beman::specgen::diff
 
@@ -42,11 +46,12 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::di
     beman::specgen::diff::Context::Changed,
     beman::specgen::diff::Context::All,
     beman::specgen::diff::Context::Items,
+    beman::specgen::diff::Context::Decls,
 };
 
 namespace beman::specgen::diff {
 
-std::string_view       context_name(Context); // "changed", "all", "items"
+std::string_view       context_name(Context); // "changed", "all", "items", "decls"
 std::optional<Context> context_from_name(std::string_view);
 
 struct Options {

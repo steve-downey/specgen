@@ -349,7 +349,11 @@ std::string render_item(const ir::SpecItem& item) {
     // the price of the label twice -- the honest rendering of that edit.
     // Joining a group's blocks first and the groups after is the same join
     // as joining every block flat, so an unmarked item renders as it did.
-    std::vector<std::string> groups = body_blocks(item.descr.leading, std::nullopt);
+    // The `decls` context's elided description: the ellipsis line alone,
+    // unnumbered, in place of every paragraph.
+    std::vector<std::string> groups = beman::specgen::ir::is_elided(item.descr)
+                                          ? std::vector<std::string>{"[\\ldots]\n"}
+                                          : body_blocks(item.descr.leading, std::nullopt);
     groups.append_range(item.descr.elements |
                         std::views::chunk_by([](const ir::DescriptionElement& a, const ir::DescriptionElement& b) {
                             return a.kind == b.kind && a.change == b.change;

@@ -145,7 +145,8 @@ generate options:
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
-                             changed section
+                             changed section, `decls` also elides the
+                             unchanged description of a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -212,7 +213,8 @@ render options:
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
-                             changed section
+                             changed section, `decls` also elides the
+                             unchanged description of a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
                              sections descend from it (mpark and org only;
                              2 by default). One to six under mpark, markdown's
@@ -421,7 +423,7 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
             const std::optional<diff::Context> context = diff::context_from_name(arg);
             if (!context)
                 return std::unexpected(OptionError{
-                    std::format("specgen: --diff-context takes 'changed', 'all' or 'items', not '{}'", arg)});
+                    std::format("specgen: --diff-context takes 'changed', 'all', 'items' or 'decls', not '{}'", arg)});
             opts.wording.diff_context = *context;
             opts.awaiting.clear();
             return opts;
@@ -1290,7 +1292,8 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
             const std::optional<diff::Context> context = diff::context_from_name(text);
             if (!context) {
-                std::println(stderr, "specgen: --diff-context takes 'changed', 'all' or 'items', not '{}'", text);
+                std::println(
+                    stderr, "specgen: --diff-context takes 'changed', 'all', 'items' or 'decls', not '{}'", text);
                 return 2;
             }
             wording.diff_context = *context;

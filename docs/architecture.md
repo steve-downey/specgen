@@ -980,7 +980,9 @@ have no independent item description.
   that revision, up to runs of whitespace. `Context` is `changed` (drop unchanged top-level
   nodes; the default), `all`, or `items` (also elide unchanged children of a changed section,
   an unchanged subsection keeping its own heading over one ellipsis, and one ellipsis wherever
-  elisions would meet, across a section's end as well).
+  elisions would meet, across a section's end as well), or `decls` (`items`, and an item whose
+  declaration changed but whose description did not keeps the declaration over one ellipsis in
+  place of the description: an `ItemDescr` of one `Elided` `BodyParagraph`).
 
 Item descriptions carry an ordered `leading` body followed by their canonical
 labelled elements. Item nodes emit `item-v4`; readers accept `item-v3`, `item-v2`

@@ -1,0 +1,42 @@
+#+begin_codeblock
+namespace std {
+  class span_like {
+  public:
+    // \ref{span.like.obs}, observers
+    @\added{constexpr}@ int size() const;
+    @\added{constexpr}@ bool empty() const;
+    @\added{constexpr}@ int front() const;
+  };
+}
+#+end_codeblock
+
+** Observers [span.like.obs]
+:PROPERTIES:
+:CUSTOM_ID: span.like.obs
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+@\added{constexpr}@ int size() const;
+#+end_itemdecl
+
+[…]
+
+#+begin_itemdecl
+@\added{constexpr}@ bool empty() const;
+#+end_itemdecl
+
+[…]
+
+#+begin_itemdecl
+@\added{constexpr}@ int front() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Preconditions/: [[delete:][~empty()~ is ~false~.]][[insert:][the span is not empty.]]
+#+end_pnum
+
+#+begin_pnum
+/Returns/: The first element.
+#+end_pnum
