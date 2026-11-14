@@ -274,6 +274,19 @@ struct PieceRenderer {
     // -- the same trade the mpark backend makes with backticks.
     std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
 
+    // A placeholder name and a C++17 named requirement, italic in the draft.
+    // Org's `/x/` is italic too, but only between whitespace or punctuation,
+    // and these sit against `&`, `~` and `-` often enough that the marks
+    // would show as text. An export snippet has no such limit, and is the
+    // form the exposition-only names in prose already use.
+    std::string operator()(const ir::PlaceholderInline& v) const {
+        const std::string latex = v.text == "cv" ? std::string{"\\cv{}"} : "\\placeholder{" + v.text + '}';
+        return "@@latex:" + latex + "@@@@html:<i>" + v.text + "</i>@@";
+    }
+    std::string operator()(const ir::OldConceptRef& v) const {
+        return "@@latex:\\oldconcept{" + v.name + "}@@@@html:<i>Cpp17" + v.name + "</i>@@";
+    }
+
     // A changed run of prose (the wording diff's mark): wg21org's
     // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
     // after `RunPieceRenderer` below, which renders the run's contents.
@@ -293,6 +306,8 @@ struct RunPieceRenderer {
     std::string operator()(const ir::CodeInline& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::RefInline& v) const { return "{{{sref(" + v.stable_name + ")}}}"; }
     std::string operator()(const ir::ConceptRef& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::PlaceholderInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::OldConceptRef& v) const { return PieceRenderer{}(v); }
 };
 
 std::string render_run(const std::vector<ir::PlainInline>& inlines) {

@@ -1020,8 +1020,9 @@ There are exactly three backends, and **adding wording to one means adding it to
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
   description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
-  `\ref`/`\iref`; `\tcode` and `\libconcept` inlines; exact `lib2dtab2` tables; all eight
-  `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
+  `\ref`/`\iref`; `\tcode`, `\libconcept`, `\placeholder` (`\cv{}` for `cv`) and `\oldconcept`
+  inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
+  `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
   as `@\added{...}@` with the spans inside it in their escaped form (`\exposidnc{x}`,
@@ -1044,6 +1045,10 @@ There are exactly three backends, and **adding wording to one means adding it to
   Paper mode (`--paper`) is the empty-baseline diff: every top-level node marked added, which
   a run of adjacent marked top-level nodes renders as one `::: add` div outside their wording
   divs.
+  The italic inlines (`PlaceholderInline`, `OldConceptRef`) look in mpark and org like what the
+  draft prints, in the target's own emphasis: `*x*` and `*Cpp17X*` in mpark, a LaTeX/HTML export
+  snippet in org, because org's `/x/` fails beside the punctuation these names sit against. Those
+  targets are not semantic markup the way the draft's macros are; the look is the contract.
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to

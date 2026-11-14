@@ -101,7 +101,7 @@ bool same_prose(const ProseToken& a, const ProseToken& b) {
     return a == b;
 }
 
-// `prose_tokens`' dispatch over the four plain inline kinds; the fifth, a
+// `prose_tokens`' dispatch over the plain inline kinds; the last, a
 // changed run in an input that should carry none, flattens to its contents.
 struct PlainTokenizer {
     std::vector<ProseToken> operator()(const ir::TextInline& v) const {
@@ -112,6 +112,8 @@ struct PlainTokenizer {
     std::vector<ProseToken> operator()(const ir::CodeInline& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::RefInline& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::ConceptRef& v) const { return {v}; }
+    std::vector<ProseToken> operator()(const ir::PlaceholderInline& v) const { return {v}; }
+    std::vector<ProseToken> operator()(const ir::OldConceptRef& v) const { return {v}; }
 };
 
 struct Tokenizer : PlainTokenizer {
@@ -137,6 +139,8 @@ struct TokenKey {
     std::string operator()(const ir::CodeInline& v) const { return "c:" + v.code.text; }
     std::string operator()(const ir::RefInline& v) const { return "r:" + v.stable_name; }
     std::string operator()(const ir::ConceptRef& v) const { return "k:" + v.name; }
+    std::string operator()(const ir::PlaceholderInline& v) const { return "p:" + v.text; }
+    std::string operator()(const ir::OldConceptRef& v) const { return "o:" + v.name; }
 };
 
 std::vector<std::string> token_keys(const std::vector<ProseToken>& tokens) {

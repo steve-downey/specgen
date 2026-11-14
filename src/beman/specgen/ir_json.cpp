@@ -73,6 +73,8 @@ using beman::specgen::ir::member_kind_from_name;
 using beman::specgen::ir::member_kind_name;
 using beman::specgen::ir::MemberKind;
 using beman::specgen::ir::Node;
+using beman::specgen::ir::OldConceptRef;
+using beman::specgen::ir::PlaceholderInline;
 using beman::specgen::ir::PlainInline;
 using beman::specgen::ir::RefInline;
 using beman::specgen::ir::Section;
@@ -358,8 +360,18 @@ struct json_descriptor<ConceptRef> {
     static constexpr auto members = std::tuple{field("name", &ConceptRef::name)};
 };
 
+template <>
+struct json_descriptor<PlaceholderInline> {
+    static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text)};
+};
+
+template <>
+struct json_descriptor<OldConceptRef> {
+    static constexpr auto members = std::tuple{field("name", &OldConceptRef::name)};
+};
+
 // A plain inline inside a changed run serializes exactly as the same inline
-// does outside one: the two variants share the tag key and the four tags.
+// does outside one: the two variants share the tag key and the plain tags.
 template <>
 struct json_descriptor<PlainInline> {
     static constexpr auto alts = alternatives("t",
@@ -367,7 +379,9 @@ struct json_descriptor<PlainInline> {
                                               alt<TextInline>("text"),
                                               alt<CodeInline>("code"),
                                               alt<RefInline>("ref"),
-                                              alt<ConceptRef>("concept"));
+                                              alt<ConceptRef>("concept"),
+                                              alt<PlaceholderInline>("placeholder"),
+                                              alt<OldConceptRef>("oldconcept"));
 };
 
 template <>
@@ -386,6 +400,8 @@ struct json_descriptor<Inline> {
                                               alt<CodeInline>("code"),
                                               alt<RefInline>("ref"),
                                               alt<ConceptRef>("concept"),
+                                              alt<PlaceholderInline>("placeholder"),
+                                              alt<OldConceptRef>("oldconcept"),
                                               alt<ChangedInline>("changed"));
 };
 

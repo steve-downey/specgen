@@ -1193,7 +1193,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.23.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.25.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1203,7 +1203,9 @@ Newly emitted item nodes use `item-v4` for ordered description bodies and
 explicit coverage metadata. Updated renderers still read `item-v3`, `item-v2`, and the earlier `item` nodes
 with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
-when moving to the new writer.
+when moving to the new writer. The prose inline tags `placeholder` and
+`oldconcept` are new; an older renderer reports a document containing one as
+unreadable rather than dropping the text.
 
 ### Section prose
 

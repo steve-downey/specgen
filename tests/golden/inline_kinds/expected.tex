@@ -1,0 +1,13 @@
+\rSec3[gadget.placeholders]{Placeholders and named requirements}
+
+\pnum
+The header provides specializations for each combination of the placeholders \cv{}, \placeholder{ref}, and \placeholder{noex}, where \cv{} is \tcode{const} or empty.
+
+\pnum
+The type \tcode{T} meets the \oldconcept{Destructible} requirements, and \placeholder{inv-quals} is \cv{}\tcode{\&}.
+
+\pnum
+Placeholders sit against punctuation: (\placeholder{ref}), \placeholder{noex}-qualified, \oldconcept{MoveConstructible}.
+
+\pnum
+A revision \removed{requires \oldconcept{CopyConstructible}}\added{requires \oldconcept{MoveConstructible} when \placeholder{noex} holds}.
