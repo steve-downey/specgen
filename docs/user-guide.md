@@ -974,13 +974,15 @@ by how alike they read. For each pair, the specifiers `constexpr`, `explicit` an
 `noexcept` are written as the declarations have them, so the draft's layout,
 placeholders and comments stay and only what the paper changed is different. A
 `noexcept` whose operand is a placeholder agrees with either. `static`,
-`friend`, `= default` and `= delete`, and a declaration only one side has,
-cannot be written and are warnings naming the declaration.
+`friend`, `= default` and `= delete` cannot be written, and are warnings naming
+the declaration, as is a class member the synopsis leaves out. A declaration the
+synopsis has and the class does not is a note: it is how a member inherited from
+a base class reads.
 
 Any synopsis that is text rather than extraction is checked the same way, under
 `--validate`: a `\verbatim-synopsis` is compared with the declarations of its
-class, and each disagreement on those specifiers, or declaration only one side
-has, is a warning. `\asdraft-synopsis` and `\verbatim-synopsis` are exclusive,
+class, and each disagreement on those specifiers is a warning, and a declaration
+only one side has is a warning or, for the synopsis's own, a note. `\asdraft-synopsis` and `\verbatim-synopsis` are exclusive,
 and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers

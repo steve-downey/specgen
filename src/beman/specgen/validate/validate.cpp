@@ -183,7 +183,7 @@ Diagnostics check_synopsis_agreement(const std::string& context, const ir::Synop
     return synopsis_check::compare(synopsis.code, *synopsis.declared) |
            std::views::transform([&](const synopsis_check::Finding& finding) {
                return Diagnostic{
-                   Severity::Warning, context, std::format("`{}`: {}", finding.declaration, finding.message)};
+                   finding.severity, context, std::format("`{}`: {}", finding.declaration, finding.message)};
            }) |
            std::ranges::to<Diagnostics>();
 }

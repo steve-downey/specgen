@@ -156,7 +156,7 @@ void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from, std::vec
         code                            = std::move(patched.code);
         // substrate generic algorithm: formats each unpatched finding onto the result.
         for (const synopsis_check::Finding& finding : patched.unpatched)
-            out.push_back({Severity::Warning,
+            out.push_back({finding.severity,
                            synopsis.name.empty() ? std::string("synopsis") : synopsis.name + "/synopsis",
                            std::format("`{}`: {}; the inherited synopsis cannot be patched to agree, so write it with "
                                        "\\verbatim-synopsis",
