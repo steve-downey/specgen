@@ -308,7 +308,8 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
                                           diags.push_back({Severity::Error, line, "\\cv takes no argument"});
                                       para.push_back(InlinePlaceholder{"cv"});
                                   } else if (m.body.empty()) {
-                                      diags.push_back({Severity::Error, line, "\\" + m.macro + " requires an argument"});
+                                      diags.push_back(
+                                          {Severity::Error, line, "\\" + m.macro + " requires an argument"});
                                   } else if (m.macro == "placeholder") {
                                       para.push_back(InlinePlaceholder{std::move(m.body)});
                                   } else {
