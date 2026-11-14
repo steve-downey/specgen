@@ -132,36 +132,35 @@ void resolve_nodes(std::vector<ir::Node>&       current,
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
-        std::visit(
-            overloaded{
-                [&](ir::Section& section) {
-                    const ir::Section* paired = find_section(baseline, section.stable_name);
-                    if (paired != nullptr) {
-                        resolve_nodes(section.children, paired->children, section.stable_name, out);
-                        return;
-                    }
-                    // A section the baseline lacks has nothing to inherit; an item in
-                    // it that asks to is reported by the walk with an empty baseline.
-                    resolve_nodes(section.children, {}, section.stable_name, out);
-                },
-                [&](ir::SpecItem& item) {
-                    if (!item.as_draft)
-                        return;
-                    const ir::SpecItem* from = pair_item(item, baseline, claimed);
-                    if (from == nullptr) {
-                        out.push_back({Severity::Error,
-                                       first_signature(item),
-                                       std::format("\\asdraft: no item of the baseline{}{} declares this",
-                                                   where.empty() ? "" : "'s section ",
-                                                   where)});
-                        return;
-                    }
-                    inherit_description(item, *from, out);
-                },
-                [](ir::Synopsis&) {},
-                [](ir::FreeParagraph&) {},
-            },
-            node);
+        std::visit(overloaded{
+                       [&](ir::Section& section) {
+                           const ir::Section* paired = find_section(baseline, section.stable_name);
+                           if (paired != nullptr) {
+                               resolve_nodes(section.children, paired->children, section.stable_name, out);
+                               return;
+                           }
+                           // A section the baseline lacks has nothing to inherit; an item in
+                           // it that asks to is reported by the walk with an empty baseline.
+                           resolve_nodes(section.children, {}, section.stable_name, out);
+                       },
+                       [&](ir::SpecItem& item) {
+                           if (!item.as_draft)
+                               return;
+                           const ir::SpecItem* from = pair_item(item, baseline, claimed);
+                           if (from == nullptr) {
+                               out.push_back({Severity::Error,
+                                              first_signature(item),
+                                              std::format("\\asdraft: no item of the baseline{}{} declares this",
+                                                          where.empty() ? "" : "'s section ",
+                                                          where)});
+                               return;
+                           }
+                           inherit_description(item, *from, out);
+                       },
+                       [](ir::Synopsis&) {},
+                       [](ir::FreeParagraph&) {},
+                   },
+                   node);
     }
 }
 

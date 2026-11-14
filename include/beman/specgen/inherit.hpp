@@ -24,7 +24,7 @@ namespace beman::specgen::inherit {
 
 struct Diagnostic {
     Severity    severity = Severity::Error;
-    std::string where;   // the declaration, as its signature reads
+    std::string where; // the declaration, as its signature reads
     std::string message;
 };
 
