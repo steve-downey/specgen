@@ -287,6 +287,16 @@ struct PieceRenderer {
         return "@@latex:\\oldconcept{" + v.name + "}@@@@html:<i>Cpp17" + v.name + "</i>@@";
     }
 
+    // A reference to a table: a link to its `#+name`, the bracketed stable name
+    // where the draft prints "Table N", spelled as RefInline spells its brackets.
+    std::string operator()(const ir::TableRef& v) const {
+        return "[[" + v.stable_name + "][Table @@html:[" + v.stable_name + "]@@@@latex:{[}" + v.stable_name +
+               "{]}@@]]";
+    }
+
+    // Draft LaTeX kept as written, as an export snippet.
+    std::string operator()(const ir::RawInline& v) const { return "@@latex:" + v.latex + "@@"; }
+
     // A changed run of prose (the wording diff's mark): wg21org's
     // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
     // after `RunPieceRenderer` below, which renders the run's contents.
@@ -308,6 +318,8 @@ struct RunPieceRenderer {
     std::string operator()(const ir::ConceptRef& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::PlaceholderInline& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::OldConceptRef& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::TableRef& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::RawInline& v) const { return PieceRenderer{}(v); }
 };
 
 std::string render_run(const std::vector<ir::PlainInline>& inlines) {

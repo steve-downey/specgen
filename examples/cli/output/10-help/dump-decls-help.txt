@@ -3,7 +3,19 @@ usage: specgen <command> [options]
 commands:
   render      render IR JSON to wording fragments
   generate    render a C++ header to wording fragments
+  import      read subclauses of the working draft's LaTeX into IR JSON
   dump-decls  print a header's decl/comment interleave (debug)
+
+import options:
+  <file.tex>                the draft source file holding the subclauses
+                             (exactly one)
+  --section <stable-name>   a subclause to import, with its subsections; the
+                             result has one top-level section per use, in the
+                             order given. Required, and may be repeated
+  -o, --output <file>       write the IR here instead of to standard output
+
+  A construct the IR has no kind for is kept as raw LaTeX and reported as a
+  warning naming it and the subclause. A name the file lacks is an error.
 
 dump-decls options:
   <header>                  the header to parse (exactly one)
