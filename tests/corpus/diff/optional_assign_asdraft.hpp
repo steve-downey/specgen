@@ -73,13 +73,14 @@ constexpr optional<T>& optional<T>::operator=(U&& v)
     return *this;
 }
 
-// The copy assignment is declared nowhere this document can see, so its item is
-// typed as a `\verbatim-itemdecl`, which names no entity. It still takes the
-// draft's description, matched by how its declaration reads.
+// `emplace` is declared nowhere this document can see, so its item is typed as a
+// detached `\verbatim-itemdecl`, which names no entity. It still takes the
+// draft's description, matched by how its declaration reads. Detached items come
+// after the members the class declares, which is the draft's order here.
 
 //! \asdraft
 //! \verbatim-itemdecl
-//! constexpr optional<T>& operator=(const optional& rhs);
+//! template<class... Args> constexpr T& emplace(Args&&... args);
 
 } // namespace demo
 
