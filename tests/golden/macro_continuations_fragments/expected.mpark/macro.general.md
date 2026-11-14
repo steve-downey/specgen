@@ -12,43 +12,43 @@ namespace std {
 }
 ```
 
-[#]{.pnum} \placeholder{noex} is a placeholder in leading prose.
+[#]{.pnum} *noex* is a placeholder in leading prose.
 
 ```cpp
 int size() const;
 ```
 
-[#]{.pnum} *Preconditions*: `T` meets the \oldconcept{Destructible} and \oldconcept{CopyConstructible} requirements.
+[#]{.pnum} *Preconditions*: `T` meets the *Cpp17Destructible* and *Cpp17CopyConstructible* requirements.
 
 [#]{.pnum} *Returns*: `0`.
 
 [#]{.pnum} *Remarks*: The following descriptions apply:
 
-- [#.#]{.pnum} Meets \oldconcept{CopyConstructible} requirements.
+- [#.#]{.pnum} Meets *Cpp17CopyConstructible* requirements.
 
-\placeholder{after} follows the list.
+*after* follows the list.
 
-| Type \cv{} qualifier | Meaning |
+| Type *cv* qualifier | Meaning |
 |---|---|
-| A \placeholder{key} | Meets \oldconcept{Destructible} requirements. |
-: [Flat table \placeholder{caption}]{#macro.flat}
+| A *key* | Meets *Cpp17Destructible* requirements. |
+: [Flat table *caption*]{#macro.flat}
 
 | | A | B |
 |---|---|---|
-| **Type \cv{} qualifier** | First \placeholder{value} | Second \placeholder{value} |
+| **Type *cv* qualifier** | First *value* | Second *value* |
 : [Grid table]{#macro.grid}
 
-\placeholder{resume} follows the tables.
+*resume* follows the tables.
 
 ::: note
 
-The type meets \oldconcept{Destructible} requirements.
+The type meets *Cpp17Destructible* requirements.
 
 :::
 
 ::: example
 
-A \cv{} qualifier is written literally.
+A *cv* qualifier is written literally.
 
 :::
 

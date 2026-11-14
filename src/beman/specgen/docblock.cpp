@@ -162,14 +162,30 @@ struct RawRef {
     bool        terminated;
 };
 
-using RawInline = std::variant<RawText, RawCode, RawRef>;
+// `\placeholder{x}`, `\cv{}` or `\oldconcept{X}`. `macro` is the command
+// name without the backslash; `body` is the braced argument.
+struct RawMacro {
+    std::string macro;
+    std::string body;
+    bool        terminated;
+};
+
+using RawInline = std::variant<RawText, RawCode, RawRef, RawMacro>;
+
+constexpr std::string_view macro_prefixes[]{"\\placeholder{", "\\cv{", "\\oldconcept{"};
+
+std::string_view macro_prefix_at(std::string_view rest) {
+    const auto it = std::ranges::find_if(macro_prefixes, [&](std::string_view p) { return rest.starts_with(p); });
+    return it == std::end(macro_prefixes) ? std::string_view{} : *it;
+}
 
 auto text_run() {
     return parse::parser{[](parse::cursor cur) -> parse::parse_result<RawInline> {
         const parse::cursor start = cur;
         // substrate generic algorithm: cursor scan to the earliest of two
         // variable-length delimiters; the cursor has no bulk-advance operation.
-        while (!cur.empty() && cur.peek() != '`' && !cur.remaining().starts_with("\\iref{"))
+        while (!cur.empty() && cur.peek() != '`' && !cur.remaining().starts_with("\\iref{") &&
+               macro_prefix_at(cur.remaining()).empty())
             cur = cur.bump();
         if (cur.position().offset == start.position().offset)
             return std::unexpected(parse::parse_error{cur.position(), "text character"});
@@ -210,13 +226,42 @@ auto ref_run() {
     }};
 }
 
-// The three branches have disjoint starts: a backtick, the full `\iref{`
+auto macro_run() {
+    return parse::parser{[](parse::cursor cur) -> parse::parse_result<RawInline> {
+        const std::string_view prefix = macro_prefix_at(cur.remaining());
+        if (prefix.empty())
+            return std::unexpected(parse::parse_error{cur.position(), "inline macro"});
+        // substrate generic algorithm: consume the fixed prefix while
+        // preserving the cursor's source-position accounting.
+        for ([[maybe_unused]] char c : prefix)
+            cur = cur.bump();
+        std::string body;
+        int         depth = 1;
+        // substrate generic algorithm: brace-balanced scan that advances the
+        // cursor and collects the argument together.
+        while (!cur.empty()) {
+            if (cur.peek() == '{')
+                ++depth;
+            else if (cur.peek() == '}' && --depth == 0)
+                break;
+            body.push_back(cur.peek());
+            cur = cur.bump();
+        }
+        const bool terminated = !cur.empty();
+        if (terminated)
+            cur = cur.bump();
+        return parse::parse_state<RawInline>{
+            RawMacro{std::string(prefix.substr(1, prefix.size() - 2)), std::move(body), terminated}, cur};
+    }};
+}
+
+// The branches have disjoint starts: a backtick, the full `\iref{`
 // prefix, or text ending immediately before either delimiter. Each fails
 // without consuming when its start does not match, so this ordered choice
 // never hits the commit-on-consumed-input hazard that rules out alternating
 // over shared-prefix spellings (foundation DIVERGENCES
 // OBS-4). Once a branch matches its delimiter it always succeeds.
-auto inline_segment() { return code_run() | ref_run() | text_run(); }
+auto inline_segment() { return code_run() | ref_run() | macro_run() | text_run(); }
 
 // Parse backticked code spans in an assembled paragraph string.
 ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagnostic>& diags) {
@@ -252,6 +297,22 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
                                       diags.push_back({Severity::Error, line, "\\iref requires a stable name"});
                                   } else {
                                       para.push_back(InlineRef{std::move(ref.stable_name)});
+                                  }
+                              },
+                              [&](RawMacro& m) {
+                                  if (!m.terminated) {
+                                      diags.push_back({Severity::Error, line, "unterminated \\" + m.macro + " macro"});
+                                      para.push_back(InlineText{"\\" + m.macro + "{" + std::move(m.body)});
+                                  } else if (m.macro == "cv") {
+                                      if (!m.body.empty())
+                                          diags.push_back({Severity::Error, line, "\\cv takes no argument"});
+                                      para.push_back(InlinePlaceholder{"cv"});
+                                  } else if (m.body.empty()) {
+                                      diags.push_back({Severity::Error, line, "\\" + m.macro + " requires an argument"});
+                                  } else if (m.macro == "placeholder") {
+                                      para.push_back(InlinePlaceholder{std::move(m.body)});
+                                  } else {
+                                      para.push_back(InlineOldConcept{std::move(m.body)});
                                   }
                               }},
                    seg);

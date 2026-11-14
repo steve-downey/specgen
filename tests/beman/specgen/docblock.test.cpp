@@ -150,8 +150,10 @@ TEST_CASE("docblock - macro-led leading prose and list continuations stay in the
     const auto leading = parse_docblock("//! \\placeholder{noex} is a value.\n");
     REQUIRE(leading.diags.empty());
     REQUIRE(leading.block.leading.size() == 1);
-    CHECK(std::get<InlineText>(std::get<BodyParagraph>(leading.block.leading.front()).text.front()).text ==
-          R"(\placeholder{noex} is a value.)");
+    const auto& lead = std::get<BodyParagraph>(leading.block.leading.front()).text;
+    REQUIRE(lead.size() == 2);
+    CHECK(std::get<InlinePlaceholder>(lead.front()).text == "noex");
+    CHECK(std::get<InlineText>(lead.back()).text == " is a value.");
 
     const auto list = parse_docblock("//! \\remarks Before:\n//! \\item Meets\n"
                                      "//! \\oldconcept{CopyConstructible} requirements.\n//!\n"
@@ -160,11 +162,22 @@ TEST_CASE("docblock - macro-led leading prose and list continuations stay in the
     REQUIRE(list.block.elements.size() == 1);
     const auto& element = list.block.elements.front();
     REQUIRE(items(element).size() == 1);
-    CHECK(std::get<InlineText>(items(element).front().front()).text ==
-          R"(Meets \oldconcept{CopyConstructible} requirements.)");
-    CHECK(std::get<InlineText>(paragraph(element, 1).front()).text == R"(\placeholder{after} follows.)");
+    const auto& item = items(element).front();
+    REQUIRE(item.size() == 3);
+    CHECK(std::get<InlineText>(item.front()).text == "Meets ");
+    CHECK(std::get<InlineOldConcept>(item[1]).name == "CopyConstructible");
+    CHECK(std::get<InlineText>(item.back()).text == " requirements.");
+    CHECK(std::get<InlinePlaceholder>(paragraph(element, 1).front()).text == "after");
+    CHECK(std::get<InlineText>(paragraph(element, 1).back()).text == " follows.");
     CHECK(std::get<BodyParagraph>(element.body.back()).continuation);
 }
+
+namespace {
+bool text_then_placeholder(const ProseParagraph& para, std::string_view text, std::string_view name) {
+    return para.size() == 2 && std::get<InlineText>(para.front()).text == text &&
+           std::get<InlinePlaceholder>(para.back()).text == name;
+}
+} // namespace
 
 TEST_CASE("docblock - raw macros continue every table field and resume prose") {
     for (const auto kind : {"libtab2", "lib2dtab2"}) {
@@ -182,26 +195,31 @@ TEST_CASE("docblock - raw macros continue every table field and resume prose") {
         REQUIRE(parsed.block.elements.size() == 1);
         const auto& element      = parsed.block.elements.front();
         const auto  check_fields = [](const auto& table) {
-            CHECK(std::get<InlineText>(table.caption.front()).text == R"(Caption \placeholder{caption})");
-            CHECK(std::get<InlineText>(table.column1.front()).text == R"(First \cv{} type)");
-            CHECK(std::get<InlineText>(table.column2.front()).text == R"(Second \oldconcept{Destructible})");
+            CHECK(text_then_placeholder(table.caption, "Caption ", "caption"));
+            CHECK(std::get<InlineText>(table.column1.front()).text == "First ");
+            CHECK(std::get<InlinePlaceholder>(table.column1[1]).text == "cv");
+            CHECK(std::get<InlineText>(table.column1.back()).text == " type");
+            CHECK(std::get<InlineText>(table.column2.front()).text == "Second ");
+            CHECK(std::get<InlineOldConcept>(table.column2.back()).name == "Destructible");
             REQUIRE(table.rows.size() == 1);
         };
         if (std::string_view(kind) == "libtab2") {
             const auto* table = first<Table1D>(element);
             REQUIRE(table != nullptr);
             check_fields(*table);
-            CHECK(std::get<InlineText>(table->rows.front().cell1.front()).text == R"(Head \placeholder{row})");
-            CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text == R"(Value \placeholder{cell})");
+            CHECK(text_then_placeholder(table->rows.front().cell1, "Head ", "row"));
+            CHECK(text_then_placeholder(table->rows.front().cell2, "Value ", "cell"));
         } else {
             const auto* table = first<Table2D>(element);
             REQUIRE(table != nullptr);
             check_fields(*table);
-            CHECK(std::get<InlineText>(table->rows.front().header.front()).text == R"(Head \placeholder{row})");
-            CHECK(std::get<InlineText>(table->rows.front().cell1.front()).text == R"(Value \placeholder{cell})");
-            CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text == R"(Other \cv{} type)");
+            CHECK(text_then_placeholder(table->rows.front().header, "Head ", "row"));
+            CHECK(text_then_placeholder(table->rows.front().cell1, "Value ", "cell"));
+            CHECK(std::get<InlineText>(table->rows.front().cell2.front()).text == "Other ");
+            CHECK(std::get<InlinePlaceholder>(table->rows.front().cell2[1]).text == "cv");
         }
-        CHECK(std::get<InlineText>(paragraph(element, 1).front()).text == R"(\placeholder{resume} follows.)");
+        CHECK(std::get<InlinePlaceholder>(paragraph(element, 1).front()).text == "resume");
+        CHECK(std::get<InlineText>(paragraph(element, 1).back()).text == " follows.");
         CHECK(std::get<BodyParagraph>(element.body.back()).continuation);
     }
 }
@@ -217,8 +235,11 @@ TEST_CASE("docblock - macro-led text continues informative bodies") {
         const auto& body =
             std::string_view(kind) == "note" ? std::get<Note>(block).body : std::get<Example>(block).body;
         REQUIRE(body.size() == 1);
-        CHECK(std::get<InlineText>(std::get<BodyParagraph>(body.front()).text.front()).text ==
-              R"(Before \oldconcept{Destructible} requirements.)");
+        const auto& text = std::get<BodyParagraph>(body.front()).text;
+        REQUIRE(text.size() == 3);
+        CHECK(std::get<InlineText>(text.front()).text == "Before ");
+        CHECK(std::get<InlineOldConcept>(text[1]).name == "Destructible");
+        CHECK(std::get<InlineText>(text.back()).text == " requirements.");
     }
 }
 
@@ -879,4 +900,20 @@ TEST_CASE("docblock - coverage metadata does not split authored lists") {
     REQUIRE(first<Itemize>(element) != nullptr);
     CHECK(items(element).size() == 2);
     CHECK(element.coverage.size() == 1);
+}
+
+TEST_CASE("docblock - malformed inline macros report diagnostics and keep their text") {
+    const auto unterminated = parse_docblock("//! \\effects Uses \\placeholder{x here.\n");
+    CHECK(has_diag(unterminated, Severity::Error, "unterminated \\placeholder macro"));
+
+    const auto empty = parse_docblock("//! \\effects Uses \\oldconcept{} here.\n");
+    CHECK(has_diag(empty, Severity::Error, "\\oldconcept requires an argument"));
+
+    const auto cv_arg = parse_docblock("//! \\effects A \\cv{x} qualifier.\n");
+    CHECK(has_diag(cv_arg, Severity::Error, "\\cv takes no argument"));
+
+    const auto nested = parse_docblock("//! \\effects A \\placeholder{a{b}c} name.\n");
+    REQUIRE(nested.diags.empty());
+    REQUIRE(nested.block.elements.size() == 1);
+    CHECK(std::get<InlinePlaceholder>(paragraph(nested.block.elements.front())[1]).text == "a{b}c");
 }
