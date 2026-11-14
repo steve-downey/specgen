@@ -224,6 +224,28 @@ TEST_CASE("ir_json - round-trip: every node, span, and index kind") { check_roun
 // How each character is escaped is json_writer's, and
 // json/writer.test.cpp pins it; what the IR owes is that a string
 // needing escapes comes back out of the parser unchanged.
+TEST_CASE("ir_json - placeholder and old-concept inlines round-trip, in prose and inside a changed run") {
+    Document doc;
+    doc.nodes.push_back(
+        FreeParagraph{{TextInline{"For each "},
+                       PlaceholderInline{"cv"},
+                       TextInline{" meeting "},
+                       OldConceptRef{"Destructible"},
+                       ChangedInline{Change::Added, {PlaceholderInline{"noex"}, OldConceptRef{"X"}}}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("{\"t\":\"placeholder\",\"text\":\"cv\"}") != std::string::npos);
+    CHECK(json.find("{\"t\":\"oldconcept\",\"name\":\"Destructible\"}") != std::string::npos);
+    // Inside a run they spell the same as outside one.
+    CHECK(json.find("\"inlines\":[{\"t\":\"placeholder\",\"text\":\"noex\"},{\"t\":\"oldconcept\"") !=
+          std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
 TEST_CASE("ir_json - round-trip: strings needing escapes") {
     Document doc;
     Synopsis syn;

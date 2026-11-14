@@ -708,7 +708,7 @@ check_paragraph_leakage(const std::string& context, const ir::Paragraph& paragra
         diagnostics_monoid);
 }
 
-// Whether one inline says anything. Five alternatives (decision
+// Whether one inline says anything. Seven alternatives (decision
 // visitation-rules' >3 rule), so a named visitor. The changed-run case visits
 // `PlainInline`, a different and non-recursive variant, with this same
 // visitor: a run cannot hold a run, so this is dispatch, not recursion.
@@ -721,6 +721,8 @@ struct InlineHasContent {
     bool operator()(const ir::CodeInline& code) const { return has_non_whitespace(code.code.text); }
     bool operator()(const ir::RefInline& ref) const { return has_non_whitespace(ref.stable_name); }
     bool operator()(const ir::ConceptRef& ref) const { return has_non_whitespace(ref.name); }
+    bool operator()(const ir::PlaceholderInline& v) const { return has_non_whitespace(v.text); }
+    bool operator()(const ir::OldConceptRef& v) const { return has_non_whitespace(v.name); }
     bool operator()(const ir::ChangedInline& run) const {
         return std::ranges::any_of(
             run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
@@ -992,13 +994,15 @@ struct Conjunct {
     ConjunctPolarity polarity;
 };
 
-// The four ordinary inline kinds stay one piece; a changed run contributes
+// The ordinary inline kinds stay one piece; a changed run contributes
 // its plain pieces. Marks annotate wording rather than hide drift evidence.
 struct UnmarkedPieces {
     std::vector<ir::PlainInline> operator()(const ir::TextInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::CodeInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::RefInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::ConceptRef& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::PlaceholderInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::OldConceptRef& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
 };
 
@@ -1006,6 +1010,8 @@ std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TextInline& pi
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::CodeInline& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RefInline& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ConceptRef& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PlaceholderInline& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::OldConceptRef& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
 
 std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
@@ -1539,8 +1545,8 @@ bool every_signature_is_noexcept(const std::vector<ir::CodeText>& signatures) {
 
 // The text of a paragraph, with every inline flattened to what it names.
 // Only ever compared against "Nothing" below, so the markup distinctions the
-// backends draw between these four do not matter here.
-// Five alternatives, so a named visitor; the changed-run case dispatches the
+// backends draw between these do not matter here.
+// Seven alternatives, so a named visitor; the changed-run case dispatches the
 // non-recursive `PlainInline` with this same visitor, as InlineHasContent
 // does, and flattens the run's text into the paragraph's.
 struct InlineText {
@@ -1548,6 +1554,8 @@ struct InlineText {
     std::string operator()(const ir::CodeInline& v) const { return v.code.text; }
     std::string operator()(const ir::RefInline& v) const { return v.stable_name; }
     std::string operator()(const ir::ConceptRef& v) const { return v.name; }
+    std::string operator()(const ir::PlaceholderInline& v) const { return v.text; }
+    std::string operator()(const ir::OldConceptRef& v) const { return v.name; }
     std::string operator()(const ir::ChangedInline& run) const {
         return foundation::mconcat_map(
             run.inlines,

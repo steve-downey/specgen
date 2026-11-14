@@ -593,6 +593,26 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_marks/input.json"
 )
 
+# The italic inlines the draft's \\placeholder, \\cv and \\oldconcept print as,
+# rendered by all three backends from one hand-written IR: placeholders and
+# named requirements in running prose, against punctuation, and inside a
+# changed run. mpark and org take the look of the LaTeX rendering, in their
+# own emphasis forms.
+specgen_add_golden(
+    inline_kinds
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+specgen_add_golden(
+    inline_kinds
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+specgen_add_golden(
+    inline_kinds
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+
 # Base level, all three backends over one nested fixture. The option existed in
 # every backend's Options and could not be set from the command line, so a
 # paper writing its own sections at `##` got its generated clauses at `##` too

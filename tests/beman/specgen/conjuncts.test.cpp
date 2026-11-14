@@ -42,6 +42,8 @@ std::string plain_prose(const PlainInline& piece) {
                           [](const CodeInline& v) { return '`' + v.code.text + '`'; },
                           [](const RefInline& v) { return "[" + v.stable_name + "]"; },
                           [](const ConceptRef& v) { return v.name; },
+                          [](const PlaceholderInline& v) { return v.text; },
+                          [](const OldConceptRef& v) { return "Cpp17" + v.name; },
                       },
                       piece);
 }
@@ -54,6 +56,8 @@ std::string prose(const Paragraph& paragraph) {
                               [](const CodeInline& v) { return plain_prose(v); },
                               [](const RefInline& v) { return plain_prose(v); },
                               [](const ConceptRef& v) { return plain_prose(v); },
+                              [](const PlaceholderInline& v) { return plain_prose(v); },
+                              [](const OldConceptRef& v) { return plain_prose(v); },
                               // A changed run (the wording diff's mark) flattens to its contents;
                               // no conjunct carries one, so the mark itself is not shown.
                               [](const ChangedInline& v) {

@@ -177,6 +177,12 @@ struct PieceRenderer {
     // backticks give.
     std::string operator()(const ir::ConceptRef& v) const { return '`' + v.name + '`'; }
 
+    // A placeholder name and a C++17 named requirement. The draft sets both
+    // in italics, and markdown has italics, so that is what they get: the
+    // look of the LaTeX rendering, not a semantic class the framework lacks.
+    std::string operator()(const ir::PlaceholderInline& v) const { return '*' + v.text + '*'; }
+    std::string operator()(const ir::OldConceptRef& v) const { return "*Cpp17" + v.name + '*'; }
+
     // A changed run of prose (the wording diff's mark): the framework's
     // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would
     // be unmarked. Defined after `render_run` below, which dispatches the

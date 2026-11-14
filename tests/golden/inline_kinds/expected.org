@@ -1,0 +1,22 @@
+** Placeholders and named requirements [gadget.placeholders]
+:PROPERTIES:
+:CUSTOM_ID: gadget.placeholders
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+The header provides specializations for each combination of the placeholders @@latex:\cv{}@@@@html:<i>cv</i>@@, @@latex:\placeholder{ref}@@@@html:<i>ref</i>@@, and @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@, where @@latex:\cv{}@@@@html:<i>cv</i>@@ is ~const~ or empty.
+#+end_pnum
+
+#+begin_pnum
+The type ~T~ meets the @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements, and @@latex:\placeholder{inv-quals}@@@@html:<i>inv-quals</i>@@ is @@latex:\cv{}@@@@html:<i>cv</i>@@~&~.
+#+end_pnum
+
+#+begin_pnum
+Placeholders sit against punctuation: (@@latex:\placeholder{ref}@@@@html:<i>ref</i>@@), @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@-qualified, @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@.
+#+end_pnum
+
+#+begin_pnum
+A revision [[delete:][requires @@latex:\oldconcept{CopyConstructible}@@@@html:<i>Cpp17CopyConstructible</i>@@]][[insert:][requires @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@ when @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ holds]].
+#+end_pnum

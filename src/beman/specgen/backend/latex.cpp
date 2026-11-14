@@ -117,6 +117,16 @@ struct PieceRenderer {
     // A library concept name, rendered with \libconcept rather than \tcode.
     std::string operator()(const ir::ConceptRef& v) const { return "\\libconcept{" + v.name + '}'; }
 
+    // A placeholder name, italic: the draft's \placeholder, or \cv{} for the
+    // one placeholder the draft gives its own macro, which also sets right in
+    // math.
+    std::string operator()(const ir::PlaceholderInline& v) const {
+        return v.text == "cv" ? std::string{"\\cv{}"} : "\\placeholder{" + v.text + '}';
+    }
+
+    // A C++17 named requirement, italic with its Cpp17 prefix.
+    std::string operator()(const ir::OldConceptRef& v) const { return "\\oldconcept{" + v.name + '}'; }
+
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
     // rendered as it would be unmarked. Defined after `render_run` below,

@@ -140,12 +140,27 @@ struct ConceptRef {
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
+// An italic placeholder name: the draft's \placeholder{x}, and \cv{} (text
+// "cv"), which sets the same italic in text and in math. Not code: the name
+// stands for whatever the surrounding wording replaces it with.
+struct PlaceholderInline {
+    std::string text;
+
+    friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
+};
+// A named requirement from the C++17 library tables, the draft's
+// \oldconcept{X}, which prints "Cpp17X" in italics. `name` is the X.
+struct OldConceptRef {
+    std::string name;
+
+    friend bool operator==(const OldConceptRef&, const OldConceptRef&) = default;
+};
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
 // itself, so that a visitor over a run's contents dispatches a different,
 // non-recursive sum type and never drives recursion (decision
 // visitation-rules).
-using PlainInline = std::variant<TextInline, CodeInline, RefInline, ConceptRef>;
+using PlainInline = std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef>;
 
 // A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
 // One mark covers the whole run, so a backend writes one span per run rather
@@ -157,7 +172,8 @@ struct ChangedInline {
 
     friend bool operator==(const ChangedInline&, const ChangedInline&) = default;
 };
-using Inline    = std::variant<TextInline, CodeInline, RefInline, ConceptRef, ChangedInline>;
+using Inline =
+    std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, ChangedInline>;
 using Paragraph = std::vector<Inline>;
 
 // --- description elements --------------------------------------------------
