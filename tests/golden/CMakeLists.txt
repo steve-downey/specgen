@@ -622,6 +622,43 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_optional_assign/expected.json"
 )
 
+# `\asdraft` (docs/plans/draft-import.md): two members take their descriptions
+# from the same draft slice, one with a requires-clause whose derived
+# Constraints the inherited bullets are validated against, with `\covers` for
+# the one predicate the draft spells differently. The marked IR's `.validate`
+# sibling is that check: it must be silent. Under the `items` context the
+# diff shows what the paper changed -- here only signature layout -- and the
+# rest of the draft's section as removed.
+specgen_add_golden(
+    diff_optional_asdraft
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/optional_assign_asdraft.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_optional_asdraft_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_optional_asdraft/expected.json"
+)
+# With no baseline there is nothing to inherit from: that is an error naming the
+# flags, not wording that quietly lacks its descriptions.
+add_test(
+    NAME golden.diff_optional_asdraft.nobaseline
+    COMMAND
+        $<TARGET_FILE:specgen> generate
+        "${PROJECT_SOURCE_DIR}/tests/corpus/diff/optional_assign_asdraft.hpp"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/diff_optional_asdraft.nobaseline.tex"
+)
+set_tests_properties(
+    golden.diff_optional_asdraft.nobaseline
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "takes a description from a baseline; name one with --baseline-draft"
+)
+
 # The wording diff's marks (docs/plans/wording-diff.md), rendered by all three
 # backends from one hand-marked IR: an added and a removed section, item,
 # element and free paragraph; a prose run holding a code inline and a

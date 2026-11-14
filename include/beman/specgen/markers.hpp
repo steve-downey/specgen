@@ -42,6 +42,11 @@ struct Markers {
     std::optional<std::string> group_id;    // \group <id>, frame-local primary
     std::optional<std::string> also_target; // optional id in \also <id>
 
+    // The description is the baseline's (docs/plans/draft-import.md): taken
+    // from the baseline item this declaration pairs with, with whatever the
+    // docblock authors replacing the inherited element of its kind.
+    bool asdraft = false;
+
     // Itemdecl rendering.
     bool                       constraints_in_decl = false;
     bool                       seebelow            = false;
@@ -121,6 +126,7 @@ inline constexpr MarkerInfo kMarkers[] = {
      .arity    = MarkerArity::ParenOptional},
     {.spelling = "merge",               .flag = &Markers::merge},
     {.spelling = "omit",                .flag = &Markers::omit},
+    {.spelling = "asdraft",             .flag = &Markers::asdraft},
     {.spelling = "elsewhere",           .flag = &Markers::elsewhere},
     {.spelling = "describe",            .flag = &Markers::describe},
     {.spelling = "also",

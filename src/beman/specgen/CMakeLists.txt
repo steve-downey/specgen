@@ -19,6 +19,7 @@ target_sources(
         depfile.cpp
         diff.cpp
         draft_import.cpp
+        inherit.cpp
         document_build.cpp
         fragments.cpp
         span_sentinels.cpp

@@ -431,10 +431,28 @@ bool has_description(const ItemDescr&);
 // Stable-sort elements into canonical order (authored order is irrelevant).
 void canonicalize(ItemDescr&);
 
+// A claim that a predicate of the code is covered by prose the item inherits,
+// for an element the item does not author (`\asdraft`, `\covers constraints
+// P`): it is carried onto the inherited element's `coverage` when the
+// description is resolved, and is never rendered.
+struct InheritedCover {
+    ElementKind kind = ElementKind::Constraints;
+    Paragraph   claim;
+
+    friend bool operator==(const InheritedCover&, const InheritedCover&) = default;
+};
+
 struct SpecItem {
     ItemDecl  decl;
     ItemDescr descr;
     Change    change = Change::Same; // the wording diff's mark on the whole item
+    // `\asdraft`: the description is the baseline's, to be resolved against
+    // the baseline item this one pairs with (inherit.hpp). Whatever `descr`
+    // holds is authored wording that replaces the inherited element of its
+    // kind, or a derivation whose conjuncts the inherited element is
+    // validated against. Cleared when resolved.
+    bool                        as_draft = false;
+    std::vector<InheritedCover> covers   = {};
 
     friend bool operator==(const SpecItem&, const SpecItem&) = default;
 };

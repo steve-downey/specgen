@@ -691,3 +691,25 @@ TEST_CASE("ir_json - table-reference and raw inlines round-trip") {
     CHECK(*back == doc);
     CHECK(emit_json(*back) == json);
 }
+
+TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
+    SpecItem plain;
+    plain.decl.signatures.push_back({"void f();", {}});
+    CHECK(emit_json(plain).find("as_draft") == std::string::npos);
+    CHECK(emit_json(plain).find("covers") == std::string::npos);
+
+    SpecItem inherited = plain;
+    inherited.as_draft = true;
+    inherited.covers   = {
+        {ElementKind::Constraints, {CodeInline{{"P", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}}}};
+    Document doc;
+    doc.nodes.push_back(inherited);
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("\"as_draft\":true") != std::string::npos);
+    CHECK(json.find("\"element\":\"constraints\"") != std::string::npos);
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}

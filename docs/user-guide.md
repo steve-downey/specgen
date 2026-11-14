@@ -896,6 +896,51 @@ an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
 wording, and the derivation is retained as evidence for the drift checks.
 
+## Inheriting a description
+
+`\asdraft` says a declaration's description is the baseline's. It is for a paper
+whose change to a member leaves its wording alone, such as adding `constexpr`:
+the wording comes from the working draft rather than being retyped, and cannot
+drift from it.
+
+```cpp
+//! \asdraft
+template <class T>
+constexpr optional<T>& optional<T>::operator=(nullopt_t) noexcept { /* ... */ }
+```
+
+The item takes its description from the baseline item of the same section that
+declares the same names and whose signature reads most like its own, each
+baseline item once; the diff's own measure, so adding `constexpr` does not break
+the pairing. Name a baseline with `--baseline-draft`, or any of the other
+baselines; with none the run is an error, since there is nothing to inherit
+from. An item with no pair is an error naming its signature and the section. An
+`\asdraft` item cannot be `\omit`, `\merge` or `\elsewhere`.
+
+Elements the docblock authors replace the inherited element of the same kind,
+which is how a paper changes one paragraph of an item and leaves the rest:
+
+```cpp
+//! \asdraft
+//! \remarks The expression is potentially-throwing only if `T`'s constructor is.
+```
+
+The requires-clause and `static_assert` derivations still run. They do not
+replace the draft's *Constraints* or *Mandates*; they are what those are checked
+against, as authored wording is (see [Explicit constraint
+coverage](#explicit-constraint-coverage)). A predicate the draft states in words
+the checker cannot read is acknowledged with `\covers` naming the element:
+
+```cpp
+//! \asdraft
+//! \covers constraints !detail::is_in_place_type<remove_cvref_t<F>>
+```
+
+A derived element the baseline has no counterpart for stays, as new wording.
+`--emit-ir` with no baseline keeps the marker in the IR (`as_draft`, and
+`covers` for the claims), and `render --from-ir` with `--baseline-ir` resolves
+it.
+
 ## Placement and grouping markers
 
 - `\omit` excludes a declaration entirely.
@@ -1248,7 +1293,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.28.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.29.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1283,7 +1328,8 @@ prose, acknowledge its correspondence on the authored element:
 //! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
 ```
 
-`\covers` belongs to the current normative Constraints or Mandates element.
+`\covers` belongs to the current normative Constraints or Mandates element, or,
+beside `\asdraft`, names the element it is about (`\covers constraints P`).
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

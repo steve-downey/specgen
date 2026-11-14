@@ -156,7 +156,11 @@ Lowered lower(const grammar::Docblock& block) {
 
     // ItemDirectives is grammar::Markers (decision marker-registry): a plain
     // copy, not a field-by-field transcription that could drift from it.
-    out.directives = block.markers;
+    out.directives       = block.markers;
+    out.inherited_covers = block.kind_covers | std::views::transform([](const grammar::KindCover& cover) {
+                               return ir::InheritedCover{cover.kind, lower_paragraph(cover.claim)};
+                           }) |
+                           std::ranges::to<std::vector>();
 
     // Authored order is irrelevant; [structure.specifications] order is not.
     ir::canonicalize(out.descr);

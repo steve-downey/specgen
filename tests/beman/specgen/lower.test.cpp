@@ -226,3 +226,12 @@ TEST_CASE("lower - coverage metadata remains separate from the authored body") {
     CHECK(code_of(element.coverage.front().back()) == "false");
     CHECK(element.body.size() == 1);
 }
+
+TEST_CASE("lower - covers naming an element lowers to a claim for the inherited description") {
+    const auto lowered = lower(grammar::parse_docblock("\\asdraft\n\\covers constraints !detail::trait<T>").block);
+    CHECK(lowered.directives.asdraft);
+    REQUIRE(lowered.inherited_covers.size() == 1);
+    CHECK(lowered.inherited_covers.front().kind == ir::ElementKind::Constraints);
+    CHECK_FALSE(lowered.inherited_covers.front().claim.empty());
+    CHECK(lowered.descr.elements.empty());
+}
