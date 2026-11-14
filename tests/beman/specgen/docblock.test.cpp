@@ -917,3 +917,35 @@ TEST_CASE("docblock - malformed inline macros report diagnostics and keep their 
     REQUIRE(nested.block.elements.size() == 1);
     CHECK(std::get<InlinePlaceholder>(paragraph(nested.block.elements.front())[1]).text == "a{b}c");
 }
+
+TEST_CASE("docblock - asdraft is a marker, and covers may name the element it is about") {
+    const auto bare = parse_docblock("\\asdraft");
+    CHECK(bare.ok());
+    CHECK(bare.block.markers.asdraft);
+    CHECK(bare.block.elements.empty());
+
+    const auto scoped = parse_docblock("\\asdraft\n\\covers constraints !detail::trait<T>");
+    REQUIRE(scoped.ok());
+    REQUIRE(scoped.block.kind_covers.size() == 1);
+    CHECK(scoped.block.kind_covers.front().kind == ir::ElementKind::Constraints);
+    CHECK(scoped.block.elements.empty());
+
+    const auto mandates = parse_docblock("\\asdraft\n\\covers mandates trait<T>");
+    REQUIRE(mandates.ok());
+    CHECK(mandates.block.kind_covers.front().kind == ir::ElementKind::Mandates);
+
+    // The element-scoped form claims wording that is inherited, so it needs the marker.
+    CHECK_FALSE(parse_docblock("\\covers constraints trait<T>").ok());
+    // Authored wording beside the marker keeps the unscoped form working.
+    const auto authored = parse_docblock("\\asdraft\n\\constraints\n\\covers !detail::trait<T>\nThe condition holds.");
+    REQUIRE(authored.ok());
+    CHECK(authored.block.elements.front().coverage.size() == 1);
+    CHECK(authored.block.kind_covers.empty());
+}
+
+TEST_CASE("docblock - asdraft takes the description, so it excludes omit, merge and elsewhere") {
+    for (const auto* marker : {"\\omit", "\\merge", "\\elsewhere"}) {
+        CAPTURE(marker);
+        CHECK_FALSE(parse_docblock(std::string("\\asdraft\n") + marker).ok());
+    }
+}

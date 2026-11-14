@@ -664,6 +664,14 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
+- `\asdraft` — the description is the baseline's ([plans/draft-import.md](plans/draft-import.md)).
+  The front end sets `SpecItem::as_draft` (and `covers`, from `\covers <element> P`) and
+  derives as usual; `inherit::resolve`, a Clang-free pass the driver runs after the baselines
+  are built and before validation and the diff, replaces the item's description with the
+  paired baseline item's. Authored elements replace the inherited one of their kind, and a
+  derivation's conjuncts move onto the inherited element so the validator checks the draft's
+  words against the code. Items pair by declared names, then by `diff::declaration_similarity`;
+  the differ's own loose pairing uses the same measure, best first.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members, for a folded-in
   namespace entity, and — on a class *definition*'s own docblock — for that class's own
   wording, both nodes of it (§6, decision routed-wording-payload).

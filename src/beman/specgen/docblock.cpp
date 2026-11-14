@@ -852,16 +852,31 @@ ParseResult parse_docblock(std::string_view raw) {
             }
 
             if (name == "covers") {
-                // Validator metadata leaves the current authored paragraph or list intact.
-                Element* element = current_element();
-                if (element == nullptr || informative != nullptr ||
-                    (element->kind != ir::ElementKind::Constraints && element->kind != ir::ElementKind::Mandates)) {
+                // Validator metadata. `\covers constraints P` names the element
+                // it is about, for one this docblock does not author -- the
+                // description is inherited (`\asdraft`) -- and is held on the
+                // block; `\covers P` leaves the current authored paragraph or
+                // list intact and attaches to its element.
+                auto                           predicate = trim(after);
+                std::optional<ir::ElementKind> scoped;
+                if (const std::size_t space = predicate.find_first_of(" \t");
+                    space != std::string_view::npos && informative == nullptr) {
+                    const auto word = predicate.substr(0, space);
+                    if (const auto kind = ir::element_from_name(word);
+                        kind && (*kind == ir::ElementKind::Constraints || *kind == ir::ElementKind::Mandates)) {
+                        scoped    = kind;
+                        predicate = trim(predicate.substr(space));
+                    }
+                }
+                Element* element = scoped ? nullptr : current_element();
+                if (!scoped &&
+                    (element == nullptr || informative != nullptr ||
+                     (element->kind != ir::ElementKind::Constraints && element->kind != ir::ElementKind::Mandates))) {
                     diags.push_back(
                         {Severity::Error, lineno, "\\covers requires a normative Constraints or Mandates element"});
                     continue;
                 }
-                auto       predicate = trim(after);
-                const bool negative  = predicate.starts_with('!');
+                const bool negative = predicate.starts_with('!');
                 if (negative)
                     predicate = trim(predicate.substr(1));
                 if (predicate.empty() || predicate.starts_with('!') || predicate.find('`') != std::string_view::npos) {
@@ -869,8 +884,12 @@ ParseResult parse_docblock(std::string_view raw) {
                         {Severity::Error, lineno, "\\covers requires a predicate, optionally prefixed by !"});
                     continue;
                 }
-                element->coverage.push_back(
-                    {InlineCode{std::string(predicate)}, InlineText{" is "}, InlineCode{negative ? "false" : "true"}});
+                ProseParagraph claim{
+                    InlineCode{std::string(predicate)}, InlineText{" is "}, InlineCode{negative ? "false" : "true"}};
+                if (scoped)
+                    block.kind_covers.push_back({*scoped, std::move(claim), lineno});
+                else
+                    element->coverage.push_back(std::move(claim));
                 continue;
             }
 
@@ -1077,6 +1096,14 @@ ParseResult parse_docblock(std::string_view raw) {
         diags.push_back({Severity::Error, 0, "\\group and \\also are mutually exclusive"});
     if (block.markers.impdef && block.markers.seebelow)
         diags.push_back({Severity::Error, 0, "\\impdef and \\seebelow are mutually exclusive"});
+    if (block.markers.asdraft && (block.markers.omit || block.markers.merge || block.markers.elsewhere))
+        diags.push_back({Severity::Error,
+                         0,
+                         "\\asdraft takes the item's description, so it cannot be \\omit, \\merge or \\elsewhere"});
+    if (!block.kind_covers.empty() && !block.markers.asdraft)
+        diags.push_back({Severity::Error,
+                         block.kind_covers.front().line,
+                         "\\covers naming an element applies to inherited wording, so it requires \\asdraft"});
     if (block.markers.elsewhere && block.markers.omit)
         diags.push_back({Severity::Error, 0, "\\elsewhere and \\omit are mutually exclusive"});
     if (block.markers.elsewhere && block.markers.merge)

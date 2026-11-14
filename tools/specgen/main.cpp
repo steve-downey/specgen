@@ -35,6 +35,7 @@
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/draft_import.hpp>
+#include <beman/specgen/inherit.hpp>
 #include <beman/specgen/foundation/fold_left_short.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/fragments.hpp>
@@ -1043,6 +1044,44 @@ std::expected<std::vector<ir::Document>, std::string> read_documents(const std::
         });
 }
 
+// Inherited descriptions (docs/plans/draft-import.md): a declaration marked
+// `\asdraft` takes its description from the baseline item it pairs with, so
+// each document is resolved against its own baseline before validation and the
+// diff, which then see ordinary wording. Without a baseline there is nothing to
+// inherit from, which is an error and not a silent absence of wording. Every
+// finding is reported, and any of them fails the run: wording that quietly
+// lacks its description is what the marker exists to prevent.
+std::expected<void, std::string> resolve_inherited(std::span<ir::Document>       documents,
+                                                   std::span<const ir::Document> baselines,
+                                                   std::span<const std::string>  labels) {
+    namespace inherit = beman::specgen::inherit;
+    if (baselines.empty()) {
+        auto waiting = std::views::zip(labels, documents) |
+                       std::views::filter([](const auto& pair) { return inherit::has_unresolved(std::get<1>(pair)); });
+        if (waiting.empty())
+            return {};
+        return std::unexpected(std::format("specgen: {}: \\asdraft takes a description from a baseline; "
+                                           "name one with --baseline-draft, --baseline-header, --baseline-rev or "
+                                           "--baseline-ir",
+                                           std::get<0>(*waiting.begin())));
+    }
+    std::vector<std::string> findings;
+    // substrate generic algorithm: each document resolves in place against its
+    // own baseline, which is a mutation, and every finding is collected.
+    for (const auto& [label, document, baseline] : std::views::zip(labels, documents, baselines))
+        // substrate generic algorithm: the findings of one document, collected.
+        for (const inherit::Diagnostic& finding : inherit::resolve(document, baseline))
+            findings.push_back(std::format("specgen: {}: {}: {}{}{}",
+                                           label,
+                                           beman::specgen::severity_label(finding.severity),
+                                           finding.where,
+                                           finding.where.empty() ? "" : ": ",
+                                           finding.message));
+    if (findings.empty())
+        return {};
+    return std::unexpected(findings | std::views::join_with('\n') | std::ranges::to<std::string>());
+}
+
 // A baseline implies --paper and replaces its mechanism: the marks the diff
 // puts on the document are the paper form, and paper mode's own "every
 // top-level node is added" is the empty-baseline case of the same thing
@@ -1132,7 +1171,7 @@ int render_command(const std::vector<std::string>& args) {
     // an unreadable other half is the state this ordering exists to prevent.
     // fold_left_short, not a loop: the scan must stop at the first input
     // that fails to read or parse and look at no later one.
-    const auto documents = read_documents(inputs);
+    auto documents = read_documents(inputs);
     if (!documents) {
         std::println(stderr, "{}", documents.error());
         return 1;
@@ -1154,6 +1193,10 @@ int render_command(const std::vector<std::string>& args) {
         return 1;
     }
     settle_baseline(wording);
+    if (const auto resolved = resolve_inherited(*documents, *baselines, inputs); !resolved) {
+        std::println(stderr, "{}", resolved.error());
+        return 1;
+    }
 
     // The prerequisites of a render are the IR files it read -- the baselines
     // among them. Modest on its own, and the point: a two-stage build whose
@@ -1697,6 +1740,26 @@ int generate_command(const std::vector<std::string>& args) {
                 return build_baselines(built).and_then([&](Baselines baselines) -> std::expected<int, std::string> {
                     const std::vector<ir::Document>& baseline_documents = baselines.documents;
                     settle_baseline(wording);
+                    {
+                        // The documents the headers built, resolved in place; the
+                        // vector `built` owns them until the writers below take them.
+                        std::vector<ir::Document> parsed = built |
+                                                           std::views::transform([](frontend::DocumentBuild& one) {
+                                                               return std::move(one.result.document);
+                                                           }) |
+                                                           std::ranges::to<std::vector<ir::Document>>();
+                        // `--emit-ir` with no baseline stops at the seam: the IR keeps the
+                        // `\asdraft` marks, and `render --baseline-ir` resolves them.
+                        const auto resolved = emit_ir && baseline_documents.empty()
+                                                  ? std::expected<void, std::string>{}
+                                                  : resolve_inherited(parsed, baseline_documents, headers);
+                        // substrate generic algorithm: puts the documents back, a move
+                        // in step with `built` rather than a fold.
+                        for (auto&& [one, document] : std::views::zip(built, parsed))
+                            one.result.document = std::move(document);
+                        if (!resolved)
+                            return std::unexpected(resolved.error());
+                    }
                     // `--emit-ir` stops at the seam (decision ir-boundary): the IR
                     // file is the output, and is as much a build artifact of the
                     // header as the wording is -- so it gets a dependency fragment

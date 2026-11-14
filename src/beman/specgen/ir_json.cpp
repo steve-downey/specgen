@@ -422,11 +422,21 @@ struct json_descriptor<Inline> {
 };
 
 template <>
+struct json_descriptor<ir::InheritedCover> {
+    static constexpr auto members = std::tuple{
+        enum_field("element", &ir::InheritedCover::kind, element_name, element_from_name, "element kind"),
+        field("claim", &ir::InheritedCover::claim),
+    };
+};
+
+template <>
 struct json_descriptor<SpecItem> {
     static constexpr auto members = std::tuple{
         field("decl", &SpecItem::decl),
         field("descr", &SpecItem::descr),
         defaulted_enum_field("change", &SpecItem::change, Change::Same, change_name, change_from_name, "change"),
+        defaulted_field("as_draft", &SpecItem::as_draft),
+        defaulted_field("covers", &SpecItem::covers),
     };
 };
 

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -839,7 +840,47 @@ diff_nodes(const std::vector<ir::Node>& a, const std::vector<ir::Node>& b, const
         }
     };
     pair_by([&](std::size_t i, std::size_t j) { return !ka[i].exact.empty() && ka[i].exact == kb[j].exact; });
-    pair_by([&](std::size_t i, std::size_t j) { return !ka[i].loose.empty() && ka[i].loose == kb[j].loose; });
+    // The looser key is the names an item declares, which an overload set
+    // shares, so first-come pairing would hand each overload another's
+    // baseline whenever the set's order or membership changed. The pairs are
+    // taken best-reading signature first instead; with one candidate each,
+    // which is every case that was not ambiguous, nothing changes.
+    {
+        struct Candidate {
+            std::size_t i;
+            std::size_t j;
+            double      score;
+        };
+        const auto alike = [&](std::size_t i, std::size_t j) {
+            const auto& x      = std::get<ir::SpecItem>(a[i]);
+            const auto& y      = std::get<ir::SpecItem>(b[j]);
+            const auto  scores = std::views::cartesian_product(x.decl.signatures, y.decl.signatures) |
+                                 std::views::transform([](const auto& pair) {
+                                    const auto& [p, q] = pair;
+                                    return p == q ? 1.0 : declaration_similarity(p, q);
+                                 });
+            return std::ranges::fold_left(
+                scores, 0.0, [](double best, double score) { return std::max(best, score); });
+        };
+        std::vector<Candidate> candidates;
+        // substrate generic algorithm: enumerates the cross product of the unpaired
+        // baseline and current items that share names, scoring each.
+        for (std::size_t i = 0; i < a.size(); ++i)
+            // substrate generic algorithm: the inner half of the same enumeration.
+            for (std::size_t j = 0; j < b.size(); ++j)
+                if (pair_a[i] == unpaired && pair_b[j] == unpaired && !ka[i].loose.empty() &&
+                    ka[i].loose == kb[j].loose)
+                    candidates.push_back({i, j, alike(i, j)});
+        std::ranges::stable_sort(candidates, std::greater<>{}, &Candidate::score);
+        // substrate generic algorithm: claims the candidates best first, each
+        // writing both pairing tables.
+        for (const Candidate& c : candidates) {
+            if (pair_a[c.i] == unpaired && pair_b[c.j] == unpaired) {
+                pair_a[c.i] = c.j;
+                pair_b[c.j] = c.i;
+            }
+        }
+    }
     pair_by([&](std::size_t i, std::size_t j) {
         return ka[i].paragraph && kb[j].paragraph &&
                similar_paragraphs(
@@ -1009,6 +1050,10 @@ std::vector<ir::Node> apply_context(std::vector<ir::Node> nodes, Context context
 }
 
 } // namespace
+
+double declaration_similarity(const ir::CodeText& x, const ir::CodeText& y) {
+    return similarity(code_keys(code_tokens(Line{x.text, x.spans})), code_keys(code_tokens(Line{y.text, y.spans})));
+}
 
 std::string_view context_name(Context c) { return kContextNames[c]; }
 
