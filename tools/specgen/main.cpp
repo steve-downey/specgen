@@ -1059,8 +1059,8 @@ std::expected<std::vector<ir::Document>, std::string> read_documents(const std::
 // each document is resolved against its own baseline before validation and the
 // diff, which then see ordinary wording. Without a baseline there is nothing to
 // inherit from, which is an error and not a silent absence of wording. Every
-// finding is reported, and any of them fails the run: wording that quietly
-// lacks its description is what the marker exists to prevent.
+// finding is reported, and an error fails the run: wording that quietly lacks
+// its description is what the marker exists to prevent.
 std::expected<void, std::string> resolve_inherited(std::span<ir::Document>       documents,
                                                    std::span<const ir::Document> baselines,
                                                    std::span<const std::string>  labels) {
@@ -1075,21 +1075,28 @@ std::expected<void, std::string> resolve_inherited(std::span<ir::Document>      
                                            "--baseline-ir",
                                            std::get<0>(*waiting.begin())));
     }
-    std::vector<std::string> findings;
+    std::vector<std::string> errors;
     // substrate generic algorithm: each document resolves in place against its
-    // own baseline, which is a mutation, and every finding is collected.
+    // own baseline, which is a mutation, and every finding is reported.
     for (const auto& [label, document, baseline] : std::views::zip(labels, documents, baselines))
-        // substrate generic algorithm: the findings of one document, collected.
-        for (const inherit::Diagnostic& finding : inherit::resolve(document, baseline))
-            findings.push_back(std::format("specgen: {}: {}: {}{}{}",
+        // substrate generic algorithm: the findings of one document, reported.
+        for (const inherit::Diagnostic& finding : inherit::resolve(document, baseline)) {
+            std::string line = std::format("specgen: {}: {}: {}{}{}",
                                            label,
                                            beman::specgen::severity_label(finding.severity),
                                            finding.where,
                                            finding.where.empty() ? "" : ": ",
-                                           finding.message));
-    if (findings.empty())
+                                           finding.message);
+            // Only an error fails the run; a warning or a note about a patched
+            // synopsis is the author's to read, like any validation finding.
+            if (finding.severity == beman::specgen::Severity::Error)
+                errors.push_back(std::move(line));
+            else
+                std::println(stderr, "{}", line);
+        }
+    if (errors.empty())
         return {};
-    return std::unexpected(findings | std::views::join_with('\n') | std::ranges::to<std::string>());
+    return std::unexpected(errors | std::views::join_with('\n') | std::ranges::to<std::string>());
 }
 
 // A baseline implies --paper and replaces its mechanism: the marks the diff

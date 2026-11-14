@@ -147,23 +147,11 @@ pair_synopsis(const ir::Synopsis& synopsis, const std::vector<ir::Node>& baselin
     return nullptr;
 }
 
-void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from, std::vector<Diagnostic>& out) {
-    // Without the class's own declarations there is nothing to patch from; the
-    // baseline's text stands.
-    ir::CodeText code = from.code;
-    if (synopsis.declared) {
-        synopsis_check::Patched patched = synopsis_check::patch(from.code, *synopsis.declared);
-        code                            = std::move(patched.code);
-        // substrate generic algorithm: formats each unpatched finding onto the result.
-        for (const synopsis_check::Finding& finding : patched.unpatched)
-            out.push_back({finding.severity,
-                           synopsis.name.empty() ? std::string("synopsis") : synopsis.name + "/synopsis",
-                           std::format("`{}`: {}; the inherited synopsis cannot be patched to agree, so write it with "
-                                       "\\verbatim-synopsis",
-                                       finding.declaration,
-                                       finding.message)});
-    }
-    synopsis.code     = std::move(code);
+// What cannot be patched is not reported here: `--validate` compares the
+// result with the class's own declarations and says so once, with the same
+// words it uses for an authored synopsis.
+void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from) {
+    synopsis.code     = synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared).code : from.code;
     synopsis.as_draft = false;
 }
 
@@ -214,7 +202,7 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                                                 where)});
                                return;
                            }
-                           resolve_synopsis(synopsis, *from, out);
+                           resolve_synopsis(synopsis, *from);
                        },
                        [](ir::FreeParagraph&) {},
                    },

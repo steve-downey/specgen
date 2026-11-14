@@ -356,10 +356,7 @@ function(specgen_add_golden case)
             )
         endif()
         if(inherit_draft_dir)
-            list(
-                APPEND single_pass_args
-                "-DINHERIT_DRAFT=${inherit_draft_dir}"
-            )
+            list(APPEND single_pass_args "-DINHERIT_DRAFT=${inherit_draft_dir}")
         endif()
         if(ARG_DIFF_CONTEXT)
             list(APPEND single_pass_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
