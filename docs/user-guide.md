@@ -937,9 +937,66 @@ the checker cannot read is acknowledged with `\covers` naming the element:
 ```
 
 A derived element the baseline has no counterpart for stays, as new wording.
+
+A paper wants two renderings of the same header: the wording itself, and its
+diff against the draft. `--baseline-draft <dir>` gives the diff.
+`--inherit-draft <dir>` takes the same directory but only resolves `\asdraft`
+from it, and renders the paper's own wording with no marks:
+
+```sh
+specgen generate hdr.hpp --inherit-draft draft/source --backend latex -o wording.tex -- -Iinclude
+specgen generate hdr.hpp --baseline-draft draft/source --backend latex -o diff.tex -- -Iinclude
+```
+
+The two flags together are an error, since the second already inherits. Both
+list the draft files they read in a `--depfile`.
+
+The same marker works one level up. On a class definition's docblock, `\asdraft`
+takes the class's own description (its *Recommended practice*, notes and prose)
+from the baseline item of the section that has no declaration; as a detached
+block of its own under a `\rSec`, it takes that section's prose:
+
+```cpp
+// \rSec4[func.wrap.move.general]{General}
+
+//! \asdraft
+
+// \rSec4[func.wrap.move.class]{Class template \tcode{move_only_function}}
+
+//! \asdraft
+//! \asdraft-synopsis
+template <class R, class... ArgTypes>
+class move_only_function<R(ArgTypes...)> { /* ... */ };
+```
+
+A description with no declaration pairs with a baseline description with no
+declaration of the same section, in order. `\asdraft` pairs members and
+descriptions only; the synopsis is a separate request, below.
 `--emit-ir` with no baseline keeps the marker in the IR (`as_draft`, and
 `covers` for the claims), and `render --from-ir` with `--baseline-ir` resolves
 it.
+
+### An inherited synopsis, and a synopsis that agrees with the code
+
+`\asdraft-synopsis` on a class takes the baseline synopsis of the same class,
+which cannot be extracted when the draft's class has placeholders (`\cv{}`,
+`noexcept(\placeholder{noex})`). The class's own declarations still generate a
+synopsis; it is kept beside the inherited one (`declared` in the IR), and the
+declarations it holds are paired with the inherited synopsis's by name and then
+by how alike they read. For each pair, the specifiers `constexpr`, `explicit` and
+`noexcept` are written as the declarations have them, so the draft's layout,
+placeholders and comments stay and only what the paper changed is different. A
+`noexcept` whose operand is a placeholder agrees with either. `static`,
+`friend`, `= default` and `= delete` cannot be written, and are warnings naming
+the declaration, as is a class member the synopsis leaves out. A declaration the
+synopsis has and the class does not is a note: it is how a member inherited from
+a base class reads.
+
+Any synopsis that is text rather than extraction is checked the same way, under
+`--validate`: a `\verbatim-synopsis` is compared with the declarations of its
+class, and each disagreement on those specifiers is a warning, and a declaration
+only one side has is a warning or, for the synopsis's own, a note. `\asdraft-synopsis` and `\verbatim-synopsis` are exclusive,
+and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers
 
@@ -1293,7 +1350,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.29.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.30.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

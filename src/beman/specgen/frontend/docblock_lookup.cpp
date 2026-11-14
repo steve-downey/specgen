@@ -160,7 +160,13 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
 
     RecordDocblock out;
     out.diagnostics = docblock_diagnostics(rc, *start, parsed.diags, sm);
-    out.descr       = lowering::lower(parsed.block).descr;
+    {
+        lowering::Lowered lowered = lowering::lower(parsed.block);
+        out.descr                 = std::move(lowered.descr);
+        out.as_draft              = lowered.directives.asdraft;
+        out.synopsis_as_draft     = lowered.directives.asdraft_synopsis;
+        out.covers                = std::move(lowered.inherited_covers);
+    }
 
     const auto reject = [&](std::string message) {
         const std::vector<grammar::Diagnostic> invalid{{beman::specgen::Severity::Error, 0, std::move(message)}};

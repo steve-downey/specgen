@@ -480,6 +480,10 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
     attached.item.covers               = std::move(lowered.inherited_covers);
     attached.directives                = std::move(lowered.directives);
     attached.verbatim_itemdecl         = pr.block.verbatim_itemdecl;
+    if (attached.directives.asdraft_synopsis && attached.grouping_line > 0)
+        attached.diagnostics.push_back({beman::specgen::Severity::Error,
+                                        attached.grouping_line,
+                                        "\\asdraft-synopsis applies to a class or class template definition"});
     if (attached.directives.verbatim_synopsis && attached.grouping_line > 0)
         // The synopsis form belongs on a class definition; on anything an
         // AttachedItem renders it would vanish silently, and silence is the
@@ -542,6 +546,13 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                     {beman::specgen::Severity::Error, 0, "\\impdef applies only to type aliases"}};
                 attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
             }
+            if (attached.directives.asdraft_synopsis) {
+                const std::vector<grammar::Diagnostic> invalid{
+                    {beman::specgen::Severity::Error,
+                     0,
+                     "\\asdraft-synopsis applies to a class or class template definition"}};
+                attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
+            }
             if (attached.directives.verbatim_synopsis) {
                 const std::vector<grammar::Diagnostic> invalid{
                     {beman::specgen::Severity::Error,
@@ -574,8 +585,19 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                                                                  seebelow_target(attached.directives),
                                                                  declarator_qualifier));
     }
-    if (const std::string name = decl_form->getNameAsString(); !name.empty())
-        attached.item.decl.entities.push_back(name);
+    // A constructor's or destructor's name is its class's, without the template
+    // arguments clang spells a partial specialization's with: the draft's index
+    // says `move_only_function`, and the differ pairs items by the names they
+    // declare.
+    const std::string entity_name = [&] {
+        if (const auto* ctor = llvm::dyn_cast<clang::CXXConstructorDecl>(decl_form))
+            return ctor->getParent()->getNameAsString();
+        if (const auto* dtor = llvm::dyn_cast<clang::CXXDestructorDecl>(decl_form))
+            return "~" + dtor->getParent()->getNameAsString();
+        return decl_form->getNameAsString();
+    }();
+    if (!entity_name.empty())
+        attached.item.decl.entities.push_back(entity_name);
 
     // The declaration kind determines the draft index form without
     // inspecting its formatted spelling. Use decl_form -- the declaration the

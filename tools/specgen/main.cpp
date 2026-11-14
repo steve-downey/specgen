@@ -165,6 +165,9 @@ generate options:
                              read, by stable name, from the *.tex files in
                              this draft source directory; a section it lacks
                              is new wording. One per run
+  --inherit-draft <dir>     resolve \asdraft against the draft in this
+                             directory, as --baseline-draft does, but render
+                             the wording itself and not a diff. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
@@ -333,7 +336,11 @@ struct WordingOptions {
     // --baseline-draft <dir>: the baseline is the working draft's own wording,
     // read from its LaTeX source directory for the sections the header
     // generates (docs/plans/draft-import.md).
-    std::optional<std::string>   baseline_draft;
+    std::optional<std::string> baseline_draft;
+    // --inherit-draft <dir>: `\asdraft` takes its descriptions from the draft's
+    // LaTeX in this directory, and the wording is rendered plain, with no
+    // diff. The paper's own wording, as --baseline-draft is its diff.
+    std::optional<std::string>   inherit_draft;
     std::optional<diff::Context> diff_context;
 
     bool has_baseline() const {
@@ -521,6 +528,9 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
         return std::string(
             "specgen: --diff-context applies with a baseline (--baseline-ir, --baseline-header, --baseline-rev "
             "or --baseline-draft)");
+    if (options.inherit_draft && options.baseline_draft)
+        return std::string("specgen: --baseline-draft already inherits from the draft; --inherit-draft is for the "
+                           "wording without a diff");
     if (options.baseline_kinds() > 1)
         return std::string("specgen: a run takes one kind of baseline, --baseline-ir, --baseline-header, "
                            "--baseline-rev or --baseline-draft, not several");
@@ -1369,6 +1379,18 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
             }
             wording.baseline_draft = std::move(directory);
+        } else if (arg == "--inherit-draft") {
+            // Like --baseline-draft, a directory for the whole paper; it only
+            // resolves `\asdraft`, so what is rendered is the paper's wording
+            // and not a diff.
+            std::string directory;
+            if (!next(directory))
+                return 2;
+            if (wording.inherit_draft) {
+                std::println(stderr, "specgen: --inherit-draft names one directory for the run; it was given twice");
+                return 2;
+            }
+            wording.inherit_draft = std::move(directory);
         } else if (arg == "--diff-context") {
             std::string text;
             if (!next(text))
@@ -1740,6 +1762,18 @@ int generate_command(const std::vector<std::string>& args) {
                 return build_baselines(built).and_then([&](Baselines baselines) -> std::expected<int, std::string> {
                     const std::vector<ir::Document>& baseline_documents = baselines.documents;
                     settle_baseline(wording);
+                    // What `\asdraft` inherits from: the draft named by --inherit-draft,
+                    // which renders no diff, or else the baseline, whatever its kind.
+                    std::optional<Baselines> inherited;
+                    if (wording.inherit_draft) {
+                        auto draft = build_draft_baselines(*wording.inherit_draft, built);
+                        if (!draft)
+                            return std::unexpected(draft.error());
+                        inherited = std::move(*draft);
+                        baselines.sources.append_range(inherited->sources);
+                    }
+                    const std::vector<ir::Document>& inherit_documents =
+                        inherited ? inherited->documents : baseline_documents;
                     {
                         // The documents the headers built, resolved in place; the
                         // vector `built` owns them until the writers below take them.
@@ -1750,9 +1784,9 @@ int generate_command(const std::vector<std::string>& args) {
                                                            std::ranges::to<std::vector<ir::Document>>();
                         // `--emit-ir` with no baseline stops at the seam: the IR keeps the
                         // `\asdraft` marks, and `render --baseline-ir` resolves them.
-                        const auto resolved = emit_ir && baseline_documents.empty()
+                        const auto resolved = emit_ir && inherit_documents.empty()
                                                   ? std::expected<void, std::string>{}
-                                                  : resolve_inherited(parsed, baseline_documents, headers);
+                                                  : resolve_inherited(parsed, inherit_documents, headers);
                         // substrate generic algorithm: puts the documents back, a move
                         // in step with `built` rather than a fold.
                         for (auto&& [one, document] : std::views::zip(built, parsed))

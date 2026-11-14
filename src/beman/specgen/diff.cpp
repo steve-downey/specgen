@@ -802,6 +802,7 @@ struct NodeKeyOf {
     NodeKey operator()(const ir::SpecItem& s) const {
         std::vector<std::string> entities = s.decl.entities;
         std::ranges::sort(entities);
+        entities.erase(std::ranges::unique(entities).begin(), entities.end());
         const std::string loose = "E:" + (entities | std::views::join_with(',') | std::ranges::to<std::string>());
         const std::string sigs  = s.decl.signatures | std::views::transform(&ir::CodeText::text) |
                                   std::views::join_with('|') | std::ranges::to<std::string>();

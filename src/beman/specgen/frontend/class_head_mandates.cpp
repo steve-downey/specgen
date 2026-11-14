@@ -141,7 +141,9 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
                               const std::map<const clang::Decl*, std::string>& expos_set) {
     namespace ir = beman::specgen::ir;
 
-    out.descr = std::move(block.descr);
+    out.descr          = std::move(block.descr);
+    out.descr_as_draft = block.as_draft;
+    out.descr_covers   = std::move(block.covers);
     // Within the class's own wording, uses of its exposition-only members
     // render as \exposid -- the same rewrite a member's description gets.
     rewrite_prose_expos(out.descr, expos_spellings(record, expos_set));
@@ -165,7 +167,7 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
 
     if (!directives.at_anchor || directives.at_anchor->empty())
         return;
-    if (!out.general && !beman::specgen::ir::has_description(out.descr))
+    if (!out.general && !beman::specgen::ir::has_description(out.descr) && !out.descr_as_draft)
         return;
 
     const std::string name = record->getNameAsString();
@@ -176,10 +178,13 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
         out.pending.push_back(db::PendingItem{*directives.at_anchor, out.offset, std::move(*out.general)});
         out.general.reset();
     }
-    if (beman::specgen::ir::has_description(out.descr)) {
-        out.pending.push_back(
-            db::PendingItem{*directives.at_anchor, out.offset, ir::SpecItem{{}, std::move(out.descr)}});
-        out.descr = {};
+    if (beman::specgen::ir::has_description(out.descr) || out.descr_as_draft) {
+        ir::SpecItem own{{}, std::move(out.descr)};
+        own.as_draft = out.descr_as_draft;
+        own.covers   = std::move(out.descr_covers);
+        out.pending.push_back(db::PendingItem{*directives.at_anchor, out.offset, std::move(own)});
+        out.descr          = {};
+        out.descr_as_draft = false;
     }
 }
 

@@ -46,6 +46,9 @@ struct Markers {
     // from the baseline item this declaration pairs with, with whatever the
     // docblock authors replacing the inherited element of its kind.
     bool asdraft = false;
+    // On a class: the synopsis is the baseline's too, patched to agree with
+    // the class's declarations (synopsis_check.hpp).
+    bool asdraft_synopsis = false;
 
     // Itemdecl rendering.
     bool                       constraints_in_decl = false;
@@ -127,6 +130,7 @@ inline constexpr MarkerInfo kMarkers[] = {
     {.spelling = "merge",               .flag = &Markers::merge},
     {.spelling = "omit",                .flag = &Markers::omit},
     {.spelling = "asdraft",             .flag = &Markers::asdraft},
+    {.spelling = "asdraft-synopsis",    .flag = &Markers::asdraft_synopsis},
     {.spelling = "elsewhere",           .flag = &Markers::elsewhere},
     {.spelling = "describe",            .flag = &Markers::describe},
     {.spelling = "also",

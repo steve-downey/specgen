@@ -149,6 +149,7 @@ function(specgen_add_golden case)
         BASELINE
         BASELINE_IR
         BASELINE_DRAFT_SLICE
+        INHERIT_DRAFT_SLICE
         DIFF_CONTEXT
         SELFDIFF_IR
     )
@@ -262,6 +263,16 @@ function(specgen_add_golden case)
     # standard-slices) staged as `<stable-name>.tex` in a scratch directory,
     # which is what `--baseline-draft` reads. The corpus keeps `.slice`
     # files; the staging is a copy at configure time.
+    set(inherit_draft_dir "")
+    if(ARG_INHERIT_DRAFT_SLICE)
+        set(inherit_draft_dir "${CMAKE_CURRENT_BINARY_DIR}/${case}.inherit")
+        configure_file(
+            "${ARG_INHERIT_DRAFT_SLICE}"
+            "${inherit_draft_dir}/utilities.tex"
+            COPYONLY
+        )
+        list(APPEND case_args "-DINHERIT_DRAFT=${inherit_draft_dir}")
+    endif()
     set(baseline_draft_dir "")
     if(ARG_BASELINE_DRAFT_SLICE)
         set(baseline_draft_dir "${CMAKE_CURRENT_BINARY_DIR}/${case}.draft")
@@ -344,6 +355,12 @@ function(specgen_add_golden case)
                 "-DBASELINE_DRAFT=${baseline_draft_dir}"
             )
         endif()
+        if(inherit_draft_dir)
+            list(
+                APPEND single_pass_args
+                "-DINHERIT_DRAFT=${inherit_draft_dir}"
+            )
+        endif()
         if(ARG_DIFF_CONTEXT)
             list(APPEND single_pass_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
         endif()
@@ -384,6 +401,7 @@ function(specgen_add_golden case)
             NOT ARG_COMPILE_COMMANDS_DIR
             AND NOT ARG_BASELINE
             AND NOT ARG_BASELINE_DRAFT_SLICE
+            AND NOT ARG_INHERIT_DRAFT_SLICE
         )
             set(quiet_args
                 "-DSPECGEN=$<TARGET_FILE:specgen>"
@@ -421,6 +439,7 @@ function(specgen_add_golden case)
             AND NOT ARG_SOURCE
             AND NOT ARG_BASELINE
             AND NOT ARG_BASELINE_DRAFT_SLICE
+            AND NOT ARG_INHERIT_DRAFT_SLICE
         )
             set(flip_args
                 "-DCLANG_FORMAT=${SPECGEN_CLANG_FORMAT}"
@@ -622,6 +641,48 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_optional_assign/expected.json"
 )
 
+# `\asdraft` on a class and on a section's prose, and `\asdraft-synopsis`
+# (docs/plans/draft-import.md): a header whose whole change to [func.wrap.move]
+# is `constexpr` writes none of the draft's wording. The general prose, the
+# class's description and every member's description are the draft's; the
+# synopsis is the draft's too, patched from the declarations, so the diff is
+# the specifier. Its `.validate` sibling is the synopsis check, which must be
+# silent once the patch has run.
+specgen_add_golden(
+    diff_func_wrap_move_asdraft
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_asdraft.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_func_wrap_move_asdraft_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_func_wrap_move_asdraft/expected.json"
+)
+
+# `--inherit-draft`: the same header, with the draft only supplying what
+# `\asdraft` inherits and the wording rendered plain, which is the paper's own
+# wording and not its diff. The IR is the unmarked document, and the latex
+# render is the draft's [func.wrap.move] with `constexpr` on the members.
+specgen_add_golden(
+    inherit_func_wrap_move
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_asdraft.hpp"
+    INHERIT_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+)
+specgen_add_golden(
+    inherit_func_wrap_move_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_func_wrap_move/expected.json"
+)
+specgen_add_golden(
+    inherit_func_wrap_move_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_func_wrap_move/expected.json"
+)
+
 # `\asdraft` (docs/plans/draft-import.md): two members take their descriptions
 # from the same draft slice, one with a requires-clause whose derived
 # Constraints the inherited bullets are validated against, with `\covers` for
@@ -800,6 +861,17 @@ specgen_add_golden(
     validate_coverage
     MODE validate
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/validate_coverage/input.json"
+)
+
+# A synopsis that is text -- authored or inherited -- against the synopsis the
+# class's own declarations generate (`declared`): a specifier the two disagree
+# on, and a declaration only one side has. Warnings, so the render is not
+# suppressed and the exit is 0.
+specgen_add_golden(
+    validate_synopsis_agreement
+    MODE validate
+    EXPECT_EXIT 0
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/validate_synopsis_agreement/input.json"
 )
 
 # Validate-mode case: the empty-synopsis backstop. A Synopsis whose code
