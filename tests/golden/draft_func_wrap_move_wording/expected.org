@@ -1,0 +1,337 @@
+** Move-only wrapper [func.wrap.move]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** General [func.wrap.move.general]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+The header provides partial specializations of ~move_only_function~ for each combination of the possible replacements of the placeholders @@latex:\cv{}@@@@html:<i>cv</i>@@, @@latex:\placeholder{ref}@@@@html:<i>ref</i>@@, and @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ where
+
+- @@latex:\cv{}@@@@html:<i>cv</i>@@ is either const or empty,
+- @@latex:\placeholder{ref}@@@@html:<i>ref</i>@@ is either ~&~, ~&&~, or empty, and
+- @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is either ~true~ or ~false~.
+#+end_pnum
+
+#+begin_pnum
+For each of the possible combinations of the placeholders mentioned above, there is a placeholder @@latex:\placeholder{inv-quals}@@@@html:<i>inv-quals</i>@@ defined as follows:
+
+- If @@latex:\placeholder{ref}@@@@html:<i>ref</i>@@ is empty, let @@latex:\placeholder{inv-quals}@@@@html:<i>inv-quals</i>@@ be @@latex:\cv{}@@@@html:<i>cv</i>@@~&~,
+- otherwise, let @@latex:\placeholder{inv-quals}@@@@html:<i>inv-quals</i>@@ be @@latex:\cv{}@@@@html:<i>cv</i>@@ @@latex:\placeholder{ref}@@@@html:<i>ref</i>@@.
+#+end_pnum
+
+*** Class template ~move_only_function~ [func.wrap.move.class]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move.class
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class R, class... ArgTypes>
+  class move_only_function<R(ArgTypes...) @\cv{}@ @\placeholder{ref}@ noexcept(@\placeholder{noex}@)> {
+  public:
+    using result_type = R;
+
+    // \ref{func.wrap.move.ctor}, constructors, assignments, and destructor
+    move_only_function() noexcept;
+    move_only_function(nullptr_t) noexcept;
+    move_only_function(move_only_function&&) noexcept;
+    template<class F> move_only_function(F&&);
+    template<class T, class... Args>
+      explicit move_only_function(in_place_type_t<T>, Args&&...);
+    template<class T, class U, class... Args>
+      explicit move_only_function(in_place_type_t<T>, initializer_list<U>, Args&&...);
+
+    move_only_function& operator=(move_only_function&&);
+    move_only_function& operator=(nullptr_t) noexcept;
+    template<class F> move_only_function& operator=(F&&);
+
+    ~move_only_function();
+
+    // \ref{func.wrap.move.inv}, invocation
+    explicit operator bool() const noexcept;
+    R operator()(ArgTypes...) @\cv{}@ @\placeholder{ref}@ noexcept(@\placeholder{noex}@);
+
+    // \ref{func.wrap.move.util}, utility
+    void swap(move_only_function&) noexcept;
+    friend void swap(move_only_function&, move_only_function&) noexcept;
+    friend bool operator==(const move_only_function&, nullptr_t) noexcept;
+
+  private:
+    template<class VT>
+      static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;       // \expos
+  };
+}
+#+end_codeblock
+
+#+begin_pnum
+The ~move_only_function~ class template provides polymorphic wrappers that generalize the notion of a callable object([[https://eel.is/c++draft/func.def][@@html:[func.def]@@@@latex:{[}func.def{]}@@]]). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+#+end_pnum
+
+#+begin_pnum
+/Recommended practice/: Implementations should avoid the use of dynamically allocated memory for a small contained value.
+
+#+begin_note
+Such small-object optimization can only be applied to a type ~T~ for which ~is_nothrow_move_constructible_v<T>~ is ~true~.
+#+end_note
+#+end_pnum
+
+*** Constructors, assignments, and destructor [func.wrap.move.ctor]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move.ctor
+:UNNUMBERED: t
+:END:
+
+
+#+begin_itemdecl
+template<class VT>
+  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+If @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is ~true~, @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_nothrow_invocable_r_v<R, VT @\cv{}@ @\placeholder{ref}@, ArgTypes...> &&
+is_nothrow_invocable_r_v<R, VT @\placeholder{inv-quals}@, ArgTypes...>
+#+end_codeblock
+
+Otherwise, @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_invocable_r_v<R, VT @\cv{}@ @\placeholder{ref}@, ArgTypes...> &&
+is_invocable_r_v<R, VT @\placeholder{inv-quals}@, ArgTypes...>
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+move_only_function() noexcept;
+move_only_function(nullptr_t) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: ~*this~ has no target object.
+#+end_pnum
+
+#+begin_itemdecl
+move_only_function(move_only_function&& f) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Postconditions/: The target object of ~*this~ is the target object ~f~ had before construction, and ~f~ is in a valid state with an unspecified value.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> move_only_function(F&& f);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<F>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~remove_cvref_t<F>~ is not the same type as ~move_only_function~, and
+- ~remove_cvref_t<F>~ is not a specialization of ~in_place_type_t~, and
+- @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_constructible_v<VT, F>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Preconditions/: ~VT~ meets the @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements, and if ~is_move_constructible_v<VT>~ is ~true~, ~VT~ meets the @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@ requirements.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ has no target object if any of the following hold:
+
+- ~f~ is a null function pointer value,
+- ~f~ is a null member pointer value, or
+- ~remove_cvref_t<F>~ is a specialization of the ~move_only_function~ or ~copyable_function~ class template, and ~f~ has no target object.
+
+Otherwise, ~*this~ has a target object of type ~VT~ direct-non-list-initialized with ~std::forward<F>(f)~.
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the initialization of the target object. May throw ~bad_alloc~ unless ~VT~ is a function pointer or a specialization of ~reference_wrapper~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T, class... Args>
+  explicit move_only_function(in_place_type_t<T>, Args&&... args);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<T>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_constructible_v<VT, Args...>~ is ~true~, and
+- @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~VT~ is the same type as ~T~.
+#+end_pnum
+
+#+begin_pnum
+/Preconditions/: ~VT~ meets the @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements, and if ~is_move_constructible_v<VT>~ is ~true~, ~VT~ meets the @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@ requirements.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ has a target object of type ~VT~ direct-non-list-initialized with ~std::forward<Args>(args)...~.
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the initialization of the target object. May throw ~bad_alloc~ unless ~VT~ is a function pointer or a specialization of ~reference_wrapper~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T, class U, class... Args>
+  explicit move_only_function(in_place_type_t<T>, initializer_list<U> ilist, Args&&... args);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~VT~ be ~decay_t<T>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_constructible_v<VT, initializer_list<U>&, Args...>~ is ~true~, and
+- @@latex:\tcode{\exposid{is-callable-from}<VT>}@@@@html:<code><var>is-callable-from</var>&lt;VT&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~VT~ is the same type as ~T~.
+#+end_pnum
+
+#+begin_pnum
+/Preconditions/: ~VT~ meets the @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements, and if ~is_move_constructible_v<VT>~ is ~true~, ~VT~ meets the @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@ requirements.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ has a target object of type ~VT~ direct-non-list-initialized with ~ilist, std::forward<Args>(args)...~.
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the initialization of the target object. May throw ~bad_alloc~ unless ~VT~ is a function pointer or a specialization of ~reference_wrapper~.
+#+end_pnum
+
+#+begin_itemdecl
+move_only_function& operator=(move_only_function&& f);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Equivalent to: ~move_only_function(std::move(f)).swap(*this);~
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+move_only_function& operator=(nullptr_t) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Destroys the target object of ~*this~, if any.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> move_only_function& operator=(F&& f);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Equivalent to: ~move_only_function(std::forward<F>(f)).swap(*this);~
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+~move_only_function();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Destroys the target object of ~*this~, if any.
+#+end_pnum
+
+*** Invocation [func.wrap.move.inv]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move.inv
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+explicit operator bool() const noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~ if ~*this~ has a target object, otherwise ~false~.
+#+end_pnum
+
+#+begin_itemdecl
+R operator()(ArgTypes... args) @\cv{}@ @\placeholder{ref}@ noexcept(@\placeholder{noex}@);
+#+end_itemdecl
+
+#+begin_pnum
+/Preconditions/: ~*this~ has a target object.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return @\placeholder{INVOKE}@<R>(static_cast<F @\placeholder{inv-quals}@>(f), std::forward<ArgTypes>(args)...);
+#+end_codeblock
+
+where ~f~ is an lvalue designating the target object of ~*this~ and ~F~ is the type of ~f~.
+#+end_pnum
+
+*** Utility [func.wrap.move.util]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.move.util
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+void swap(move_only_function& other) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Exchanges the target objects of ~*this~ and ~other~.
+#+end_pnum
+
+#+begin_itemdecl
+friend void swap(move_only_function& f1, move_only_function& f2) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Equivalent to ~f1.swap(f2)~.
+#+end_pnum
+
+#+begin_itemdecl
+friend bool operator==(const move_only_function& f, nullptr_t) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~ if ~f~ has no target object, otherwise ~false~.
+#+end_pnum

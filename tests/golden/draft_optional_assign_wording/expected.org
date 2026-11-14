@@ -1,0 +1,255 @@
+** Assignment [optional.assign]
+:PROPERTIES:
+:CUSTOM_ID: optional.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+constexpr optional<T>& operator=(nullopt_t) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: If ~*this~ contains a value, calls @@latex:\tcode{\exposid{val}.T::\textasciitilde{}T()}@@@@html:<code><var>val</var>.T::~T()</code>@@ to destroy the contained value; otherwise no effect.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ does not contain a value.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+constexpr optional<T>& operator=(const optional& rhs);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: See [[optional.assign.copy][Table @@html:[optional.assign.copy]@@@@latex:{[}optional.assign.copy{]}@@]].
+
+#+name: optional.assign.copy
+#+caption: ~optional::operator=(const optional&)~ effects
+#+ATTR_WG21: :columns 18 36 36
+| | ~*this~ contains a value | ~*this~ does not contain a value |
+|-
+| ~rhs~ contains a value | assigns @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ | direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ |
+| ~rhs~ does not contain a value | destroys the contained value by calling @@latex:\tcode{\exposid{val}.T::\textasciitilde{}T()}@@@@html:<code><var>val</var>.T::~T()</code>@@ | no effect |
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~rhs.has_value() == this->has_value()~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If any exception is thrown, the result of the expression ~this->has_value()~ remains unchanged. If an exception is thrown during the call to ~T~'s copy constructor, no effect. If an exception is thrown during the call to ~T~'s copy assignment, the state of its contained value is as defined by the exception safety guarantee of ~T~'s copy assignment. This operator is defined as deleted unless ~is_copy_constructible_v<T>~ is ~true~ and ~is_copy_assignable_v<T>~ is ~true~. If ~is_trivially_copy_constructible_v<T> &&~ ~is_trivially_copy_assignable_v<T> &&~ ~is_trivially_destructible_v<T>~ is ~true~, this assignment operator is trivial.
+#+end_pnum
+
+#+begin_itemdecl
+constexpr optional& operator=(optional&& rhs) noexcept(@\seebelow@);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_move_constructible_v<T>~ is ~true~ and ~is_move_assignable_v<T>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: See [[optional.assign.move][Table @@html:[optional.assign.move]@@@@latex:{[}optional.assign.move{]}@@]]. The result of the expression ~rhs.has_value()~ remains unchanged.
+
+#+name: optional.assign.move
+#+caption: ~optional::operator=(optional&&)~ effects
+#+ATTR_WG21: :columns 18 36 36
+| | ~*this~ contains a value | ~*this~ does not contain a value |
+|-
+| ~rhs~ contains a value | assigns @@latex:\tcode{std::move(rhs.\exposid{val})}@@@@html:<code>std::move(rhs.<var>val</var>)</code>@@ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ | direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with @@latex:\tcode{std::move(rhs.\exposid{val})}@@@@html:<code>std::move(rhs.<var>val</var>)</code>@@ |
+| ~rhs~ does not contain a value | destroys the contained value by calling @@latex:\tcode{\exposid{val}.T::\textasciitilde{}T()}@@@@html:<code><var>val</var>.T::~T()</code>@@ | no effect |
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~rhs.has_value() == this->has_value()~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The exception specification is equivalent to:
+
+#+begin_codeblock
+is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T>
+#+end_codeblock
+#+end_pnum
+
+#+begin_pnum
+If any exception is thrown, the result of the expression ~this->has_value()~ remains unchanged. If an exception is thrown during the call to ~T~'s move constructor, the state of @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ is determined by the exception safety guarantee of ~T~'s move constructor. If an exception is thrown during the call to ~T~'s move assignment, the states of @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ and @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ are determined by the exception safety guarantee of ~T~'s move assignment. If ~is_trivially_move_constructible_v<T> &&~ ~is_trivially_move_assignable_v<T> &&~ ~is_trivially_destructible_v<T>~ is ~true~, this assignment operator is trivial.
+#+end_pnum
+
+#+begin_itemdecl
+template<class U = remove_cv_t<T>> constexpr optional& operator=(U&& v);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_same_v<remove_cvref_t<U>, optional>~ is ~false~,
+- ~conjunction_v<is_scalar<T>, is_same<T, decay_t<U>>>~ is ~false~,
+- ~is_constructible_v<T, U>~ is ~true~, and
+- ~is_assignable_v<T&, U>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: If ~*this~ contains a value, assigns ~std::forward<U>(v)~ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@; otherwise direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with ~std::forward<U>(v)~.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ contains a value.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If any exception is thrown, the result of the expression ~this->has_value()~ remains unchanged. If an exception is thrown during the call to ~T~'s constructor, the state of ~v~ is determined by the exception safety guarantee of ~T~'s constructor. If an exception is thrown during the call to ~T~'s assignment, the states of @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ and ~v~ are determined by the exception safety guarantee of ~T~'s assignment.
+#+end_pnum
+
+#+begin_itemdecl
+template<class U> constexpr optional<T>& operator=(const optional<U>& rhs);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_constructible_v<T, const U&>~ is ~true~,
+- ~is_assignable_v<T&, const U&>~ is ~true~,
+- @@latex:\tcode{\exposid{converts-from-any-cvref}<T, optional<U>>}@@@@html:<code><var>converts-from-any-cvref</var>&lt;T, optional&lt;U&gt;&gt;</code>@@ is ~false~,
+- ~is_assignable_v<T&, optional<U>&>~ is ~false~,
+- ~is_assignable_v<T&, optional<U>&&>~ is ~false~,
+- ~is_assignable_v<T&, const optional<U>&>~ is ~false~, and
+- ~is_assignable_v<T&, const optional<U>&&>~ is ~false~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: See [[optional.assign.copy.templ][Table @@html:[optional.assign.copy.templ]@@@@latex:{[}optional.assign.copy.templ{]}@@]].
+
+#+name: optional.assign.copy.templ
+#+caption: ~optional::operator=(const optional<U>&)~ effects
+#+ATTR_WG21: :columns 18 36 36
+| | ~*this~ contains a value | ~*this~ does not contain a value |
+|-
+| ~rhs~ contains a value | assigns ~rhs.operator*()~ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ | direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with ~rhs.operator*()~ |
+| ~rhs~ does not contain a value | destroys the contained value by calling @@latex:\tcode{\exposid{val}.T::\textasciitilde{}T()}@@@@html:<code><var>val</var>.T::~T()</code>@@ | no effect |
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~rhs.has_value() == this->has_value()~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If any exception is thrown, the result of the expression ~this->has_value()~ remains unchanged. If an exception is thrown during the call to ~T~'s constructor, the state of @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ is determined by the exception safety guarantee of ~T~'s constructor. If an exception is thrown during the call to ~T~'s assignment, the states of @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ and @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ are determined by the exception safety guarantee of ~T~'s assignment.
+#+end_pnum
+
+#+begin_itemdecl
+template<class U> constexpr optional<T>& operator=(optional<U>&& rhs);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_constructible_v<T, U>~ is ~true~,
+- ~is_assignable_v<T&, U>~ is ~true~,
+- @@latex:\tcode{\exposid{converts-from-any-cvref}<T, optional<U>>}@@@@html:<code><var>converts-from-any-cvref</var>&lt;T, optional&lt;U&gt;&gt;</code>@@ is ~false~,
+- ~is_assignable_v<T&, optional<U>&>~ is ~false~,
+- ~is_assignable_v<T&, optional<U>&&>~ is ~false~,
+- ~is_assignable_v<T&, const optional<U>&>~ is ~false~, and
+- ~is_assignable_v<T&, const optional<U>&&>~ is ~false~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: See [[optional.assign.move.templ][Table @@html:[optional.assign.move.templ]@@@@latex:{[}optional.assign.move.templ{]}@@]]. The result of the expression ~rhs.has_value()~ remains unchanged.
+
+#+name: optional.assign.move.templ
+#+caption: ~optional::operator=(optional<U>&&)~ effects
+#+ATTR_WG21: :columns 18 36 36
+| | ~*this~ contains a value | ~*this~ does not contain a value |
+|-
+| ~rhs~ contains a value | assigns ~std::move(rhs).operator*()~ to @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ | direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with ~std::move(rhs).operator*()~ |
+| ~rhs~ does not contain a value | destroys the contained value by calling @@latex:\tcode{\exposid{val}.T::\textasciitilde{}T()}@@@@html:<code><var>val</var>.T::~T()</code>@@ | no effect |
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~rhs.has_value() == this->has_value()~.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If any exception is thrown, the result of the expression ~this->has_value()~ remains unchanged. If an exception is thrown during the call to ~T~'s constructor, the state of @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ is determined by the exception safety guarantee of ~T~'s constructor. If an exception is thrown during the call to ~T~'s assignment, the states of @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ and @@latex:\tcode{rhs.\exposid{val}}@@@@html:<code>rhs.<var>val</var></code>@@ are determined by the exception safety guarantee of ~T~'s assignment.
+#+end_pnum
+
+#+begin_itemdecl
+template<class... Args> constexpr T& emplace(Args&&... args);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_constructible_v<T, Args...>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Calls ~*this = nullopt~. Then direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with ~std::forward<Args>(args)...~.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ contains a value.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@.
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the selected constructor of ~T~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If an exception is thrown during the call to ~T~'s constructor, ~*this~ does not contain a value, and the previous @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ (if any) has been destroyed.
+#+end_pnum
+
+#+begin_itemdecl
+template<class U, class... Args> constexpr T& emplace(initializer_list<U> il, Args&&... args);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_constructible_v<T, initializer_list<U>&, Args...>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Calls ~*this = nullopt~. Then direct-non-list-initializes @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ with ~il, std::forward<Args>(args)...~.
+#+end_pnum
+
+#+begin_pnum
+/Postconditions/: ~*this~ contains a value.
+#+end_pnum
+
+#+begin_pnum
+/Returns/: @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@.
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the selected constructor of ~T~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If an exception is thrown during the call to ~T~'s constructor, ~*this~ does not contain a value, and the previous @@latex:\exposid{val}@@@@html:<code><var>val</var></code>@@ (if any) has been destroyed.
+#+end_pnum

@@ -1167,6 +1167,42 @@ each `--from-ir` in order. `render --depfile` names the IR files the render
 read as its prerequisites; `--from-ir -` reads standard input, which is not a
 file, so it is left out.
 
+### Reading the working draft's LaTeX
+
+`import` is the other way into the IR: it reads subclauses of the C++ working
+draft's LaTeX source, so wording a paper does not change can come from the draft
+rather than be retyped. It runs no compiler, like `render`.
+
+```sh
+specgen import draft/source/utilities.tex --section func.wrap.move -o func.wrap.move.json
+specgen render --from-ir func.wrap.move.json --backend mpark
+```
+
+`--section <stable-name>` names a subclause; it is imported with its
+subsections, and the option may be repeated, giving one top-level section per
+use in the order named. A name the file does not contain is an error and the
+command exits 1. With no `-o`, the IR goes to standard output. The command reads
+one source file; a paper whose subclauses live in several files runs it once per
+file.
+
+The importer reads what the LaTeX backend writes, so a subclause the backend
+wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
+`itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
+at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
+macros the IR has a kind for. The exceptions are layout only: line breaks inside
+a paragraph, `\brk`, `\-` and their relatives, and `\index...` entries other
+than `\indexlibrary...` are dropped.
+
+A macro or environment the IR has no kind for is kept as raw LaTeX, which the
+mpark and org backends write as a raw inline, and the command warns, naming the
+macro and the subclause:
+
+```text
+specgen: warning: optional.ctor: \keyword has no IR kind and is kept as raw LaTeX
+```
+
+The warnings say which kind to add next. Nothing is dropped silently.
+
 ## Exit behavior
 
 - Successful `generate`, `render`, and `dump-decls` invocations exit with
@@ -1193,7 +1229,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.26.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.27.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1203,8 +1239,8 @@ Newly emitted item nodes use `item-v4` for ordered description bodies and
 explicit coverage metadata. Updated renderers still read `item-v3`, `item-v2`, and the earlier `item` nodes
 with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
-when moving to the new writer. The prose inline tags `placeholder` and
-`oldconcept` are new; an older renderer reports a document containing one as
+when moving to the new writer. The prose inline tags `placeholder`,
+`oldconcept` and `raw` are new; an older renderer reports a document containing one as
 unreadable rather than dropping the text.
 
 ### Section prose

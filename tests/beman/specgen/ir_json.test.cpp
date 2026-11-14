@@ -674,3 +674,20 @@ TEST_CASE("ir_json - an elided mark round-trips") {
     REQUIRE(back.has_value());
     CHECK(std::get<FreeParagraph>(back->nodes[0]).change == Change::Elided);
 }
+
+TEST_CASE("ir_json - table-reference and raw inlines round-trip") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{TextInline{"See "},
+                                       TableRef{"optional.assign.copy"},
+                                       RawInline{"\\term{x}"},
+                                       ChangedInline{Change::Added, {TableRef{"t"}, RawInline{"\\y"}}}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("{\"t\":\"tableref\",\"stable\":\"optional.assign.copy\"}") != std::string::npos);
+    CHECK(json.find("{\"t\":\"raw\",\"latex\":\"\\\\term{x}\"}") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}

@@ -1426,6 +1426,13 @@ The build assembles the tool from these components, each following the shared CM
 - **Wording diff** — `include/beman/specgen/diff.hpp`, `src/beman/specgen/diff.cpp`, Tier A.
   §7's `diff::compare`: the prose and code tokenizers, the structural matcher over nodes,
   elements and blocks, the three `Context` levels, and `has_marks`.
+- **Draft import** — `include/beman/specgen/draft_import.hpp`,
+  `src/beman/specgen/draft_import.cpp`, Tier A. `specgen import`
+  ([plans/draft-import.md](plans/draft-import.md)): the working draft's LaTeX read into the IR,
+  the inverse of the LaTeX backend over what the backend writes. It scans a source file into
+  `\rSecN` sections, items, description elements and blocks, and lowers the inline macros the
+  IR has a kind for; anything else is a `RawInline` and a Warning naming the macro and the
+  subclause, so no LaTeX reaches the mpark and org backends unreported.
 - **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`,
   `src/beman/specgen/baseline_tree.cpp`, Tier A. `--baseline-rev`'s git revision checked out
   into a scratch tree for the run (`read-tree` into a temporary index, then `checkout-index`:

@@ -155,12 +155,29 @@ struct OldConceptRef {
 
     friend bool operator==(const OldConceptRef&, const OldConceptRef&) = default;
 };
+// A reference to a table by its stable name: the draft's \tref{x}, which
+// prints "Table N" and links to the table's caption. A table's stable name is
+// the one its `libtab2` or `lib2dtab2` carries.
+struct TableRef {
+    std::string stable_name;
+
+    friend bool operator==(const TableRef&, const TableRef&) = default;
+};
+// Draft LaTeX the importer has no inline kind for, kept as written. It is the
+// one place LaTeX survives into a backend that does not write LaTeX, and the
+// importer reports a Warning for each, so nothing degrades silently.
+struct RawInline {
+    std::string latex;
+
+    friend bool operator==(const RawInline&, const RawInline&) = default;
+};
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
 // itself, so that a visitor over a run's contents dispatches a different,
 // non-recursive sum type and never drives recursion (decision
 // visitation-rules).
-using PlainInline = std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef>;
+using PlainInline =
+    std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, TableRef, RawInline>;
 
 // A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
 // One mark covers the whole run, so a backend writes one span per run rather
@@ -172,8 +189,15 @@ struct ChangedInline {
 
     friend bool operator==(const ChangedInline&, const ChangedInline&) = default;
 };
-using Inline =
-    std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, ChangedInline>;
+using Inline    = std::variant<TextInline,
+                               CodeInline,
+                               RefInline,
+                               ConceptRef,
+                               PlaceholderInline,
+                               OldConceptRef,
+                               TableRef,
+                               RawInline,
+                               ChangedInline>;
 using Paragraph = std::vector<Inline>;
 
 // --- description elements --------------------------------------------------

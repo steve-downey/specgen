@@ -20,3 +20,7 @@ Placeholders sit against punctuation: (@@latex:\placeholder{ref}@@@@html:<i>ref<
 #+begin_pnum
 A revision [[delete:][requires @@latex:\oldconcept{CopyConstructible}@@@@html:<i>Cpp17CopyConstructible</i>@@]][[insert:][requires @@latex:\oldconcept{MoveConstructible}@@@@html:<i>Cpp17MoveConstructible</i>@@ when @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ holds]].
 #+end_pnum
+
+#+begin_pnum
+See [[gadget.table][Table @@html:[gadget.table]@@@@latex:{[}gadget.table{]}@@]] lists them, and @@latex:\term{unknown}@@ stays as written.
+#+end_pnum

@@ -127,6 +127,12 @@ struct PieceRenderer {
     // A C++17 named requirement, italic with its Cpp17 prefix.
     std::string operator()(const ir::OldConceptRef& v) const { return "\\oldconcept{" + v.name + '}'; }
 
+    // A reference to a table by its stable name.
+    std::string operator()(const ir::TableRef& v) const { return "\\tref{" + v.stable_name + '}'; }
+
+    // Draft LaTeX the importer kept as written.
+    std::string operator()(const ir::RawInline& v) const { return v.latex; }
+
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
     // rendered as it would be unmarked. Defined after `render_run` below,

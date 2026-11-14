@@ -723,6 +723,8 @@ struct InlineHasContent {
     bool operator()(const ir::ConceptRef& ref) const { return has_non_whitespace(ref.name); }
     bool operator()(const ir::PlaceholderInline& v) const { return has_non_whitespace(v.text); }
     bool operator()(const ir::OldConceptRef& v) const { return has_non_whitespace(v.name); }
+    bool operator()(const ir::TableRef& v) const { return has_non_whitespace(v.stable_name); }
+    bool operator()(const ir::RawInline& v) const { return has_non_whitespace(v.latex); }
     bool operator()(const ir::ChangedInline& run) const {
         return std::ranges::any_of(
             run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
@@ -1003,6 +1005,8 @@ struct UnmarkedPieces {
     std::vector<ir::PlainInline> operator()(const ir::ConceptRef& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::PlaceholderInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::OldConceptRef& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::TableRef& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::RawInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
 };
 
@@ -1012,6 +1016,8 @@ std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RefInline& pie
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ConceptRef& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PlaceholderInline& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::OldConceptRef& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TableRef& piece) const { return {piece}; }
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RawInline& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
 
 std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
@@ -1556,6 +1562,8 @@ struct InlineText {
     std::string operator()(const ir::ConceptRef& v) const { return v.name; }
     std::string operator()(const ir::PlaceholderInline& v) const { return v.text; }
     std::string operator()(const ir::OldConceptRef& v) const { return v.name; }
+    std::string operator()(const ir::TableRef& v) const { return v.stable_name; }
+    std::string operator()(const ir::RawInline& v) const { return v.latex; }
     std::string operator()(const ir::ChangedInline& run) const {
         return foundation::mconcat_map(
             run.inlines,

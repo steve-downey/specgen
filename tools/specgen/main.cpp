@@ -3,7 +3,7 @@
 //
 // The specgen driver.
 //
-// Three subcommands, on either side of the IR boundary (decision ir-boundary):
+// Four subcommands, on either side of the IR boundary (decision ir-boundary):
 //
 //   render      IR JSON in, wording fragments out. Runs no compiler, so the
 //               backend goldens exercise it on checked-in IR alone (decision
@@ -14,6 +14,9 @@
 //               through the Clang front end, which every build has (decision
 //               llvm-toolchain-pin).
 //
+//   import      the working draft's LaTeX in, IR JSON out: the way unchanged
+//               wording enters a paper without being retyped
+//               (docs/plans/draft-import.md). Clang-free, like `render`.
 //   dump-decls  debug mode: prints the decl/comment interleave design
 //               §3.2 builds for a header.
 //
@@ -31,6 +34,7 @@
 #include <beman/specgen/depfile.hpp>
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/foundation/fold_left_short.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/fragments.hpp>
@@ -90,7 +94,19 @@ constexpr std::string_view kUsage = R"(usage: specgen <command> [options]
 commands:
   render      render IR JSON to wording fragments
   generate    render a C++ header to wording fragments
+  import      read subclauses of the working draft's LaTeX into IR JSON
   dump-decls  print a header's decl/comment interleave (debug)
+
+import options:
+  <file.tex>                the draft source file holding the subclauses
+                             (exactly one)
+  --section <stable-name>   a subclause to import, with its subsections; the
+                             result has one top-level section per use, in the
+                             order given. Required, and may be repeated
+  -o, --output <file>       write the IR here instead of to standard output
+
+  A construct the IR has no kind for is kept as raw LaTeX and reported as a
+  warning naming it and the subclause. A name the file lacks is an error.
 
 dump-decls options:
   <header>                  the header to parse (exactly one)
@@ -1798,6 +1814,89 @@ int dump_decls_command(const std::vector<std::string>& args) {
     return 0;
 }
 
+int import_command(const std::vector<std::string>& args) {
+    std::string              file;
+    std::string              output;
+    std::vector<std::string> sections;
+    // substrate generic algorithm: an option that takes a value consumes the
+    // next argument, so the index is the loop's state (as in the other
+    // commands' option loops).
+    for (std::size_t i = 0; i < args.size(); ++i) {
+        const std::string& arg  = args[i];
+        const auto         next = [&](std::string& dest) {
+            if (i + 1 >= args.size()) {
+                std::println(stderr, "specgen: {} requires an argument", arg);
+                return false;
+            }
+            dest = args[++i];
+            return true;
+        };
+        if (arg == "-h" || arg == "--help") {
+            return usage(stdout, 0);
+        } else if (arg == "--section") {
+            std::string name;
+            if (!next(name))
+                return 2;
+            sections.push_back(std::move(name));
+        } else if (arg == "-o" || arg == "--output") {
+            if (!next(output))
+                return 2;
+        } else if (!arg.empty() && arg.front() != '-') {
+            if (!file.empty()) {
+                std::println(stderr, "specgen: import reads one source file, not '{}' and '{}'", file, arg);
+                return 2;
+            }
+            file = arg;
+        } else {
+            std::println(stderr, "specgen: unknown option '{}'", arg);
+            return usage(stderr, 2);
+        }
+    }
+    if (file.empty()) {
+        std::println(stderr, "specgen: import requires a draft source file");
+        return usage(stderr, 2);
+    }
+    if (sections.empty()) {
+        std::println(stderr, "specgen: import requires at least one --section <stable-name>");
+        return 2;
+    }
+    const auto source = read_all(file);
+    if (!source) {
+        std::println(stderr, "specgen: cannot read '{}'", file);
+        return 1;
+    }
+
+    const beman::specgen::draft_import::Result imported =
+        beman::specgen::draft_import::import_sections(*source, {.sections = sections});
+    const bool failed = std::ranges::any_of(imported.diagnostics, [](const auto& diagnostic) {
+        return diagnostic.severity == beman::specgen::Severity::Error;
+    });
+    // substrate generic algorithm: formatted output, not a fold.
+    for (const auto& diagnostic : imported.diagnostics) {
+        std::println(stderr,
+                     "specgen: {}: {}{}{}",
+                     beman::specgen::severity_label(diagnostic.severity),
+                     diagnostic.section,
+                     diagnostic.section.empty() ? "" : ": ",
+                     diagnostic.message);
+    }
+    if (failed)
+        return 1;
+
+    const std::string json = ir::emit_json(imported.document);
+    if (output.empty()) {
+        std::println(stdout, "{}", json);
+        return 0;
+    }
+    std::ofstream out(output, std::ios::binary);
+    out << json << '\n';
+    if (!out) {
+        std::println(stderr, "specgen: cannot write '{}'", output);
+        return 1;
+    }
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -1822,6 +1921,8 @@ int main(int argc, char** argv) {
         return render_command({args.begin() + 1, args.end()});
     if (command == "generate")
         return generate_command({args.begin() + 1, args.end()});
+    if (command == "import")
+        return import_command({args.begin() + 1, args.end()});
     if (command == "dump-decls")
         return dump_decls_command({args.begin() + 1, args.end()});
 
