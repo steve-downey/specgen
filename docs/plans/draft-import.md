@@ -253,6 +253,22 @@ Each is a PR that ends green.
 
 The two independent derivation changes and the `std::move` bug are separate PRs at any point.
 
+### Where each step landed
+
+Steps 1 to 3 are [#273](https://github.com/steve-downey/specgen/pull/273),
+[#274](https://github.com/steve-downey/specgen/pull/274) and
+[#275](https://github.com/steve-downey/specgen/pull/275). Steps 4 and 5 are two commits of
+[#276](https://github.com/steve-downey/specgen/pull/276), and step 6 is
+[#277](https://github.com/steve-downey/specgen/pull/277), which grew the changes in
+[what the real headers needed](#implementation-log). Step 7 is the draft PR
+[constexpr_callables#9](https://github.com/steve-downey/constexpr_callables/pull/9), which needs
+a specgen release first. Its acceptance test holds: the wording diff has the same marks as the
+baseline-revision diff did (30, 34 and 2 in the three clauses), and the plain wording is
+unchanged for [func.wrap.move] and [func.wrap.copy].
+
+Not done, and left for the owner: deleting the `p3574-baseline` branch and the
+`p3574-baseline-draft` tag in `beman.constexpr_callables`. The build no longer reads them.
+
 ## Open questions
 
 ### inline-rendering
@@ -301,3 +317,56 @@ authored synopsis.
 
 Specgen records no draft revision. The build names a directory, and the paper's makefile owns the
 checkout, as it owns `--baseline-rev`'s revision.
+
+## Implementation log
+
+What the plan did not foresee, found by running the implementation over the real headers. Each
+was decided while implementing, **Decided by:** the implementer, and is open to review. They are
+named for the question, as the open questions above are.
+
+### inherit-without-diff
+
+The plan had `--baseline-draft` only. A paper also wants its own wording, which needs the draft to
+resolve `\asdraft` and must render with no marks. `generate --inherit-draft <dir>` is that: the same
+directory, the same resolution, no diff. Giving both is an error.
+
+### entity-names-for-pairing
+
+The differ pairs items by the names they declare. The importer takes them from `\indexlibrary`
+entries, and the front end now names a constructor or destructor by its class without the template
+arguments clang spells it with (`box<T>` becomes `box`). Fourteen goldens carry that one-field
+change. Overloads of one name pair by how alike their signatures read, best first, in the differ and
+in `\asdraft`.
+
+### nameless-items
+
+A detached `\verbatim-itemdecl` names no entity, and neither does the draft's index for an
+exposition-only variable. Such an item pairs with the other side's item that reads most like it,
+if it reads alike at all, both for `\asdraft` and in the differ. A name known on both sides that
+differs is still a rename, an item removed and an item added.
+
+### same-wording-same-ir
+
+Authored text and imported text of the same wording had different IR, so the differ showed
+retyped wording as changed. The differ now reads authored listings (`@\cv{}@` escapes) the way the
+importer does, reads a typed `Equivalent to:` and its code block as the `EquivalentTo` block, names a
+typed synopsis for the class it declares, and diffs deleted and inserted lines that read as nearly
+the same code over a different number of lines as one run of tokens, so a line break is not a
+change. Generation is not touched: a `\verbatim-itemdecl` stays exact, span-free text.
+
+### synopsis-source
+
+`\asdraft-synopsis` patches the draft's synopsis from the declarations the class makes, kept
+beside the text in `Synopsis::declared`. A member the class inherits from a base is not among them,
+so `move_only_function` and `copyable_function`, whose `operator()` comes from `detail::call_base`,
+keep an authored `\verbatim-synopsis`. The check compares that with the class's declarations, and
+reports a declaration the synopsis has and the class does not as a note, not a warning. Open: a way
+to say that a declaration the class does not make is made elsewhere, so the synopsis can still be
+inherited.
+
+### importer-vocabulary-gaps
+
+`\ref`, `\cvqual`, `\exposconcept`, `\newline` and `\opt` have no IR kind. The importer keeps
+each as raw LaTeX and warns, and keeps a whole `\tcode` holding one as raw LaTeX, since the macro as
+text would be escaped. They occur only in [func.wrap.ref], where the headers author the wording, so
+`beman.constexpr_callables` lets exactly those warnings through. Open: the kinds.
