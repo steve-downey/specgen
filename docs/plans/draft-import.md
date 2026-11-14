@@ -268,28 +268,36 @@ rule, not the table, decides a case it does not list.
 
 ### import-vocabulary-order
 
-Which kinds land in step 1 and which wait for a paper that needs them. Recommendation:
-`PlaceholderInline`, `OldConceptRef`, `RangeInline`, `TableRef` and `RawInline` first; `TermInline`
-and `MathInline` when a round-trip golden needs them.
+**Status:** decided, 2026-11-13. **Decided by:** the project owner.
+
+Which kinds land first and which wait for a paper that needs them. `PlaceholderInline` and
+`OldConceptRef` shipped with step 1. `RangeInline`, `TableRef` and `RawInline` come next.
+`TermInline` and `MathInline` wait until a round-trip golden needs them.
 
 ### asdraft-default
 
-Whether an undocumented declaration under `--baseline-draft` inherits without a marker.
-Recommendation: no. The coverage invariant (design §9, check 1) means "every declaration has a
-markup block", and a marker keeps that true and visible.
+**Status:** decided, 2026-11-13. **Decided by:** the project owner.
+
+An undocumented declaration under `--baseline-draft` does not inherit without a marker. The
+coverage invariant (design §9, check 1) means "every declaration has a markup block", and a marker
+keeps that true and visible.
 
 ### asdraft-spelling
 
-The marker's name. Recommendation: `\asdraft`; `\inherit` reads as class inheritance in a C++
-header.
+**Status:** decided, 2026-11-13. **Decided by:** the project owner.
+
+The marker is `\asdraft`. `\inherit` reads as class inheritance in a C++ header.
 
 ### synopsis-patching
 
-Whether an inherited synopsis is patched from the roster or only checked against it.
-Recommendation: patched, with the check as the safety net for an authored one.
+**Status:** decided, 2026-11-13. **Decided by:** the project owner.
+
+An inherited synopsis is patched from the roster. The check stays as the safety net for an
+authored synopsis.
 
 ### draft-pin
 
-Where a paper records the draft revision it imports from. Recommendation: nowhere in specgen; the
-build names a directory, and the paper's makefile owns the checkout, as it owns `--baseline-rev`'s
-revision.
+**Status:** decided, 2026-11-13. **Decided by:** the project owner.
+
+Specgen records no draft revision. The build names a directory, and the paper's makefile owns the
+checkout, as it owns `--baseline-rev`'s revision.
