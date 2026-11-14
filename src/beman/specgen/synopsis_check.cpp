@@ -3,6 +3,7 @@
 
 #include <beman/specgen/synopsis_check.hpp>
 
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/ir.hpp>
 
@@ -12,6 +13,7 @@
 #include <format>
 #include <functional>
 #include <optional>
+#include <span>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -27,9 +29,9 @@ bool is_word(char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 |
 // One member function declaration of a synopsis, with where its parts are.
 struct Decl {
     std::string name;
-    std::size_t begin = 0; // the statement's first character
-    std::size_t end   = 0; // its `;`
-    std::size_t head_end = 0;   // after a leading `template<...>`
+    std::size_t begin      = 0; // the statement's first character
+    std::size_t end        = 0; // its `;`
+    std::size_t head_end   = 0; // after a leading `template<...>`
     std::size_t name_begin = 0;
     std::size_t params_end = 0; // just past the parameter list's `)`
     std::string text;           // begin..end, whitespace folded
@@ -48,32 +50,50 @@ struct Decl {
     bool              is_noexcept  = false;
     // A placeholder in the `noexcept` operand (the draft's `noexcept(noex)`):
     // the declaration stands for both, so it agrees with either and is not patched.
-    bool              noexcept_any = false;
-    bool              is_default   = false;
-    bool              is_delete    = false;
-    std::size_t       noexcept_begin = 0; // `noexcept` and its parenthesised operand, when there is one
-    std::size_t       noexcept_end   = 0;
-    std::size_t       tail_insert    = 0; // where a `noexcept` would go
+    bool        noexcept_any   = false;
+    bool        is_default     = false;
+    bool        is_delete      = false;
+    std::size_t noexcept_begin = 0; // `noexcept` and its parenthesised operand, when there is one
+    std::size_t noexcept_end   = 0;
+    std::size_t tail_insert    = 0; // where a `noexcept` would go
 };
 
-// The text with comments and access labels blanked, every offset unchanged.
-std::string blanked(std::string_view text) {
-    std::string out(text);
+// The text with comments, access labels and authored `@...@` escapes blanked,
+// every offset unchanged. An escape is a run of underscores, so it reads as one
+// word and its braces (`@\cv{}@`) cannot end a statement; the ones that name a
+// placeholder are reported by where they are, since an authored synopsis spells
+// its placeholders that way where an imported one has a span.
+struct Blanked {
+    std::string                                      text;
+    std::vector<std::pair<std::size_t, std::size_t>> placeholders;
+};
+
+Blanked blank_text(std::string_view text) {
+    Blanked      out{std::string(text), {}};
+    std::string& w = out.text;
     // substrate generic algorithm: a scan over the characters that rewrites the
     // copy in place; the position is the loop's state.
-    for (std::size_t i = 0; i < out.size(); ++i) {
-        if (out[i] == '/' && i + 1 < out.size() && out[i + 1] == '/') {
-            // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
-            while (i < out.size() && out[i] != '\n')
-                out[i++] = ' ';
+    for (std::size_t i = 0; i < w.size(); ++i) {
+        if (w[i] == '/' && i + 1 < w.size() && w[i + 1] == '/') {
+            // substrate generic algorithm: a cursor scan to the end of the line.
+            while (i < w.size() && w[i] != '\n')
+                w[i++] = ' ';
+        } else if (w[i] == '@') {
+            const std::size_t close = w.find('@', i + 1);
+            if (close == std::string::npos)
+                continue;
+            if (w.compare(i, 14, "@\\placeholder{") == 0)
+                out.placeholders.emplace_back(i, close + 1);
+            std::ranges::fill(std::span(w).subspan(i, close + 1 - i), '_');
+            i = close;
         }
     }
-    // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
+    // substrate generic algorithm: blanks each access label, which mutates the copy.
     for (const std::string_view label : {"public:", "private:", "protected:"}) {
         std::size_t at = 0;
         // substrate generic algorithm: a search resumed after each hit.
-        while ((at = out.find(label, at)) != std::string::npos) {
-            std::ranges::fill_n(out.begin() + static_cast<std::ptrdiff_t>(at), label.size(), ' ');
+        while ((at = w.find(label, at)) != std::string::npos) {
+            std::ranges::fill_n(w.begin() + static_cast<std::ptrdiff_t>(at), label.size(), ' ');
             at += label.size();
         }
     }
@@ -121,7 +141,11 @@ std::string folded(std::string_view s) {
     return out;
 }
 
-std::optional<Decl> read_decl(std::string_view w, std::size_t begin, std::size_t end, const std::vector<ir::Span>& spans) {
+std::optional<Decl> read_decl(std::string_view                                        w,
+                              std::size_t                                             begin,
+                              std::size_t                                             end,
+                              const std::vector<ir::Span>&                            spans,
+                              const std::vector<std::pair<std::size_t, std::size_t>>& escapes) {
     Decl d;
     d.begin = begin;
     d.end   = end;
@@ -135,10 +159,44 @@ std::optional<Decl> read_decl(std::string_view w, std::size_t begin, std::size_t
             return std::nullopt;
         at = skip_space(w, shut);
     }
+    // A leading requires-clause is constraint, not declarator: primary
+    // expressions joined by `&&` and `||`, each a parenthesised expression or
+    // an id-expression, and the declaration begins where the chain ends.
+    if (starts_with_word(w, at, "requires")) {
+        std::size_t k = skip_space(w, at + 8);
+        // substrate generic algorithm: a cursor scan over a chain of primary expressions.
+        while (k < end) {
+            if (w[k] == '(') {
+                const std::size_t closed = past_close(w, k, '(', ')');
+                if (closed == std::string_view::npos)
+                    return std::nullopt;
+                k = closed;
+            } else {
+                // substrate generic algorithm: a cursor scan over an id-expression.
+                while (k < end && (is_word(w[k]) || w[k] == ':'))
+                    ++k;
+                if (k < end && w[k] == '<') {
+                    const std::size_t closed = past_close(w, k, '<', '>');
+                    if (closed == std::string_view::npos)
+                        return std::nullopt;
+                    k = closed;
+                }
+            }
+            const std::size_t next = skip_space(w, k);
+            if (w.substr(next, 2) == "&&" || w.substr(next, 2) == "||")
+                k = skip_space(w, next + 2);
+            else {
+                k = next;
+                break;
+            }
+        }
+        at = k;
+    }
     d.head_end = at;
     // Not a function: an alias, an assertion, a class head, or a friend class.
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
-    for (const std::string_view skipped : {"using", "typedef", "static_assert", "namespace", "enum", "struct", "class", "union"})
+    for (const std::string_view skipped :
+         {"using", "typedef", "static_assert", "namespace", "enum", "struct", "class", "union"})
         if (starts_with_word(w, at, skipped))
             return std::nullopt;
     if (starts_with_word(w, at, "friend")) {
@@ -153,27 +211,28 @@ std::optional<Decl> read_decl(std::string_view w, std::size_t begin, std::size_t
     // identifier before the first parenthesis.
     std::size_t open = std::string_view::npos;
     std::size_t name_begin;
-    if (const std::size_t op = [&] {
-            std::size_t pos = at;
-            // substrate generic algorithm: finds the first whole-word `operator` before any `(`.
-            while (pos < end) {
-                if (w[pos] == '(')
-                    return std::string_view::npos;
-                if (starts_with_word(w, pos, "operator") && (pos == at || !is_word(w[pos - 1])))
-                    return pos;
-                ++pos;
-            }
-            return std::string_view::npos;
-        }();
+    if (const std::size_t op =
+            [&] {
+                std::size_t pos = at;
+                // substrate generic algorithm: finds the first whole-word `operator` before any `(`.
+                while (pos < end) {
+                    if (w[pos] == '(')
+                        return std::string_view::npos;
+                    if (starts_with_word(w, pos, "operator") && (pos == at || !is_word(w[pos - 1])))
+                        return pos;
+                    ++pos;
+                }
+                return std::string_view::npos;
+            }();
         op != std::string_view::npos) {
         name_begin             = op;
         std::size_t after_word = skip_space(w, op + 8);
         if (w.substr(after_word, 2) == "()") {
-            open = after_word + 2;
-            open = w.find('(', open);
+            open   = after_word + 2;
+            open   = w.find('(', open);
             d.name = "operator()";
         } else {
-            open   = w.find('(', after_word);
+            open = w.find('(', after_word);
             if (open == std::string_view::npos || open >= end)
                 return std::nullopt;
             d.name = folded(w.substr(op, open - op));
@@ -242,11 +301,16 @@ std::optional<Decl> read_decl(std::string_view w, std::size_t begin, std::size_t
             if (const std::size_t paren = skip_space(w, i + 8); paren < end && w[paren] == '(')
                 if (const std::size_t closed = past_close(w, paren, '(', ')'); closed != std::string_view::npos)
                     d.noexcept_end = closed;
-            d.noexcept_any = std::ranges::any_of(spans, [&](const ir::Span& span) {
-                return span.kind == ir::SpanKind::Placeholder && span.begin >= d.noexcept_begin &&
-                       span.end <= d.noexcept_end;
-            });
-            i = d.noexcept_end;
+            d.noexcept_any = std::ranges::any_of(spans,
+                                                 [&](const ir::Span& span) {
+                                                     return span.kind == ir::SpanKind::Placeholder &&
+                                                            span.begin >= d.noexcept_begin &&
+                                                            span.end <= d.noexcept_end;
+                                                 }) ||
+                             std::ranges::any_of(escapes, [&](const auto& escape) {
+                                 return escape.first >= d.noexcept_begin && escape.second <= d.noexcept_end;
+                             });
+            i              = d.noexcept_end;
             continue;
         }
         if (w[i] == '-' && i + 1 < end && w[i + 1] == '>')
@@ -271,11 +335,12 @@ std::optional<Decl> read_decl(std::string_view w, std::size_t begin, std::size_t
 }
 
 std::vector<Decl> declarations(const ir::CodeText& code) {
-    const std::string& text = code.text;
-    const std::string w = blanked(text);
-    std::vector<Decl> out;
-    std::size_t       begin = 0;
-    int               parens = 0;
+    const std::string& text    = code.text;
+    const Blanked      blanked = blank_text(text);
+    const std::string& w       = blanked.text;
+    std::vector<Decl>  out;
+    std::size_t        begin  = 0;
+    int                parens = 0;
     // substrate generic algorithm: a statement scan; the start and the depth are the loop's state.
     for (std::size_t i = 0; i < w.size(); ++i) {
         const char c = w[i];
@@ -288,7 +353,7 @@ std::vector<Decl> declarations(const ir::CodeText& code) {
         if (c == ';') {
             const std::size_t first = skip_space(w, begin);
             if (first < i)
-                if (auto d = read_decl(w, first, i, code.spans))
+                if (auto d = read_decl(w, first, i, code.spans, blanked.placeholders))
                     out.push_back(std::move(*d));
         }
         begin  = i + 1;
@@ -320,7 +385,8 @@ Pairing pair_up(const std::vector<Decl>& synopsis, const std::vector<Decl>& decl
         // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
         for (std::size_t d = 0; d < declared.size(); ++d)
             if (synopsis[s].name == declared[d].name)
-                candidates.push_back({s, d, diff::declaration_similarity({synopsis[s].text, {}}, {declared[d].text, {}})});
+                candidates.push_back(
+                    {s, d, diff::declaration_similarity({synopsis[s].text, {}}, {declared[d].text, {}})});
     std::ranges::stable_sort(candidates, std::greater<>{}, &Candidate::score);
 
     Pairing           out;
@@ -347,8 +413,8 @@ Pairing pair_up(const std::vector<Decl>& synopsis, const std::vector<Decl>& decl
 
 struct Specifier {
     std::string_view name;
-    bool Decl::*     flag;
-    bool             patchable;
+    bool Decl::* flag;
+    bool         patchable;
 };
 
 constexpr Specifier kSpecifiers[] = {
@@ -394,7 +460,7 @@ std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& d
         out.append_range(disagreements(s[si], d[di], false));
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_synopsis)
-        out.push_back({s[i].text, "the synopsis declares this, and the code does not"});
+        out.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_declared)
         out.push_back({d[i].text, "the code declares this, and the synopsis does not"});
@@ -402,9 +468,9 @@ std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& d
 }
 
 Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
-    const std::string       w = blanked(synopsis.text);
-    const std::vector<Decl> s = declarations(synopsis);
-    const std::vector<Decl> d = declarations(declared);
+    const std::string       w       = blank_text(synopsis.text).text;
+    const std::vector<Decl> s       = declarations(synopsis);
+    const std::vector<Decl> d       = declarations(declared);
     const Pairing           pairing = pair_up(s, d);
 
     struct Edit {
@@ -453,8 +519,9 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
         }
         if (sd.is_noexcept != dd.is_noexcept && !sd.noexcept_any && !dd.noexcept_any) {
             if (dd.is_noexcept)
-                edits.push_back(
-                    {sd.tail_insert, 0, " " + declared.text.substr(dd.noexcept_begin, dd.noexcept_end - dd.noexcept_begin)});
+                edits.push_back({sd.tail_insert,
+                                 0,
+                                 " " + declared.text.substr(dd.noexcept_begin, dd.noexcept_end - dd.noexcept_begin)});
             else {
                 std::size_t begin = sd.noexcept_begin;
                 // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
@@ -467,7 +534,7 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
     }
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_synopsis)
-        unpatched.push_back({s[i].text, "the synopsis declares this, and the code does not"});
+        unpatched.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_declared)
         unpatched.push_back({d[i].text, "the code declares this, and the synopsis does not"});

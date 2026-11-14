@@ -4,6 +4,7 @@
 #include <beman/specgen/synopsis_check.hpp>
 #include <beman/specgen/synopsis_check.hpp> // Re-inclusion verification
 
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -86,15 +87,15 @@ TEST_CASE("synopsis_check - noexcept and explicit are patched both ways") {
 }
 
 TEST_CASE("synopsis_check - the declarations' noexcept operand is written as they have it") {
-    const auto draft   = code("class f {\n  void g();\n};");
+    const auto draft    = code("class f {\n  void g();\n};");
     const auto declared = code("class f {\n  void g() noexcept(is_nothrow_v<T>);\n};");
     CHECK(check::patch(draft, declared).code.text == declared.text);
 }
 
 TEST_CASE("synopsis_check - spans move with the text they sit on") {
     CodeText draft;
-    draft.text  = "class f {\n  void g();\n  void h(cv);\n};";
-    draft.spans = {{draft.text.find("cv"), draft.text.find("cv") + 2, SpanKind::Placeholder, "cv"}};
+    draft.text          = "class f {\n  void g();\n  void h(cv);\n};";
+    draft.spans         = {{draft.text.find("cv"), draft.text.find("cv") + 2, SpanKind::Placeholder, "cv"}};
     const auto declared = code("class f {\n  void g();\n  constexpr void h(cv);\n};");
 
     const auto patched = check::patch(draft, declared);
@@ -116,6 +117,8 @@ TEST_CASE("synopsis_check - a specifier that cannot be patched is reported, and 
     REQUIRE(findings.size() == 3);
     CHECK(findings[0].message == "the synopsis does not have `static` and the declaration does");
     CHECK(findings[1].message == "the synopsis declares this, and the code does not");
+    CHECK(findings[1].severity == beman::specgen::Severity::Note);
+    CHECK(findings[0].severity == beman::specgen::Severity::Warning);
     CHECK(findings[2].message == "the code declares this, and the synopsis does not");
 }
 
@@ -128,9 +131,10 @@ TEST_CASE("synopsis_check - overloads pair with the declaration that reads most 
 }
 
 TEST_CASE("synopsis_check - aliases, friend classes and access labels are not declarations") {
-    const auto text = code("class f {\npublic:\n  using t = int;\n  friend class g;\n  static_assert(true);\nprivate:\n  void h();\n};");
+    const auto text = code(
+        "class f {\npublic:\n  using t = int;\n  friend class g;\n  static_assert(true);\nprivate:\n  void h();\n};");
     CHECK(check::compare(text, text).empty());
-    const auto without = code("class f {\n};");
+    const auto without  = code("class f {\n};");
     const auto findings = check::compare(text, without);
     REQUIRE(findings.size() == 1);
     CHECK(findings.front().declaration == "void h()");
@@ -138,8 +142,8 @@ TEST_CASE("synopsis_check - aliases, friend classes and access labels are not de
 
 TEST_CASE("synopsis_check - a placeholder in the noexcept operand agrees with either") {
     CodeText draft;
-    draft.text  = "class f {\n  R g() cv noexcept(noex);\n};";
-    draft.spans = {{draft.text.find("noex)"), draft.text.find("noex)") + 4, SpanKind::Placeholder, "noex"}};
+    draft.text       = "class f {\n  R g() cv noexcept(noex);\n};";
+    draft.spans      = {{draft.text.find("noex)"), draft.text.find("noex)") + 4, SpanKind::Placeholder, "noex"}};
     const auto plain = code("class f {\n  R g();\n};");
 
     CHECK(check::compare(draft, plain).empty());

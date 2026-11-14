@@ -14,6 +14,7 @@
 #ifndef BEMAN_SPECGEN_SYNOPSIS_CHECK_HPP
 #define BEMAN_SPECGEN_SYNOPSIS_CHECK_HPP
 
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <string>
@@ -24,6 +25,11 @@ namespace beman::specgen::synopsis_check {
 struct Finding {
     std::string declaration; // the synopsis's declaration, on one line; the code's when the synopsis lacks it
     std::string message;
+    // A Note when the synopsis declares what the code does not: that is how a
+    // member inherited from a base class reads, and nothing is wrong with it.
+    // A Warning for every other disagreement, including a class member the
+    // synopsis leaves out.
+    Severity severity = Severity::Warning;
 };
 
 // Where the synopsis and the declarations disagree: a paired declaration whose

@@ -59,18 +59,28 @@ class move_only_function<R(ArgTypes...)> {
 
     //! \asdraft
     template <class F>
-    constexpr move_only_function(F&& f) { (void)f; }
+    constexpr move_only_function(F&& f) {
+        (void)f;
+    }
 
     //! \asdraft
     template <class T, class... Args>
-    constexpr explicit move_only_function(in_place_type_t<T>, Args&&... args) { (void)sizeof...(args); }
+    constexpr explicit move_only_function(in_place_type_t<T>, Args&&... args) {
+        (void)sizeof...(args);
+    }
 
     //! \asdraft
     template <class T, class U, class... Args>
-    constexpr explicit move_only_function(in_place_type_t<T>, initializer_list<U> ilist, Args&&... args) { (void)ilist; (void)sizeof...(args); }
+    constexpr explicit move_only_function(in_place_type_t<T>, initializer_list<U> ilist, Args&&... args) {
+        (void)ilist;
+        (void)sizeof...(args);
+    }
 
     //! \asdraft
-    constexpr move_only_function& operator=(move_only_function&& f) { (void)f; return *this; }
+    constexpr move_only_function& operator=(move_only_function&& f) {
+        (void)f;
+        return *this;
+    }
 
     //! \asdraft
     constexpr move_only_function& operator=(nullptr_t) noexcept { return *this; }
@@ -91,7 +101,10 @@ class move_only_function<R(ArgTypes...)> {
     constexpr explicit operator bool() const noexcept { return false; }
 
     //! \asdraft
-    constexpr R operator()(ArgTypes... args) { (void)sizeof...(args); return R(); }
+    constexpr R operator()(ArgTypes... args) {
+        (void)sizeof...(args);
+        return R();
+    }
 
     // \ref{func.wrap.move.util}, utility
 
@@ -99,7 +112,10 @@ class move_only_function<R(ArgTypes...)> {
     constexpr void swap(move_only_function& other) noexcept { (void)other; }
 
     //! \asdraft
-    friend constexpr void swap(move_only_function& f1, move_only_function& f2) noexcept { (void)f1; (void)f2; }
+    friend constexpr void swap(move_only_function& f1, move_only_function& f2) noexcept {
+        (void)f1;
+        (void)f2;
+    }
 
     //! \asdraft
     friend constexpr bool operator==(const move_only_function& f, nullptr_t) noexcept { return (void)f, true; }
