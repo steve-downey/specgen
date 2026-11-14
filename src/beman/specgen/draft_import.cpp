@@ -1021,8 +1021,14 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         return std::ranges::any_of(loose, [](const std::string& l) { return !trim(l).empty(); });
     };
     const auto flush_loose = [&] {
-        if (has_content())
-            nodes.push_back(ir::SpecItem{.decl = {}, .descr = parse_description(loose)});
+        // Text that says nothing once read -- an `\indextext` line, say -- is not a
+        // description, and an item with no declaration and no wording is noise
+        // the differ would show as a removed item.
+        if (has_content()) {
+            ir::ItemDescr descr = parse_description(loose);
+            if (ir::has_description(descr))
+                nodes.push_back(ir::SpecItem{.decl = {}, .descr = std::move(descr)});
+        }
         loose.clear();
     };
 

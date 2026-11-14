@@ -164,8 +164,10 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
 
     const auto add_pending = [&](AttachedItem&& attached, bool alias = false, bool adjacent_alias = false) {
         const bool named = attached.directives.group_id || attached.directives.also_target;
-        const bool joins = !named && (alias ? (attached.directives.also && adjacent_alias)
-                                            : (attached.directives.also || !ir::has_description(attached.item.descr)));
+        const bool joins =
+            !named && (alias ? (attached.directives.also && adjacent_alias)
+                             : (attached.directives.also ||
+                                (!ir::has_description(attached.item.descr) && !attached.item.as_draft)));
         const std::string section = attached.directives.at_anchor.value_or(section_for(attached.inclass_offset));
         pending.push_back(beman::specgen::document_build::PendingItem{
             section,

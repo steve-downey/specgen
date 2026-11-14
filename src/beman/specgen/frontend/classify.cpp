@@ -112,7 +112,9 @@ beman::specgen::document_build::DocEvent item_decl_event(AttachedItem&& attached
     // decided in push order, not the placement-key-sorted order the tree
     // ends up in).
     const bool named_grouping = attached.directives.group_id || attached.directives.also_target;
-    const bool wants_join = !named_grouping && (attached.directives.also || !ir::has_description(attached.item.descr));
+    const bool wants_join =
+        !named_grouping &&
+        (attached.directives.also || (!ir::has_description(attached.item.descr) && !attached.item.as_draft));
 
     return db::ItemDecl{doc.offset_in(attached.file, attached.inclass_offset),
                         wants_join,
@@ -295,6 +297,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     out.diagnostics   = std::move(diagnostics);
                     return out;
                 }
+                // A detached `\asdraft` alone: the section's prose is the baseline's.
+                if (grammar::Markers only_asdraft;
+                    parsed.block.markers.asdraft && parsed.block.leading.empty() && parsed.block.elements.empty() &&
+                    parsed.block.kind_covers.empty() &&
+                    ((only_asdraft.asdraft = true), parsed.block.markers == only_asdraft)) {
+                    return db::SectionProse{ev.offset, {}, std::move(diagnostics), first_line, diagnostic_file, true};
+                }
                 if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
                     parsed.block.markers == grammar::Markers{}) {
                     auto lowered = lowering::lower(parsed.block);
@@ -463,11 +472,14 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.name    = record->getNameAsString();
         out.nested_namespace = rendered_namespace(record, ns_drop_set, specified_set).definition;
         out.diagnostics      = std::move(block.diagnostics);
-        out.synopsis.code =
-            block.synopsis
-                ? ir::CodeText{std::move(*block.synopsis), {}}
-                : extract_synopsis(
-                      record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
+        ir::CodeText extracted =
+            extract_synopsis(record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
+        out.synopsis.as_draft = block.synopsis_as_draft;
+        // An authored or inherited synopsis is text nothing ties to the
+        // declarations, so the code's own is kept beside it for the check.
+        if (block.synopsis || block.synopsis_as_draft)
+            out.synopsis.declared = extracted;
+        out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}} : std::move(extracted);
         collect_inclass_items(
             record, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // After collection: the roster reads the routed sections
@@ -494,20 +506,16 @@ db::DocEvent classify(const RawItem&                                   ev,
         // reads use.
         RecordDocblock   block = record_docblock(tmpl, sm);
         db::SynopsisDecl out;
-        out.offset           = ev.offset;
-        out.synopsis.name    = templated->getNameAsString();
-        out.nested_namespace = rendered_namespace(tmpl, ns_drop_set, specified_set).definition;
-        out.diagnostics      = std::move(block.diagnostics);
-        out.synopsis.code    = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}}
-                                              : extract_synopsis(templated,
-                                                                 sm,
-                                                                 lang_opts,
-                                                                 omit_set,
-                                                                 expos_set,
-                                                                 seebelow_map,
-                                                                 freestanding_map,
-                                                                 ns_drop_set,
-                                                                 tmpl);
+        out.offset             = ev.offset;
+        out.synopsis.name      = templated->getNameAsString();
+        out.nested_namespace   = rendered_namespace(tmpl, ns_drop_set, specified_set).definition;
+        out.diagnostics        = std::move(block.diagnostics);
+        ir::CodeText extracted = extract_synopsis(
+            templated, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, tmpl);
+        out.synopsis.as_draft = block.synopsis_as_draft;
+        if (block.synopsis || block.synopsis_as_draft)
+            out.synopsis.declared = extracted;
+        out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}} : std::move(extracted);
         collect_inclass_items(
             templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
         // Build the roster before core grouping so every declaration offset still

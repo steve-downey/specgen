@@ -68,7 +68,6 @@ Such small-object optimization can only be applied to a type `T` for which `is_n
 
 ### Constructors, assignments, and destructor [func.wrap.move.ctor]{- .sref} {-}
 
-
 ```cpp
 template<class VT>
   static constexpr bool $is-callable-from$ = $see below$;

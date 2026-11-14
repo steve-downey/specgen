@@ -37,6 +37,11 @@ bool has_unresolved(const ir::Document&);
 // baseline item taken once. An item with no pair, or a `\covers` for an element
 // the resolved description lacks, is an Error and the item is left as it was.
 //
+// A synopsis marked `\asdraft-synopsis` takes the baseline synopsis of the same
+// class and has the specifiers of its own `declared` text written into it
+// (synopsis_check.hpp), which is what lets a paper that only adds `constexpr`
+// say so without retyping the draft's class. What cannot be written is a Warning.
+//
 // The resolved description is the baseline's, with each element the item
 // authors replacing the baseline element of its kind. A derived element (from
 // a requires-clause or a static_assert) does not replace the baseline's: its

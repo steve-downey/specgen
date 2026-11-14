@@ -1100,6 +1100,10 @@ ParseResult parse_docblock(std::string_view raw) {
         diags.push_back({Severity::Error,
                          0,
                          "\\asdraft takes the item's description, so it cannot be \\omit, \\merge or \\elsewhere"});
+    if (block.markers.asdraft_synopsis && block.markers.verbatim_synopsis)
+        diags.push_back({Severity::Error,
+                         0,
+                         "\\asdraft-synopsis takes the baseline's synopsis, so it cannot be \\verbatim-synopsis"});
     if (!block.kind_covers.empty() && !block.markers.asdraft)
         diags.push_back({Severity::Error,
                          block.kind_covers.front().line,

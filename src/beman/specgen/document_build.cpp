@@ -303,9 +303,12 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // description-only ir::SpecItem -- no signatures,
                     // so group_items neither joins it to anything nor
                     // lets a following \also item join onto it.
-                    if (beman::specgen::ir::has_description(syn.descr))
-                        stack.back().pushed.push_back(
-                            GroupCandidate{syn.offset, ir::SpecItem{{}, std::move(syn.descr)}, false});
+                    if (beman::specgen::ir::has_description(syn.descr) || syn.descr_as_draft) {
+                        ir::SpecItem own{{}, std::move(syn.descr)};
+                        own.as_draft = syn.descr_as_draft;
+                        own.covers   = std::move(syn.descr_covers);
+                        stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(own), false});
+                    }
                     // substrate generic algorithm: distributes each
                     // in-class member to the pending bucket for its
                     // own \rSec target — a scatter keyed by data
@@ -338,8 +341,9 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     }
                     ir::ItemDescr description;
                     description.leading = std::move(prose.body);
-                    stack.back().pushed.push_back(
-                        GroupCandidate{prose.offset, ir::SpecItem{{}, std::move(description)}, false});
+                    ir::SpecItem own{{}, std::move(description)};
+                    own.as_draft = prose.as_draft;
+                    stack.back().pushed.push_back(GroupCandidate{prose.offset, std::move(own), false});
                 },
                 [&](Ignored& ig) {
                     // \ref group headers, license/SPDX text, trailing

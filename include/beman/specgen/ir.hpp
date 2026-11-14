@@ -578,6 +578,15 @@ struct Synopsis {
     CodeText                   code;
     std::vector<SynopsisEntry> roster;                // empty for a forward declaration
     Change                     change = Change::Same; // the wording diff's mark on the whole synopsis
+    // The synopsis the class's own declarations generate, kept when `code` is
+    // authored (`\verbatim-synopsis`) or inherited (`\asdraft-synopsis`), which
+    // nothing otherwise ties to them. Validator-only: no backend reads it. The
+    // check compares the two for what a paper changes without touching a word
+    // (synopsis_check.hpp).
+    std::optional<CodeText> declared = {};
+    // `\asdraft-synopsis`: `code` is the baseline synopsis of this class, with
+    // the specifiers of `declared` written into it, once resolved (inherit.hpp).
+    bool as_draft = false;
 
     friend bool operator==(const Synopsis&, const Synopsis&) = default;
 };
