@@ -37,6 +37,9 @@
 #             side of the rule would make the golden machine-specific.
 #             ALSO_INPUTS adds further headers, pinning the fragment for a whole
 #             paper — the union of what all its parses read, deduplicated.
+#   import    INPUT is a slice of the working draft's LaTeX; run it through
+#             `specgen import` for the stable names in SECTIONS and compare
+#             the IR JSON it writes. Needs no Clang.
 #   split     INPUT is IR JSON; run it through `specgen render --split`
 #             and compare the *directory* of fragments it writes, plus the
 #             manifest it prints, against a checked-in directory. ACTUAL is a
@@ -113,6 +116,21 @@ if(MODE STREQUAL "generate")
     endif()
     execute_process(
         COMMAND "${SPECGEN}" ${generate_args}
+        RESULT_VARIABLE render_result
+        ERROR_VARIABLE render_error
+    )
+elseif(MODE STREQUAL "import")
+    # The draft importer: INPUT is a slice of the working draft's LaTeX and
+    # SECTIONS the |-joined stable names to read from it. The IR it writes is
+    # the artifact; its warnings go to stderr, where a case that expects some
+    # is read through the `render` goldens over the same IR. Needs no Clang.
+    set(import_args import "${INPUT}" -o "${ACTUAL}")
+    string(REPLACE "|" ";" _sections "${SECTIONS}")
+    foreach(_section IN LISTS _sections)
+        list(APPEND import_args --section "${_section}")
+    endforeach()
+    execute_process(
+        COMMAND "${SPECGEN}" ${import_args}
         RESULT_VARIABLE render_result
         ERROR_VARIABLE render_error
     )

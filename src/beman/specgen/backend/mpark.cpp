@@ -183,6 +183,16 @@ struct PieceRenderer {
     std::string operator()(const ir::PlaceholderInline& v) const { return '*' + v.text + '*'; }
     std::string operator()(const ir::OldConceptRef& v) const { return "*Cpp17" + v.name + '*'; }
 
+    // A reference to a table: a link to its caption's anchor, the bracketed
+    // stable name where the draft prints "Table N".
+    std::string operator()(const ir::TableRef& v) const {
+        return "[Table \\[" + v.stable_name + "\\]](#" + v.stable_name + ')';
+    }
+
+    // Draft LaTeX kept as written: pandoc's raw inline, the one form that
+    // carries it through to a LaTeX build and is ignored by any other.
+    std::string operator()(const ir::RawInline& v) const { return '`' + v.latex + "`{=latex}"; }
+
     // A changed run of prose (the wording diff's mark): the framework's
     // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would
     // be unmarked. Defined after `render_run` below, which dispatches the

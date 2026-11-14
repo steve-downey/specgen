@@ -10,4 +10,6 @@
 
 [#]{.pnum} A revision [requires *Cpp17CopyConstructible*]{.rm}[requires *Cpp17MoveConstructible* when *noex* holds]{.add}.
 
+[#]{.pnum} See [Table \[gadget.table\]](#gadget.table) lists them, and `\term{unknown}`{=latex} stays as written.
+
 :::

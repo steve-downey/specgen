@@ -159,7 +159,7 @@ function(specgen_add_golden case)
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_INPUT;SOURCE"
+        "ROOT;ALSO_INPUT;SOURCE;SECTION"
         ${ARGN}
     )
 
@@ -185,7 +185,7 @@ function(specgen_add_golden case)
         # driver is run from, so the manifest it prints stays relative.
         set(expected "${case_dir}/expected.${ARG_BACKEND}")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.split")
-    elseif(ARG_MODE STREQUAL "generate")
+    elseif(ARG_MODE STREQUAL "generate" OR ARG_MODE STREQUAL "import")
         set(expected "${expected_dir}/expected.json")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.json")
     elseif(ARG_MODE STREQUAL "diagnose" OR ARG_MODE STREQUAL "validate")
@@ -233,6 +233,11 @@ function(specgen_add_golden case)
     if(ARG_SOURCE)
         string(REPLACE ";" "|" _sources_joined "${ARG_SOURCE}")
         list(APPEND case_args "-DSOURCES=${_sources_joined}")
+    endif()
+    if(ARG_SECTION)
+        string(REPLACE ";" "|" _sections_joined "${ARG_SECTION}")
+        list(APPEND case_args "-DSECTIONS=${_sections_joined}")
+        unset(_sections_joined)
     endif()
     if(ARG_VALIDATE)
         list(APPEND case_args "-DVALIDATE=ON")
@@ -611,6 +616,55 @@ specgen_add_golden(
     inline_kinds
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+
+# The draft importer (docs/plans/draft-import.md): a slice of the working
+# draft's LaTeX read into IR, and that IR rendered by each backend. The slices
+# are copied into tests/corpus/standard-slices with their revision recorded, so no
+# checkout of the draft is needed. The wording goldens read the import golden's
+# own expected.json, so one pin covers both halves.
+specgen_add_golden(
+    draft_func_wrap_move
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    SECTION func.wrap.move
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+
+# A subclause with library tables and references to them, which the importer
+# reads into the two table kinds and TableRef.
+specgen_add_golden(
+    draft_optional_assign
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
+    SECTION optional.assign
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
 )
 
 # Base level, all three backends over one nested fixture. The option existed in

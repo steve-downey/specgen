@@ -1,0 +1,260 @@
+% Slice of the C++ working draft, source/utilities.tex, lines 3686-3944,
+% at cplusplus/draft commit 2594eff0. Copied unchanged; see README.md.
+\rSec3[optional.ctor]{Constructors}
+
+\pnum
+The exposition-only variable template \exposid{converts-from-any-cvref}
+is used by some constructors for \tcode{optional}.
+\begin{codeblock}
+template<class T, class W>
+constexpr bool @\exposid{converts-from-any-cvref}@ =  // \expos
+  disjunction_v<is_constructible<T, W&>, is_convertible<W&, T>,
+                is_constructible<T, W>, is_convertible<W, T>,
+                is_constructible<T, const W&>, is_convertible<const W&, T>,
+                is_constructible<T, const W>, is_convertible<const W, T>>;
+\end{codeblock}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+constexpr optional() noexcept;
+constexpr optional(nullopt_t) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\ensures
+\tcode{*this} does not contain a value.
+
+\pnum
+\remarks
+No contained value is initialized.
+For every object type \tcode{T} these constructors are constexpr constructors\iref{dcl.constexpr}.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+constexpr optional(const optional& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+If \tcode{rhs} contains a value, direct-non-list-initializes \exposid{val}
+with \tcode{rhs.\exposid{val}}.
+
+\pnum
+\ensures
+\tcode{rhs.has_value() == this->has_value()}.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+This constructor is defined as deleted unless
+\tcode{is_copy_constructible_v<T>} is \tcode{true}.
+If \tcode{is_trivially_copy_constructible_v<T>} is \tcode{true},
+this constructor is trivial.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+constexpr optional(optional&& rhs) noexcept(@\seebelow@);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_move_constructible_v<T>} is \tcode{true}.
+
+\pnum
+\effects
+If \tcode{rhs} contains a value, direct-non-list-initializes \exposid{val}
+with \tcode{std::move(rhs.\exposid{val})}.
+\tcode{rhs.has_value()} is unchanged.
+
+\pnum
+\ensures
+\tcode{rhs.has_value() == this->has_value()}.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+The exception specification is equivalent to
+\tcode{is_nothrow_move_constructible_v<T>}.
+If \tcode{is_trivially_move_constructible_v<T>} is \tcode{true},
+this constructor is trivial.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_constructible_v<T, Args...>} is \tcode{true}.
+
+\pnum
+\effects
+Direct-non-list-initializes \exposid{val}
+with \tcode{std::forward<Args>(args)...}.
+
+\pnum
+\ensures
+\tcode{*this} contains a value.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+If \tcode{T}'s constructor selected for the initialization is a constexpr constructor, this constructor is a constexpr constructor.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class U, class... Args>
+  constexpr explicit optional(in_place_t, initializer_list<U> il, Args&&... args);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_constructible_v<T, initializer_list<U>\&, Args...>} is \tcode{true}.
+
+\pnum
+\effects
+Direct-non-list-initializes \exposid{val}
+with \tcode{il, std::forward<Args>(args)...}.
+
+\pnum
+\ensures
+\tcode{*this} contains a value.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+If \tcode{T}'s constructor selected for the initialization is a constexpr constructor, this constructor is a constexpr constructor.
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class U = remove_cv_t<T>> constexpr explicit(@\seebelow@) optional(U&& v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_constructible_v<T, U>} is \tcode{true},
+\item \tcode{is_same_v<remove_cvref_t<U>, in_place_t>} is \tcode{false},
+\item \tcode{is_same_v<remove_cvref_t<U>, optional>} is \tcode{false}, and
+\item if \tcode{T} is \cv{} \tcode{bool},
+\tcode{remove_cvref_t<U>} is not a specialization of \tcode{optional}.
+\end{itemize}
+
+\pnum
+\effects
+Direct-non-list-initializes \exposid{val}
+with \tcode{std::forward<U>(v)}.
+
+\pnum
+\ensures
+\tcode{*this} contains a value.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+If \tcode{T}'s selected constructor is a constexpr constructor,
+this constructor is a constexpr constructor.
+The expression inside \keyword{explicit} is equivalent to:
+\begin{codeblock}
+!is_convertible_v<U, T>
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class U> constexpr explicit(@\seebelow@) optional(const optional<U>& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_constructible_v<T, const U\&>} is \tcode{true}, and
+\item if \tcode{T} is not \cv{} \tcode{bool},
+\tcode{\exposid{converts-from-any-cvref}<T, optional<U>>} is \tcode{false}.
+\end{itemize}
+
+\pnum
+\effects
+If \tcode{rhs} contains a value,
+direct-non-list-initializes \exposid{val}
+with \tcode{rhs.operator*()}.
+
+\pnum
+\ensures
+\tcode{rhs.has_value() == this->has_value()}.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+The expression inside \keyword{explicit} is equivalent to:
+\begin{codeblock}
+!is_convertible_v<const U&, T>
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibraryctor{optional}%
+\begin{itemdecl}
+template<class U> constexpr explicit(@\seebelow@) optional(optional<U>&& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_constructible_v<T, U>} is \tcode{true}, and
+\item if \tcode{T} is not \cv{} \tcode{bool},
+\tcode{\exposid{converts-from-any-cvref}<T, optional<U>>} is \tcode{false}.
+\end{itemize}
+
+\pnum
+\effects
+If \tcode{rhs} contains a value,
+direct-non-list-initializes \exposid{val}
+with \tcode{std::move(rhs).operator*()}.
+\tcode{rhs.has_value()} is unchanged.
+
+\pnum
+\ensures
+\tcode{rhs.has_value() == this->has_value()}.
+
+\pnum
+\throws
+Any exception thrown by the selected constructor of \tcode{T}.
+
+\pnum
+\remarks
+The expression inside \keyword{explicit} is equivalent to:
+\begin{codeblock}
+!is_convertible_v<U, T>
+\end{codeblock}
+\end{itemdescr}

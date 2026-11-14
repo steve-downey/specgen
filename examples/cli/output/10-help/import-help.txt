@@ -1,0 +1,171 @@
+usage: specgen <command> [options]
+
+commands:
+  render      render IR JSON to wording fragments
+  generate    render a C++ header to wording fragments
+  import      read subclauses of the working draft's LaTeX into IR JSON
+  dump-decls  print a header's decl/comment interleave (debug)
+
+import options:
+  <file.tex>                the draft source file holding the subclauses
+                             (exactly one)
+  --section <stable-name>   a subclause to import, with its subsections; the
+                             result has one top-level section per use, in the
+                             order given. Required, and may be repeated
+  -o, --output <file>       write the IR here instead of to standard output
+
+  A construct the IR has no kind for is kept as raw LaTeX and reported as a
+  warning naming it and the subclause. A name the file lacks is an error.
+
+dump-decls options:
+  <header>                  the header to parse (exactly one)
+  --compile-commands <dir>  read compile flags for <header> from <dir>'s
+                             compile_commands.json
+  --no-compile-commands     suppress the search for a compile_commands.json
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
+  -- <clang args>...        pass these to Clang verbatim instead of consulting
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
+
+generate options:
+  <header>...                the headers to parse, one document each and all
+                             of them one paper, in the order named; with none,
+                             parse a stock snippet as a link-proving smoke
+                             check
+  --source <file>           a source file defining members the preceding
+                             header declares: a documented definition in it
+                             supplies that member's wording, as one in the
+                             header would. Parsed as its own translation unit,
+                             with its own compile flags; may be repeated
+  --emit-ir                 emit the document tree (design §3.2) as IR JSON
+                             for a later `render --from-ir`, instead of
+                             rendering wording here. One document per file is
+                             what the format is, so this takes one header
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
+  --new-root <name>         treat <name> and every stable name beneath it as
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --baseline-header <path>  the wording diff against this header's wording,
+                             parsed with the same compile flags as the header
+                             it pairs with, in order. May be repeated
+  --baseline-rev <rev>      the wording diff against the headers as they were
+                             at this git revision of their repository, checked
+                             out into a scratch tree for the run; a header the
+                             revision lacks is new wording. One per run
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --split <dir>             write one fragment per top-level section into <dir>,
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted. With
+                             several headers, repeats to name each document's
+                             root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and every file its parse read,
+                             with an empty rule per prerequisite so a deleted
+                             header rebuilds rather than erroring. System
+                             headers are left out
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
+  --compile-commands <dir>  read compile flags for <header> from <dir>'s
+                             compile_commands.json
+  --no-compile-commands     suppress the search for a compile_commands.json
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
+  -- <clang args>...        pass these to Clang verbatim instead of consulting
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
+
+render options:
+  --from-ir <file>          IR JSON to read; "-" for standard input (required).
+                             May be repeated, once per document of one paper:
+                             --validate then runs across the union of their
+                             documented names, so a name specified by a
+                             sibling document is not foreign. Several inputs
+                             render as one paper -- joined in order for a
+                             single output, split into per-clause fragments,
+                             or both -- and --root, when given at all, repeats
+                             too, pairing with each --from-ir in order
+  --backend <name>          latex (default), mpark, or org
+  --validate                run the wording validators before rendering; a
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
+  --new-root <name>         treat <name> and every stable name beneath it as
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
+  --base-heading-level <n>  heading level of a top-level section; nested
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
+  --base-section-depth <n>  \rSec depth of a top-level section; nested sections
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --split <dir>             write one fragment per top-level section into <dir>,
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
+  --root <name>             name the fragment holding the nodes outside every
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted. With
+                             several --from-ir inputs, repeats to name each
+                             document's root fragment, pairing in order
+  -o, --output <file>       write the whole here instead of standard output
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
+  --depfile <file>          write a Makefile dependency fragment naming what
+                             this run produced and the IR files it read, with
+                             an empty rule per prerequisite. Standard input is
+                             not a file, so it is left out
+  --dep-target <name>       name this target in the dependency fragment
+                             instead of the files actually written; repeats
+                             (--depfile only)
+
+general:
+  -h, --help                show this message
+  --version                 show the version
