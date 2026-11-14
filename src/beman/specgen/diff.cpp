@@ -4,6 +4,7 @@
 #include <beman/specgen/diff.hpp>
 
 #include <beman/specgen/diff/sequence.hpp>
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -12,6 +13,7 @@
 #include <cctype>
 #include <cstddef>
 #include <functional>
+#include <iterator>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -483,6 +485,62 @@ void append_merged_line(BuiltCode& out, const Line& a, const Line& b, const Opti
     });
 }
 
+// Several deleted lines against several inserted ones, as one run of tokens:
+// the same code laid out over a different number of lines. The draft writes
+// `template<class F> move_only_function(F&& f);` on one line where the header's
+// declaration extracts as two, and a line break is not wording. Line breaks and
+// indentation are layout that is always kept, from the current revision; the
+// tokens are diffed as one sequence, so only what differs is marked.
+void append_merged_group(BuiltCode&                      out,
+                         const std::vector<Line>&        la,
+                         const std::vector<std::size_t>& deleted,
+                         const std::vector<Line>&        lb,
+                         const std::vector<std::size_t>& inserted,
+                         const Options&                  options) {
+    std::vector<CodeToken> ta;
+    std::ranges::for_each(deleted, [&](std::size_t d) {
+        std::ranges::copy_if(
+            code_tokens(la[d]), std::back_inserter(ta), [](const CodeToken& t) { return !rstripped(t.text).empty(); });
+    });
+    std::vector<CodeToken>   tb_all;
+    std::vector<std::size_t> real; // where in tb_all each token that is not layout is
+    std::vector<CodeToken>   tb;
+    std::ranges::for_each(std::views::enumerate(inserted), [&](const auto& entry) {
+        const auto& [n, j] = entry;
+        if (n > 0)
+            tb_all.push_back(CodeToken{"\n", std::nullopt});
+        std::ranges::for_each(code_tokens(lb[j]), [&](const CodeToken& t) {
+            if (!rstripped(t.text).empty()) {
+                real.push_back(tb_all.size());
+                tb.push_back(t);
+            }
+            tb_all.push_back(t);
+        });
+    });
+
+    const std::vector<Edit> script       = join_islands(edit_script(ta, tb, same_code_token), options.island);
+    std::size_t             cursor       = 0;
+    const auto              flush_layout = [&](std::size_t upto) {
+        // substrate generic algorithm: emits the layout tokens before a kept or added one.
+        while (cursor < upto)
+            out.append(tb_all[cursor++].text, std::nullopt, ir::Change::Same);
+    };
+    std::ranges::for_each(std::views::iota(std::size_t{0}, script.size()), [&](std::size_t k) {
+        const Edit& e = script[k];
+        if (e.op == Op::Delete) {
+            const bool replaced = k + 1 < script.size() && script[k + 1].op == Op::Insert;
+            out.append(replaced ? rstripped(ta[e.a].text) : std::string_view(ta[e.a].text),
+                       ta[e.a].span,
+                       ir::Change::Removed);
+            return;
+        }
+        flush_layout(real[e.b]);
+        out.append(tb[e.b].text, tb[e.b].span, e.op == Op::Keep ? ir::Change::Same : ir::Change::Added);
+        cursor = real[e.b] + 1;
+    });
+    flush_layout(tb_all.size());
+}
+
 ir::CodeText diff_code(const ir::CodeText& a, const ir::CodeText& b, const Options& options) {
     if (a == b)
         return b;
@@ -507,6 +565,24 @@ ir::CodeText diff_code(const ir::CodeText& a, const ir::CodeText& b, const Optio
         const std::vector<std::size_t> inserted =
             run | std::views::filter([](const Edit& e) { return e.op == Op::Insert; }) |
             std::views::transform(&Edit::b) | std::ranges::to<std::vector>();
+        // The same code over a different number of lines: diffed as one run of
+        // tokens when it reads as nearly the same, so a line break is not a change.
+        if (!deleted.empty() && !inserted.empty() && deleted.size() != inserted.size()) {
+            const auto keys = [&](const std::vector<Line>& lines, const std::vector<std::size_t>& which) {
+                std::vector<std::string> out;
+                std::ranges::for_each(which, [&](std::size_t n) {
+                    std::ranges::copy_if(code_keys(code_tokens(lines[n])),
+                                         std::back_inserter(out),
+                                         [](const std::string& k) { return !k.empty(); });
+                });
+                return out;
+            };
+            if (similarity(keys(la, deleted), keys(lb, inserted)) >= std::max(options.pairing_threshold, 0.8)) {
+                line_break();
+                append_merged_group(out, la, deleted, lb, inserted, options);
+                return;
+            }
+        }
         std::vector<std::size_t> added_tail;
         // substrate generic algorithm: a walk over two index lists in step,
         // whose outcome for a pair decides where the second index goes.
@@ -802,6 +878,7 @@ struct NodeKeyOf {
     NodeKey operator()(const ir::SpecItem& s) const {
         std::vector<std::string> entities = s.decl.entities;
         std::ranges::sort(entities);
+        entities.erase(std::ranges::unique(entities).begin(), entities.end());
         const std::string loose = "E:" + (entities | std::views::join_with(',') | std::ranges::to<std::string>());
         const std::string sigs  = s.decl.signatures | std::views::transform(&ir::CodeText::text) |
                                   std::views::join_with('|') | std::ranges::to<std::string>();
@@ -844,8 +921,14 @@ diff_nodes(const std::vector<ir::Node>& a, const std::vector<ir::Node>& b, const
     // shares, so first-come pairing would hand each overload another's
     // baseline whenever the set's order or membership changed. The pairs are
     // taken best-reading signature first instead; with one candidate each,
-    // which is every case that was not ambiguous, nothing changes.
-    {
+    // which is every case that was not ambiguous, nothing changes. A third
+    // pass pairs what is left by how alike the declarations read, as long as
+    // they read alike at all, for an item one side gives no names for: the
+    // draft's index says nothing of an exposition-only variable, so
+    // `is-callable-from` has none, where the header's has `is_callable_from`.
+    // An item whose names are known on both sides and differ is a rename, which
+    // is an item removed and an item added, not an edit.
+    const auto pair_best = [&](auto&& eligible, double minimum) {
         struct Candidate {
             std::size_t i;
             std::size_t j;
@@ -864,13 +947,15 @@ diff_nodes(const std::vector<ir::Node>& a, const std::vector<ir::Node>& b, const
         };
         std::vector<Candidate> candidates;
         // substrate generic algorithm: enumerates the cross product of the unpaired
-        // baseline and current items that share names, scoring each.
+        // baseline and current items that are eligible, scoring each.
         for (std::size_t i = 0; i < a.size(); ++i)
             // substrate generic algorithm: the inner half of the same enumeration.
             for (std::size_t j = 0; j < b.size(); ++j)
-                if (pair_a[i] == unpaired && pair_b[j] == unpaired && !ka[i].loose.empty() &&
-                    ka[i].loose == kb[j].loose)
-                    candidates.push_back({i, j, alike(i, j)});
+                if (pair_a[i] == unpaired && pair_b[j] == unpaired && eligible(i, j)) {
+                    const double score = alike(i, j);
+                    if (score >= minimum)
+                        candidates.push_back({i, j, score});
+                }
         std::ranges::stable_sort(candidates, std::greater<>{}, &Candidate::score);
         // substrate generic algorithm: claims the candidates best first, each
         // writing both pairing tables.
@@ -880,7 +965,18 @@ diff_nodes(const std::vector<ir::Node>& a, const std::vector<ir::Node>& b, const
                 pair_b[c.j] = c.i;
             }
         }
-    }
+    };
+    pair_best([&](std::size_t i, std::size_t j) { return !ka[i].loose.empty() && ka[i].loose == kb[j].loose; }, 0.0);
+    pair_best(
+        [&](std::size_t i, std::size_t j) {
+            if (!std::holds_alternative<ir::SpecItem>(a[i]) || !std::holds_alternative<ir::SpecItem>(b[j]))
+                return false;
+            const auto& x = std::get<ir::SpecItem>(a[i]);
+            const auto& y = std::get<ir::SpecItem>(b[j]);
+            return !x.decl.signatures.empty() && !y.decl.signatures.empty() &&
+                   (x.decl.entities.empty() || y.decl.entities.empty());
+        },
+        options.pairing_threshold);
     pair_by([&](std::size_t i, std::size_t j) {
         return ka[i].paragraph && kb[j].paragraph &&
                similar_paragraphs(
@@ -1063,9 +1159,86 @@ std::optional<Context> context_from_name(std::string_view name) {
     return found != foundation::enumerators<Context>.end() ? std::optional<Context>{*found} : std::nullopt;
 }
 
+namespace {
+
+// Authored listing text -- a `\verbatim-synopsis`, a `\verbatim-itemdecl`, an
+// authored `\codeblock` -- keeps its `@\cv{}@` escapes as written, which is the
+// contract of verbatim text. The draft's own listings, read by the importer,
+// have the same escapes as spans. For the comparison the authored text is read
+// the way the importer reads a listing, so the same wording is the same IR and
+// a paper that retypes a placeholder is not shown as having changed it.
+void read_escapes(ir::CodeText& code) {
+    if (code.spans.empty() && code.text.contains('@'))
+        code = draft_import::parse_listing(code.text);
+}
+
+void read_escapes(ir::InformativeBody& body);
+
+void read_escapes(ir::DescriptionBody& body) {
+    // `Equivalent to:` and its code, typed as prose and a code block, is the
+    // block the importer reads the draft's as, and the one `\effects-equiv`
+    // extracts.
+    // substrate generic algorithm: a pairwise rewrite that replaces two blocks with one.
+    for (std::size_t i = 0; i + 1 < body.size(); ++i) {
+        const auto* lead = std::get_if<ir::BodyParagraph>(&body[i]);
+        auto*       code = std::get_if<ir::AuthoredCode>(&body[i + 1]);
+        if (lead != nullptr && code != nullptr && lead->text == ir::Paragraph{ir::TextInline{"Equivalent to:"}}) {
+            body[i] = ir::EquivalentTo{std::move(code->code), code->change};
+            body.erase(body.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+        }
+    }
+    // substrate generic algorithm: a visit that rewrites each block's code in place.
+    for (ir::BodyBlock& block : body) {
+        if (auto* b = std::get_if<ir::EquivalentTo>(&block))
+            read_escapes(b->code);
+        else if (auto* b = std::get_if<ir::AuthoredCode>(&block))
+            read_escapes(b->code);
+        else if (auto* b = std::get_if<ir::Note>(&block))
+            read_escapes(b->body);
+        else if (auto* b = std::get_if<ir::Example>(&block))
+            read_escapes(b->body);
+    }
+}
+
+void read_escapes(ir::InformativeBody& body) {
+    // substrate generic algorithm: a visit that rewrites each block's code in place.
+    for (ir::InformativeBlock& block : body)
+        if (auto* b = std::get_if<ir::AuthoredCode>(&block))
+            read_escapes(b->code);
+}
+
+void read_escapes(std::vector<ir::Node>& nodes) {
+    // substrate generic algorithm: a visit that rewrites each node's listings in place.
+    for (ir::Node& node : nodes) {
+        if (auto* section = std::get_if<ir::Section>(&node)) {
+            read_escapes(section->children);
+        } else if (auto* synopsis = std::get_if<ir::Synopsis>(&node)) {
+            read_escapes(synopsis->code);
+            // A synopsis typed in a header names no class; the draft's is named
+            // for the one it declares, which is what pairs the two.
+            if (synopsis->name.empty())
+                synopsis->name = draft_import::declared_class_name(synopsis->code.text);
+        } else if (auto* item = std::get_if<ir::SpecItem>(&node)) {
+            // substrate generic algorithm: a visit that rewrites each signature in place.
+            for (ir::CodeText& signature : item->decl.signatures)
+                read_escapes(signature);
+            read_escapes(item->descr.leading);
+            // substrate generic algorithm: a visit that rewrites each element's body in place.
+            for (ir::DescriptionElement& element : item->descr.elements)
+                read_escapes(element.body);
+        }
+    }
+}
+
+} // namespace
+
 ir::Document compare(const ir::Document& baseline, const ir::Document& current, const Options& options) {
-    ir::Document out = current;
-    out.nodes        = apply_context(diff_nodes(baseline.nodes, current.nodes, options), options.context);
+    ir::Document a = baseline;
+    ir::Document b = current;
+    read_escapes(a.nodes);
+    read_escapes(b.nodes);
+    ir::Document out = b;
+    out.nodes        = apply_context(diff_nodes(a.nodes, b.nodes, options), options.context);
     return out;
 }
 

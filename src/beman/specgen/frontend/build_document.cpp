@@ -475,11 +475,14 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // gathered node's own pending list to the section it named
                     // (issue #98). build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
-                    if (synopsis->general || beman::specgen::ir::has_description(synopsis->descr)) {
+                    if (synopsis->general || beman::specgen::ir::has_description(synopsis->descr) ||
+                        synopsis->descr_as_draft) {
                         db::SynopsisDecl class_extra;
-                        class_extra.offset  = synopsis->offset;
-                        class_extra.general = std::move(synopsis->general);
-                        class_extra.descr   = std::move(synopsis->descr);
+                        class_extra.offset         = synopsis->offset;
+                        class_extra.general        = std::move(synopsis->general);
+                        class_extra.descr          = std::move(synopsis->descr);
+                        class_extra.descr_as_draft = synopsis->descr_as_draft;
+                        class_extra.descr_covers   = std::move(synopsis->descr_covers);
                         extras.push_back(std::move(class_extra));
                     }
                 } else {
@@ -508,8 +511,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // is. A declaration with nothing to say contributes
                         // only its declaration, exactly as before: a masked
                         // customization point object is the common case.
-                        if (beman::specgen::ir::has_description(item_decl->item.descr) || directives.also ||
-                            item_decl->group_id || item_decl->also_target ||
+                        if (beman::specgen::ir::has_description(item_decl->item.descr) || item_decl->item.as_draft ||
+                            directives.also || item_decl->group_id || item_decl->also_target ||
                             (item_decl->wants_join && function_or_template(item.decl) != nullptr)) {
                             // An out-of-line member definition belongs to its
                             // class's group, not to whatever namespace-scope

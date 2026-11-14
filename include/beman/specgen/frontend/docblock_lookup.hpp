@@ -136,8 +136,13 @@ record_suppression_diagnostics(const clang::Decl* decl, const clang::SourceManag
 // suppresses the comment's own RawItem for an attached block, so this is
 // where they reach the driver.
 struct RecordDocblock {
-    beman::specgen::ir::ItemDescr                           descr;
-    std::optional<std::string>                              synopsis;
+    beman::specgen::ir::ItemDescr descr;
+    std::optional<std::string>    synopsis;
+    // `\asdraft`: the class's description is the baseline's.
+    bool                                            as_draft = false;
+    std::vector<beman::specgen::ir::InheritedCover> covers   = {};
+    // `\asdraft-synopsis`: the synopsis is the baseline's, patched.
+    bool                                                    synopsis_as_draft = false;
     std::vector<beman::specgen::document_build::Diagnostic> diagnostics;
 };
 

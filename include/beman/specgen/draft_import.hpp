@@ -46,6 +46,19 @@ struct Result {
 // kind for is a Warning naming it and the subclause, and is kept as raw LaTeX.
 Result import_sections(std::string_view tex, const Options& options);
 
+// Author-written listing text -- a `\verbatim-synopsis` or `\verbatim-itemdecl`
+// payload -- read as the draft's own listings are: an `@...@` escape made only
+// of macros the span vocabulary has (`@\cv{}@`, `@\placeholder{ref}@`,
+// `@\exposid{x}@`, `@\seebelow@`) becomes spans, and any other escape stays as
+// written. So authored text and imported text of the same wording are the same
+// IR, which is what lets the differ compare them.
+ir::CodeText parse_listing(std::string_view raw);
+
+// The class a synopsis declares, by the rule the importer names an imported one
+// by: the one class or struct its code declares, or empty for none or several.
+// An authored synopsis is named the same way when it is compared.
+std::string declared_class_name(std::string_view code);
+
 // The draft's source directory read for a document's sections (`--baseline-draft`).
 struct TreeResult {
     // One top-level section per name found, in the order the names were given.

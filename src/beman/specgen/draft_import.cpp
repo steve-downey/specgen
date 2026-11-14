@@ -163,7 +163,11 @@ struct Importer {
 
     Result run(std::string_view tex, const Options& options);
 
-    ir::CodeText              parse_code(std::string_view raw, bool listing);
+    ir::CodeText parse_code(std::string_view raw, bool listing);
+    // Set by parse_code when it met a macro the span vocabulary lacks: the text
+    // it returned has that macro as written, which the LaTeX backend would
+    // escape, so a caller that can keep the whole run as raw LaTeX should.
+    bool                      met_unknown_macro = false;
     ir::Paragraph             parse_prose(std::string_view text, bool in_table = false);
     ir::InformativeBody       parse_informative(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
@@ -362,7 +366,8 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 i += 2;
                 continue;
             }
-            report(Severity::Warning, "a macro in \\tcode is kept as written: " + std::string(raw.substr(i, 12)));
+            met_unknown_macro = true;
+            report(Severity::Warning, "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 12)));
         }
         out.text(raw.substr(i, 1));
         ++i;
@@ -435,7 +440,14 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
 
         if (name == "tcode" && arg) {
             flush();
-            out.push_back(code_inline_of(parse_code(arg->inner, false)));
+            met_unknown_macro = false;
+            ir::CodeText code = parse_code(arg->inner, false);
+            // A macro in the code the IR has no kind for is not text: the whole run
+            // is kept as the LaTeX it was, which the backend writes back as it was.
+            if (met_unknown_macro)
+                out.push_back(ir::RawInline{std::string(text.substr(i, arg->next - i))});
+            else
+                out.push_back(code_inline_of(std::move(code)));
             i = arg->next;
         } else if ((name == "exposid" || name == "exposidnc") && arg) {
             flush();
@@ -1021,8 +1033,14 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         return std::ranges::any_of(loose, [](const std::string& l) { return !trim(l).empty(); });
     };
     const auto flush_loose = [&] {
-        if (has_content())
-            nodes.push_back(ir::SpecItem{.decl = {}, .descr = parse_description(loose)});
+        // Text that says nothing once read -- an `\indextext` line, say -- is not a
+        // description, and an item with no declaration and no wording is noise
+        // the differ would show as a removed item.
+        if (has_content()) {
+            ir::ItemDescr descr = parse_description(loose);
+            if (ir::has_description(descr))
+                nodes.push_back(ir::SpecItem{.decl = {}, .descr = std::move(descr)});
+        }
         loose.clear();
     };
 
@@ -1150,6 +1168,10 @@ Result Importer::run(std::string_view tex, const Options& options) {
 } // namespace
 
 Result import_sections(std::string_view tex, const Options& options) { return Importer{}.run(tex, options); }
+
+ir::CodeText parse_listing(std::string_view raw) { return Importer{}.parse_code(raw, true); }
+
+std::string declared_class_name(std::string_view code) { return declared_class(code); }
 
 namespace {
 

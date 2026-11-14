@@ -468,6 +468,8 @@ struct json_descriptor<Synopsis> {
         field("code", &Synopsis::code),
         field("roster", &Synopsis::roster),
         defaulted_enum_field("change", &Synopsis::change, Change::Same, change_name, change_from_name, "change"),
+        optional_field("declared", &Synopsis::declared),
+        defaulted_field("as_draft", &Synopsis::as_draft),
     };
 };
 

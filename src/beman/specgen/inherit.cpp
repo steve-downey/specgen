@@ -5,8 +5,10 @@
 
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/synopsis_check.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -25,22 +27,37 @@ namespace {
 using foundation::overloaded;
 
 std::string first_signature(const ir::SpecItem& item) {
-    return item.decl.signatures.empty() ? std::string{} : item.decl.signatures.front().text;
+    return item.decl.signatures.empty() ? std::string("a description with no declaration")
+                                        : item.decl.signatures.front().text;
 }
 
 std::vector<std::string> sorted_entities(const ir::SpecItem& item) {
+    // Distinct: an `\also` group names its entity once per signature, and the
+    // draft's index names it once.
     std::vector<std::string> names = item.decl.entities;
     std::ranges::sort(names);
+    names.erase(std::ranges::unique(names).begin(), names.end());
     return names;
 }
 
 // How alike two items' declarations read: the best match over their signatures,
 // so an overload set pairs with the one that reads most like it.
+// A signature typed in a header keeps its `@\exposid{x}@` escapes as written;
+// the draft's, imported, have them as spans. Read the typed one the way the
+// importer reads a listing, so the same declaration reads alike.
+ir::CodeText as_imported(const ir::CodeText& code) {
+    return code.spans.empty() && code.text.contains('@') ? draft_import::parse_listing(code.text) : code;
+}
+
 double declared_alike(const ir::SpecItem& a, const ir::SpecItem& b) {
+    // A description with no declaration -- a class's own wording, or a
+    // section's detached prose -- pairs with one, in order.
+    if (a.decl.signatures.empty() || b.decl.signatures.empty())
+        return a.decl.signatures.empty() && b.decl.signatures.empty() ? 1.0 : 0.0;
     const auto scores = std::views::cartesian_product(a.decl.signatures, b.decl.signatures) |
                         std::views::transform([](const auto& pair) {
                             const auto& [x, y] = pair;
-                            return x == y ? 1.0 : diff::declaration_similarity(x, y);
+                            return x == y ? 1.0 : diff::declaration_similarity(as_imported(x), as_imported(y));
                         });
     return std::ranges::fold_left(scores, 0.0, [](double best, double score) { return std::max(best, score); });
 }
@@ -52,6 +69,10 @@ const ir::Section* find_section(const std::vector<ir::Node>& nodes, const std::s
     });
     return found == nodes.end() ? nullptr : std::get_if<ir::Section>(&*found);
 }
+
+// How alike a nameless item's declaration must read a baseline item's to take
+// its description: the differ's own measure and threshold for a pair.
+constexpr double kNamelessThreshold = 0.5;
 
 // The baseline item `item` takes its description from: among the unclaimed
 // items declaring the same names, the one whose signature reads most like its
@@ -65,9 +86,15 @@ pair_item(const ir::SpecItem& item, const std::vector<ir::Node>& baseline, std::
     // the first of equals, which writes the claim table.
     for (std::size_t i = 0; i < baseline.size(); ++i) {
         const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
-        if (candidate == nullptr || claimed[i] || sorted_entities(*candidate) != names)
+        // An item typed as a `\verbatim-itemdecl` names nothing the front end
+        // knows of, so it is matched by how its declaration reads against every
+        // baseline item, and only when it reads alike.
+        const bool nameless = names.empty() && !item.decl.signatures.empty();
+        if (candidate == nullptr || claimed[i] || (!nameless && sorted_entities(*candidate) != names))
             continue;
         const double score = declared_alike(item, *candidate);
+        if (nameless && score < kNamelessThreshold)
+            continue;
         if (score > best_score) {
             best       = i;
             best_score = score;
@@ -124,6 +151,28 @@ void inherit_description(ir::SpecItem& item, const ir::SpecItem& from, std::vect
     item.covers.clear();
 }
 
+// The baseline's synopsis of the same class that nothing has claimed.
+const ir::Synopsis*
+pair_synopsis(const ir::Synopsis& synopsis, const std::vector<ir::Node>& baseline, std::vector<bool>& claimed) {
+    // substrate generic algorithm: a search that writes the claim table at the hit.
+    for (std::size_t i = 0; i < baseline.size(); ++i) {
+        const auto* candidate = std::get_if<ir::Synopsis>(&baseline[i]);
+        if (candidate != nullptr && !claimed[i] && candidate->name == synopsis.name) {
+            claimed[i] = true;
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+// What cannot be patched is not reported here: `--validate` compares the
+// result with the class's own declarations and says so once, with the same
+// words it uses for an authored synopsis.
+void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from) {
+    synopsis.code     = synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared).code : from.code;
+    synopsis.as_draft = false;
+}
+
 void resolve_nodes(std::vector<ir::Node>&       current,
                    const std::vector<ir::Node>& baseline,
                    const std::string&           where,
@@ -157,7 +206,22 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                            }
                            inherit_description(item, *from, out);
                        },
-                       [](ir::Synopsis&) {},
+                       [&](ir::Synopsis& synopsis) {
+                           if (!synopsis.as_draft)
+                               return;
+                           const ir::Synopsis* from = pair_synopsis(synopsis, baseline, claimed);
+                           if (from == nullptr) {
+                               out.push_back(
+                                   {Severity::Error,
+                                    synopsis.name + "/synopsis",
+                                    std::format("\\asdraft-synopsis: no synopsis of `{}` in the baseline{}{}",
+                                                synopsis.name,
+                                                where.empty() ? "" : "'s section ",
+                                                where)});
+                               return;
+                           }
+                           resolve_synopsis(synopsis, *from);
+                       },
                        [](ir::FreeParagraph&) {},
                    },
                    node);
@@ -169,7 +233,7 @@ bool any_unresolved(const std::vector<ir::Node>& nodes) {
         return std::visit(overloaded{
                               [](const ir::Section& section) { return any_unresolved(section.children); },
                               [](const ir::SpecItem& item) { return item.as_draft; },
-                              [](const ir::Synopsis&) { return false; },
+                              [](const ir::Synopsis& synopsis) { return synopsis.as_draft; },
                               [](const ir::FreeParagraph&) { return false; },
                           },
                           node);
