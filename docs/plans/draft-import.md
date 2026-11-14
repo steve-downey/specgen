@@ -126,7 +126,7 @@ explicit-constraint-coverage): an older reader rejects an item it cannot represe
 ### 2. `specgen import`
 
 ```sh
-specgen import <draft>/source/utilities.tex --section func.wrap.move --emit-ir > func.wrap.move.json
+specgen import <draft>/source/utilities.tex --section func.wrap.move -o func.wrap.move.json
 ```
 
 One or more `--section` stable names; the result is one `ir::Document` whose top-level sections are
