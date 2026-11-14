@@ -2781,6 +2781,26 @@ foreach(backend latex mpark org)
     )
 endforeach()
 
+# The same context over a pair in the shape of the paper it is for
+# (docs/plans/wording-diff.md, diff-context-decls): `constexpr` is added across
+# an interface. `size()` and `empty()` change only their declaration, so their
+# descriptions collapse to the ellipsis; `front()`'s *Preconditions* changed
+# too, so its description renders whole beside them.
+specgen_add_golden(
+    diff_qualifier_decls
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.after.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.before.hpp"
+    DIFF_CONTEXT decls
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        diff_qualifier_decls_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_qualifier_decls/expected.json"
+    )
+endforeach()
+
 # --section-number's refusals (issue #265): each is reported, never ignored, so
 # a number the author believes was written is not silently dropped.
 foreach(
