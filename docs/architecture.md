@@ -664,6 +664,14 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   there too — it used to read no marker at all and report nothing.
 - `\constraints-in-decl` — keep the requires-clause in the itemdecl and emit no
   Constraints element (ranges-style wording) instead of the default extraction.
+- `\asdraft` — the description is the baseline's ([plans/draft-import.md](plans/draft-import.md)).
+  The front end sets `SpecItem::as_draft` (and `covers`, from `\covers <element> P`) and
+  derives as usual; `inherit::resolve`, a Clang-free pass the driver runs after the baselines
+  are built and before validation and the diff, replaces the item's description with the
+  paired baseline item's. Authored elements replace the inherited one of their kind, and a
+  derivation's conjuncts move onto the inherited element so the validator checks the draft's
+  words against the code. Items pair by declared names, then by `diff::declaration_similarity`;
+  the differ's own loose pairing uses the same measure, best first.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members, for a folded-in
   namespace entity, and — on a class *definition*'s own docblock — for that class's own
   wording, both nodes of it (§6, decision routed-wording-payload).
@@ -1020,8 +1028,9 @@ There are exactly three backends, and **adding wording to one means adding it to
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
   description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
-  `\ref`/`\iref`; `\tcode` and `\libconcept` inlines; exact `lib2dtab2` tables; all eight
-  `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
+  `\ref`/`\iref`; `\tcode`, `\libconcept`, `\placeholder` (`\cv{}` for `cv`) and `\oldconcept`
+  inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
+  `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
   as `@\added{...}@` with the spans inside it in their escaped form (`\exposidnc{x}`,
@@ -1044,6 +1053,10 @@ There are exactly three backends, and **adding wording to one means adding it to
   Paper mode (`--paper`) is the empty-baseline diff: every top-level node marked added, which
   a run of adjacent marked top-level nodes renders as one `::: add` div outside their wording
   divs.
+  The italic inlines (`PlaceholderInline`, `OldConceptRef`) look in mpark and org like what the
+  draft prints, in the target's own emphasis: `*x*` and `*Cpp17X*` in mpark, a LaTeX/HTML export
+  snippet in org, because org's `/x/` fails beside the punctuation these names sit against. Those
+  targets are not semantic markup the way the draft's macros are; the look is the contract.
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
@@ -1421,6 +1434,16 @@ The build assembles the tool from these components, each following the shared CM
 - **Wording diff** — `include/beman/specgen/diff.hpp`, `src/beman/specgen/diff.cpp`, Tier A.
   §7's `diff::compare`: the prose and code tokenizers, the structural matcher over nodes,
   elements and blocks, the three `Context` levels, and `has_marks`.
+- **Draft import** — `include/beman/specgen/draft_import.hpp`,
+  `src/beman/specgen/draft_import.cpp`, Tier A. `specgen import`
+  ([plans/draft-import.md](plans/draft-import.md)): the working draft's LaTeX read into the IR,
+  the inverse of the LaTeX backend over what the backend writes. It scans a source file into
+  `\rSecN` sections, items, description elements and blocks, and lowers the inline macros the
+  IR has a kind for; anything else is a `RawInline` and a Warning naming the macro and the
+  subclause, so no LaTeX reaches the mpark and org backends unreported. Each imported item
+  carries `entities` taken from its `\indexlibrary` entries, which is the key the differ pairs
+  items by. `import_from_directory` finds a document's top-level sections by stable name among
+  a source directory's `*.tex` files, for `generate --baseline-draft`.
 - **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`,
   `src/beman/specgen/baseline_tree.cpp`, Tier A. `--baseline-rev`'s git revision checked out
   into a scratch tree for the run (`read-tree` into a temporary index, then `checkout-index`:

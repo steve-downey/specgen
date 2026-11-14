@@ -33,6 +33,8 @@ foreach(
     depfile
     diagnostic
     diff
+    draft_import
+    inherit
     document_build
     fragments
     span_sentinels
@@ -53,6 +55,11 @@ foreach(
             PROPERTIES CXX_MODULE_STD ON
         )
     endif()
+    # draft_import.test.cpp reads the draft slices under tests/corpus/standard-slices.
+    target_compile_definitions(
+        beman.specgen.tests.${component}
+        PRIVATE BEMAN_SPECGEN_CORPUS_DIR="${PROJECT_SOURCE_DIR}/tests/corpus"
+    )
     catch_discover_tests(beman.specgen.tests.${component})
 endforeach()
 

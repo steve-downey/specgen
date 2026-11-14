@@ -159,6 +159,22 @@ And under the =items= context, where =level()= collapses to the ellipsis:
 
 #+transclude: [[file:../examples/cli/output/45-wording-diff/gadget-diff-items.md]] :src markdown
 
+** Against the working draft
+:PROPERTIES:
+:CUSTOM_ID: the-wording-diff-draft
+:END:
+
+The baseline can also be the standard's own wording. =--baseline-draft= takes the
+draft's =source= directory and reads, by stable name, the sections the header
+generates, so a paper changes what it changes and the rest comes from the draft.
+The header here declares one item of [optional.assign]; its description is
+reworded, and the draft's other items, which the header leaves out, come out
+removed.
+
+#+transclude: [[file:../examples/cli/47-wording-diff-draft.sh]] :src sh
+
+#+transclude: [[file:../examples/cli/output/47-wording-diff-draft/optional-assign-diff.md]] :src markdown
+
 * Fragment Output
 :PROPERTIES:
 :CUSTOM_ID: fragment-output

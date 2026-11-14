@@ -16,6 +16,7 @@
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace beman::specgen::lowering {
 
@@ -32,6 +33,8 @@ using ItemDirectives = grammar::Markers;
 struct Lowered {
     ir::ItemDescr  descr;
     ItemDirectives directives;
+    // `\covers <element> P` claims, for the description `\asdraft` inherits.
+    std::vector<ir::InheritedCover> inherited_covers = {};
 };
 
 // Lower one parsed markup block into canonical-order IR plus its directives.

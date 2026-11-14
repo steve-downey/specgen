@@ -306,7 +306,7 @@ paragraph, with `@[...]{.add}@` inside code; the draft's `addedblock`,
 `org`. A retained paragraph keeps its paragraph number; an added one takes the
 `x`, `x+1` literal, as under `--paper`. A baseline implies `--paper`.
 
-The baseline is one of three things, and a run takes one kind:
+The baseline is one of four things, and a run takes one kind:
 
 - `--baseline-rev <rev>` (`generate` only): a git revision of the repository
   the headers live in, named once for the whole paper. `specgen` checks the
@@ -317,6 +317,17 @@ The baseline is one of three things, and a run takes one kind:
   revision does not have is new wording: it renders as all added, with a note
   on stderr. `git` must be on the `PATH`, and the revision must be in the
   clone, so a shallow checkout needs the history fetched first.
+- `--baseline-draft <dir>` (`generate` only): the C++ working draft's own
+  wording. `<dir>` is the draft's `source` directory; for each header, the
+  top-level sections it generates are found by stable name among the
+  `\rSecN[name]` headings of the `*.tex` files directly in `<dir>` and read
+  with the importer described in
+  [Reading the working draft's LaTeX](#reading-the-working-drafts-latex). The
+  result is a paper's wording diff against the standard itself, with no
+  earlier revision of anything to check out. A section the draft does not have
+  is new wording and renders as all added, with a note on stderr. The files
+  read are prerequisites in a `--depfile`. Specgen records no draft revision:
+  the checkout is the paper build's to pin.
 - `--baseline-header <path>` (`generate` only): the previous revision of the
   header checked out somewhere, one per document and pairing with the
   documents in order, parsed with the compile flags that resolve for *its*
@@ -885,6 +896,51 @@ an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
 wording, and the derivation is retained as evidence for the drift checks.
 
+## Inheriting a description
+
+`\asdraft` says a declaration's description is the baseline's. It is for a paper
+whose change to a member leaves its wording alone, such as adding `constexpr`:
+the wording comes from the working draft rather than being retyped, and cannot
+drift from it.
+
+```cpp
+//! \asdraft
+template <class T>
+constexpr optional<T>& optional<T>::operator=(nullopt_t) noexcept { /* ... */ }
+```
+
+The item takes its description from the baseline item of the same section that
+declares the same names and whose signature reads most like its own, each
+baseline item once; the diff's own measure, so adding `constexpr` does not break
+the pairing. Name a baseline with `--baseline-draft`, or any of the other
+baselines; with none the run is an error, since there is nothing to inherit
+from. An item with no pair is an error naming its signature and the section. An
+`\asdraft` item cannot be `\omit`, `\merge` or `\elsewhere`.
+
+Elements the docblock authors replace the inherited element of the same kind,
+which is how a paper changes one paragraph of an item and leaves the rest:
+
+```cpp
+//! \asdraft
+//! \remarks The expression is potentially-throwing only if `T`'s constructor is.
+```
+
+The requires-clause and `static_assert` derivations still run. They do not
+replace the draft's *Constraints* or *Mandates*; they are what those are checked
+against, as authored wording is (see [Explicit constraint
+coverage](#explicit-constraint-coverage)). A predicate the draft states in words
+the checker cannot read is acknowledged with `\covers` naming the element:
+
+```cpp
+//! \asdraft
+//! \covers constraints !detail::is_in_place_type<remove_cvref_t<F>>
+```
+
+A derived element the baseline has no counterpart for stays, as new wording.
+`--emit-ir` with no baseline keeps the marker in the IR (`as_draft`, and
+`covers` for the claims), and `render --from-ir` with `--baseline-ir` resolves
+it.
+
 ## Placement and grouping markers
 
 - `\omit` excludes a declaration entirely.
@@ -1167,6 +1223,50 @@ each `--from-ir` in order. `render --depfile` names the IR files the render
 read as its prerequisites; `--from-ir -` reads standard input, which is not a
 file, so it is left out.
 
+### Reading the working draft's LaTeX
+
+`import` is the other way into the IR: it reads subclauses of the C++ working
+draft's LaTeX source, so wording a paper does not change can come from the draft
+rather than be retyped. It runs no compiler, like `render`.
+
+```sh
+specgen import draft/source/utilities.tex --section func.wrap.move -o func.wrap.move.json
+specgen render --from-ir func.wrap.move.json --backend mpark
+```
+
+`--section <stable-name>` names a subclause; it is imported with its
+subsections, and the option may be repeated, giving one top-level section per
+use in the order named. A name the file does not contain is an error and the
+command exits 1. With no `-o`, the IR goes to standard output. The command reads
+one source file; a paper whose subclauses live in several files runs it once per
+file.
+
+The importer reads what the LaTeX backend writes, so a subclause the backend
+wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
+`itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
+at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
+macros the IR has a kind for. The exceptions are layout only: line breaks inside
+a paragraph, `\brk`, `\-` and their relatives, and `\index...` entries other
+than `\indexlibrary...` are dropped.
+
+A macro or environment the IR has no kind for is kept as raw LaTeX, which the
+mpark and org backends write as a raw inline, and the command warns, naming the
+macro and the subclause:
+
+```text
+specgen: warning: optional.ctor: \keyword has no IR kind and is kept as raw LaTeX
+```
+
+The warnings say which kind to add next. Nothing is dropped silently.
+
+`generate --baseline-draft <dir>` runs the same import over the sections a
+header generates, as the baseline of the wording diff:
+
+```sh
+specgen generate include/beman/example/example.hpp \
+  --baseline-draft draft/source --backend mpark -- -Iinclude
+```
+
 ## Exit behavior
 
 - Successful `generate`, `render`, and `dump-decls` invocations exit with
@@ -1193,7 +1293,7 @@ file, so it is left out.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.23.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.29.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1203,7 +1303,9 @@ Newly emitted item nodes use `item-v4` for ordered description bodies and
 explicit coverage metadata. Updated renderers still read `item-v3`, `item-v2`, and the earlier `item` nodes
 with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
-when moving to the new writer.
+when moving to the new writer. The prose inline tags `placeholder`,
+`oldconcept` and `raw` are new; an older renderer reports a document containing one as
+unreadable rather than dropping the text.
 
 ### Section prose
 
@@ -1226,7 +1328,8 @@ prose, acknowledge its correspondence on the authored element:
 //! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
 ```
 
-`\covers` belongs to the current normative Constraints or Mandates element.
+`\covers` belongs to the current normative Constraints or Mandates element, or,
+beside `\asdraft`, names the element it is about (`\covers constraints P`).
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

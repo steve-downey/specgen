@@ -50,7 +50,10 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
         foundation::when<ir::SpanKind::ExposId>([&] { return "\\exposid{" + span.payload + '}'; }),
         foundation::when<ir::SpanKind::SeeBelow>([&] { return std::string{"\\seebelow"}; }),
         foundation::when<ir::SpanKind::ImplDefined>([&] { return std::string{"\\impdef"}; }),
-        foundation::when<ir::SpanKind::Placeholder>([&] { return "\\placeholder{" + span.payload + '}'; }),
+        // \cv{} is the one placeholder the draft gives its own macro, which the
+        // draft's listings and its prose both use.
+        foundation::when<ir::SpanKind::Placeholder>(
+            [&] { return span.payload == "cv" ? std::string{"\\cv{}"} : "\\placeholder{" + span.payload + '}'; }),
         // `\ref`, not `\iref`. A Ref *span* is a cross-reference
         // inside a code comment, which the draft writes bare --
         // `// \ref{optional.ctor}, constructors` -- where `\iref` is the

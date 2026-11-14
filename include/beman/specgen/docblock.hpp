@@ -43,7 +43,13 @@ struct InlineCode {
 struct InlineRef {
     std::string stable_name;
 }; // \iref{stable-name}; prose references may name an external subclause
-using ProseInline    = std::variant<InlineText, InlineCode, InlineRef>;
+struct InlinePlaceholder {
+    std::string text;
+}; // \placeholder{x}, and \cv{} (text "cv")
+struct InlineOldConcept {
+    std::string name;
+}; // \oldconcept{X}
+using ProseInline    = std::variant<InlineText, InlineCode, InlineRef, InlinePlaceholder, InlineOldConcept>;
 using ProseParagraph = std::vector<ProseInline>;
 
 struct Table2DRow {
@@ -107,7 +113,16 @@ struct Element {
     std::vector<ProseParagraph> coverage = {};
 };
 
+// `\covers constraints P`: coverage claimed for an element the docblock does
+// not author, which `\asdraft` inherits.
+struct KindCover {
+    ir::ElementKind kind = ir::ElementKind::Constraints;
+    ProseParagraph  claim;
+    int             line = 0;
+};
+
 struct Docblock {
+    std::vector<KindCover>     kind_covers;
     std::vector<Element>       elements;
     DescriptionBody            leading = {};
     Markers                    markers;

@@ -148,6 +148,7 @@ function(specgen_add_golden case)
         EXPECTED_DIR
         BASELINE
         BASELINE_IR
+        BASELINE_DRAFT_SLICE
         DIFF_CONTEXT
         SELFDIFF_IR
     )
@@ -159,7 +160,7 @@ function(specgen_add_golden case)
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_INPUT;SOURCE"
+        "ROOT;ALSO_INPUT;SOURCE;SECTION"
         ${ARGN}
     )
 
@@ -185,7 +186,7 @@ function(specgen_add_golden case)
         # driver is run from, so the manifest it prints stays relative.
         set(expected "${case_dir}/expected.${ARG_BACKEND}")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.split")
-    elseif(ARG_MODE STREQUAL "generate")
+    elseif(ARG_MODE STREQUAL "generate" OR ARG_MODE STREQUAL "import")
         set(expected "${expected_dir}/expected.json")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.json")
     elseif(ARG_MODE STREQUAL "diagnose" OR ARG_MODE STREQUAL "validate")
@@ -234,6 +235,11 @@ function(specgen_add_golden case)
         string(REPLACE ";" "|" _sources_joined "${ARG_SOURCE}")
         list(APPEND case_args "-DSOURCES=${_sources_joined}")
     endif()
+    if(ARG_SECTION)
+        string(REPLACE ";" "|" _sections_joined "${ARG_SECTION}")
+        list(APPEND case_args "-DSECTIONS=${_sections_joined}")
+        unset(_sections_joined)
+    endif()
     if(ARG_VALIDATE)
         list(APPEND case_args "-DVALIDATE=ON")
     endif()
@@ -251,6 +257,21 @@ function(specgen_add_golden case)
     endif()
     if(ARG_BASELINE_IR)
         list(APPEND case_args "-DBASELINE_IR=${ARG_BASELINE_IR}")
+    endif()
+    # BASELINE_DRAFT_SLICE: a slice of the working draft (tests/corpus/
+    # standard-slices) staged as `<stable-name>.tex` in a scratch directory,
+    # which is what `--baseline-draft` reads. The corpus keeps `.slice`
+    # files; the staging is a copy at configure time.
+    set(baseline_draft_dir "")
+    if(ARG_BASELINE_DRAFT_SLICE)
+        set(baseline_draft_dir "${CMAKE_CURRENT_BINARY_DIR}/${case}.draft")
+        cmake_path(GET ARG_BASELINE_DRAFT_SLICE STEM _slice_stem)
+        configure_file(
+            "${ARG_BASELINE_DRAFT_SLICE}"
+            "${baseline_draft_dir}/${_slice_stem}.tex"
+            COPYONLY
+        )
+        list(APPEND case_args "-DBASELINE_DRAFT=${baseline_draft_dir}")
     endif()
     if(ARG_DIFF_CONTEXT)
         list(APPEND case_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
@@ -317,6 +338,12 @@ function(specgen_add_golden case)
         if(ARG_BASELINE)
             list(APPEND single_pass_args "-DBASELINE=${ARG_BASELINE}")
         endif()
+        if(baseline_draft_dir)
+            list(
+                APPEND single_pass_args
+                "-DBASELINE_DRAFT=${baseline_draft_dir}"
+            )
+        endif()
         if(ARG_DIFF_CONTEXT)
             list(APPEND single_pass_args "-DDIFF_CONTEXT=${ARG_DIFF_CONTEXT}")
         endif()
@@ -353,7 +380,11 @@ function(specgen_add_golden case)
         # reported on stderr, so silence is the wrong demand. Those cases pair
         # with an EXTRA_ARGS twin reaching the same parse, and the twin carries
         # the gate.
-        if(NOT ARG_COMPILE_COMMANDS_DIR AND NOT ARG_BASELINE)
+        if(
+            NOT ARG_COMPILE_COMMANDS_DIR
+            AND NOT ARG_BASELINE
+            AND NOT ARG_BASELINE_DRAFT_SLICE
+        )
             set(quiet_args
                 "-DSPECGEN=$<TARGET_FILE:specgen>"
                 "-DINPUT=${ARG_INPUT}"
@@ -389,6 +420,7 @@ function(specgen_add_golden case)
             AND NOT ARG_COMPILE_COMMANDS_DIR
             AND NOT ARG_SOURCE
             AND NOT ARG_BASELINE
+            AND NOT ARG_BASELINE_DRAFT_SLICE
         )
             set(flip_args
                 "-DCLANG_FORMAT=${SPECGEN_CLANG_FORMAT}"
@@ -571,6 +603,62 @@ specgen_add_golden(
     BASELINE_IR "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_before/expected.json"
 )
 
+# The wording diff against the working draft (docs/plans/draft-import.md):
+# `generate --baseline-draft` reads the top-level section the header generates
+# out of a slice of the draft's LaTeX, by stable name, and diffs against it.
+# The slice is the importer's own corpus input, so this pins the whole path --
+# find the section, import it, pair it, mark it -- in one case, with the
+# usual single-pass sibling demanding the same bytes from `render`.
+specgen_add_golden(
+    diff_optional_assign
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/optional_assign.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
+)
+specgen_add_golden(
+    diff_optional_assign_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_optional_assign/expected.json"
+)
+
+# `\asdraft` (docs/plans/draft-import.md): two members take their descriptions
+# from the same draft slice, one with a requires-clause whose derived
+# Constraints the inherited bullets are validated against, with `\covers` for
+# the one predicate the draft spells differently. The marked IR's `.validate`
+# sibling is that check: it must be silent. Under the `items` context the
+# diff shows what the paper changed -- here only signature layout -- and the
+# rest of the draft's section as removed.
+specgen_add_golden(
+    diff_optional_asdraft
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/optional_assign_asdraft.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_optional_asdraft_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_optional_asdraft/expected.json"
+)
+# With no baseline there is nothing to inherit from: that is an error naming the
+# flags, not wording that quietly lacks its descriptions.
+add_test(
+    NAME golden.diff_optional_asdraft.nobaseline
+    COMMAND
+        $<TARGET_FILE:specgen> generate
+        "${PROJECT_SOURCE_DIR}/tests/corpus/diff/optional_assign_asdraft.hpp"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/diff_optional_asdraft.nobaseline.tex"
+)
+set_tests_properties(
+    golden.diff_optional_asdraft.nobaseline
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "takes a description from a baseline; name one with --baseline-draft"
+)
+
 # The wording diff's marks (docs/plans/wording-diff.md), rendered by all three
 # backends from one hand-marked IR: an added and a removed section, item,
 # element and free paragraph; a prose run holding a code inline and a
@@ -591,6 +679,75 @@ specgen_add_golden(
     diff_marks
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_marks/input.json"
+)
+
+# The italic inlines the draft's \\placeholder, \\cv and \\oldconcept print as,
+# rendered by all three backends from one hand-written IR: placeholders and
+# named requirements in running prose, against punctuation, and inside a
+# changed run. mpark and org take the look of the LaTeX rendering, in their
+# own emphasis forms.
+specgen_add_golden(
+    inline_kinds
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+specgen_add_golden(
+    inline_kinds
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+specgen_add_golden(
+    inline_kinds
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+
+# The draft importer (docs/plans/draft-import.md): a slice of the working
+# draft's LaTeX read into IR, and that IR rendered by each backend. The slices
+# are copied into tests/corpus/standard-slices with their revision recorded, so no
+# checkout of the draft is needed. The wording goldens read the import golden's
+# own expected.json, so one pin covers both halves.
+specgen_add_golden(
+    draft_func_wrap_move
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    SECTION func.wrap.move
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_move_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+
+# A subclause with library tables and references to them, which the importer
+# reads into the two table kinds and TableRef.
+specgen_add_golden(
+    draft_optional_assign
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
+    SECTION optional.assign
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
+)
+specgen_add_golden(
+    draft_optional_assign_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_optional_assign/expected.json"
 )
 
 # Base level, all three backends over one nested fixture. The option existed in
