@@ -392,4 +392,3 @@ friend bool operator==(const move_only_function& f, nullptr_t) noexcept;
 \returns
 \tcode{true} if \tcode{f} has no target object, otherwise \tcode{false}.
 \end{itemdescr}
-

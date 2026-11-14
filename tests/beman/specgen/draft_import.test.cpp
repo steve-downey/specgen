@@ -23,7 +23,8 @@ using draft_import::import_sections;
 using draft_import::Options;
 
 std::string read_corpus(std::string_view name) {
-    std::ifstream      in(std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/draft/" + std::string(name), std::ios::binary);
+    std::ifstream      in(std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/standard-slices/" + std::string(name),
+                          std::ios::binary);
     std::ostringstream buffer;
     buffer << in.rdbuf();
     return buffer.str();
@@ -83,7 +84,8 @@ std::vector<std::string> normalize(std::string_view tex) {
             line.pop_back();
         if (!verbatim)
             line = drop_hints(line);
-        const bool opens = !verbatim && (line.starts_with("\\begin{codeblock}") || line.starts_with("\\begin{itemdecl}"));
+        const bool opens =
+            !verbatim && (line.starts_with("\\begin{codeblock}") || line.starts_with("\\begin{itemdecl}"));
         const bool closes = verbatim && (line.starts_with("\\end{codeblock}") || line.starts_with("\\end{itemdecl}"));
         if (verbatim || opens || closes) {
             for (std::string::size_type at = 0; (at = raw.find("\\exposid{", at)) != std::string::npos;)
@@ -95,10 +97,10 @@ std::vector<std::string> normalize(std::string_view tex) {
             joining  = false;
             continue;
         }
-        const bool structural = line.starts_with("\\begin{") || line.starts_with("\\end{") ||
-                                line.starts_with("\\pnum") || line.starts_with("\\rSec") ||
-                                (line.size() > 1 && line.front() == '\\' &&
-                                 ir::element_from_name(line.substr(1)).has_value());
+        const bool structural =
+            line.starts_with("\\begin{") || line.starts_with("\\end{") || line.starts_with("\\pnum") ||
+            line.starts_with("\\rSec") ||
+            (line.size() > 1 && line.front() == '\\' && ir::element_from_name(line.substr(1)).has_value());
         if (structural) {
             out.push_back(line);
             joining = false;
@@ -137,7 +139,7 @@ demo(nullptr_t) noexcept;
 Text.
 \rSec2[next]{Next}
 )";
-    const auto                     r   = import_sections(tex, Options{{"demo"}});
+    const auto                 r   = import_sections(tex, Options{{"demo"}});
     CHECK(r.diagnostics.empty());
     const auto& demo = only_section(r);
     CHECK(demo.stable_name == "demo");
@@ -174,7 +176,7 @@ TEST_CASE("draft_import - inline macros become inline kinds") {
 Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \iref{y} and \libconcept{c};
 \tcode{\exposid{is-callable-from}<VT>} and \exposid{z} and \seebelow.
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
+    const auto                 r   = import_sections(tex, Options{{"x"}});
     CHECK(r.diagnostics.empty());
     const auto& item = item_at(only_section(r), 0);
     REQUIRE(item.descr.leading.size() == 1);
@@ -198,14 +200,14 @@ Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \
 }
 
 TEST_CASE("draft_import - escapes in a listing become spans, and an unknown escape stays the author's") {
-    constexpr std::string_view tex = R"(\rSec3[x]{X}
+    constexpr std::string_view tex  = R"(\rSec3[x]{X}
 \begin{itemdecl}
 template<class VT> static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@; // \expos
 void f() @\cv{}@ @\added{x}@; // \ref{y}
 \end{itemdecl}
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
-    const auto&                    sigs = item_at(only_section(r), 0).decl.signatures;
+    const auto                 r    = import_sections(tex, Options{{"x"}});
+    const auto&                sigs = item_at(only_section(r), 0).decl.signatures;
     REQUIRE(sigs.size() == 2);
     REQUIRE(sigs[0].spans.size() == 2);
     CHECK(sigs[0].spans[0].kind == ir::SpanKind::ExposId);
@@ -247,7 +249,7 @@ Careful.
 \end{note}
 \end{itemdescr}
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
+    const auto                 r   = import_sections(tex, Options{{"x"}});
     CHECK(r.diagnostics.empty());
     const auto& descr = item_at(only_section(r), 0).descr;
     REQUIRE(descr.elements.size() == 2);
@@ -275,8 +277,8 @@ namespace std {
 }
 \end{codeblock}
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
-    const auto&                    syn = std::get<ir::Synopsis>(only_section(r).children.at(0));
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    const auto&                syn = std::get<ir::Synopsis>(only_section(r).children.at(0));
     CHECK(syn.name == "demo");
     CHECK(syn.code.text.starts_with("namespace std {"));
 }
@@ -289,7 +291,7 @@ A \term{thing} costs $O(n)$.
 foo
 \end{tokens}
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
+    const auto                 r   = import_sections(tex, Options{{"x"}});
     CHECK(has_diag(r, Severity::Warning, "\\term has no IR kind"));
     CHECK(has_diag(r, Severity::Warning, "mathematics"));
     CHECK(has_diag(r, Severity::Warning, "tokens environment"));
@@ -301,9 +303,9 @@ foo
 }
 
 TEST_CASE("draft_import - the corpus slices round-trip through the LaTeX backend") {
-    for (const auto& [file, section] : {std::pair{"func.wrap.move.draft", "func.wrap.move"},
-                                        std::pair{"optional.ctor.draft", "optional.ctor"},
-                                        std::pair{"optional.assign.draft", "optional.assign"}}) {
+    for (const auto& [file, section] : {std::pair{"func.wrap.move.slice", "func.wrap.move"},
+                                        std::pair{"optional.ctor.slice", "optional.ctor"},
+                                        std::pair{"optional.assign.slice", "optional.assign"}}) {
         CAPTURE(file);
         const std::string source = read_corpus(file);
         REQUIRE_FALSE(source.empty());
@@ -350,7 +352,7 @@ creates it \\
 \end{libtab2}
 \end{itemdescr}
 )";
-    const auto                     r   = import_sections(tex, Options{{"x"}});
+    const auto                 r   = import_sections(tex, Options{{"x"}});
     CHECK(r.diagnostics.empty());
     const auto& body = item_at(only_section(r), 0).descr.elements.at(0).body;
     REQUIRE(body.size() == 3);
