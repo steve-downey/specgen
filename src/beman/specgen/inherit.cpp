@@ -5,6 +5,7 @@
 
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/synopsis_check.hpp>
@@ -41,6 +42,13 @@ std::vector<std::string> sorted_entities(const ir::SpecItem& item) {
 
 // How alike two items' declarations read: the best match over their signatures,
 // so an overload set pairs with the one that reads most like it.
+// A signature typed in a header keeps its `@\exposid{x}@` escapes as written;
+// the draft's, imported, have them as spans. Read the typed one the way the
+// importer reads a listing, so the same declaration reads alike.
+ir::CodeText as_imported(const ir::CodeText& code) {
+    return code.spans.empty() && code.text.contains('@') ? draft_import::parse_listing(code.text) : code;
+}
+
 double declared_alike(const ir::SpecItem& a, const ir::SpecItem& b) {
     // A description with no declaration -- a class's own wording, or a
     // section's detached prose -- pairs with one, in order.
@@ -49,7 +57,7 @@ double declared_alike(const ir::SpecItem& a, const ir::SpecItem& b) {
     const auto scores = std::views::cartesian_product(a.decl.signatures, b.decl.signatures) |
                         std::views::transform([](const auto& pair) {
                             const auto& [x, y] = pair;
-                            return x == y ? 1.0 : diff::declaration_similarity(x, y);
+                            return x == y ? 1.0 : diff::declaration_similarity(as_imported(x), as_imported(y));
                         });
     return std::ranges::fold_left(scores, 0.0, [](double best, double score) { return std::max(best, score); });
 }

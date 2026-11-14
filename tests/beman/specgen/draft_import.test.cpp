@@ -372,3 +372,17 @@ creates it \\
     REQUIRE(flat.rows.size() == 2);
     CHECK(std::get<ir::TextInline>(flat.rows[1].cell2[0]).text == "second");
 }
+
+TEST_CASE("draft_import - a placeholder in \\tcode keeps its \\tcode when written back") {
+    // `\exposid` and `\seebelow` set the code font themselves, so the LaTeX backend
+    // writes a code run that is one of them bare. `\placeholder` sets italic, and the
+    // draft's `\tcode{\placeholder{x}}` is monospace italic: it is written as read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Within, \tcode{\placeholder{call-args}} is a pack and \exposid{z} is not.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.empty());
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\tcode{\\placeholder{call-args}} is a pack and \\exposid{z} is not"));
+}

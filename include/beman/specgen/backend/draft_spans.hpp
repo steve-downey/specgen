@@ -175,8 +175,11 @@ inline std::string draft_escape_code_text(std::string_view text) {
 // \tcode would double up. Partial spans still need the wrapper
 // (`x.\exposid{val}`).
 inline std::string draft_code_inline(const ir::CodeInline& v) {
-    const bool whole_span =
-        v.code.spans.size() == 1 && v.code.spans.front().begin == 0 && v.code.spans.front().end == v.code.text.size();
+    // A placeholder is the exception: `\placeholder` sets italic, not the code
+    // font, and the draft writes `\tcode{\placeholder{x}}` for it.
+    const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
+                            v.code.spans.front().end == v.code.text.size() &&
+                            v.code.spans.front().kind != ir::SpanKind::Placeholder;
     if (whole_span)
         return draft_span_prose(v.code.spans.front(), v.code.text);
     return "\\tcode{" + render_code_spans(v.code, draft_span_prose, draft_escape_code_text) + '}';
