@@ -34,6 +34,7 @@ foreach(
     diagnostic
     diff
     draft_import
+    inherit
     document_build
     fragments
     span_sentinels

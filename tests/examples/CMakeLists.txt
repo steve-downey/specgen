@@ -133,6 +133,12 @@ specgen_add_example_parity(
     CAPTURED 45-wording-diff/gadget-diff-items.md
     GOLDEN diff_gadget_items_wording/expected.md
 )
+# The same diff against the working draft's LaTeX instead of an earlier header.
+specgen_add_example_parity(
+    wording_diff_draft
+    CAPTURED 47-wording-diff-draft/optional-assign-diff.md
+    GOLDEN diff_optional_assign_wording/expected.md
+)
 
 # The fragment captures: a manifest file and a directory of fragments per
 # backend, from the same split the fragments goldens pin.
@@ -225,6 +231,7 @@ specgen_add_example_rerun(20-widget-ir)
 specgen_add_example_rerun(30-render-backends)
 specgen_add_example_rerun(40-paper-mode)
 specgen_add_example_rerun(45-wording-diff)
+specgen_add_example_rerun(47-wording-diff-draft)
 specgen_add_example_rerun(50-fragments)
 specgen_add_example_rerun(55-paper)
 specgen_add_example_rerun(60-validate)

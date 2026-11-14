@@ -476,6 +476,8 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
     lowering::Lowered          lowered = lowering::lower(pr.block);
     attached.diagnostics               = docblock_diagnostics(rc, *start, pr.diags, sm);
     attached.item.descr                = std::move(lowered.descr);
+    attached.item.as_draft             = lowered.directives.asdraft;
+    attached.item.covers               = std::move(lowered.inherited_covers);
     attached.directives                = std::move(lowered.directives);
     attached.verbatim_itemdecl         = pr.block.verbatim_itemdecl;
     if (attached.directives.verbatim_synopsis && attached.grouping_line > 0)
@@ -531,6 +533,8 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
             // the tree context this function does not. \describe/\at/\merge
             // act on in-class-defined members and remain unread here.
             attached.item.descr        = std::move(lowered.descr);
+            attached.item.as_draft     = lowered.directives.asdraft;
+            attached.item.covers       = std::move(lowered.inherited_covers);
             attached.directives        = std::move(lowered.directives);
             attached.verbatim_itemdecl = pr.block.verbatim_itemdecl;
             if (attached.directives.impdef) {

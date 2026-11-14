@@ -77,6 +77,12 @@ struct Options {
 // gives `b`, while stripping the `Added` material gives `a`.
 ir::Document compare(const ir::Document& baseline, const ir::Document& current, const Options& = {});
 
+// How alike two declarations read, from 0 to 1: the share of their code tokens
+// (Jaccard over the token sets) that is common. The measure the differ pairs
+// signatures by, offered so the pairing of an inherited item (inherit.hpp) is
+// the differ's and not a second opinion.
+double declaration_similarity(const ir::CodeText&, const ir::CodeText&);
+
 // Whether any mark but `Same` sits anywhere in the document: on a node, an
 // element, a block, a run of prose or a run of code.
 bool has_marks(const ir::Document&);

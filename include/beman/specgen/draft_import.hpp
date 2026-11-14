@@ -16,6 +16,8 @@
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <filesystem>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -43,6 +45,23 @@ struct Result {
 // not contain is an Error and contributes no node. A construct the IR has no
 // kind for is a Warning naming it and the subclause, and is kept as raw LaTeX.
 Result import_sections(std::string_view tex, const Options& options);
+
+// The draft's source directory read for a document's sections (`--baseline-draft`).
+struct TreeResult {
+    // One top-level section per name found, in the order the names were given.
+    ir::Document document;
+    // Names no `.tex` file of the directory declares: new wording, not an error.
+    std::vector<std::string> missing;
+    // The files the sections were read from, for the dependency fragment.
+    std::vector<std::string> sources;
+    std::vector<Diagnostic>  diagnostics;
+};
+
+// Finds each of `names` (stable names) among the `\rSecN[name]` headings of the
+// `*.tex` files directly in `directory`, and imports it as `import_sections`
+// does. The first file, in name order, that declares a name supplies it. An
+// unreadable directory is an Error and contributes nothing.
+TreeResult import_from_directory(const std::filesystem::path& directory, std::span<const std::string> names);
 
 } // namespace beman::specgen::draft_import
 

@@ -35,6 +35,7 @@
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/draft_import.hpp>
+#include <beman/specgen/inherit.hpp>
 #include <beman/specgen/foundation/fold_left_short.hpp>
 #include <beman/specgen/foundation/monoid.hpp>
 #include <beman/specgen/fragments.hpp>
@@ -69,6 +70,7 @@
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace {
@@ -158,6 +160,11 @@ generate options:
                              at this git revision of their repository, checked
                              out into a scratch tree for the run; a header the
                              revision lacks is new wording. One per run
+  --baseline-draft <dir>    the wording diff against the C++ working draft:
+                             the top-level sections the headers generate are
+                             read, by stable name, from the *.tex files in
+                             this draft source directory; a section it lacks
+                             is new wording. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
@@ -320,17 +327,23 @@ struct WordingOptions {
     // --baseline-rev <rev> is the third kind, `generate` only: one revision for
     // the whole paper, each header's baseline being its own path at that
     // revision (baseline_tree.hpp).
-    std::vector<std::string>     baseline_irs;
-    std::vector<std::string>     baseline_headers;
-    std::optional<std::string>   baseline_rev;
+    std::vector<std::string>   baseline_irs;
+    std::vector<std::string>   baseline_headers;
+    std::optional<std::string> baseline_rev;
+    // --baseline-draft <dir>: the baseline is the working draft's own wording,
+    // read from its LaTeX source directory for the sections the header
+    // generates (docs/plans/draft-import.md).
+    std::optional<std::string>   baseline_draft;
     std::optional<diff::Context> diff_context;
 
     bool has_baseline() const {
-        return !baseline_irs.empty() || !baseline_headers.empty() || baseline_rev.has_value();
+        return !baseline_irs.empty() || !baseline_headers.empty() || baseline_rev.has_value() ||
+               baseline_draft.has_value();
     }
-    // How many of the three baseline kinds were spelled; a run takes one.
+    // How many of the baseline kinds were spelled; a run takes one.
     int baseline_kinds() const {
-        return int(!baseline_irs.empty()) + int(!baseline_headers.empty()) + int(baseline_rev.has_value());
+        return int(!baseline_irs.empty()) + int(!baseline_headers.empty()) + int(baseline_rev.has_value()) +
+               int(baseline_draft.has_value());
     }
     // Where a top-level section starts, in the two units the backends measure
     // it in: --base-heading-level <n> (mpark and org) and
@@ -506,10 +519,11 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     // wording the author believes was diffed.
     if (options.diff_context && !options.has_baseline())
         return std::string(
-            "specgen: --diff-context applies with a baseline (--baseline-ir, --baseline-header or --baseline-rev)");
+            "specgen: --diff-context applies with a baseline (--baseline-ir, --baseline-header, --baseline-rev "
+            "or --baseline-draft)");
     if (options.baseline_kinds() > 1)
-        return std::string("specgen: a run takes one kind of baseline, --baseline-ir, --baseline-header or "
-                           "--baseline-rev, not several");
+        return std::string("specgen: a run takes one kind of baseline, --baseline-ir, --baseline-header, "
+                           "--baseline-rev or --baseline-draft, not several");
     // The two base-level options measure two different things, so each is a
     // usage error where the other one belongs -- and each message names the
     // one that does. Accepting either spelling everywhere would be the flag
@@ -1030,6 +1044,44 @@ std::expected<std::vector<ir::Document>, std::string> read_documents(const std::
         });
 }
 
+// Inherited descriptions (docs/plans/draft-import.md): a declaration marked
+// `\asdraft` takes its description from the baseline item it pairs with, so
+// each document is resolved against its own baseline before validation and the
+// diff, which then see ordinary wording. Without a baseline there is nothing to
+// inherit from, which is an error and not a silent absence of wording. Every
+// finding is reported, and any of them fails the run: wording that quietly
+// lacks its description is what the marker exists to prevent.
+std::expected<void, std::string> resolve_inherited(std::span<ir::Document>       documents,
+                                                   std::span<const ir::Document> baselines,
+                                                   std::span<const std::string>  labels) {
+    namespace inherit = beman::specgen::inherit;
+    if (baselines.empty()) {
+        auto waiting = std::views::zip(labels, documents) |
+                       std::views::filter([](const auto& pair) { return inherit::has_unresolved(std::get<1>(pair)); });
+        if (waiting.empty())
+            return {};
+        return std::unexpected(std::format("specgen: {}: \\asdraft takes a description from a baseline; "
+                                           "name one with --baseline-draft, --baseline-header, --baseline-rev or "
+                                           "--baseline-ir",
+                                           std::get<0>(*waiting.begin())));
+    }
+    std::vector<std::string> findings;
+    // substrate generic algorithm: each document resolves in place against its
+    // own baseline, which is a mutation, and every finding is collected.
+    for (const auto& [label, document, baseline] : std::views::zip(labels, documents, baselines))
+        // substrate generic algorithm: the findings of one document, collected.
+        for (const inherit::Diagnostic& finding : inherit::resolve(document, baseline))
+            findings.push_back(std::format("specgen: {}: {}: {}{}{}",
+                                           label,
+                                           beman::specgen::severity_label(finding.severity),
+                                           finding.where,
+                                           finding.where.empty() ? "" : ": ",
+                                           finding.message));
+    if (findings.empty())
+        return {};
+    return std::unexpected(findings | std::views::join_with('\n') | std::ranges::to<std::string>());
+}
+
 // A baseline implies --paper and replaces its mechanism: the marks the diff
 // puts on the document are the paper form, and paper mode's own "every
 // top-level node is added" is the empty-baseline case of the same thing
@@ -1119,7 +1171,7 @@ int render_command(const std::vector<std::string>& args) {
     // an unreadable other half is the state this ordering exists to prevent.
     // fold_left_short, not a loop: the scan must stop at the first input
     // that fails to read or parse and look at no later one.
-    const auto documents = read_documents(inputs);
+    auto documents = read_documents(inputs);
     if (!documents) {
         std::println(stderr, "{}", documents.error());
         return 1;
@@ -1141,6 +1193,10 @@ int render_command(const std::vector<std::string>& args) {
         return 1;
     }
     settle_baseline(wording);
+    if (const auto resolved = resolve_inherited(*documents, *baselines, inputs); !resolved) {
+        std::println(stderr, "{}", resolved.error());
+        return 1;
+    }
 
     // The prerequisites of a render are the IR files it read -- the baselines
     // among them. Modest on its own, and the point: a two-stage build whose
@@ -1302,6 +1358,17 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
             }
             wording.baseline_rev = std::move(revision);
+        } else if (arg == "--baseline-draft") {
+            // One draft source directory for the whole paper: each header's
+            // baseline is its own top-level sections, found by stable name.
+            std::string directory;
+            if (!next(directory))
+                return 2;
+            if (wording.baseline_draft) {
+                std::println(stderr, "specgen: --baseline-draft names one directory for the run; it was given twice");
+                return 2;
+            }
+            wording.baseline_draft = std::move(directory);
         } else if (arg == "--diff-context") {
             std::string text;
             if (!next(text))
@@ -1406,6 +1473,8 @@ int generate_command(const std::vector<std::string>& args) {
         wording.root = roots.front();
     // A baseline pairs with the headers in order, like --root, and of one kind
     // per run (wording_option_error says so for the mixed case).
+    // --baseline-rev and --baseline-draft are one value for the whole paper
+    // and pair with nothing.
     const std::size_t baseline_count = wording.baseline_irs.size() + wording.baseline_headers.size();
     if (baseline_count != 0 && baseline_count != headers.size()) {
         std::println(stderr,
@@ -1552,8 +1621,53 @@ int generate_command(const std::vector<std::string>& args) {
                     });
             });
     };
+    // A draft baseline (--baseline-draft) is read, not parsed: for each
+    // header's document, the top-level sections it generates are imported from
+    // the draft's LaTeX by stable name. A section the draft lacks is new
+    // wording and diffs as all added, noted on stderr. The files read join the
+    // prerequisites, since unlike a revision the checkout can change.
+    const auto build_draft_baselines =
+        [&](const std::string&                          directory,
+            const std::vector<frontend::DocumentBuild>& built) -> std::expected<Baselines, std::string> {
+        return beman::specgen::foundation::fold_left_short(
+            built,
+            Baselines{},
+            [&](Baselines acc, const frontend::DocumentBuild& one) -> std::expected<Baselines, std::string> {
+                const std::vector<std::string>           names = one.result.document.nodes |
+                                                                 std::views::filter([](const ir::Node& node) {
+                                                           return std::holds_alternative<ir::Section>(node);
+                                                                 }) |
+                                                                 std::views::transform([](const ir::Node& node) {
+                                                           return std::get<ir::Section>(node).stable_name;
+                                                                 }) |
+                                                                 std::ranges::to<std::vector<std::string>>();
+                beman::specgen::draft_import::TreeResult imported =
+                    beman::specgen::draft_import::import_from_directory(directory, names);
+                // substrate generic algorithm: formatted output, not a fold.
+                for (const auto& diagnostic : imported.diagnostics)
+                    std::println(stderr,
+                                 "specgen: {}: {}{}{}",
+                                 beman::specgen::severity_label(diagnostic.severity),
+                                 diagnostic.section,
+                                 diagnostic.section.empty() ? "" : ": ",
+                                 diagnostic.message);
+                if (std::ranges::any_of(imported.diagnostics, [](const auto& diagnostic) {
+                        return diagnostic.severity == beman::specgen::Severity::Error;
+                    }))
+                    return std::unexpected(std::format("specgen: --baseline-draft: cannot read '{}'", directory));
+                // substrate generic algorithm: formatted output, not a fold.
+                for (const std::string& name : imported.missing)
+                    std::println(
+                        stderr, "specgen: '{}' is not in the draft at {}; its wording is new", name, directory);
+                acc.documents.push_back(std::move(imported.document));
+                acc.sources.append_range(std::move(imported.sources));
+                return acc;
+            });
+    };
     const auto build_baselines =
-        [&](const std::vector<frontend::DocumentBuild>&) -> std::expected<Baselines, std::string> {
+        [&](const std::vector<frontend::DocumentBuild>& built) -> std::expected<Baselines, std::string> {
+        if (wording.baseline_draft)
+            return build_draft_baselines(*wording.baseline_draft, built);
         if (!wording.baseline_irs.empty()) {
             return read_documents(wording.baseline_irs).transform([&](std::vector<ir::Document> documents) {
                 return Baselines{std::move(documents), wording.baseline_irs};
@@ -1626,6 +1740,26 @@ int generate_command(const std::vector<std::string>& args) {
                 return build_baselines(built).and_then([&](Baselines baselines) -> std::expected<int, std::string> {
                     const std::vector<ir::Document>& baseline_documents = baselines.documents;
                     settle_baseline(wording);
+                    {
+                        // The documents the headers built, resolved in place; the
+                        // vector `built` owns them until the writers below take them.
+                        std::vector<ir::Document> parsed = built |
+                                                           std::views::transform([](frontend::DocumentBuild& one) {
+                                                               return std::move(one.result.document);
+                                                           }) |
+                                                           std::ranges::to<std::vector<ir::Document>>();
+                        // `--emit-ir` with no baseline stops at the seam: the IR keeps the
+                        // `\asdraft` marks, and `render --baseline-ir` resolves them.
+                        const auto resolved = emit_ir && baseline_documents.empty()
+                                                  ? std::expected<void, std::string>{}
+                                                  : resolve_inherited(parsed, baseline_documents, headers);
+                        // substrate generic algorithm: puts the documents back, a move
+                        // in step with `built` rather than a fold.
+                        for (auto&& [one, document] : std::views::zip(built, parsed))
+                            one.result.document = std::move(document);
+                        if (!resolved)
+                            return std::unexpected(resolved.error());
+                    }
                     // `--emit-ir` stops at the seam (decision ir-boundary): the IR
                     // file is the output, and is as much a build artifact of the
                     // header as the wording is -- so it gets a dependency fragment
