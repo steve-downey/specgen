@@ -1432,7 +1432,10 @@ The build assembles the tool from these components, each following the shared CM
   the inverse of the LaTeX backend over what the backend writes. It scans a source file into
   `\rSecN` sections, items, description elements and blocks, and lowers the inline macros the
   IR has a kind for; anything else is a `RawInline` and a Warning naming the macro and the
-  subclause, so no LaTeX reaches the mpark and org backends unreported.
+  subclause, so no LaTeX reaches the mpark and org backends unreported. Each imported item
+  carries `entities` taken from its `\indexlibrary` entries, which is the key the differ pairs
+  items by. `import_from_directory` finds a document's top-level sections by stable name among
+  a source directory's `*.tex` files, for `generate --baseline-draft`.
 - **Baseline tree** — `include/beman/specgen/baseline_tree.hpp`,
   `src/beman/specgen/baseline_tree.cpp`, Tier A. `--baseline-rev`'s git revision checked out
   into a scratch tree for the run (`read-tree` into a temporary index, then `checkout-index`:

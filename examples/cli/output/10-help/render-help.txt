@@ -67,6 +67,11 @@ generate options:
                              at this git revision of their repository, checked
                              out into a scratch tree for the run; a header the
                              revision lacks is new wording. One per run
+  --baseline-draft <dir>    the wording diff against the C++ working draft:
+                             the top-level sections the headers generate are
+                             read, by stable name, from the *.tex files in
+                             this draft source directory; a section it lacks
+                             is new wording. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
