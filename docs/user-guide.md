@@ -938,6 +938,19 @@ the checker cannot read is acknowledged with `\covers` naming the element:
 
 A derived element the baseline has no counterpart for stays, as new wording.
 
+A paper wants two renderings of the same header: the wording itself, and its
+diff against the draft. `--baseline-draft <dir>` gives the diff.
+`--inherit-draft <dir>` takes the same directory but only resolves `\asdraft`
+from it, and renders the paper's own wording with no marks:
+
+```sh
+specgen generate hdr.hpp --inherit-draft draft/source --backend latex -o wording.tex -- -Iinclude
+specgen generate hdr.hpp --baseline-draft draft/source --backend latex -o diff.tex -- -Iinclude
+```
+
+The two flags together are an error, since the second already inherits. Both
+list the draft files they read in a `--depfile`.
+
 The same marker works one level up. On a class definition's docblock, `\asdraft`
 takes the class's own description (its *Recommended practice*, notes and prose)
 from the baseline item of the section that has no declaration; as a detached
