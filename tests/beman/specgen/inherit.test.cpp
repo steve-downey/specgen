@@ -194,3 +194,24 @@ TEST_CASE("inherit - an unmarked item is not touched") {
     CHECK(inherit::resolve(current, baseline).empty());
     CHECK(current == before);
 }
+
+TEST_CASE("inherit - an item that names no entity takes the baseline item its declaration reads like") {
+    const Document baseline = in_section("s",
+                                         {item("void f(int);", {"f"}, {element(ElementKind::Effects, "Int.")}),
+                                          item("void g(string);", {"g"}, {element(ElementKind::Effects, "String.")})});
+    // Typed as a `\verbatim-itemdecl`: no entities, and a declaration that reads like `g`'s.
+    Document current = in_section("s", {marked("constexpr void g(string);", {})});
+
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    CHECK(element_of(item_at(current, 0), ElementKind::Effects)->body ==
+          element(ElementKind::Effects, "String.").body);
+}
+
+TEST_CASE("inherit - an item that names no entity and reads like nothing is unpaired") {
+    const Document baseline = in_section("s", {item("void f(int);", {"f"}, {element(ElementKind::Effects, "Int.")})});
+    Document       current  = in_section("s", {marked("template<class T> struct widget_traits;", {})});
+
+    const auto findings = inherit::resolve(current, baseline);
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == beman::specgen::Severity::Error);
+}

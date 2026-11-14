@@ -8,7 +8,8 @@
 // wording of its own. The converting assignment has a requires-clause, so its
 // derived Constraints is the evidence the draft's four bullets are checked
 // against; two of the draft's predicates are ones the code spells differently
-// or not at all, and `\covers` says which are covered.
+// or not at all, and `\covers` says which are covered. A third, typed as a
+// detached `\verbatim-itemdecl`, is matched to the draft's by its declaration.
 //
 // Self-contained: the traits are stub variable templates, so the header parses
 // standalone under -std=c++2c.
@@ -71,6 +72,14 @@ constexpr optional<T>& optional<T>::operator=(U&& v)
     engaged_ = true;
     return *this;
 }
+
+// The copy assignment is declared nowhere this document can see, so its item is
+// typed as a `\verbatim-itemdecl`, which names no entity. It still takes the
+// draft's description, matched by how its declaration reads.
+
+//! \asdraft
+//! \verbatim-itemdecl
+//! constexpr optional<T>& operator=(const optional& rhs);
 
 } // namespace demo
 

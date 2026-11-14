@@ -1159,6 +1159,8 @@ Result import_sections(std::string_view tex, const Options& options) { return Im
 
 ir::CodeText parse_listing(std::string_view raw) { return Importer{}.parse_code(raw, true); }
 
+std::string declared_class_name(std::string_view code) { return declared_class(code); }
+
 namespace {
 
 // Whether `tex` has a heading `\rSecN[name]` -- the bracket, the name, the

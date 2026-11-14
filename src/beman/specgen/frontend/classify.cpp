@@ -286,7 +286,9 @@ db::DocEvent classify(const RawItem&                                   ev,
                     lowering::Lowered lowered = lowering::lower(parsed.block);
                     ir::SpecItem      item;
                     item.decl.signatures.push_back(ir::CodeText{std::move(*parsed.block.verbatim_itemdecl), {}});
-                    item.descr = std::move(lowered.descr);
+                    item.descr    = std::move(lowered.descr);
+                    item.as_draft = lowered.directives.asdraft;
+                    item.covers   = std::move(lowered.inherited_covers);
                     return db::ItemDecl{ev.offset, false, std::move(item), std::move(diagnostics)};
                 }
                 if (parsed.block.markers.verbatim_synopsis) {

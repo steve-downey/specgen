@@ -62,6 +62,10 @@ const ir::Section* find_section(const std::vector<ir::Node>& nodes, const std::s
     return found == nodes.end() ? nullptr : std::get_if<ir::Section>(&*found);
 }
 
+// How alike a nameless item's declaration must read a baseline item's to take
+// its description: the differ's own measure and threshold for a pair.
+constexpr double kNamelessThreshold = 0.5;
+
 // The baseline item `item` takes its description from: among the unclaimed
 // items declaring the same names, the one whose signature reads most like its
 // own. Nothing reading alike at all is no pair.
@@ -74,9 +78,15 @@ pair_item(const ir::SpecItem& item, const std::vector<ir::Node>& baseline, std::
     // the first of equals, which writes the claim table.
     for (std::size_t i = 0; i < baseline.size(); ++i) {
         const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
-        if (candidate == nullptr || claimed[i] || sorted_entities(*candidate) != names)
+        // An item typed as a `\verbatim-itemdecl` names nothing the front end
+        // knows of, so it is matched by how its declaration reads against every
+        // baseline item, and only when it reads alike.
+        const bool nameless = names.empty() && !item.decl.signatures.empty();
+        if (candidate == nullptr || claimed[i] || (!nameless && sorted_entities(*candidate) != names))
             continue;
         const double score = declared_alike(item, *candidate);
+        if (nameless && score < kNamelessThreshold)
+            continue;
         if (score > best_score) {
             best       = i;
             best_score = score;

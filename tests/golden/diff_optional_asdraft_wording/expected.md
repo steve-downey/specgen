@@ -189,4 +189,26 @@ template<class U, class... Args> constexpr T& emplace(initializer_list<U> il, Ar
 
 :::
 
+::: add
+
+```cpp
+constexpr optional<T>& operator=(const optional& rhs);
+```
+
+[x]{.pnum} *Effects*: See [Table \[optional.assign.copy\]](#optional.assign.copy).
+
+| | `*this` contains a value | `*this` does not contain a value |
+|---|---|---|
+| **`rhs` contains a value** | assigns `rhs.$val$` to `$val$` | direct-non-list-initializes `$val$` with `rhs.$val$` |
+| **`rhs` does not contain a value** | destroys the contained value by calling `$val$.T::~T()` | no effect |
+: [`optional::operator=(const optional&)` effects]{#optional.assign.copy}
+
+[x+1]{.pnum} *Postconditions*: `rhs.has_value() == this->has_value()`.
+
+[x+2]{.pnum} *Returns*: `*this`.
+
+[x+3]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s copy constructor, no effect. If an exception is thrown during the call to `T`'s copy assignment, the state of its contained value is as defined by the exception safety guarantee of `T`'s copy assignment. This operator is defined as deleted unless `is_copy_constructible_v<T>` is `true` and `is_copy_assignable_v<T>` is `true`. If `is_trivially_copy_constructible_v<T> &&` `is_trivially_copy_assignable_v<T> &&` `is_trivially_destructible_v<T>` is `true`, this assignment operator is trivial.
+
+:::
+
 :::

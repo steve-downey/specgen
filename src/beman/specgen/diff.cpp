@@ -1175,6 +1175,18 @@ void read_escapes(ir::CodeText& code) {
 void read_escapes(ir::InformativeBody& body);
 
 void read_escapes(ir::DescriptionBody& body) {
+    // `Equivalent to:` and its code, typed as prose and a code block, is the
+    // block the importer reads the draft's as, and the one `\effects-equiv`
+    // extracts.
+    // substrate generic algorithm: a pairwise rewrite that replaces two blocks with one.
+    for (std::size_t i = 0; i + 1 < body.size(); ++i) {
+        const auto* lead = std::get_if<ir::BodyParagraph>(&body[i]);
+        auto*       code = std::get_if<ir::AuthoredCode>(&body[i + 1]);
+        if (lead != nullptr && code != nullptr && lead->text == ir::Paragraph{ir::TextInline{"Equivalent to:"}}) {
+            body[i] = ir::EquivalentTo{std::move(code->code), code->change};
+            body.erase(body.begin() + static_cast<std::ptrdiff_t>(i) + 1);
+        }
+    }
     // substrate generic algorithm: a visit that rewrites each block's code in place.
     for (ir::BodyBlock& block : body) {
         if (auto* b = std::get_if<ir::EquivalentTo>(&block))
@@ -1202,6 +1214,10 @@ void read_escapes(std::vector<ir::Node>& nodes) {
             read_escapes(section->children);
         } else if (auto* synopsis = std::get_if<ir::Synopsis>(&node)) {
             read_escapes(synopsis->code);
+            // A synopsis typed in a header names no class; the draft's is named
+            // for the one it declares, which is what pairs the two.
+            if (synopsis->name.empty())
+                synopsis->name = draft_import::declared_class_name(synopsis->code.text);
         } else if (auto* item = std::get_if<ir::SpecItem>(&node)) {
             // substrate generic algorithm: a visit that rewrites each signature in place.
             for (ir::CodeText& signature : item->decl.signatures)
