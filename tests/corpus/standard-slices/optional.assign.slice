@@ -338,4 +338,3 @@ If an exception is thrown during the call to \tcode{T}'s constructor,
 \tcode{*this} does not contain a value, and
 the previous \exposid{val} (if any) has been destroyed.
 \end{itemdescr}
-

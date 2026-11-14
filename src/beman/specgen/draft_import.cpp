@@ -272,9 +272,9 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             const std::string_view inner = raw.substr(i + 1, close - i - 1);
             // The escape is spans when every macro in it is one; otherwise it
             // stays the author's own escape, as in a \verbatim-itemdecl.
-            CodeBuilder   trial;
-            std::size_t   j  = 0;
-            bool          ok = !inner.empty();
+            CodeBuilder trial;
+            std::size_t j  = 0;
+            bool        ok = !inner.empty();
             // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
             while (ok && j < inner.size()) {
                 if (inner[j] != '\\') {
@@ -291,7 +291,8 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             if (ok) {
                 const std::size_t shift = out.code.text.size();
                 out.code.text += trial.code.text;
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
+                // state.
                 for (ir::Span span : trial.code.spans) {
                     span.begin += shift;
                     span.end += shift;
@@ -446,7 +447,8 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::RefInline{arg->inner});
             i = arg->next;
-        } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" || name == "nolinebreak") {
+        } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" ||
+                   name == "nolinebreak") {
             i = arg && name != "brk" && name != "br" && name != "newline" ? arg->next : end;
         } else {
             // Any other macro, with the groups that follow it, as written.
@@ -539,7 +541,6 @@ std::optional<ir::ElementKind> element_tag(std::string_view line, std::string& r
     return kind;
 }
 
-
 std::optional<RSecHeader> parse_rsec(std::string_view line) {
     const std::string_view t = trim(line);
     if (!t.starts_with("\\rSec") || t.size() < 8 || std::isdigit(static_cast<unsigned char>(t[5])) == 0)
@@ -607,9 +608,9 @@ std::vector<std::string> split_cells(std::string_view row) {
 // rows of `&`-separated cells ending `\\`, between `\rowsep`s. A lib2dtab2 row
 // starts with `\rowhdr{...}`. Nothing else is read as a table.
 std::optional<EvTable> parse_table(bool flat, std::string_view text) {
-    EvTable            table;
-    table.flat = flat;
-    std::size_t        pos = 0;
+    EvTable table;
+    table.flat                   = flat;
+    std::size_t              pos = 0;
     std::vector<std::string> groups;
     const std::size_t        wanted = flat ? 5 : 4;
     // substrate generic algorithm: the header groups are read one after the
@@ -679,11 +680,12 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
         }
         if (starts_with_command(t, "\\pnum")) {
             flush();
-            EvPnum pnum;
+            EvPnum      pnum;
             std::string rest(trim(t.substr(5)));
             if (rest.empty()) {
                 std::size_t j = i + 1;
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
+                // state.
                 while (j < lines.size() && trim(lines[j]).empty())
                     ++j;
                 std::string tag_rest;
@@ -709,8 +711,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
         }
         if (const auto name = begin_name(t)) {
             flush();
-            const std::size_t end   = environment_end(lines, i, *name);
-            const std::size_t inner = std::min(end, lines.size());
+            const std::size_t        end   = environment_end(lines, i, *name);
+            const std::size_t        inner = std::min(end, lines.size());
             std::vector<std::string> body;
             if (const std::string rest = after_begin(t, *name); !rest.empty() && rest.front() != '{')
                 body.push_back(rest);
@@ -718,7 +720,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
 
             if (*name == "lib2dtab2" || *name == "libtab2") {
                 std::vector<std::string> table_lines;
-                table_lines.push_back(std::string(trim(trim(t).substr(std::string("\\begin{").size() + name->size() + 1))));
+                table_lines.push_back(
+                    std::string(trim(trim(t).substr(std::string("\\begin{").size() + name->size() + 1))));
                 table_lines.append_range(lines.subspan(i + 1, inner - i - 1));
                 if (auto table = parse_table(*name == "libtab2", join_prose(table_lines))) {
                     events.push_back(std::move(*table));
@@ -742,7 +745,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                         items.push_back(join_prose(current));
                     current.clear();
                 };
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
+                // state.
                 for (const std::string& item_line : body) {
                     if (starts_with_command(item_line, "\\item")) {
                         close();
@@ -785,10 +789,11 @@ ir::Table2D Importer::make_table2d(const EvTable& table) {
                     .column1     = parse_prose(table.column1, true),
                     .column2     = parse_prose(table.column2, true),
                     .rows        = {}};
-    out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
-                   return ir::Table2DRow{parse_prose(row[0], true), parse_prose(row[1], true), parse_prose(row[2], true)};
-               }) |
-               std::ranges::to<std::vector>();
+    out.rows =
+        table.rows | std::views::transform([&](const std::vector<std::string>& row) {
+            return ir::Table2DRow{parse_prose(row[0], true), parse_prose(row[1], true), parse_prose(row[2], true)};
+        }) |
+        std::ranges::to<std::vector>();
     return out;
 }
 
@@ -811,27 +816,27 @@ ir::InformativeBody Importer::parse_informative(Lines lines) {
     ir::InformativeBody body;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const Event& event : events) {
-        std::visit(overloaded{[&](const EvPnum&) {},
-                              [&](const EvProse& e) { body.push_back(ir::BodyParagraph{parse_prose(e.text), false}); },
-                              [&](const EvItemize& e) {
-                                  ir::Itemize list;
-                                  // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
-                                  for (const std::string& item : e.items)
-                                      list.items.push_back(parse_prose(item));
-                                  body.push_back(std::move(list));
-                              },
-                              [&](const EvCode& e) { body.push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
-                              [&](const EvNote&) { report(Severity::Warning, "a note inside a note is dropped"); },
-                              [&](const EvTable& e) {
-                                  if (e.flat)
-                                      body.push_back(make_table1d(e));
-                                  else
-                                      body.push_back(make_table2d(e));
-                              },
-                              [&](const EvRaw& e) {
-                                  body.push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, false});
-                              }},
-                   event);
+        std::visit(
+            overloaded{[&](const EvPnum&) {},
+                       [&](const EvProse& e) { body.push_back(ir::BodyParagraph{parse_prose(e.text), false}); },
+                       [&](const EvItemize& e) {
+                           ir::Itemize list;
+                           // substrate generic algorithm: a cursor scan over variable-width input; the position is the
+                           // loop's state.
+                           for (const std::string& item : e.items)
+                               list.items.push_back(parse_prose(item));
+                           body.push_back(std::move(list));
+                       },
+                       [&](const EvCode& e) { body.push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
+                       [&](const EvNote&) { report(Severity::Warning, "a note inside a note is dropped"); },
+                       [&](const EvTable& e) {
+                           if (e.flat)
+                               body.push_back(make_table1d(e));
+                           else
+                               body.push_back(make_table2d(e));
+                       },
+                       [&](const EvRaw& e) { body.push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, false}); }},
+            event);
     }
     return body;
 }
@@ -848,7 +853,7 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
     // substrate generic algorithm: "Equivalent to:" looks one event ahead and
     // consumes it, so the index is the loop's state.
     while (k < events.size()) {
-        const Event& event = events[k++];
+        const Event& event     = events[k++];
         const bool   was_fresh = std::exchange(fresh, false);
         std::visit(
             overloaded{[&](const EvPnum& e) {
@@ -862,8 +867,7 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
                        [&](const EvProse& e) {
                            if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
                                std::holds_alternative<EvCode>(events[k])) {
-                               target->push_back(
-                                   ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
+                               target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
                                ++k;
                                new_para = false;
                                return;
@@ -873,7 +877,8 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
                        },
                        [&](const EvItemize& e) {
                            ir::Itemize list;
-                           // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+                           // substrate generic algorithm: a cursor scan over variable-width input; the position is the
+                           // loop's state.
                            for (const std::string& item : e.items)
                                list.items.push_back(parse_prose(item));
                            target->push_back(std::move(list));
@@ -891,20 +896,18 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
                            else
                                target->push_back(make_table2d(e));
                        },
-                       [&](const EvRaw& e) {
-                           target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true});
-                       }},
+                       [&](const EvRaw& e) { target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true}); }},
             event);
     }
     return descr;
 }
 
 std::vector<ir::CodeText> Importer::split_signatures(Lines lines) {
-    const std::string text = lines | std::views::join_with('\n') | std::ranges::to<std::string>();
+    const std::string         text = lines | std::views::join_with('\n') | std::ranges::to<std::string>();
     std::vector<ir::CodeText> out;
-    int         depth = 0;
-    std::size_t start = 0;
-    const auto  emit  = [&](std::size_t end) {
+    int                       depth = 0;
+    std::size_t               start = 0;
+    const auto                emit  = [&](std::size_t end) {
         const std::string_view sig = trim(std::string_view(text).substr(start, end - start));
         if (!sig.empty())
             out.push_back(parse_code(sig, true));
@@ -922,7 +925,7 @@ std::vector<ir::CodeText> Importer::split_signatures(Lines lines) {
         else if (c == ';' && depth <= 0) {
             std::size_t end = i + 1;
             // A trailing comment on the declaration's last line belongs to it.
-            const std::size_t eol  = std::min(text.find('\n', end), text.size());
+            const std::size_t      eol  = std::min(text.find('\n', end), text.size());
             const std::string_view tail = trim(std::string_view(text).substr(end, eol - end));
             if (tail.starts_with("//"))
                 end = eol;
@@ -948,12 +951,13 @@ std::string declared_class(std::string_view code) {
         }
         std::size_t end = i;
         // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
-        while (end < code.size() && (is_letter(code[end]) || std::isdigit(static_cast<unsigned char>(code[end])) != 0 || code[end] == '_'))
+        while (end < code.size() &&
+               (is_letter(code[end]) || std::isdigit(static_cast<unsigned char>(code[end])) != 0 || code[end] == '_'))
             ++end;
         const std::string_view word = code.substr(i, end - i);
         if (word == "template") {
-            const std::size_t open = code.find('<', end);
-            std::size_t       j    = open;
+            const std::size_t open  = code.find('<', end);
+            std::size_t       j     = open;
             int               depth = 0;
             // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
             while (open != std::string_view::npos && j < code.size()) {
@@ -973,7 +977,8 @@ std::string declared_class(std::string_view code) {
             std::size_t name_end = name_begin;
             // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
             while (name_end < code.size() &&
-                   (is_letter(code[name_end]) || std::isdigit(static_cast<unsigned char>(code[name_end])) != 0 || code[name_end] == '_'))
+                   (is_letter(code[name_end]) || std::isdigit(static_cast<unsigned char>(code[name_end])) != 0 ||
+                    code[name_end] == '_'))
                 ++name_end;
             if (name_end > name_begin)
                 names.emplace_back(code.substr(name_begin, name_end - name_begin));
@@ -988,7 +993,7 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
     std::vector<ir::Node>       nodes;
     std::vector<std::string>    loose;
     std::vector<ir::IndexEntry> pending;
-    const auto has_content = [&] {
+    const auto                  has_content = [&] {
         return std::ranges::any_of(loose, [](const std::string& l) { return !trim(l).empty(); });
     };
     const auto flush_loose = [&] {
@@ -1018,7 +1023,8 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 item.decl.index      = std::exchange(pending, {});
                 std::size_t next     = end + 1;
                 std::size_t probe    = next;
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
+                // state.
                 while (probe < lines.size() && trim(lines[probe]).empty())
                     ++probe;
                 if (probe < lines.size() && begin_name(lines[probe]) == std::optional<std::string>{"itemdescr"}) {
@@ -1031,11 +1037,10 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 continue;
             }
             if (*name == "codeblock" && !has_content()) {
-                const std::size_t end = environment_end(lines, i, *name);
-                const std::string code =
-                    lines.subspan(i + 1, std::min(end, lines.size()) - i - 1) | std::views::join_with('\n') |
-                    std::ranges::to<std::string>();
-                ir::Synopsis synopsis;
+                const std::size_t end  = environment_end(lines, i, *name);
+                const std::string code = lines.subspan(i + 1, std::min(end, lines.size()) - i - 1) |
+                                         std::views::join_with('\n') | std::ranges::to<std::string>();
+                ir::Synopsis      synopsis;
                 synopsis.code = parse_code(code, true);
                 synopsis.name = declared_class(synopsis.code.text);
                 nodes.push_back(std::move(synopsis));
@@ -1052,7 +1057,7 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
 }
 
 ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t end) {
-    const RSecHeader head = *parse_rsec(lines[header]);
+    const RSecHeader  head  = *parse_rsec(lines[header]);
     const std::string saved = std::exchange(section, head.stable);
     ir::Section       out{.stable_name = head.stable, .title = head.title, .children = {}};
 

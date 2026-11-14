@@ -620,13 +620,13 @@ specgen_add_golden(
 
 # The draft importer (docs/plans/draft-import.md): a slice of the working
 # draft's LaTeX read into IR, and that IR rendered by each backend. The slices
-# are copied into tests/corpus/draft with their revision recorded, so no
+# are copied into tests/corpus/standard-slices with their revision recorded, so no
 # checkout of the draft is needed. The wording goldens read the import golden's
 # own expected.json, so one pin covers both halves.
 specgen_add_golden(
     draft_func_wrap_move
     MODE import
-    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/draft/func.wrap.move.draft"
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
     SECTION func.wrap.move
 )
 specgen_add_golden(
@@ -649,7 +649,7 @@ specgen_add_golden(
 specgen_add_golden(
     draft_optional_assign
     MODE import
-    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/draft/optional.assign.draft"
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/optional.assign.slice"
     SECTION optional.assign
 )
 specgen_add_golden(

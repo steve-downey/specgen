@@ -258,4 +258,3 @@ The expression inside \keyword{explicit} is equivalent to:
 !is_convertible_v<U, T>
 \end{codeblock}
 \end{itemdescr}
-
