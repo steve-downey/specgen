@@ -44,8 +44,8 @@ class optional {
 
     template <class U = remove_cv_t<T>>
     constexpr optional& operator=(U&& v)
-        requires(!is_same_v<remove_cvref_t<U>, optional>) && (!(is_scalar_v<T> && is_same_v<T, U>)) &&
-                is_constructible_v<T, U> && is_assignable_v<T&, U>;
+        requires(!is_same_v<remove_cvref_t<U>, optional>) &&
+                (!(is_scalar_v<T> && is_same_v<T, U>)) && is_constructible_v<T, U> && is_assignable_v<T&, U>;
 
   private:
     bool engaged_ = false;
@@ -65,8 +65,8 @@ constexpr optional<T>& optional<T>::operator=(nullopt_t) noexcept {
 template <class T>
 template <class U>
 constexpr optional<T>& optional<T>::operator=(U&& v)
-    requires(!is_same_v<remove_cvref_t<U>, optional>) && (!(is_scalar_v<T> && is_same_v<T, U>)) &&
-            is_constructible_v<T, U> && is_assignable_v<T&, U>
+    requires(!is_same_v<remove_cvref_t<U>, optional>) &&
+            (!(is_scalar_v<T> && is_same_v<T, U>)) && is_constructible_v<T, U> && is_assignable_v<T&, U>
 {
     engaged_ = true;
     return *this;

@@ -89,7 +89,6 @@ Such small-object optimization can only be applied to a type ~T~ for which ~is_n
 :UNNUMBERED: t
 :END:
 
-
 #+begin_itemdecl
 template<class VT>
   static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;

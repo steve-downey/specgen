@@ -7,6 +7,7 @@
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/synopsis_check.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -25,18 +26,26 @@ namespace {
 using foundation::overloaded;
 
 std::string first_signature(const ir::SpecItem& item) {
-    return item.decl.signatures.empty() ? std::string{} : item.decl.signatures.front().text;
+    return item.decl.signatures.empty() ? std::string("a description with no declaration")
+                                        : item.decl.signatures.front().text;
 }
 
 std::vector<std::string> sorted_entities(const ir::SpecItem& item) {
+    // Distinct: an `\also` group names its entity once per signature, and the
+    // draft's index names it once.
     std::vector<std::string> names = item.decl.entities;
     std::ranges::sort(names);
+    names.erase(std::ranges::unique(names).begin(), names.end());
     return names;
 }
 
 // How alike two items' declarations read: the best match over their signatures,
 // so an overload set pairs with the one that reads most like it.
 double declared_alike(const ir::SpecItem& a, const ir::SpecItem& b) {
+    // A description with no declaration -- a class's own wording, or a
+    // section's detached prose -- pairs with one, in order.
+    if (a.decl.signatures.empty() || b.decl.signatures.empty())
+        return a.decl.signatures.empty() && b.decl.signatures.empty() ? 1.0 : 0.0;
     const auto scores = std::views::cartesian_product(a.decl.signatures, b.decl.signatures) |
                         std::views::transform([](const auto& pair) {
                             const auto& [x, y] = pair;
@@ -124,6 +133,40 @@ void inherit_description(ir::SpecItem& item, const ir::SpecItem& from, std::vect
     item.covers.clear();
 }
 
+// The baseline's synopsis of the same class that nothing has claimed.
+const ir::Synopsis*
+pair_synopsis(const ir::Synopsis& synopsis, const std::vector<ir::Node>& baseline, std::vector<bool>& claimed) {
+    // substrate generic algorithm: a search that writes the claim table at the hit.
+    for (std::size_t i = 0; i < baseline.size(); ++i) {
+        const auto* candidate = std::get_if<ir::Synopsis>(&baseline[i]);
+        if (candidate != nullptr && !claimed[i] && candidate->name == synopsis.name) {
+            claimed[i] = true;
+            return candidate;
+        }
+    }
+    return nullptr;
+}
+
+void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from, std::vector<Diagnostic>& out) {
+    // Without the class's own declarations there is nothing to patch from; the
+    // baseline's text stands.
+    ir::CodeText code = from.code;
+    if (synopsis.declared) {
+        synopsis_check::Patched patched = synopsis_check::patch(from.code, *synopsis.declared);
+        code                            = std::move(patched.code);
+        // substrate generic algorithm: formats each unpatched finding onto the result.
+        for (const synopsis_check::Finding& finding : patched.unpatched)
+            out.push_back({Severity::Warning,
+                           synopsis.name.empty() ? std::string("synopsis") : synopsis.name + "/synopsis",
+                           std::format("`{}`: {}; the inherited synopsis cannot be patched to agree, so write it with "
+                                       "\\verbatim-synopsis",
+                                       finding.declaration,
+                                       finding.message)});
+    }
+    synopsis.code     = std::move(code);
+    synopsis.as_draft = false;
+}
+
 void resolve_nodes(std::vector<ir::Node>&       current,
                    const std::vector<ir::Node>& baseline,
                    const std::string&           where,
@@ -132,36 +175,50 @@ void resolve_nodes(std::vector<ir::Node>&       current,
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
-        std::visit(
-            overloaded{
-                [&](ir::Section& section) {
-                    const ir::Section* paired = find_section(baseline, section.stable_name);
-                    if (paired != nullptr) {
-                        resolve_nodes(section.children, paired->children, section.stable_name, out);
-                        return;
-                    }
-                    // A section the baseline lacks has nothing to inherit; an item in
-                    // it that asks to is reported by the walk with an empty baseline.
-                    resolve_nodes(section.children, {}, section.stable_name, out);
-                },
-                [&](ir::SpecItem& item) {
-                    if (!item.as_draft)
-                        return;
-                    const ir::SpecItem* from = pair_item(item, baseline, claimed);
-                    if (from == nullptr) {
-                        out.push_back({Severity::Error,
-                                       first_signature(item),
-                                       std::format("\\asdraft: no item of the baseline{}{} declares this",
-                                                   where.empty() ? "" : "'s section ",
-                                                   where)});
-                        return;
-                    }
-                    inherit_description(item, *from, out);
-                },
-                [](ir::Synopsis&) {},
-                [](ir::FreeParagraph&) {},
-            },
-            node);
+        std::visit(overloaded{
+                       [&](ir::Section& section) {
+                           const ir::Section* paired = find_section(baseline, section.stable_name);
+                           if (paired != nullptr) {
+                               resolve_nodes(section.children, paired->children, section.stable_name, out);
+                               return;
+                           }
+                           // A section the baseline lacks has nothing to inherit; an item in
+                           // it that asks to is reported by the walk with an empty baseline.
+                           resolve_nodes(section.children, {}, section.stable_name, out);
+                       },
+                       [&](ir::SpecItem& item) {
+                           if (!item.as_draft)
+                               return;
+                           const ir::SpecItem* from = pair_item(item, baseline, claimed);
+                           if (from == nullptr) {
+                               out.push_back({Severity::Error,
+                                              first_signature(item),
+                                              std::format("\\asdraft: no item of the baseline{}{} declares this",
+                                                          where.empty() ? "" : "'s section ",
+                                                          where)});
+                               return;
+                           }
+                           inherit_description(item, *from, out);
+                       },
+                       [&](ir::Synopsis& synopsis) {
+                           if (!synopsis.as_draft)
+                               return;
+                           const ir::Synopsis* from = pair_synopsis(synopsis, baseline, claimed);
+                           if (from == nullptr) {
+                               out.push_back(
+                                   {Severity::Error,
+                                    synopsis.name + "/synopsis",
+                                    std::format("\\asdraft-synopsis: no synopsis of `{}` in the baseline{}{}",
+                                                synopsis.name,
+                                                where.empty() ? "" : "'s section ",
+                                                where)});
+                               return;
+                           }
+                           resolve_synopsis(synopsis, *from, out);
+                       },
+                       [](ir::FreeParagraph&) {},
+                   },
+                   node);
     }
 }
 
@@ -170,7 +227,7 @@ bool any_unresolved(const std::vector<ir::Node>& nodes) {
         return std::visit(overloaded{
                               [](const ir::Section& section) { return any_unresolved(section.children); },
                               [](const ir::SpecItem& item) { return item.as_draft; },
-                              [](const ir::Synopsis&) { return false; },
+                              [](const ir::Synopsis& synopsis) { return synopsis.as_draft; },
                               [](const ir::FreeParagraph&) { return false; },
                           },
                           node);

@@ -38,6 +38,7 @@ foreach(
     document_build
     fragments
     span_sentinels
+    synopsis_check
     synopsis_edits
 )
     add_executable(beman.specgen.tests.${component})

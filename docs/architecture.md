@@ -671,7 +671,15 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   paired baseline item's. Authored elements replace the inherited one of their kind, and a
   derivation's conjuncts move onto the inherited element so the validator checks the draft's
   words against the code. Items pair by declared names, then by `diff::declaration_similarity`;
-  the differ's own loose pairing uses the same measure, best first.
+  the differ's own loose pairing uses the same measure, best first. The same marker on a class
+  docblock or as a detached block takes a description with no declaration (the class's own
+  wording, a section's prose), which pairs with one in the baseline section in order.
+- `\asdraft-synopsis` — the class's synopsis is the baseline's. The front end keeps the synopsis
+  the declarations generate (`Synopsis::declared`, validator-only) beside the text, for this and
+  for `\verbatim-synopsis`; `synopsis_check` (Clang-free) pairs the two texts' member declarations
+  by name and signature likeness, and `inherit::resolve` writes `constexpr`, `explicit` and
+  `noexcept` into the inherited text, moving the spans with it, while `--validate` warns on any
+  remaining disagreement. A placeholder in a `noexcept` operand agrees with either.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members, for a folded-in
   namespace entity, and — on a class *definition*'s own docblock — for that class's own
   wording, both nodes of it (§6, decision routed-wording-payload).

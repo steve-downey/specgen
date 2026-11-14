@@ -220,6 +220,12 @@ struct SynopsisDecl {
     // Empty when the class's docblock carries an `\at`, for the reason
     // `general` above gives.
     beman::specgen::ir::ItemDescr descr = {};
+    // `\asdraft` on the class's docblock: `descr` is the baseline's, so the
+    // description-only item exists even though `descr` holds nothing yet, and
+    // carries the marker (and `\covers <element>` claims) for the pass that
+    // resolves it.
+    bool                                            descr_as_draft = false;
+    std::vector<beman::specgen::ir::InheritedCover> descr_covers   = {};
     // A standalone `\verbatim-synopsis`: the author's text is the whole
     // synopsis, namespace and all, so the front end's `namespace std`
     // enclosure leaves it as written. Every other synopsis -- extracted, a
@@ -301,6 +307,9 @@ struct SectionProse {
     std::vector<Diagnostic>             diagnostics;
     unsigned                            line = 0;
     std::string                         file;
+    // A detached `\asdraft` and nothing else: the section's prose is the
+    // baseline's (docs/plans/draft-import.md), so `body` is empty.
+    bool as_draft = false;
 };
 
 // classify()'s output (decision document-build-stages): a closed variant naming no

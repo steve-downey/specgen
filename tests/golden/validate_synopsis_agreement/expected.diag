@@ -1,0 +1,3 @@
+specgen: f/synopsis: warning: `f() noexcept`: the synopsis does not have `constexpr` and the declaration does
+specgen: f/synopsis: warning: `void g()`: the synopsis does not have `noexcept` and the declaration does
+specgen: f/synopsis: warning: `void extra()`: the code declares this, and the synopsis does not

@@ -16,6 +16,7 @@
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/ir_fold.hpp>
+#include <beman/specgen/synopsis_check.hpp>
 
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
@@ -168,6 +169,23 @@ std::set<std::string> section_names(const ir::Node& node) {
 std::string roster_context(const std::string& synopsis_name, const ir::SynopsisEntry& entry) {
     const std::string& owner = synopsis_name.empty() ? entry.parent : synopsis_name;
     return owner.empty() ? "synopsis" : owner + "/synopsis";
+}
+
+// An authored or inherited synopsis against the synopsis the class's own
+// declarations generate (synopsis_check.hpp): what a paper changes without
+// touching a word -- `constexpr`, `noexcept`, `explicit` and the like -- is
+// exactly what text nothing ties to the code cannot be trusted to say. A
+// Warning, since the synopsis is the author's to write; unresolved inherited
+// text has not been compared with anything yet.
+Diagnostics check_synopsis_agreement(const std::string& context, const ir::Synopsis& synopsis) {
+    if (!synopsis.declared || synopsis.as_draft)
+        return {};
+    return synopsis_check::compare(synopsis.code, *synopsis.declared) |
+           std::views::transform([&](const synopsis_check::Finding& finding) {
+               return Diagnostic{
+                   Severity::Warning, context, std::format("`{}`: {}", finding.declaration, finding.message)};
+           }) |
+           std::ranges::to<Diagnostics>();
 }
 
 Diagnostics check_coverage(const std::string&                    synopsis_name,
@@ -1785,11 +1803,13 @@ struct ValidationAlgebra {
             diagnostics_monoid.combine(
                 diagnostics_monoid.combine(
                     diagnostics_monoid.combine(
-                        diagnostics_monoid.combine(check_nonempty(context, v.code), check_spans(context, v.code)),
-                        check_coverage(v.name, v.roster, sections)),
-                    check_private_data(v.name, v.roster)),
-                check_synopsis_leakage(context, v, visible)),
-            check_dangling_ref(context, v.code, sections));
+                        diagnostics_monoid.combine(
+                            diagnostics_monoid.combine(check_nonempty(context, v.code), check_spans(context, v.code)),
+                            check_coverage(v.name, v.roster, sections)),
+                        check_private_data(v.name, v.roster)),
+                    check_synopsis_leakage(context, v, visible)),
+                check_dangling_ref(context, v.code, sections)),
+            check_synopsis_agreement(context, v));
     }
 
     // A declared item: check that it says anything at all, every signature's
