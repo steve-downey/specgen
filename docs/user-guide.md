@@ -306,7 +306,7 @@ paragraph, with `@[...]{.add}@` inside code; the draft's `addedblock`,
 `org`. A retained paragraph keeps its paragraph number; an added one takes the
 `x`, `x+1` literal, as under `--paper`. A baseline implies `--paper`.
 
-The baseline is one of three things, and a run takes one kind:
+The baseline is one of four things, and a run takes one kind:
 
 - `--baseline-rev <rev>` (`generate` only): a git revision of the repository
   the headers live in, named once for the whole paper. `specgen` checks the
@@ -317,6 +317,17 @@ The baseline is one of three things, and a run takes one kind:
   revision does not have is new wording: it renders as all added, with a note
   on stderr. `git` must be on the `PATH`, and the revision must be in the
   clone, so a shallow checkout needs the history fetched first.
+- `--baseline-draft <dir>` (`generate` only): the C++ working draft's own
+  wording. `<dir>` is the draft's `source` directory; for each header, the
+  top-level sections it generates are found by stable name among the
+  `\rSecN[name]` headings of the `*.tex` files directly in `<dir>` and read
+  with the importer described in
+  [Reading the working draft's LaTeX](#reading-the-working-drafts-latex). The
+  result is a paper's wording diff against the standard itself, with no
+  earlier revision of anything to check out. A section the draft does not have
+  is new wording and renders as all added, with a note on stderr. The files
+  read are prerequisites in a `--depfile`. Specgen records no draft revision:
+  the checkout is the paper build's to pin.
 - `--baseline-header <path>` (`generate` only): the previous revision of the
   header checked out somewhere, one per document and pairing with the
   documents in order, parsed with the compile flags that resolve for *its*
@@ -1203,6 +1214,14 @@ specgen: warning: optional.ctor: \keyword has no IR kind and is kept as raw LaTe
 
 The warnings say which kind to add next. Nothing is dropped silently.
 
+`generate --baseline-draft <dir>` runs the same import over the sections a
+header generates, as the baseline of the wording diff:
+
+```sh
+specgen generate include/beman/example/example.hpp \
+  --baseline-draft draft/source --backend mpark -- -Iinclude
+```
+
 ## Exit behavior
 
 - Successful `generate`, `render`, and `dump-decls` invocations exit with
@@ -1229,7 +1248,7 @@ The warnings say which kind to add next. Nothing is dropped silently.
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.27.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.28.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

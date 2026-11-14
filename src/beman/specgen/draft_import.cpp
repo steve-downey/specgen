@@ -10,13 +10,19 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <filesystem>
 #include <format>
+#include <fstream>
+#include <ios>
+#include <iterator>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <set>
 #include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -167,6 +173,24 @@ struct Importer {
     ir::Table2D               make_table2d(const struct EvTable& table);
     ir::Table1D               make_table1d(const struct EvTable& table);
 };
+
+// The names an item declares, which the differ pairs items by. The generator
+// takes them from the declarations; the draft says them in its `\indexlibrary`
+// entries, which name the same thing -- a constructor by its class, a
+// destructor with the tilde the declaration has. A zombie name and a
+// miscellaneous entry are not declarations.
+std::vector<std::string> declared_entities(const std::vector<ir::IndexEntry>& index) {
+    std::vector<std::string> names;
+    // substrate generic algorithm: collects the distinct names in order of first appearance.
+    for (const ir::IndexEntry& entry : index) {
+        if (entry.kind == ir::IndexKind::Zombie || entry.kind == ir::IndexKind::Misc)
+            continue;
+        std::string name = entry.kind == ir::IndexKind::Destructor ? "~" + entry.name : entry.name;
+        if (std::ranges::find(names, name) == names.end())
+            names.push_back(std::move(name));
+    }
+    return names;
+}
 
 // --- code ---------------------------------------------------------------------
 
@@ -1021,6 +1045,7 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 ir::SpecItem      item;
                 item.decl.signatures = split_signatures(lines.subspan(i + 1, std::min(end, lines.size()) - i - 1));
                 item.decl.index      = std::exchange(pending, {});
+                item.decl.entities   = declared_entities(item.decl.index);
                 std::size_t next     = end + 1;
                 std::size_t probe    = next;
                 // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
@@ -1125,5 +1150,75 @@ Result Importer::run(std::string_view tex, const Options& options) {
 } // namespace
 
 Result import_sections(std::string_view tex, const Options& options) { return Importer{}.run(tex, options); }
+
+namespace {
+
+// Whether `tex` has a heading `\rSecN[name]` -- the bracket, the name, the
+// bracket, on a line that holds `\rSec`. A name in running text does not count.
+bool declares_section(std::string_view tex, std::string_view name) {
+    const std::string needle = std::format("[{}]", name);
+    std::size_t       at     = 0;
+    // substrate generic algorithm: a search that resumes after each miss; the position is the loop's state.
+    while ((at = tex.find(needle, at)) != std::string_view::npos) {
+        const std::size_t line_begin = tex.rfind('\n', at) == std::string_view::npos ? 0 : tex.rfind('\n', at) + 1;
+        if (tex.substr(line_begin, at - line_begin).find("\\rSec") != std::string_view::npos)
+            return true;
+        at += needle.size();
+    }
+    return false;
+}
+
+std::optional<std::string> read_text(const std::filesystem::path& path) {
+    std::ifstream in(path, std::ios::binary);
+    if (!in)
+        return std::nullopt;
+    return std::string(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+} // namespace
+
+TreeResult import_from_directory(const std::filesystem::path& directory, std::span<const std::string> names) {
+    TreeResult                         result;
+    std::error_code                    ec;
+    std::vector<std::filesystem::path> files;
+    // substrate generic algorithm: directory iteration is an input range with an error channel, not a fold.
+    for (std::filesystem::directory_iterator it(directory, ec), end; !ec && it != end; it.increment(ec))
+        if (it->path().extension() == ".tex")
+            files.push_back(it->path());
+    if (ec) {
+        result.diagnostics.push_back(
+            {Severity::Error, {}, std::format("cannot read the draft source directory '{}'", directory.string())});
+        return result;
+    }
+    std::ranges::sort(files);
+
+    std::map<std::string, ir::Node> found;
+    // substrate generic algorithm: each file claims the names it declares among those still unclaimed.
+    for (const auto& file : files) {
+        const std::optional<std::string> tex = read_text(file);
+        if (!tex)
+            continue;
+        const std::vector<std::string> here = names | std::views::filter([&](const std::string& name) {
+                                                  return !found.contains(name) && declares_section(*tex, name);
+                                              }) |
+                                              std::ranges::to<std::vector<std::string>>();
+        if (here.empty())
+            continue;
+        Result imported = import_sections(*tex, {.sections = here});
+        result.sources.push_back(file.string());
+        result.diagnostics.append_range(std::move(imported.diagnostics));
+        // substrate generic algorithm: pairs each name with the node imported for it.
+        for (auto&& [name, node] : std::views::zip(here, imported.document.nodes))
+            found.emplace(name, std::move(node));
+    }
+    // substrate generic algorithm: assembles the result in the order the names came.
+    for (const std::string& name : names) {
+        if (auto it = found.find(name); it != found.end())
+            result.document.nodes.push_back(std::move(it->second));
+        else
+            result.missing.push_back(name);
+    }
+    return result;
+}
 
 } // namespace beman::specgen::draft_import
