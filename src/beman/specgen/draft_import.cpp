@@ -163,7 +163,11 @@ struct Importer {
 
     Result run(std::string_view tex, const Options& options);
 
-    ir::CodeText              parse_code(std::string_view raw, bool listing);
+    ir::CodeText parse_code(std::string_view raw, bool listing);
+    // Set by parse_code when it met a macro the span vocabulary lacks: the text
+    // it returned has that macro as written, which the LaTeX backend would
+    // escape, so a caller that can keep the whole run as raw LaTeX should.
+    bool                      met_unknown_macro = false;
     ir::Paragraph             parse_prose(std::string_view text, bool in_table = false);
     ir::InformativeBody       parse_informative(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
@@ -362,7 +366,8 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 i += 2;
                 continue;
             }
-            report(Severity::Warning, "a macro in \\tcode is kept as written: " + std::string(raw.substr(i, 12)));
+            met_unknown_macro = true;
+            report(Severity::Warning, "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 12)));
         }
         out.text(raw.substr(i, 1));
         ++i;
@@ -435,7 +440,14 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
 
         if (name == "tcode" && arg) {
             flush();
-            out.push_back(code_inline_of(parse_code(arg->inner, false)));
+            met_unknown_macro = false;
+            ir::CodeText code = parse_code(arg->inner, false);
+            // A macro in the code the IR has no kind for is not text: the whole run
+            // is kept as the LaTeX it was, which the backend writes back as it was.
+            if (met_unknown_macro)
+                out.push_back(ir::RawInline{std::string(text.substr(i, arg->next - i))});
+            else
+                out.push_back(code_inline_of(std::move(code)));
             i = arg->next;
         } else if ((name == "exposid" || name == "exposidnc") && arg) {
             flush();

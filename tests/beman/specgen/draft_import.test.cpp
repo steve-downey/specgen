@@ -386,3 +386,21 @@ Within, \tcode{\placeholder{call-args}} is a pack and \exposid{z} is not.
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains("\\tcode{\\placeholder{call-args}} is a pack and \\exposid{z} is not"));
 }
+
+TEST_CASE("draft_import - a \\tcode holding a macro the IR has no kind for is kept whole as raw LaTeX") {
+    // Kept as the text `\cvqual{cv2}`, the LaTeX backend would escape the backslash and the
+    // braces and the wording would print the macro; kept as LaTeX it writes back as it was.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+For \tcode{R(Args...) \cvqual{cv2} noexcept}, and \tcode{plain}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message.contains("\\cvqual"));
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    REQUIRE(std::holds_alternative<ir::RawInline>(para[1]));
+    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\tcode{R(Args...) \\cvqual{cv2} noexcept}");
+    CHECK(std::holds_alternative<ir::CodeInline>(para[3]));
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("For \\tcode{R(Args...) \\cvqual{cv2} noexcept}, and \\tcode{plain}."));
+}
