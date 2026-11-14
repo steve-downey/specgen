@@ -685,8 +685,9 @@ specgen_add_golden(
 # Constraints the inherited bullets are validated against, with `\covers` for
 # the one predicate the draft spells differently. The marked IR's `.validate`
 # sibling is that check: it must be silent. Under the `items` context the
-# diff shows what the paper changed -- here only signature layout -- and the
-# rest of the draft's section as removed.
+# diff shows what the paper changed -- nothing, for these two members, since
+# the draft's one-line template head and the generator's two-line one are
+# the same code -- and the rest of the draft's section as removed.
 specgen_add_golden(
     diff_optional_asdraft
     MODE generate

@@ -83,25 +83,7 @@ is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T>
 
 :::
 
-```cpp
-template<class U = remove_cv_t<T>>@[constexpr optional& operator=(U&& v);]{.rm}@
-  @[constexpr optional& operator=(U&& v);]{.add}@
-```
-
-[#]{.pnum} *Constraints*:
-
-- [#.#]{.pnum} `is_same_v<remove_cvref_t<U>, optional>` is `false`,
-- [#.#]{.pnum} `conjunction_v<is_scalar<T>, is_same<T, decay_t<U>>>` is `false`,
-- [#.#]{.pnum} `is_constructible_v<T, U>` is `true`, and
-- [#.#]{.pnum} `is_assignable_v<T&, U>` is `true`.
-
-[#]{.pnum} *Effects*: If `*this` contains a value, assigns `std::forward<U>(v)` to `$val$`; otherwise direct-non-list-initializes `$val$` with `std::forward<U>(v)`.
-
-[#]{.pnum} *Postconditions*: `*this` contains a value.
-
-[#]{.pnum} *Returns*: `*this`.
-
-[#]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s constructor, the state of `v` is determined by the exception safety guarantee of `T`'s constructor. If an exception is thrown during the call to `T`'s assignment, the states of `$val$` and `v` are determined by the exception safety guarantee of `T`'s assignment.
+[…]
 
 ::: rm
 

@@ -71,6 +71,11 @@ struct Options {
 // Both inputs are expected canonical and unmarked (`has_marks` below): a diff
 // of a diff means nothing, and the driver refuses it.
 //
+// Authored listing text is read the way the draft importer reads a listing, so
+// an `@\cv{}@` escape typed in a header and the same placeholder in the draft's
+// LaTeX are the same code. The marked document returned has the escapes as
+// spans, which every backend writes the same way it wrote them.
+//
 // Three laws the tests pin: `compare(d, d)` under `Context::All` is `d`;
 // `compare({}, d)` marks every top-level node `Added` and nothing beneath;
 // and stripping the `Removed` material and the marks from `compare(a, b)`

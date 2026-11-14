@@ -106,9 +106,8 @@ is_invocable_r_v<R, VT $inv-quals$, ArgTypes...>
 [#]{.pnum} *Postconditions*: The target object of `*this` is the target object `f` had before construction, and `f` is in a valid state with an unspecified value.
 
 ```cpp
-@[template<class F> move_only_function(F&& f);]{.rm}@
-@[template<class F>]{.add}@
-  @[constexpr move_only_function(F&& f);]{.add}@
+template<class F>
+  @[constexpr]{.add}@ move_only_function(F&& f);
 ```
 
 [#]{.pnum} Let `VT` be `decay_t<F>`.
@@ -190,9 +189,8 @@ template<class T, class U, class... Args>
 [#]{.pnum} *Returns*: `*this`.
 
 ```cpp
-@[template<class F> move_only_function& operator=(F&& f);]{.rm}@
-@[template<class F>]{.add}@
-  @[constexpr move_only_function& operator=(F&& f);]{.add}@
+template<class F>
+  @[constexpr]{.add}@ move_only_function& operator=(F&& f);
 ```
 
 [#]{.pnum} *Effects*: Equivalent to: `move_only_function(std::forward<F>(f)).swap(*this);`
