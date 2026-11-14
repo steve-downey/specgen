@@ -43,7 +43,13 @@ struct InlineCode {
 struct InlineRef {
     std::string stable_name;
 }; // \iref{stable-name}; prose references may name an external subclause
-using ProseInline    = std::variant<InlineText, InlineCode, InlineRef>;
+struct InlinePlaceholder {
+    std::string text;
+}; // \placeholder{x}, and \cv{} (text "cv")
+struct InlineOldConcept {
+    std::string name;
+}; // \oldconcept{X}
+using ProseInline    = std::variant<InlineText, InlineCode, InlineRef, InlinePlaceholder, InlineOldConcept>;
 using ProseParagraph = std::vector<ProseInline>;
 
 struct Table2DRow {

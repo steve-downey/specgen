@@ -31,6 +31,8 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
                            return ir::CodeInline{ir::CodeText{code.code, {}}};
                        },
                        [](const grammar::InlineRef& ref) -> ir::Inline { return ir::RefInline{ref.stable_name}; },
+                       [](const grammar::InlinePlaceholder& p) -> ir::Inline { return ir::PlaceholderInline{p.text}; },
+                       [](const grammar::InlineOldConcept& c) -> ir::Inline { return ir::OldConceptRef{c.name}; },
                    },
                    piece);
            }) |

@@ -16,7 +16,7 @@ namespace std {
 #+end_codeblock
 
 #+begin_pnum
-\placeholder{noex} is a placeholder in leading prose.
+@@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is a placeholder in leading prose.
 #+end_pnum
 
 #+begin_itemdecl
@@ -24,7 +24,7 @@ int size() const;
 #+end_itemdecl
 
 #+begin_pnum
-/Preconditions/: ~T~ meets the \oldconcept{Destructible} and \oldconcept{CopyConstructible} requirements.
+/Preconditions/: ~T~ meets the @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ and @@latex:\oldconcept{CopyConstructible}@@@@html:<i>Cpp17CopyConstructible</i>@@ requirements.
 #+end_pnum
 
 #+begin_pnum
@@ -34,31 +34,31 @@ int size() const;
 #+begin_pnum
 /Remarks/: The following descriptions apply:
 
-- Meets \oldconcept{CopyConstructible} requirements.
+- Meets @@latex:\oldconcept{CopyConstructible}@@@@html:<i>Cpp17CopyConstructible</i>@@ requirements.
 
-\placeholder{after} follows the list.
+@@latex:\placeholder{after}@@@@html:<i>after</i>@@ follows the list.
 
 #+name: macro.flat
-#+caption: Flat table \placeholder{caption}
+#+caption: Flat table @@latex:\placeholder{caption}@@@@html:<i>caption</i>@@
 #+ATTR_WG21: :columns 25 67
-| Type \cv{} qualifier | Meaning |
+| Type @@latex:\cv{}@@@@html:<i>cv</i>@@ qualifier | Meaning |
 |-
-| A \placeholder{key} | Meets \oldconcept{Destructible} requirements. |
+| A @@latex:\placeholder{key}@@@@html:<i>key</i>@@ | Meets @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements. |
 
 #+name: macro.grid
 #+caption: Grid table
 #+ATTR_WG21: :columns 18 36 36
 | | A | B |
 |-
-| Type \cv{} qualifier | First \placeholder{value} | Second \placeholder{value} |
+| Type @@latex:\cv{}@@@@html:<i>cv</i>@@ qualifier | First @@latex:\placeholder{value}@@@@html:<i>value</i>@@ | Second @@latex:\placeholder{value}@@@@html:<i>value</i>@@ |
 
-\placeholder{resume} follows the tables.
+@@latex:\placeholder{resume}@@@@html:<i>resume</i>@@ follows the tables.
 
 #+begin_note
-The type meets \oldconcept{Destructible} requirements.
+The type meets @@latex:\oldconcept{Destructible}@@@@html:<i>Cpp17Destructible</i>@@ requirements.
 #+end_note
 
 #+begin_wgexample
-A \cv{} qualifier is written literally.
+A @@latex:\cv{}@@@@html:<i>cv</i>@@ qualifier is written literally.
 #+end_wgexample
 #+end_pnum
