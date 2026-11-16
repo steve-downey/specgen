@@ -387,6 +387,62 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             ref_groups[*current_group].live = true;
     };
 
+    // The function members of a nested class that stays in the synopsis as a
+    // definition (issue #298). Its text used to be carried as written, so a
+    // nested member kept the body, the requires-clause and the `\omit`ted
+    // declaration that a direct member loses: `advance() requires ok<T>;` in
+    // the synopsis beside an item declaration `void advance();` and a
+    // *Constraints* paragraph. This applies to them the rules that are about
+    // one function and nothing around it, the same edits the member walk
+    // below makes, at any depth. Access labels, `\ref` groups and the
+    // private-member rule stay the enclosing class's alone: a nested class
+    // owns its own group headers, and has no roster for those to be read
+    // against.
+    //
+    // Called only for a nested class the walk below keeps whole, so none of
+    // these edits lands inside a range that walk removes or replaces.
+    const auto nested_function_edits = [&](this const auto& self, const clang::CXXRecordDecl* nested) -> void {
+        // substrate generic algorithm: a side-effecting fold into the shared
+        // edit lists, recursing into the classes nested in this one.
+        for (const clang::Decl* member : nested->decls()) {
+            if (member->isImplicit() || member->getBeginLoc().isInvalid())
+                continue;
+            const clang::CXXRecordDecl* inner = llvm::dyn_cast<clang::CXXRecordDecl>(member);
+            if (const auto* inner_tmpl = llvm::dyn_cast<clang::ClassTemplateDecl>(member))
+                inner = inner_tmpl->getTemplatedDecl();
+            if (inner != nullptr) {
+                if (inner->isThisDeclarationADefinition() && !inner->isAnonymousStructOrUnion())
+                    self(inner);
+                continue;
+            }
+            const clang::FunctionDecl* fn = member_function_or_template(member);
+            if (fn == nullptr)
+                continue;
+            if (omit_set.count(fn->getCanonicalDecl()) != 0 ||
+                suppresses_generated_entity(docblock_directives(member, sm))) {
+                omit_line(member); // \omit / \merge / \elsewhere
+                continue;
+            }
+            if (constraints_stated.contains(fn->getCanonicalDecl()))
+                seebelow_edits.append_range(requires_clause_removals(fn, sm, lang_opts));
+            if (fn->isDefaulted() || fn->isDeleted() || !fn->doesThisDeclarationHaveABody()) {
+                if (const std::optional<DeletedTail> tail = deleted_tail(member, sm, lang_opts)) {
+                    edits.push_back(SynopsisEdit{tail->begin, tail->end, std::string(kDeletedTail)});
+                    removed_ranges.emplace_back(tail->begin, tail->end);
+                }
+                continue;
+            }
+            const clang::Stmt* body = fn->getBody();
+            if (body == nullptr)
+                continue;
+            const unsigned body_begin = spliced_tail_begin(fn, body, sm);
+            const unsigned body_end =
+                sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(body->getEndLoc(), 0, sm, lang_opts)).second;
+            edits.push_back(SynopsisEdit{body_begin, body_end, ";"});
+            removed_ranges.emplace_back(body_begin, body_end);
+        }
+    };
+
     // Walk the members. Bodies of in-class function definitions (including hidden
     // friends) splice down to a bare `;`; `= default`/`= delete` members fall
     // through untouched (design §3.4). A member in `omit_set` (`\omit`/`\merge`)
@@ -513,6 +569,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                     removed_ranges.emplace_back(record_begin, record_end);
                 } else {
                     add_exposid(named, it->second);
+                    nested_function_edits(nested_record);
                 }
                 mark_survivor();
                 continue;
@@ -582,7 +639,13 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
 
         const clang::FunctionDecl* fn = member_fn;
         if (fn == nullptr) {
-            mark_survivor(); // a shown non-function member (type alias, nested type, ...)
+            // A shown non-function member (type alias, nested type, ...). A
+            // nested class shown as a definition has function members of its
+            // own to bring into line.
+            if (nested_record != nullptr && nested_record->isThisDeclarationADefinition() &&
+                !nested_record->isAnonymousStructOrUnion())
+                nested_function_edits(nested_record);
+            mark_survivor();
             continue;
         }
 

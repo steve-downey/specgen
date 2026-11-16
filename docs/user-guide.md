@@ -803,7 +803,10 @@ a validation error, as it is on a class member.
 
 An in-class member definition is reduced to a declaration in the synopsis,
 since a body is never synopsis content, and the member is described in its own
-subclause like any other. Declaring members in the class and defining them out
+subclause like any other. The same holds for the members of a nested class
+shown in its enclosing class's synopsis: a body is reduced to a declaration, an
+`\omit`ted member is left out, and a `requires`-clause stated as *Constraints*
+is dropped. Declaring members in the class and defining them out
 of line remains the recommended style, because the definition's lexical
 position determines where its wording is placed, but it is not required for a
 clean synopsis.

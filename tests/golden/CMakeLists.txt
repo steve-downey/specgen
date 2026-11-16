@@ -1709,6 +1709,21 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/trailing_comment_docblock/expected.json"
 )
 
+# A nested class's function members follow the synopsis rules a direct member
+# follows (issue #298): the requires-clause its item declaration states as
+# *Constraints* is gone, an in-class body is spliced, an `\omit`ted member is
+# gone, and a deleted tail reads `= delete;`. At any depth, and for an
+# exposition-only nested class shown as a definition.
+specgen_add_golden(
+    nested_class_members
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_class_members.hpp"
+)
+specgen_add_golden(
+    nested_class_members_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_class_members/expected.json"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(

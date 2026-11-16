@@ -303,6 +303,17 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   `//! \merge`. A nested class owns its own group headers. The liveness test is AST-based, so
   a group containing only declarations in an inactive preprocessor branch is out of scope for
   this rule.
+- **A nested class's function members follow the per-function rules** (issue #298). A named
+  nested class that stays in the synopsis as a definition is not flattened, and its text
+  used to be carried as written: a nested member kept its body, its `\omit`ted declaration,
+  its deleted tail's message, and the requires-clause its own item declaration states as
+  *Constraints* (§5.1). The rules that are about one function and nothing around it now
+  apply at any depth, by the same edits the member walk makes: `\omit`/`\merge`/`\elsewhere`
+  removes the declaration, a clause in `build_constraints_stated` is removed, a body is
+  spliced to `;`, a deleted tail reads `= delete;`. An exposition-only nested class shown as
+  a definition is on the same path. Access labels, `\ref` groups and the private-member
+  rule stay the enclosing class's alone: a nested class owns its own group headers and has
+  no roster of its own, so an unmarked private member of one is still printed.
 - **Direct class-scope `static_assert`s are general wording.** They are removed from the
   class synopsis regardless of access; their conditions become an adjacent paragraph per §5.2.
   Assertions in a nested class belong to that nested class.
