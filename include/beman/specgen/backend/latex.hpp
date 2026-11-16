@@ -14,6 +14,8 @@
 #include <beman/specgen/ir.hpp>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace beman::specgen::backend::latex {
 
@@ -33,6 +35,18 @@ struct Options {
     // render whether or not this is set. Once refused on this backend, for
     // want of anything to emit; the draft's macros are the thing to emit.
     bool paper_mode = false;
+
+    // The draft number of a top-level section, by stable name
+    // (`--section-number func.wrap.move=22.10.17.4`, issue #265). A fragment
+    // starts at `\rSec3` and does not know which subclause it is, so inside the
+    // draft macros' `wording` environment its heading, and every nested one,
+    // prints the unknown-number glyph. A section named here is written as
+    // `\clausenumber{N}` ahead of its `\rSec`, a macro the draft macros define
+    // (it sets the counters and the `\thesection` forms); the counters carry on
+    // from it into nested sections. The call is guarded by `\ifdefined`, so
+    // output still builds against macros that lack it. Only a top-level node is
+    // looked at; the driver reports a name that matches none.
+    std::vector<std::pair<std::string, std::string>> section_numbers = {};
 };
 
 // Rendering returns the fragment; a caller that has a sink writes it once.

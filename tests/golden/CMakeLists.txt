@@ -161,7 +161,7 @@ function(specgen_add_golden case)
         ARG
         "NO_VALIDATE;PAPER;VALIDATE"
         "${one_value_args}"
-        "ROOT;ALSO_INPUT;SOURCE;SECTION"
+        "ROOT;ALSO_INPUT;SOURCE;SECTION;SECTION_NUMBERS"
         ${ARGN}
     )
 
@@ -249,6 +249,10 @@ function(specgen_add_golden case)
     endif()
     if(ARG_BASE_SECTION_DEPTH)
         list(APPEND case_args "-DBASE_SECTION_DEPTH=${ARG_BASE_SECTION_DEPTH}")
+    endif()
+    if(ARG_SECTION_NUMBERS)
+        string(REPLACE ";" "|" _section_numbers "${ARG_SECTION_NUMBERS}")
+        list(APPEND case_args "-DSECTION_NUMBERS=${_section_numbers}")
     endif()
     if(DEFINED ARG_EXPECT_EXIT)
         list(APPEND case_args "-DEXPECT_EXIT=${ARG_EXPECT_EXIT}")
@@ -716,6 +720,16 @@ set_tests_properties(
     PROPERTIES
         PASS_REGULAR_EXPRESSION
             "takes a description from a baseline; name one with --baseline-draft"
+)
+
+# --section-number (issue #265): a fragment cannot know which subclause of the
+# draft it is, so the author gives the number and the latex backend writes
+# `\\clausenumber{N}` ahead of the section. `gadget.observe` is numbered and
+# `gadget.syn` is not, so the case shows both a numbered and a bare section.
+specgen_add_golden(
+    section_number
+    SECTION_NUMBERS "gadget.observe=22.10.17.4"
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json"
 )
 
 # The wording diff's marks (docs/plans/wording-diff.md), rendered by all three
@@ -2764,6 +2778,51 @@ foreach(backend latex mpark org)
         diff_gadget_decls_wording
         BACKEND ${backend}
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_gadget_decls/expected.json"
+    )
+endforeach()
+
+# The same context over a pair in the shape of the paper it is for
+# (docs/plans/wording-diff.md, diff-context-decls): `constexpr` is added across
+# an interface. `size()` and `empty()` change only their declaration, so their
+# descriptions collapse to the ellipsis; `front()`'s *Preconditions* changed
+# too, so its description renders whole beside them.
+specgen_add_golden(
+    diff_qualifier_decls
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.after.hpp"
+    BASELINE "${PROJECT_SOURCE_DIR}/tests/corpus/diff/qualifier.before.hpp"
+    DIFF_CONTEXT decls
+)
+foreach(backend latex mpark org)
+    specgen_add_golden(
+        diff_qualifier_decls_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_qualifier_decls/expected.json"
+    )
+endforeach()
+
+# --section-number's refusals (issue #265): each is reported, never ignored, so
+# a number the author believes was written is not silently dropped.
+foreach(
+    refusal
+    "bad-number|--section-number,gadget.observe=x|not a dotted number"
+    "other-backend|--backend,mpark,--section-number,gadget.observe=1|applies only to the latex backend"
+    "unmatched-name|--section-number,gadget.nope=1.2|not a top-level section"
+)
+    string(REPLACE "|" ";" refusal_parts "${refusal}")
+    list(GET refusal_parts 0 refusal_name)
+    list(GET refusal_parts 1 refusal_args)
+    string(REPLACE "," ";" refusal_args "${refusal_args}")
+    list(GET refusal_parts 2 refusal_message)
+    add_test(
+        NAME golden.section_number.refuses.${refusal_name}
+        COMMAND
+            specgen render --from-ir
+            "${CMAKE_CURRENT_SOURCE_DIR}/base_level/input.json" ${refusal_args}
+    )
+    set_tests_properties(
+        golden.section_number.refuses.${refusal_name}
+        PROPERTIES PASS_REGULAR_EXPRESSION "${refusal_message}"
     )
 endforeach()
 

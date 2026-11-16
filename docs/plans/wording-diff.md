@@ -223,9 +223,9 @@ rather not page through wording that did not move
 ellipsis is an unnumbered paragraph reading `[…]` in mpark and org and `[\ldots]` in LaTeX, the
 form papers write by hand; a first cut, signed off on the golden. A changed item still renders
 whole under `items`: the unit of elision is a node, not a paragraph. `decls`
-applies the same section elision and also replaces an unchanged, nonempty description
-of a retained item with one unnumbered ellipsis (issue #264). A changed description
-stays whole, and added or removed items stay whole. An unchanged subsection
+([diff-context-decls](#diff-context-decls)) applies the same section elision and also replaces
+an unchanged, nonempty description of a retained item with one unnumbered ellipsis (issue #264).
+A changed description stays whole, and added or removed items stay whole. An unchanged subsection
 keeps its own heading over one ellipsis for its wording, and so does each subsection nested in
 it, at any depth (issue #263). A `\ref` to it from retained wording then still resolves, the reader sees which
 subclause was left out, and the next sibling's number comes from that level's counter as in the
@@ -314,6 +314,20 @@ nor the draft macros have an elision form. The user's answer: LWG prefers not to
 unchanged wording, and it is also sometimes necessary to show that nothing changed, so both ends
 are needed. The ellipsis form is specgen's own convention, written the way papers write it by
 hand; see the rendering section.
+
+### diff-context-decls
+
+**Question.** A level past `items` that elides the unchanged description of an item whose only
+change is its declaration (issue #264)?
+**Status.** DECIDED: `--diff-context decls`, alongside `changed`, `all` and `items`.
+**Decision.** `decls` is `items` plus one rule: a retained item with a description, none of which
+changed, renders its marked declaration over a description of one unnumbered ellipsis. An item
+whose description changed renders the description whole, the node-as-unit rule `items` already
+follows; an added or removed item stays whole, and an item with no description gains no ellipsis.
+The elided description is an `ItemDescr` whose `leading` is one `BodyParagraph` marked `Elided`,
+so the IR schema is unchanged and a marked IR round trips. Papers adding `constexpr`, `noexcept`
+or `[[nodiscard]]` across an interface are the case.
+**Decided by.** the user, in issue #264.
 
 ### paired-paragraph-threshold
 

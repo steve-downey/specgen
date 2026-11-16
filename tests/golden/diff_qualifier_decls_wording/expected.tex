@@ -1,0 +1,46 @@
+\begin{codeblock}
+namespace std {
+  class @\libglobal{span_like}@ {
+  public:
+    // \ref{span.like.obs}, observers
+    @\added{constexpr}@ int size() const;
+    @\added{constexpr}@ bool empty() const;
+    @\added{constexpr}@ int front() const;
+  };
+}
+\end{codeblock}
+
+\rSec3[span.like.obs]{Observers}
+
+\indexlibrarymember{size}{span_like}%
+\begin{itemdecl}
+@\added{constexpr}@ int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+[\ldots]
+\end{itemdescr}
+
+\indexlibrarymember{empty}{span_like}%
+\begin{itemdecl}
+@\added{constexpr}@ bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+[\ldots]
+\end{itemdescr}
+
+\indexlibrarymember{front}{span_like}%
+\begin{itemdecl}
+@\added{constexpr}@ int front() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\expects
+\removed{\tcode{empty()} is \tcode{false}.}\added{the span is not empty.}
+
+\pnum
+\returns
+The first element.
+\end{itemdescr}
