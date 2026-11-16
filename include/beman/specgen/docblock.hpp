@@ -113,6 +113,14 @@ struct Element {
     std::vector<ProseParagraph> coverage = {};
 };
 
+// The finding for `\covers <element> P` in a docblock without `\asdraft`.
+// Named because one reader takes it back: on a class definition the scoped
+// form has a second meaning that needs no `\asdraft` (issue #283, the class's
+// leading prose standing for its derived paragraph), and the grammar cannot
+// see what a docblock is attached to.
+inline constexpr std::string_view kCoversNeedsAsdraft =
+    "\\covers naming an element applies to inherited wording, so it requires \\asdraft";
+
 // `\covers constraints P`: coverage claimed for an element the docblock does
 // not author, which `\asdraft` inherits.
 struct KindCover {

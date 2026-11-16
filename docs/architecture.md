@@ -802,6 +802,21 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - An authored `\mandates` in the class definition's *own* docblock replaces
   that paragraph and inherits its conjuncts, the same replacement rule and the
   same validator-only drift evidence a member's authored Mandates gets.
+- **The class's leading prose can stand for that paragraph instead** (issue #283). An
+  authored `\mandates` renders under a label, and the draft states this requirement
+  unlabelled, in its own words ([expected.un.general]: "A program that instantiates the
+  definition of `unexpected` for a non-object type, an array type, ... is ill-formed").
+  `\covers mandates P` on the class's docblock, without `\asdraft`, says the leading prose
+  is that paragraph: the derived one is not rendered, and its conjuncts ride on a Mandates
+  element with **no body**, carrying the claims. Nothing renders for it, a backend writing
+  an element's label on its first block, and nothing is new in the IR: the element is the
+  one an authored `\mandates` would have been, minus its words. The validator takes a claim
+  on such an element to be about the leading prose (§9), reads that prose for the conjuncts
+  it can recognize, as it always did for any item, and notes one that is neither recognized
+  nor claimed. The claim is an Error on a class with no `static_assert`, in a docblock with
+  no leading prose, and as `\covers constraints`, a class deriving no Constraints. The
+  grammar reports the scoped form without `\asdraft` wherever it is written, not knowing
+  what a docblock is attached to; `record_docblock` takes that finding back.
 
 ### 5.3 Conjunct rendering
 
@@ -1343,7 +1358,9 @@ Warning stop the render as an Error does, and a Note never fails a run.
 Validator metadata on a Constraints or Mandates element may include explicit
 `\covers [!]predicate` claims (decision `explicit-constraint-coverage`).
 Each claim must identify exactly one derived conjunct of that kind and agree
-with its polarity. Claims neither render nor participate in leakage checks;
+with its polarity. A claim needs wording to be about: its own element's, or,
+for an element with no body, the description's leading prose (§5.2, the
+stand-in a class's leading prose leaves behind). Claims neither render nor participate in leakage checks;
 recognizable contradictions and unrelated missing counterparts remain findings.
 Items emit as `item-v4`, accepting legacy `item`, `item-v2`, and `item-v3` on
 input, so older readers cannot silently discard coverage claims.

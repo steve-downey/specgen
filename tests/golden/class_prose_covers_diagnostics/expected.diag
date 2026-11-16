@@ -1,0 +1,4 @@
+spec_class_prose_covers_diagnostics.hpp:28: error: \covers mandates on a class definition answers the paragraph its static_asserts derive, and this class has none
+spec_class_prose_covers_diagnostics.hpp:33: error: \covers mandates on a class definition says its leading prose states what the static_asserts require, and this docblock has no leading prose
+spec_class_prose_covers_diagnostics.hpp:40: error: \covers constraints on a class definition needs \asdraft: a class derives no Constraints
+spec_class_prose_covers_diagnostics.hpp:45: error: \covers naming an element applies to inherited wording, so it requires \asdraft

@@ -1633,6 +1633,39 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/authored_header_synopsis/expected.json"
 )
 
+# A class's leading prose standing for the paragraph its static_asserts derive
+# (issue #283): `\covers mandates P` on the class's docblock suppresses the
+# derived "is ill-formed unless" paragraph and keeps its conjuncts as drift
+# evidence on a Mandates element with no body, which renders nothing. The
+# `.validate` sibling is the proof that the claims and the one conjunct the
+# validator reads for itself answer every assertion. Rendered through all
+# three backends, since "an element with no body writes no label" is each
+# backend's own rule.
+specgen_add_golden(
+    class_prose_covers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers.hpp"
+)
+specgen_add_golden(
+    class_prose_covers_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_prose_covers/expected.json"
+)
+foreach(backend mpark org)
+    specgen_add_golden(
+        class_prose_covers_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_prose_covers/expected.json"
+    )
+endforeach()
+# The claim misplaced: on a class with no static_assert, in a docblock with no
+# leading prose, naming Constraints, and on a function without `\asdraft`.
+specgen_add_golden(
+    class_prose_covers_diagnostics
+    MODE diagnose
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,

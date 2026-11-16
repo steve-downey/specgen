@@ -1344,12 +1344,20 @@ CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& b
     const auto                                       report = [&](ir::ElementKind kind, std::string message) {
         result.diagnostics.push_back({Severity::Error, std::string(ir::element_name(kind)), std::move(message)});
     };
+    // A claim needs wording to be about. Ordinarily that is its own element's.
+    // An element with no body at all is the stand-in a class's leading prose
+    // leaves behind (issue #283): the unlabelled paragraphs state what the
+    // derived conjuncts require, so the claims are about those.
+    const bool has_leading_prose = !ir::body_paragraphs(description.leading, false).empty();
+    const auto has_wording       = [&](const ir::DescriptionElement& element) {
+        return !element_paragraphs(element).empty() || (element.body.empty() && has_leading_prose);
+    };
     // substrate generic algorithm: scatter claim state and validated targets into per-kind sets.
     for (const auto& element : description.elements) {
         // substrate generic algorithm: scatter each claim's target or append its diagnostic.
         for (const auto& paragraph : element.coverage) {
             const auto claim = read_conjunct(paragraph);
-            if (element.derived || element_paragraphs(element).empty() ||
+            if (element.derived || !has_wording(element) ||
                 (element.kind != ir::ElementKind::Constraints && element.kind != ir::ElementKind::Mandates) ||
                 !claim || claim->polarity == ConjunctPolarity::Unknown) {
                 report(element.kind,

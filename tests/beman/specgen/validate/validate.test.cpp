@@ -1640,6 +1640,42 @@ TEST_CASE("validate - code normalization preserves token boundaries and literal 
     CHECK_FALSE(validate(ir::Node{item}).empty());
 }
 
+TEST_CASE("validate - a claim on an element with no body is about the leading prose") {
+    // The stand-in a class's leading prose leaves behind (issue #283): the
+    // derived conjuncts and the claims that answer them, on a Mandates element
+    // with nothing to render.
+    ir::DescriptionElement stand_in;
+    stand_in.kind      = ir::ElementKind::Mandates;
+    stand_in.conjuncts = {conjunct_paragraph("is_object_v<E>", "true"), conjunct_paragraph("is_array_v<E>", "false")};
+    stand_in.coverage  = {conjunct_paragraph("is_object_v<E>", "true")};
+
+    ir::SpecItem item;
+    item.descr.leading  = {ir::BodyParagraph{{ir::TextInline{"A program that instantiates it for a non-object "
+                                                             "type or an array type is ill-formed."}}}};
+    item.descr.elements = {stand_in};
+
+    // The claimed conjunct is quiet; the other is the usual note.
+    const Diagnostics findings = validate(ir::Node{item});
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == Severity::Note);
+    CHECK(findings.front().message.find("`is_array_v<E>`") != std::string::npos);
+
+    // It survives saved IR.
+    const auto saved = ir::parse_item(ir::emit_json(item));
+    REQUIRE(saved.has_value());
+    CHECK(validate(ir::Node{*saved}) == findings);
+
+    SECTION("with no leading prose there is nothing for the claim to be about") {
+        item.decl.signatures.push_back({"void f();", {}});
+        item.descr.leading.clear();
+        const auto unworded = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(unworded, [](const auto& finding) {
+            return finding.severity == Severity::Error &&
+                   finding.message.find("invalid explicit coverage claim") != std::string::npos;
+        }));
+    }
+}
+
 TEST_CASE("validate - explicit coverage checks exact targets and polarity through saved IR") {
     ir::SpecItem item;
     item.decl.signatures.push_back({"template<class T> void f();", {}});

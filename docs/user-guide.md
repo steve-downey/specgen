@@ -759,7 +759,27 @@ The docblock of a class or class-template definition describes the *type*. Its
 description elements are rendered immediately after the class synopsis, with no
 item declaration of their own, which is the shape the draft uses for a class's
 general subclause. An authored `\mandates` there replaces the paragraph derived
-from the class's direct `static_assert`s. A `\at stable.name` on the class
+from the class's direct `static_assert`s, under a *Mandates* label. To state
+the requirement as the draft often does, in an unlabelled paragraph of its
+own words, write that paragraph as leading prose and add `\covers mandates P`
+for each derived predicate it covers:
+
+```cpp
+//! A program that instantiates the definition of `unexpected` for a
+//! non-object type or an array type is ill-formed.
+//! \covers mandates is_object_v<E>
+//! \covers mandates !is_array_v<E>
+template <class E>
+class unexpected {
+    static_assert(std::is_object_v<E>);
+    static_assert(!std::is_array_v<E>);
+```
+
+The derived "is ill-formed unless" paragraph is then not rendered, and the
+assertions remain the evidence the prose is checked against, as they are for an
+authored `\mandates`. A predicate the prose states in a form the validator
+reads needs no claim, and one it neither reads nor is told about is a note.
+Without a claim the derived paragraph renders as before. A `\at stable.name` on the class
 definition routes both that derived paragraph and the class's own description
 to the named section, in that order; this is particularly useful for a class
 gathered from a component header whose `\rSec` outline is in an umbrella header.
@@ -1475,7 +1495,10 @@ prose, acknowledge its correspondence on the authored element:
 ```
 
 `\covers` belongs to the current normative Constraints or Mandates element, or,
-beside `\asdraft`, names the element it is about (`\covers constraints P`).
+beside `\asdraft`, names the element it is about (`\covers constraints P`). On
+a class definition, `\covers mandates P` needs no `\asdraft`: it says that the
+class's leading prose stands for the paragraph derived from its
+`static_assert`s.
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

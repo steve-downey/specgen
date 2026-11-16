@@ -1,0 +1,63 @@
+** Class template holder [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class holder {};
+}
+#+end_codeblock
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.holder][@@html:[demo.holder]@@@@latex:{[}demo.holder{]}@@]]) describes the class template ~holder~.
+#+end_pnum
+
+#+begin_pnum
+A program that instantiates the definition of ~holder~ for a non-object type or an array type is ill-formed.
+#+end_pnum
+
+
+** Class template slot [demo.slot]
+:PROPERTIES:
+:CUSTOM_ID: demo.slot
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class slot {};
+}
+#+end_codeblock
+
+#+begin_pnum
+A program that instantiates the definition of ~slot~ for a non-object type is ill-formed, and ~is_array_like<E>~ is ~false~.
+#+end_pnum
+
+
+** Class template plain [demo.plain]
+:PROPERTIES:
+:CUSTOM_ID: demo.plain
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class plain {};
+}
+#+end_codeblock
+
+#+begin_pnum
+A program that instantiates ~plain<E>~ is ill-formed unless ~is_object_like<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.plain][@@html:[demo.plain]@@@@latex:{[}demo.plain{]}@@]]) describes the class template ~plain~.
+#+end_pnum
