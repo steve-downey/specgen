@@ -624,6 +624,13 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // its range can be the final character of `default`, and splicing it
         // would turn `= default;` into `= defaul;;`.
         if (fn->isDefaulted() || fn->isDeleted() || !fn->doesThisDeclarationHaveABody()) {
+            // A deleted tail reads `= delete;` however the header spells it
+            // (issue #282). Nothing is edited inside it, as for any replaced
+            // range.
+            if (const std::optional<DeletedTail> tail = deleted_tail(member, sm, lang_opts)) {
+                edits.push_back(SynopsisEdit{tail->begin, tail->end, std::string(kDeletedTail)});
+                removed_ranges.emplace_back(tail->begin, tail->end);
+            }
             if (!freestanding_comment.empty()) {
                 const unsigned semi_end = member_declaration_end(fn, sm, lang_opts);
                 edits.push_back(SynopsisEdit{semi_end, semi_end, std::string(freestanding_comment)});

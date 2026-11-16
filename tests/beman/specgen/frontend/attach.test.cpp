@@ -190,12 +190,14 @@ TEST_CASE("build_document - a merged deleted member goes whole however its `= de
     CHECK_FALSE(contains(syn.code.text, "gauge(double)"));
     CHECK_FALSE(contains(syn.code.text, "gauge(const gauge&)"));
 
-    // The literal spellings render exactly as they did before, and the
-    // `\freestanding-deleted` suffix lands past the whole tail rather than
-    // between the keyword and its message.
+    // The literal spellings render exactly as they did before. A tail that
+    // survives says `= delete;` and nothing of its message (issue #282), and
+    // the `\freestanding-deleted` suffix lands past the whole tail rather
+    // than between the keyword and where the message was.
     CHECK(contains(syn.code.text, "constexpr gauge() = default;"));
     CHECK(contains(syn.code.text, "constexpr gauge(gauge&&) = delete;"));
-    CHECK(contains(syn.code.text, "\"gauge: not assignable\"); // freestanding-deleted"));
+    CHECK(contains(syn.code.text, "operator=(const gauge&) = delete; // freestanding-deleted"));
+    CHECK_FALSE(contains(syn.code.text, "not assignable"));
 }
 
 TEST_CASE("build_document - spec_attach.hpp attaches itemdecl/itemdescr to each out-of-line overload") {

@@ -13,6 +13,7 @@
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/qualifiers.hpp>
+#include <beman/specgen/frontend/record_members.hpp>
 #include <beman/specgen/frontend/synopsis_extraction.hpp>
 #include <beman/specgen/frontend/classify.hpp>
 
@@ -27,7 +28,6 @@
 #include <clang/Basic/LangOptions.h>
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
-#include <clang/Basic/TokenKinds.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/Token.h>
@@ -208,12 +208,12 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const clang::VarDecl*                            unspecified,
                                                         std::optional<clang::SourceRange>                see_below,
                                                         unsigned                                         indent) {
-    const unsigned        decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    clang::SourceLocation end_loc    = clang::Lexer::getLocForEndOfToken(decl->getEndLoc(), 0, sm, lang_opts);
-    if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(decl->getEndLoc(), sm, lang_opts);
-        semi && semi->is(clang::tok::semi))
-        end_loc = clang::Lexer::getLocForEndOfToken(semi->getLocation(), 0, sm, lang_opts);
-    const unsigned decl_end = sm.getDecomposedLoc(end_loc).second;
+    const unsigned decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    // Through the `;`, which for a deleted or defaulted function is past a
+    // tail the declaration's recorded end does not reach (issue #282): the
+    // declaration used to stop at its parameter list, with no `= delete` and
+    // no semicolon.
+    const unsigned decl_end = member_declaration_end(decl, sm, lang_opts);
 
     const llvm::StringRef           buffer = file_buffer(sm, decl->getBeginLoc());
     std::string                     text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
@@ -242,6 +242,12 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                 edits.push_back(SynopsisEdit{body_begin, decl_end, ";"});
             }
         }
+    // A deleted tail reads `= delete;` however it is spelled, as in a class
+    // body, and like a body it is a replaced range no other edit may enter.
+    if (const std::optional<DeletedTail> tail = deleted_tail(decl, sm, lang_opts)) {
+        body_splice = std::pair{tail->begin, tail->end};
+        edits.push_back(SynopsisEdit{tail->begin, tail->end, std::string(kDeletedTail)});
+    }
     const auto outside_body = [&](unsigned begin, unsigned end) {
         return !body_splice || end <= body_splice->first || begin >= body_splice->second;
     };

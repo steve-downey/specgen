@@ -1585,6 +1585,22 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_spelling.hpp"
 )
 
+# What a deleted tail *says* (issue #282): `= delete;`, whether the header
+# wrote the keyword, P2573's message, or a macro standing for either. Pinned
+# at the three places a declaration is printed, in the rendered LaTeX as well
+# as the IR: the class synopsis, the item declaration of a `\describe`d
+# member (a lone `;` for the macro spelling, before), and a gathered header
+# synopsis (no tail and no `;` at all, before).
+specgen_add_golden(
+    deleted_tail_wording
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_wording.hpp"
+)
+specgen_add_golden(
+    deleted_tail_wording_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deleted_tail_wording/expected.json"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,

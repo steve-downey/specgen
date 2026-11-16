@@ -15,6 +15,8 @@
 #include <clang/Basic/LangOptions.h>
 #include <clang/Basic/SourceManager.h>
 
+#include <optional>
+#include <string_view>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -85,6 +87,31 @@ unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* bo
 // that is not there (an in-class body, whose `}` no semicolon follows).
 unsigned
 member_declaration_end(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts);
+
+// What a deleted function writes between its `=` and its `;`: `delete`, or
+// P2573's `delete("reason")`, or a macro standing for either (issue #282).
+// The wording says `= delete;` whichever it is. A message is the
+// implementation's diagnostic, not interface, and a macro is the
+// implementation's spelling of a keyword; the draft's synopses carry neither.
+//
+// As for member_declaration_end, the AST says that the function is deleted
+// and the lexer only measures: the tail starts after the last `=` outside any
+// bracket before the terminating `;`. Earlier ones are `operator=` and the
+// default arguments of a template head, and a default argument of a function
+// parameter is inside the parameter list's parentheses.
+//
+// Empty for anything that is not a function deleted as written, when no such
+// `=` is found, and when the tail already reads ` delete`, since there is then
+// nothing to replace.
+struct DeletedTail {
+    unsigned begin = 0; // just past the `=`
+    unsigned end   = 0; // the `;`
+};
+std::optional<DeletedTail>
+deleted_tail(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts);
+
+// The text a deleted tail is replaced with, leading space included.
+inline constexpr std::string_view kDeletedTail = " delete";
 
 } // namespace beman::specgen::frontend
 

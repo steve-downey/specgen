@@ -249,6 +249,17 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   first and its overlap watermark would suppress the removal — which is how a body naming a
   droppable qualifier once survived into the synopsis while its unqualified twin spliced
   cleanly.
+- **A deleted tail reads `= delete;` however the header spells it** (issue #282): P2573's
+  `= delete("reason")` loses its message, the implementation's diagnostic and no part of the
+  interface, and a macro standing for the keyword
+  (`= BEMAN_EXPECTED_DELETE_MSG("...")`, so that a pre-C++26 build still compiles) is the
+  implementation's spelling of it. The AST says the function is deleted and the lexer only
+  measures the tail, as for where it ends: it starts after the last `=` outside a bracket
+  before the terminating `;`, earlier ones being `operator=` and a template head's default
+  arguments. One helper (`deleted_tail`) serves the three places a declaration is printed:
+  the class synopsis, the item declaration of a `\describe`d member, and a gathered header
+  synopsis, where a deleted namespace-scope function is also read through its `;` rather
+  than to the end of its parameter list.
 - Strip docblocks/markup comments and Doxygen comments; keep draft-form comments (`\ref`,
   `see~\ref`).
 - **An empty class-scope `\ref` group is not printed.** A group header is retained only when

@@ -1054,6 +1054,11 @@ and `\asdraft-synopsis` applies only to a class definition.
   `&&` chain; any other shape is left whole.
 - `\describe` forces an item declaration for a documented `= default` or
   `= delete` entity.
+- A deleted function reads `= delete;` in a synopsis and in an item
+  declaration however the header spells the tail. A C++26 message
+  (`= delete("reason")`) is dropped, and so is a macro standing for the
+  keyword, so a header that writes `= MY_DELETE("reason")` to compile before
+  C++26 generates the same wording as one that writes `= delete`.
 - A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in
