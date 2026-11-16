@@ -485,8 +485,10 @@ top-level number; under `--diff-context items` or `decls` an elided subclause
 keeps its heading and so still steps them. A number is only meaningful against
 one revision of the draft, so the paper names that revision. The option is
 refused under `mpark` and `org`. A name that matches no top-level section of
-the output is an error, and so are an empty number and a second number for one
-name.
+the paper is an error, and so are an empty number and a second number for one
+name. With a wording diff, a section that did not change is left out of the
+output and its number is not written; naming it is not an error, so one list of
+numbers serves every revision of the paper.
 
 ### Proposed stable names in mpark and wg21org papers
 

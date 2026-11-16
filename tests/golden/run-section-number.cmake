@@ -5,8 +5,9 @@
 # golden `section_number` pins the framing of one numbered section; this pins
 # what a single render cannot: that `generate` and `render` agree, that the
 # number reaches every `--split` fragment and leaves the whole unchanged, that
-# a wording diff carries it through both baseline routes, and that every
-# malformed or repeated assignment is a usage error from both commands.
+# a wording diff carries it through both baseline routes, that a number for a
+# section the diff leaves out is not a mistake, and that every malformed or
+# repeated assignment is a usage error from both commands.
 #
 # Ported from the second implementation of #265, which merged into its base
 # branch and never reached main, and adapted to the rules the first one
@@ -111,6 +112,16 @@ if(NOT output STREQUAL generated_diff OR NOT output MATCHES "clausenumber")
         FATAL_ERROR
         "generate and render disagree on numbered wording diffs"
     )
+endif()
+
+# A number for a section the diff leaves out is not a mistake: the name is a
+# section of the paper, checked before the context drops what did not change.
+# A self-diff drops everything, and still succeeds, with nothing to print.
+run(0 "^$" render --from-ir "${ir}" --baseline-ir "${ir}" ${number_args}
+    --diff-context decls
+)
+if(NOT output STREQUAL "")
+    message(FATAL_ERROR "a self-diff should be empty")
 endif()
 
 # A malformed, repeated or missing assignment is a usage error from both

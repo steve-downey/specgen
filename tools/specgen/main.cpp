@@ -762,11 +762,15 @@ std::string render_wording(const ir::Document& fragment, const WordingOptions& o
          .section_numbers    = options.section_numbers});
 }
 
-// A `--section-number` that names no top-level section of what is being
-// rendered is a typo, or a section the diff dropped; either way the number
-// would silently go nowhere, which is the mistake this option exists to
-// prevent. Fragments are cut at top-level sections, so the documents' own top
-// level is what is looked at.
+// A `--section-number` that names no top-level section of the paper is a
+// typo: the number would silently go nowhere, which is the mistake this
+// option exists to prevent. Fragments are cut at top-level sections, so the
+// documents' own top level is what is looked at.
+//
+// The paper, not the output (issue #287): the documents are checked as they
+// came, before a wording diff drops the sections that did not change. A
+// section's number is a fact about the paper, and a build that lists every
+// section's would otherwise fail on the day one of them stops changing.
 std::optional<std::string> unmatched_section_number(std::span<const ir::Document> documents,
                                                     const WordingOptions&         options) {
     const auto matched = [&](const std::string& name) {
@@ -781,8 +785,7 @@ std::optional<std::string> unmatched_section_number(std::span<const ir::Document
         std::ranges::find_if(options.section_numbers, [&](const auto& entry) { return !matched(entry.first); });
     if (missing == options.section_numbers.end())
         return std::nullopt;
-    return std::format("specgen: --section-number names '{}', which is not a top-level section of the output",
-                       missing->first);
+    return std::format("specgen: --section-number names '{}', which is not a top-level section", missing->first);
 }
 
 // The extension is the only part of design §8's fragment-path scheme
@@ -954,7 +957,7 @@ emit_wording(const ir::Document& document, const WordingOptions& options, const 
         })
         .and_then([&](const std::optional<ir::Document>& marked) -> std::expected<Written, std::string> {
             const ir::Document& rendered = marked ? *marked : document;
-            if (const auto error = unmatched_section_number(std::span(&rendered, 1), options))
+            if (const auto error = unmatched_section_number(std::span(&document, 1), options))
                 return std::unexpected(*error);
             return (wants_whole(options) ? write_whole(render_wording(rendered, options), options)
                                          : std::expected<Written, std::string>{Written{}})
@@ -1061,7 +1064,7 @@ std::expected<Written, std::string> emit_paper(const std::vector<std::string>&  
         .and_then([&] { return diffed_all(baselines, current, options); })
         .and_then([&](const std::optional<std::vector<ir::Document>>& marked) -> std::expected<Written, std::string> {
             const std::vector<ir::Document>& documents = marked ? *marked : current;
-            if (const auto error = unmatched_section_number(documents, options))
+            if (const auto error = unmatched_section_number(current, options))
                 return std::unexpected(*error);
             // The whole paper is its documents rendered in order and joined by a blank
             // line. That is the same text `--split` would write, in the same order,

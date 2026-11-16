@@ -1151,8 +1151,11 @@ environment an unknown number prints as a glyph. The latex backend writes
 the macro itself belongs to the draft macros. This is the one wording form not
 yet in all three backends, because mpark and org have no macro to call; the
 option is a usage error there, not an ignored flag. A name that matches no
-top-level section of what is rendered is an error, the same rule `--root` has, as is an
-empty number and a second number for one name (issue #287).
+top-level section of the paper is an error, as is an empty number and a second number for
+one name. The name is checked against the documents as they came, before a wording diff
+drops the sections that did not change (issue #287): a section's number is a fact about the
+paper, so a build may list every section's and keep working when one stops changing. The
+number of a section the diff leaves out is simply not written.
 
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 

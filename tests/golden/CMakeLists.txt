@@ -2976,8 +2976,8 @@ endforeach()
 
 # --section-number at the driver seam (issue #287): one-pass and two-pass
 # agreement, the number in every `--split` fragment, numbered wording diffs
-# through both baseline routes, and the usage errors. See
-# run-section-number.cmake.
+# through both baseline routes, a number for a section the diff leaves out,
+# and the usage errors. See run-section-number.cmake.
 add_test(
     NAME golden.section_number.driver
     COMMAND
