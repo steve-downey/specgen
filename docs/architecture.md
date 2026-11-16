@@ -788,6 +788,21 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   declares as deleted. The two are distinct flags because [lib-intro] gives the comments
   distinct meanings. Either marker may live on an out-of-line definition even though the
   suffix is emitted on the earlier in-class declaration (§3.4).
+- `\synopsis-here` — on a class definition's own docblock: where the class synopsis stands
+  among the leading paragraphs (issue #292). All of a class's own wording used to follow
+  its synopsis, and the draft does not always order a general subclause so:
+  [expected.un.general] opens with a paragraph, then the synopsis, then the "is ill-formed"
+  paragraph. The marker is positional, so the grammar handles it directly, like
+  `\verbatim-itemdecl`: `Markers::synopsis_here` is the number of leading blocks before it.
+  It ends the paragraph in progress, is an Error after a labelled element, a Warning when
+  repeated, and an Error off a class. `attach_class_description` moves those blocks out of
+  the description into `SynopsisDecl::opening`, which `build_tree` pushes ahead of the
+  synopsis at the same placement key as a signatureless `SpecItem`, the node kind detached
+  section prose already is, so it takes every wording check and needs nothing of a backend
+  (§6). Where there is no synopsis to stand ahead of, because `\at` routed the class's
+  wording or the class is folded into a gathered region, the opening prose leads the
+  class's own nodes. A detached block is not a substitute: Clang attaches a lone comment
+  before a class to that class across any number of blank lines.
 - `\specified` — on a `namespace`: its declarations render inside it rather than flattened
   into the enclosing one (§3.5, issue #209). The only marker a namespace takes, and it takes
   nothing else beside it; on anything but a namespace it is an Error.
@@ -945,7 +960,9 @@ A class or class-template **definition**'s own docblock describes the *type*. It
 description elements become a **description-only item** — an ItemDescr carrying no
 ItemDecl — placed immediately after the class synopsis and after the derived
 class-scope paragraph of §5.2, in the same frame and at the same placement key, so
-the three stay together through the placement sort and through a `--split`. An `\at`
+the three stay together through the placement sort and through a `--split`. The
+leading paragraphs ahead of a `\synopsis-here` marker (§4.3) are a fourth node, placed
+ahead of the synopsis at that same key. An `\at`
 on that docblock sends both of the class's own nodes — the derived paragraph and this
 item, in that order — to the section it names instead, keyed by the class's own offset,
 which is the same route an in-class member and a folded-in namespace entity already take

@@ -288,6 +288,14 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // reach the frame (issue #41). A class whose `\at`
                     // did route them leaves both fields empty here and
                     // carries them in `pending` instead (issue #98).
+                    // Pushed first, at the same placement key: the prose a
+                    // class's docblock puts ahead of its synopsis (issue
+                    // #292). sort_frame is stable, so it stays there.
+                    if (!syn.opening.empty())
+                        stack.back().pushed.push_back(GroupCandidate{
+                            syn.offset,
+                            ir::SpecItem{{}, ir::ItemDescr{.elements = {}, .leading = std::move(syn.opening)}},
+                            false});
                     if (!syn.synopsis.code.text.empty())
                         stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(syn.synopsis), false});
                     // Same placement key, pushed second: sort_frame is

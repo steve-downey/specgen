@@ -220,6 +220,14 @@ struct SynopsisDecl {
     // Empty when the class's docblock carries an `\at`, for the reason
     // `general` above gives.
     beman::specgen::ir::ItemDescr descr = {};
+    // The paragraphs of the class's docblock that come before `\synopsis-here`
+    // (issue #292): the prose that opens a general subclause ahead of the
+    // class synopsis, as [expected.un.general]'s first paragraph does. A
+    // signatureless ir::SpecItem like `descr`, pushed ahead of the synopsis
+    // at the same placement key. Where there is no synopsis to stand ahead of
+    // -- a class folded into a gathered region, or routed by `\at` -- it is
+    // the first of the class's own nodes.
+    beman::specgen::ir::DescriptionBody opening = {};
     // `\asdraft` on the class's docblock: `descr` is the baseline's, so the
     // description-only item exists even though `descr` holds nothing yet, and
     // carries the marker (and `\covers <element>` claims) for the pass that

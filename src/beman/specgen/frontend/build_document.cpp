@@ -493,10 +493,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // gathered node's own pending list to the section it named
                     // (issue #98). build_tree pushes no node for the synopsis
                     // itself, whose code really has been moved out.
-                    if (synopsis->general || beman::specgen::ir::has_description(synopsis->descr) ||
-                        synopsis->descr_as_draft) {
+                    if (!synopsis->opening.empty() || synopsis->general ||
+                        beman::specgen::ir::has_description(synopsis->descr) || synopsis->descr_as_draft) {
                         db::SynopsisDecl class_extra;
                         class_extra.offset         = synopsis->offset;
+                        class_extra.opening        = std::move(synopsis->opening);
                         class_extra.general        = std::move(synopsis->general);
                         class_extra.descr          = std::move(synopsis->descr);
                         class_extra.descr_as_draft = synopsis->descr_as_draft;

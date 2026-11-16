@@ -159,6 +159,9 @@ struct RecordDocblock {
     // `\asdraft`: the class's description is the baseline's.
     bool                                            as_draft = false;
     std::vector<beman::specgen::ir::InheritedCover> covers   = {};
+    // `\synopsis-here`: how many of `descr`'s leading blocks come before the
+    // class synopsis (issue #292).
+    std::optional<std::size_t> synopsis_here = {};
     // `\asdraft-synopsis`: the synopsis is the baseline's, patched.
     bool                                                    synopsis_as_draft = false;
     std::vector<beman::specgen::document_build::Diagnostic> diagnostics;

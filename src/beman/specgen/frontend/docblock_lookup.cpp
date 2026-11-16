@@ -223,6 +223,7 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
         out.descr                 = std::move(lowered.descr);
         out.as_draft              = lowered.directives.asdraft;
         out.synopsis_as_draft     = lowered.directives.asdraft_synopsis;
+        out.synopsis_here         = lowered.directives.synopsis_here;
         out.covers                = std::move(lowered.inherited_covers);
     }
 

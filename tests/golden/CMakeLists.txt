@@ -1724,6 +1724,36 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_class_members/expected.json"
 )
 
+# `\synopsis-here` (issue #292): the paragraphs of a class's docblock before
+# the marker open the subclause ahead of the class synopsis, and the rest
+# follows it, which is [expected.un.general]'s shape. With `\at`, where there
+# is no synopsis to stand ahead of, the opening prose leads the class's nodes
+# in the section they are routed to. Rendered through all three backends: the
+# order of nodes is theirs to carry.
+specgen_add_golden(
+    synopsis_here
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_here.hpp"
+)
+specgen_add_golden(
+    synopsis_here_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_here/expected.json"
+)
+foreach(backend mpark org)
+    specgen_add_golden(
+        synopsis_here_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_here/expected.json"
+    )
+endforeach()
+# The marker misplaced: after an element, twice, with text after it, and on a
+# function.
+specgen_add_golden(
+    synopsis_here_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_here_diagnostics.hpp"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(

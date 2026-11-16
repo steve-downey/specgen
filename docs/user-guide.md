@@ -817,7 +817,27 @@ clean synopsis.
 The docblock of a class or class-template definition describes the *type*. Its
 description elements are rendered immediately after the class synopsis, with no
 item declaration of their own, which is the shape the draft uses for a class's
-general subclause. An authored `\mandates` there replaces the paragraph derived
+general subclause. A paragraph that should open the subclause ahead of the
+synopsis is marked off with `\synopsis-here`:
+
+```cpp
+//! Subclause \iref{expected.unexpected} describes the class template
+//! `unexpected`.
+//! \synopsis-here
+//! A program that instantiates the definition of `unexpected` for a
+//! non-object type is ill-formed.
+template <class E>
+class unexpected {
+```
+
+The leading paragraphs before the marker render before the class synopsis, and
+the rest of the docblock after it. The marker ends the paragraph in progress,
+comes before the first labelled element, and applies only to a class or
+class-template definition. A separate docblock above the class is not a
+substitute: a lone docblock before a class is that class's own, however many
+blank lines separate them. Where the class's own wording has no synopsis to
+stand ahead of, because `\at` routes it elsewhere or the class is folded into
+a gathered header synopsis, the opening paragraphs lead that wording. An authored `\mandates` there replaces the paragraph derived
 from the class's direct `static_assert`s, under a *Mandates* label. To state
 the requirement as the draft often does, in an unlabelled paragraph of its
 own words, write that paragraph as leading prose and add `\covers mandates P`
