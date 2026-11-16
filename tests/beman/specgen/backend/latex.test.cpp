@@ -675,3 +675,29 @@ TEST_CASE("latex - an elided paragraph is the unnumbered ellipsis") {
         "g.s", "S", {FreeParagraph{{TextInline{"hidden"}}, Change::Elided}, FreeParagraph{{TextInline{"Kept."}}}}});
     CHECK(latex::render_to_string(doc) == "\\rSec3[g.s]{S}\n\n[\\ldots]\n\n\\pnum\nKept.\n");
 }
+
+// A top-level section given its draft number (issue #265) is preceded by the
+// guarded \clausenumber hook; a nested section is not, since the counters
+// carry on from its parent, and a top-level section without a number is
+// untouched. The number reaches each `--split` fragment the same way, because
+// a fragment is rendered as a document of its own. Ported from the second
+// implementation of #265, which never reached main (issue #287).
+TEST_CASE("latex - a numbered top-level section is preceded by the guarded clausenumber hook") {
+    Document doc;
+    doc.nodes.push_back(
+        Section{"func.wrap.move", "Move-only wrapper", {Section{"func.wrap.move.general", "General", {}}}});
+    doc.nodes.push_back(Section{"func.wrap.copy", "Copyable wrapper", {}});
+    const std::string expected = R"(\ifdefined\clausenumber\clausenumber{22.10.17.4}\fi
+\rSec3[func.wrap.move]{Move-only wrapper}
+
+\rSec4[func.wrap.move.general]{General}
+
+\rSec3[func.wrap.copy]{Copyable wrapper}
+)";
+    CHECK(latex::render_to_string(
+              doc, {.base_section_depth = 3, .section_numbers = {{"func.wrap.move", "22.10.17.4"}}}) == expected);
+    // A number for a section nested under the top level numbers nothing.
+    CHECK(latex::render_to_string(
+              doc, {.base_section_depth = 3, .section_numbers = {{"func.wrap.move.general", "22.10.17.4.1"}}})
+              .find("clausenumber") == std::string::npos);
+}

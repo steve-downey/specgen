@@ -442,8 +442,11 @@ std::expected<std::pair<std::string, std::string>, std::string> parse_section_nu
     const auto  digits = [](std::string_view part) {
         return !part.empty() && std::ranges::all_of(part, [](char c) { return c >= '0' && c <= '9'; });
     };
-    if (!std::ranges::all_of(std::views::split(std::string_view(number), '.'),
-                             [&](auto part) { return digits(std::string_view(part.begin(), part.end())); }))
+    // An empty number splits into no parts at all, which every part-wise test
+    // passes, so it is refused by name (issue #287).
+    if (number.empty() || !std::ranges::all_of(std::views::split(std::string_view(number), '.'), [&](auto part) {
+            return digits(std::string_view(part.begin(), part.end()));
+        }))
         return std::unexpected(std::format(
             "specgen: --section-number '{}': '{}' is not a dotted number such as 22.10.17.4", name, number));
     return std::pair{std::move(name), std::move(number)};
@@ -614,6 +617,18 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
                            options.backend);
     if (!options.section_numbers.empty() && options.backend != "latex")
         return std::format("specgen: --section-number applies only to the latex backend, not '{}'", options.backend);
+    // One number per section: the second of two would otherwise be dropped
+    // or win, and either way the author believes something that is not so
+    // (issue #287).
+    {
+        std::vector<std::string_view> names =
+            options.section_numbers | std::views::keys |
+            std::views::transform([](const std::string& name) { return std::string_view(name); }) |
+            std::ranges::to<std::vector>();
+        std::ranges::sort(names);
+        if (const auto twice = std::ranges::adjacent_find(names); twice != names.end())
+            return std::format("specgen: --section-number gives '{}' a number twice", *twice);
+    }
     // Markdown stops at six heading levels. The backend saturates *descent*
     // there, because how deep a document nests is the document's business, but
     // a base is the one level the author chose, and a chosen level that did

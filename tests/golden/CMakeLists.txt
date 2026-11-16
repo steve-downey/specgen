@@ -2974,6 +2974,19 @@ foreach(
     )
 endforeach()
 
+# --section-number at the driver seam (issue #287): one-pass and two-pass
+# agreement, the number in every `--split` fragment, numbered wording diffs
+# through both baseline routes, and the usage errors. See
+# run-section-number.cmake.
+add_test(
+    NAME golden.section_number.driver
+    COMMAND
+        "${CMAKE_COMMAND}" "-DSPECGEN=$<TARGET_FILE:specgen>"
+        "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/section_number.driver" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-section-number.cmake"
+)
+
 # --warnings-as-errors (issue #285): a Warning is what the validator verified,
 # so a build may require a run with none, and a Note is what a person has to
 # check, so it never fails one. Three inputs that already have validate

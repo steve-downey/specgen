@@ -1151,7 +1151,8 @@ environment an unknown number prints as a glyph. The latex backend writes
 the macro itself belongs to the draft macros. This is the one wording form not
 yet in all three backends, because mpark and org have no macro to call; the
 option is a usage error there, not an ignored flag. A name that matches no
-top-level section of what is rendered is an error, the same rule `--root` has.
+top-level section of what is rendered is an error, the same rule `--root` has, as is an
+empty number and a second number for one name (issue #287).
 
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
