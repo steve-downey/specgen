@@ -1617,6 +1617,22 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_code_spans/expected.json"
 )
 
+# An authored header synopsis (issue #284): a detached `\verbatim-synopsis`
+# alone in a `.syn` section is that section's synopsis exactly as written,
+# with no second `namespace std {` around it, and `/// END` closes the
+# section, so the helper after the fence is at the document root and not in
+# the header synopsis's subclause. The IR pins the tree; the LaTeX the text.
+specgen_add_golden(
+    authored_header_synopsis
+    MODE generate
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_authored_header_synopsis.hpp"
+)
+specgen_add_golden(
+    authored_header_synopsis_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/authored_header_synopsis/expected.json"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,

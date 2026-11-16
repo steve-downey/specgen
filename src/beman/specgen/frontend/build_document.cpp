@@ -422,6 +422,15 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         // into that namespace's block, and the blocks open and close in source
         // order, which is what the enclosing `namespace std {` then indents.
         NamespaceRuns runs;
+        // Whether the region holds an authored synopsis and nothing gathered
+        // (issue #284). A detached `\verbatim-synopsis` in an otherwise empty
+        // region *is* the header synopsis, the author's whole text with its
+        // own namespace, as it is in a section of any other name; it used to
+        // be wrapped in a second `namespace std {`. Beside gathered
+        // declarations it stays what it was, a payload appended to their code
+        // inside the one enclosure.
+        bool authored_synopsis = false;
+        bool gathered_code     = false;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -447,6 +456,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // forward declarations) to take that rather than teach
                     // classify where it is being called from.
                     runs.append(std::move(synopsis->synopsis.code), nested);
+                    gathered_code = true;
                     gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                     // The class's routed in-class members ride along. They
                     // are not part of the gathered synopsis -- build_tree
@@ -572,6 +582,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // synopsis, so a masked variable is inside one by
                         // construction, and that is where the mask stopped
                         // being applied.
+                        gathered_code = true;
                         AttachedItem marked;
                         attach_docblock(marked, item.decl, sm);
                         const VariableMask mask =
@@ -606,6 +617,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 continue;
             }
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
+                authored_synopsis = authored_synopsis || synopsis->exact;
+                gathered_code     = gathered_code || !synopsis->exact;
                 runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                 continue;
@@ -634,11 +647,30 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     break;
                 line_begin = newline + 1;
             }
+            gathered_code = gathered_code || !refs.empty();
             runs.append_comment(header_comment_code(std::move(refs)));
         }
         gathered.synopsis.code = runs.finish();
+        // An authored-only region is not a gathered one: it is the section it
+        // would be under any other name, so its synopsis is left exactly as
+        // written and its fence closes it (design §3.2). A helper written
+        // after `/// END [x.syn]` then returns to the enclosing frame instead
+        // of landing in the header synopsis's fragment. The gatherer consumed
+        // the fence, so the close is pushed here. A gathered region's fence
+        // only bounds the gather, as it always has: headers nest their class
+        // subclauses beneath a gathered `.syn` section, and closing it would
+        // lift every one of them out.
+        const bool authored_only = authored_synopsis && !gathered_code;
+        gathered.exact           = authored_only;
         events.push_back(std::move(gathered));
         events.append_range(std::move(extras));
+        if (authored_only) {
+            const RawItem& closer       = raw_items[*close_index];
+            const unsigned fence_offset = closer.offset + static_cast<unsigned>(close->line_begin);
+            const auto [file, local]    = doc.locate(fence_offset);
+            events.push_back(
+                db::SectionClose{header->stable, sm.getLineNumber(file, local), diagnostic_file_name(sm, file)});
+        }
         i = *close_index + 1;
     }
 

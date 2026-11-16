@@ -189,7 +189,8 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   clauses stay out of the preceding clause's fragment. A mismatched fence or one with no
   section open reports a Warning and leaves the tree unchanged. A `.syn` fence is instead
   consumed by the bounded header-synopsis gatherer below; it does not produce a second close
-  event or diagnostic.
+  event or diagnostic. The one `.syn` fence that does close its section is an authored
+  region's (§3.4, issue #284), which is not gathered at all.
 
 ### 3.3 Redeclaration-chain attachment
 
@@ -316,6 +317,18 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   the route was asked for — without it a typo loses the wording as silently as not routing it
   at all did, and a namespace entity has no other roster entry to be caught by. A missing or mismatched
   fence warns and does not consume later sections.
+- **An authored header synopsis is not a gathered one** (issue #284). A `.syn` region that
+  holds a detached `\verbatim-synopsis` and gathers nothing -- no declaration, no `\ref`
+  header -- is the section it would be under any other name: the block is the section's
+  synopsis exactly as written, its own namespace included, and the fence closes the section,
+  so a helper after it returns to the enclosing frame. The name alone used to turn the
+  gatherer on, which wrapped the block in a second `namespace std {` and left the section
+  open across its fence. A gathered region cannot stand in for this: it folds a class's
+  whole synopsis into the header synopsis, where [expected.syn] has a forward declaration
+  and the class synopsis is in the class's subclause. Beside gathered declarations a
+  `\verbatim-synopsis` payload is still appended to their code inside the one enclosure,
+  and a gathered region's fence still only bounds the gather: headers nest their class
+  subclauses beneath a gathered `.syn` section, and closing it would lift them out.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
   definition. Neither status enters the IR as metadata; after extraction it is ordinary

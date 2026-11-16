@@ -688,6 +688,28 @@ placement. Closing a nested section resumes its parent; closing a top-level
 section resumes the document root. The same spelling bounds a gathered `.syn`
 region, as described below; that fence is consumed by the gatherer.
 
+A header synopsis can also be authored instead of gathered. A `.syn` section
+that holds a detached `\verbatim-synopsis` and no declarations is an ordinary
+section: the block is its synopsis exactly as written, and the fence closes it
+as it would a section of any other name.
+
+```cpp
+// \rSec2[expected.syn]{Header `<expected>` synopsis}
+
+//! \verbatim-synopsis
+//! namespace std {
+//!   // \ref{expected.expected}, class template expected
+//!   template<class T, class E> class expected;
+//! }
+
+/// END [expected.syn]
+```
+
+This is the form for a header whose content is classes: a gathered region
+folds each class's whole synopsis into the header synopsis, where the draft
+writes a forward declaration there and the class synopsis in the class's own
+subclause.
+
 Inside a class, a draft-form group header routes the documented in-class
 members that follow it to the section with the matching stable name:
 
@@ -1170,7 +1192,9 @@ wording follows [structure.specifications].
   roster, and routing are processed as usual, including the
   `namespace std {` enclosure that every synopsis receives. Detached, the block
   stands alone as an anonymous synopsis and is left exactly as written, so it
-  must supply its own namespace.
+  must supply its own namespace. That holds in a `.syn` section too, when the
+  block is all the section contains; beside gathered declarations it is
+  appended to their code, inside the enclosure they share.
 - `\verbatim-itemdecl` is terminal. Authored elements before it remain the item
   description; all following decorated lines form one exact item declaration,
   free of spans. Multiple declaration lines are not split, parsed, formatted,
