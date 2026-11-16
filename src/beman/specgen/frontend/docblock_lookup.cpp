@@ -19,6 +19,8 @@
 #include <llvm/ADT/StringRef.h>
 
 #include <cstddef>
+#include <iterator>
+#include <map>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -121,7 +123,42 @@ docblock_diagnostics(const clang::RawComment*                rc,
 
 const clang::RawComment* attached_raw_comment(const clang::Decl* decl) {
     const clang::TemplateDecl* described = decl->getDescribedTemplate();
-    return decl->getASTContext().getRawCommentNoCache(described != nullptr ? described : decl);
+    const clang::Decl*         target    = described != nullptr ? described : decl;
+    const clang::ASTContext&   ctx       = decl->getASTContext();
+    const clang::RawComment*   found     = ctx.getRawCommentNoCache(target);
+    if (found == nullptr || !found->isTrailingComment())
+        return found;
+
+    // A comment after the declaration, on its line (issue #296). Clang's
+    // search looks behind the declaration first and takes a trailing comment
+    // there in preference to the one before it; under -fparse-all-comments an
+    // ordinary comment that follows code on its line is trailing, so
+    // `int size_ = 0; // a note` made the note the member's comment and the
+    // `//! \expos` above it was never read. Markup is what this lookup is
+    // for, so a trailing comment that carries none gives way to a docblock
+    // before the declaration, found by Clang's own rule for that half of the
+    // search: the last comment that ends before the declaration, with none of
+    // `;{}#@` between them.
+    const clang::SourceManager& sm = ctx.getSourceManager();
+    if (is_docblock_comment(found->getRawText(sm)))
+        return found;
+    const clang::SourceLocation begin = sm.getFileLoc(target->getBeginLoc());
+    if (begin.isInvalid())
+        return found;
+    const std::map<unsigned, clang::RawComment*>* comments = file_comments(ctx, sm, begin);
+    if (comments == nullptr)
+        return found;
+    const auto [file, decl_begin] = sm.getDecomposedLoc(begin);
+    const auto after              = comments->lower_bound(decl_begin);
+    if (after == comments->begin())
+        return found;
+    const clang::RawComment* before = std::prev(after)->second;
+    const llvm::StringRef    raw    = before->getRawText(sm);
+    const unsigned           end    = std::prev(after)->first + static_cast<unsigned>(raw.size());
+    if (end > decl_begin || !is_docblock_comment(raw))
+        return found;
+    const llvm::StringRef between = sm.getBufferData(file).slice(end, decl_begin);
+    return between.find_first_of(";{}#@") == llvm::StringRef::npos ? before : found;
 }
 
 bool has_docblock(const clang::Decl* decl, const clang::SourceManager& sm) {
@@ -186,6 +223,7 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
         out.descr                 = std::move(lowered.descr);
         out.as_draft              = lowered.directives.asdraft;
         out.synopsis_as_draft     = lowered.directives.asdraft_synopsis;
+        out.synopsis_here         = lowered.directives.synopsis_here;
         out.covers                = std::move(lowered.inherited_covers);
     }
 

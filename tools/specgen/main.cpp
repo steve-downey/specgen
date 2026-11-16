@@ -442,8 +442,11 @@ std::expected<std::pair<std::string, std::string>, std::string> parse_section_nu
     const auto  digits = [](std::string_view part) {
         return !part.empty() && std::ranges::all_of(part, [](char c) { return c >= '0' && c <= '9'; });
     };
-    if (!std::ranges::all_of(std::views::split(std::string_view(number), '.'),
-                             [&](auto part) { return digits(std::string_view(part.begin(), part.end())); }))
+    // An empty number splits into no parts at all, which every part-wise test
+    // passes, so it is refused by name (issue #287).
+    if (number.empty() || !std::ranges::all_of(std::views::split(std::string_view(number), '.'), [&](auto part) {
+            return digits(std::string_view(part.begin(), part.end()));
+        }))
         return std::unexpected(std::format(
             "specgen: --section-number '{}': '{}' is not a dotted number such as 22.10.17.4", name, number));
     return std::pair{std::move(name), std::move(number)};
@@ -614,6 +617,18 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
                            options.backend);
     if (!options.section_numbers.empty() && options.backend != "latex")
         return std::format("specgen: --section-number applies only to the latex backend, not '{}'", options.backend);
+    // One number per section: the second of two would otherwise be dropped
+    // or win, and either way the author believes something that is not so
+    // (issue #287).
+    {
+        std::vector<std::string_view> names =
+            options.section_numbers | std::views::keys |
+            std::views::transform([](const std::string& name) { return std::string_view(name); }) |
+            std::ranges::to<std::vector>();
+        std::ranges::sort(names);
+        if (const auto twice = std::ranges::adjacent_find(names); twice != names.end())
+            return std::format("specgen: --section-number gives '{}' a number twice", *twice);
+    }
     // Markdown stops at six heading levels. The backend saturates *descent*
     // there, because how deep a document nests is the document's business, but
     // a base is the one level the author chose, and a chosen level that did
@@ -747,11 +762,15 @@ std::string render_wording(const ir::Document& fragment, const WordingOptions& o
          .section_numbers    = options.section_numbers});
 }
 
-// A `--section-number` that names no top-level section of what is being
-// rendered is a typo, or a section the diff dropped; either way the number
-// would silently go nowhere, which is the mistake this option exists to
-// prevent. Fragments are cut at top-level sections, so the documents' own top
-// level is what is looked at.
+// A `--section-number` that names no top-level section of the paper is a
+// typo: the number would silently go nowhere, which is the mistake this
+// option exists to prevent. Fragments are cut at top-level sections, so the
+// documents' own top level is what is looked at.
+//
+// The paper, not the output (issue #287): the documents are checked as they
+// came, before a wording diff drops the sections that did not change. A
+// section's number is a fact about the paper, and a build that lists every
+// section's would otherwise fail on the day one of them stops changing.
 std::optional<std::string> unmatched_section_number(std::span<const ir::Document> documents,
                                                     const WordingOptions&         options) {
     const auto matched = [&](const std::string& name) {
@@ -766,8 +785,7 @@ std::optional<std::string> unmatched_section_number(std::span<const ir::Document
         std::ranges::find_if(options.section_numbers, [&](const auto& entry) { return !matched(entry.first); });
     if (missing == options.section_numbers.end())
         return std::nullopt;
-    return std::format("specgen: --section-number names '{}', which is not a top-level section of the output",
-                       missing->first);
+    return std::format("specgen: --section-number names '{}', which is not a top-level section", missing->first);
 }
 
 // The extension is the only part of design §8's fragment-path scheme
@@ -939,7 +957,7 @@ emit_wording(const ir::Document& document, const WordingOptions& options, const 
         })
         .and_then([&](const std::optional<ir::Document>& marked) -> std::expected<Written, std::string> {
             const ir::Document& rendered = marked ? *marked : document;
-            if (const auto error = unmatched_section_number(std::span(&rendered, 1), options))
+            if (const auto error = unmatched_section_number(std::span(&document, 1), options))
                 return std::unexpected(*error);
             return (wants_whole(options) ? write_whole(render_wording(rendered, options), options)
                                          : std::expected<Written, std::string>{Written{}})
@@ -1046,7 +1064,7 @@ std::expected<Written, std::string> emit_paper(const std::vector<std::string>&  
         .and_then([&] { return diffed_all(baselines, current, options); })
         .and_then([&](const std::optional<std::vector<ir::Document>>& marked) -> std::expected<Written, std::string> {
             const std::vector<ir::Document>& documents = marked ? *marked : current;
-            if (const auto error = unmatched_section_number(documents, options))
+            if (const auto error = unmatched_section_number(current, options))
                 return std::unexpected(*error);
             // The whole paper is its documents rendered in order and joined by a blank
             // line. That is the same text `--split` would write, in the same order,

@@ -1030,6 +1030,24 @@ ParseResult parse_docblock(std::string_view raw) {
                 block.verbatim_itemdecl =
                     lines | std::views::drop(i + 1) | std::views::join_with('\n') | std::ranges::to<std::string>();
                 break;
+            } else if (name == "synopsis-here") {
+                // Where the synopsis stands among a class's leading
+                // paragraphs (issue #292): the blocks so far precede it. It
+                // ends the paragraph in progress, as a blank line would, and
+                // has nothing to divide once a labelled element has begun.
+                flush_item();
+                flush_paragraph();
+                if (current_element() != nullptr || informative != nullptr)
+                    diags.push_back({Severity::Error,
+                                     lineno,
+                                     "\\synopsis-here divides the leading paragraphs, so it comes before the "
+                                     "first labelled element"});
+                else if (block.markers.synopsis_here)
+                    diags.push_back({Severity::Warning, lineno, "duplicate \\synopsis-here marker"});
+                else
+                    block.markers.synopsis_here = block.leading.size();
+                if (!trim(after).empty())
+                    diags.push_back({Severity::Warning, lineno, "trailing text after \\synopsis-here ignored"});
             } else if (const MarkerInfo* info = find_marker(name)) {
                 flush_item();
                 flush_paragraph();

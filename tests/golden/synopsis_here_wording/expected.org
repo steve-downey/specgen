@@ -1,0 +1,98 @@
+** Class template holder [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.holder][@@html:[demo.holder]@@@@latex:{[}demo.holder{]}@@]]) describes the class template ~holder~.
+#+end_pnum
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class holder {};
+}
+#+end_codeblock
+
+#+begin_pnum
+A program that instantiates the definition of ~holder~ for a non-object type is ill-formed.
+#+end_pnum
+
+
+** Class template plain [demo.plain]
+:PROPERTIES:
+:CUSTOM_ID: demo.plain
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.plain][@@html:[demo.plain]@@@@latex:{[}demo.plain{]}@@]]) describes the class template ~plain~.
+#+end_pnum
+
+#+begin_pnum
+It holds nothing.
+#+end_pnum
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class plain {};
+}
+#+end_codeblock
+
+#+begin_pnum
+A program that instantiates ~plain<E>~ is ill-formed unless ~is_object_like<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A ~plain~ is trivially copyable.
+#+end_pnum
+
+** Class template late [demo.late]
+:PROPERTIES:
+:CUSTOM_ID: demo.late
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class late {};
+}
+#+end_codeblock
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.late][@@html:[demo.late]@@@@latex:{[}demo.late{]}@@]]) describes the class template ~late~.
+#+end_pnum
+
+** Class template routed [demo.routed]
+:PROPERTIES:
+:CUSTOM_ID: demo.routed
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class E>
+  class routed {};
+}
+#+end_codeblock
+
+*** General [demo.routed.general]
+:PROPERTIES:
+:CUSTOM_ID: demo.routed.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+Subclause ([[https://eel.is/c++draft/demo.routed][@@html:[demo.routed]@@@@latex:{[}demo.routed{]}@@]]) describes the class template ~routed~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A ~routed~ is described in its general subclause.
+#+end_pnum

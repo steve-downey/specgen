@@ -484,6 +484,10 @@ void attach_docblock(AttachedItem& attached, const clang::Decl* decl, const clan
         attached.diagnostics.push_back({beman::specgen::Severity::Error,
                                         attached.grouping_line,
                                         "\\asdraft-synopsis applies to a class or class template definition"});
+    if (attached.directives.synopsis_here && attached.grouping_line > 0)
+        attached.diagnostics.push_back({beman::specgen::Severity::Error,
+                                        attached.grouping_line,
+                                        "\\synopsis-here applies to a class or class template definition"});
     if (attached.directives.verbatim_synopsis && attached.grouping_line > 0)
         // The synopsis form belongs on a class definition; on anything an
         // AttachedItem renders it would vanish silently, and silence is the
@@ -551,6 +555,13 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                     {beman::specgen::Severity::Error,
                      0,
                      "\\asdraft-synopsis applies to a class or class template definition"}};
+                attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
+            }
+            if (attached.directives.synopsis_here) {
+                const std::vector<grammar::Diagnostic> invalid{
+                    {beman::specgen::Severity::Error,
+                     0,
+                     "\\synopsis-here applies to a class or class template definition"}};
                 attached.diagnostics.append_range(docblock_diagnostics(rc, *start, invalid, sm));
             }
             if (attached.directives.verbatim_synopsis) {

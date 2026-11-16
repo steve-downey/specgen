@@ -1,0 +1,63 @@
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{range}@ {
+  public:
+    // \ref{demo.range.iter}, class range::iterator
+    class iterator {
+    public:
+      void advance();
+
+      int get() const;
+
+      void reset(double) = delete;
+
+      class cursor {
+      public:
+        int at() const;
+      };
+
+    private:
+      int steps_ = 0;
+    };
+
+    class @\exposidnc{sentinel}@ {
+    public:
+      bool reached() const;
+    }; // exposition only
+
+    // \ref{demo.range.obs}, observers
+    iterator begin() const;
+  };
+}
+\end{codeblock}
+
+\rSec3[demo.range.iter]{Class range::iterator}
+
+\indexlibrarymember{advance}{iterator}%
+\begin{itemdecl}
+void advance();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{steppable<T>} is \tcode{true}.
+
+\pnum
+\effects
+Advances the iterator by one step.
+\end{itemdescr}
+
+\rSec3[demo.range.obs]{Observers}
+
+\indexlibrarymember{begin}{range}%
+\begin{itemdecl}
+iterator begin() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+An iterator to the first element.
+\end{itemdescr}

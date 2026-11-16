@@ -949,3 +949,38 @@ TEST_CASE("docblock - asdraft takes the description, so it excludes omit, merge 
         CHECK_FALSE(parse_docblock(std::string("\\asdraft\n") + marker).ok());
     }
 }
+
+TEST_CASE("docblock - synopsis-here records how many leading blocks come before it") {
+    // The marker divides the leading paragraphs (issue #292): its payload is
+    // its position, and it ends the paragraph in progress as a blank line does.
+    auto r = parse_docblock("//! Opens the subclause.\n"
+                            "//!\n"
+                            "//! Still before the synopsis.\n"
+                            "//! \\synopsis-here\n"
+                            "//! After the synopsis.\n"
+                            "//! \\remarks And so is this.\n");
+    CHECK(r.diags.empty());
+    REQUIRE(r.block.markers.synopsis_here.has_value());
+    CHECK(*r.block.markers.synopsis_here == 2);
+    CHECK(r.block.leading.size() == 3);
+    CHECK(r.block.elements.size() == 1);
+
+    // Without it nothing is recorded, and at the very top nothing precedes it.
+    CHECK_FALSE(parse_docblock("//! Prose.\n").block.markers.synopsis_here.has_value());
+    auto first = parse_docblock("//! \\synopsis-here\n//! Prose.\n");
+    REQUIRE(first.block.markers.synopsis_here.has_value());
+    CHECK(*first.block.markers.synopsis_here == 0);
+
+    // After a labelled element there is nothing left to divide.
+    auto late = parse_docblock("//! \\remarks Something.\n//! \\synopsis-here\n");
+    CHECK_FALSE(late.block.markers.synopsis_here.has_value());
+    REQUIRE(late.diags.size() == 1);
+    CHECK(late.diags.front().severity == beman::specgen::Severity::Error);
+
+    // A second one is reported, and the first stands.
+    auto twice = parse_docblock("//! One.\n//! \\synopsis-here\n//! Two.\n//! \\synopsis-here\n");
+    REQUIRE(twice.block.markers.synopsis_here.has_value());
+    CHECK(*twice.block.markers.synopsis_here == 1);
+    REQUIRE(twice.diags.size() == 1);
+    CHECK(twice.diags.front().severity == beman::specgen::Severity::Warning);
+}

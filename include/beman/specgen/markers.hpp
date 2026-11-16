@@ -16,6 +16,7 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <array>
+#include <cstddef>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -49,6 +50,11 @@ struct Markers {
     // On a class: the synopsis is the baseline's too, patched to agree with
     // the class's declarations (synopsis_check.hpp).
     bool asdraft_synopsis = false;
+    // On a class: where the synopsis stands among the docblock's leading
+    // paragraphs (issue #292). The value is how many leading blocks come
+    // before the marker, and so before the synopsis; the rest of the
+    // docblock follows it, as the whole of it does without the marker.
+    std::optional<std::size_t> synopsis_here;
 
     // Itemdecl rendering.
     bool                       constraints_in_decl = false;
@@ -149,6 +155,9 @@ inline constexpr MarkerInfo kMarkers[] = {
     {.spelling = "verbatim-synopsis",    .flag = &Markers::verbatim_synopsis},
     {.spelling = "specified",            .flag = &Markers::specified},
     {.spelling = "verbatim-itemdecl"},
+    // Positional: its place among the leading paragraphs is the payload, so
+    // the grammar handles it directly, like verbatim-itemdecl.
+    {.spelling = "synopsis-here"},
     // Element-scoped validator metadata, parsed directly like verbatim-itemdecl.
     {.spelling = "covers",
      .arity = MarkerArity::RestRequired,

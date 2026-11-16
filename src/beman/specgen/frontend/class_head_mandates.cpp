@@ -32,7 +32,9 @@
 #include <llvm/Support/Casting.h>
 
 #include <algorithm>
+#include <cstddef>
 #include <format>
+#include <iterator>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -149,6 +151,16 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
     // Within the class's own wording, uses of its exposition-only members
     // render as \exposid -- the same rewrite a member's description gets.
     rewrite_prose_expos(out.descr, expos_spellings(record, expos_set), taken_names(record, expos_set));
+    // `\synopsis-here` (issue #292): the leading paragraphs ahead of the
+    // marker open the subclause before the synopsis, and leave the
+    // description. Split after the rewrite above, which both halves want, and
+    // before anything below asks what the description's own prose is.
+    if (block.synopsis_here) {
+        const auto split = out.descr.leading.begin() +
+                           static_cast<std::ptrdiff_t>(std::min(*block.synopsis_here, out.descr.leading.size()));
+        out.opening.assign(std::make_move_iterator(out.descr.leading.begin()), std::make_move_iterator(split));
+        out.descr.leading.erase(out.descr.leading.begin(), split);
+    }
 
     // `\covers <element> P` beside `\asdraft` is a claim about the inherited
     // description, resolved later (inherit.hpp). Without `\asdraft` it is the
@@ -222,13 +234,22 @@ void route_class_description(beman::specgen::document_build::SynopsisDecl&   out
 
     if (!directives.at_anchor || directives.at_anchor->empty())
         return;
-    if (!out.general && !beman::specgen::ir::has_description(out.descr) && !out.descr_as_draft)
+    if (out.opening.empty() && !out.general && !beman::specgen::ir::has_description(out.descr) && !out.descr_as_draft)
         return;
 
     const std::string name = record->getNameAsString();
     out.synopsis.roster.push_back(
         ir::SynopsisEntry{name, ir::Disposition::Routed, *directives.at_anchor, ir::MemberKind::Function, name});
 
+    // Routed, there is no synopsis for the opening prose to stand ahead of,
+    // so it leads the class's own nodes in the section they go to.
+    if (!out.opening.empty()) {
+        out.pending.push_back(
+            db::PendingItem{*directives.at_anchor,
+                            out.offset,
+                            ir::SpecItem{{}, ir::ItemDescr{.elements = {}, .leading = std::move(out.opening)}}});
+        out.opening.clear();
+    }
     if (out.general) {
         out.pending.push_back(db::PendingItem{*directives.at_anchor, out.offset, std::move(*out.general)});
         out.general.reset();

@@ -39,6 +39,10 @@
 (setq org-src-preserve-indentation t)
 (setq org-startup-folded nil)
 (setq org-startup-truncated nil)
+;; A capture is shown byte for byte. With tabs allowed, org re-indents a
+;; source block's lines on export and turns each leading run of eight spaces
+;; into a tab, which rewrote the help text and the JSON this document embeds.
+(setq-default indent-tabs-mode nil)
 
 ;; ox-gfm always fences a source block with three backticks. The transcluded
 ;; mpark outputs are markdown that carries its own ``` fences, so the outer
@@ -59,5 +63,25 @@
       (concat fence lang "\n" code fence))))
 
 (advice-add 'org-gfm-src-block :override #'specgen--gfm-src-block)
+
+;; A transcluded capture is source to show, not org to interpret. Inside a
+;; source block org takes a line that starts with `*' as a headline and one
+;; that starts with `#+' as a keyword unless it is comma-escaped, and
+;; org-transclusion wraps the file's text in the block as it is. The org
+;; captures have both, so their block ended at the first headline, the rest of
+;; the capture was exported as if it were part of this document, and once a
+;; capture carried wg21org's `[[delete:][...]]' change links the export
+;; stopped altogether on a link it could not resolve (issue #294). Escaping
+;; the text on its way in keeps the block whole; org removes the commas again
+;; when it exports a source block, so what is shown is the capture's own text.
+(defun specgen--escape-transcluded-source (payload)
+  "Comma-escape the :src-content of PAYLOAD, a transclusion's content plist."
+  (let ((content (plist-get payload :src-content)))
+    (if (stringp content)
+        (plist-put payload :src-content (org-escape-code-in-string content))
+      payload)))
+
+(advice-add 'org-transclusion-content-range-of-lines
+            :filter-return #'specgen--escape-transcluded-source)
 
 ;;; init.el ends here

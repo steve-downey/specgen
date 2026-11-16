@@ -1692,6 +1692,68 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_comments/expected.json"
 )
 
+# A plain comment after a declaration, on its line, does not displace the
+# docblock above it (issue #296): Clang prefers a trailing comment to the one
+# before the declaration, which lost every marker an in-class declaration
+# carries -- `\expos`, `\omit`, `\seebelow`, `\freestanding` -- and a hidden
+# friend's description, without a finding. The LaTeX render shows each one
+# taking effect.
+specgen_add_golden(
+    trailing_comment_docblock
+    MODE generate
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_trailing_comment_docblock.hpp"
+)
+specgen_add_golden(
+    trailing_comment_docblock_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/trailing_comment_docblock/expected.json"
+)
+
+# A nested class's function members follow the synopsis rules a direct member
+# follows (issue #298): the requires-clause its item declaration states as
+# *Constraints* is gone, an in-class body is spliced, an `\omit`ted member is
+# gone, and a deleted tail reads `= delete;`. At any depth, and for an
+# exposition-only nested class shown as a definition.
+specgen_add_golden(
+    nested_class_members
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_class_members.hpp"
+)
+specgen_add_golden(
+    nested_class_members_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_class_members/expected.json"
+)
+
+# `\synopsis-here` (issue #292): the paragraphs of a class's docblock before
+# the marker open the subclause ahead of the class synopsis, and the rest
+# follows it, which is [expected.un.general]'s shape. With `\at`, where there
+# is no synopsis to stand ahead of, the opening prose leads the class's nodes
+# in the section they are routed to. Rendered through all three backends: the
+# order of nodes is theirs to carry.
+specgen_add_golden(
+    synopsis_here
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_here.hpp"
+)
+specgen_add_golden(
+    synopsis_here_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_here/expected.json"
+)
+foreach(backend mpark org)
+    specgen_add_golden(
+        synopsis_here_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_here/expected.json"
+    )
+endforeach()
+# The marker misplaced: after an element, twice, with text after it, and on a
+# function.
+specgen_add_golden(
+    synopsis_here_diagnostics
+    MODE diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_here_diagnostics.hpp"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(
@@ -2941,6 +3003,19 @@ foreach(
         PROPERTIES PASS_REGULAR_EXPRESSION "${refusal_message}"
     )
 endforeach()
+
+# --section-number at the driver seam (issue #287): one-pass and two-pass
+# agreement, the number in every `--split` fragment, numbered wording diffs
+# through both baseline routes, a number for a section the diff leaves out,
+# and the usage errors. See run-section-number.cmake.
+add_test(
+    NAME golden.section_number.driver
+    COMMAND
+        "${CMAKE_COMMAND}" "-DSPECGEN=$<TARGET_FILE:specgen>"
+        "-DSOURCE_DIR=${PROJECT_SOURCE_DIR}"
+        "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/section_number.driver" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-section-number.cmake"
+)
 
 # --warnings-as-errors (issue #285): a Warning is what the validator verified,
 # so a build may require a run with none, and a Note is what a person has to

@@ -1,0 +1,4 @@
+spec_synopsis_here_diagnostics.hpp:20: error: \synopsis-here divides the leading paragraphs, so it comes before the first labelled element
+spec_synopsis_here_diagnostics.hpp:25: warning: duplicate \synopsis-here marker
+spec_synopsis_here_diagnostics.hpp:29: warning: trailing text after \synopsis-here ignored
+spec_synopsis_here_diagnostics.hpp:32: error: \synopsis-here applies to a class or class template definition

@@ -1,0 +1,67 @@
+\rSec3[demo.holder]{Class template holder}
+
+\pnum
+Subclause \iref{demo.holder} describes the class template \tcode{holder}.
+
+\begin{codeblock}
+namespace std {
+  template<class E>
+  class @\libglobal{holder}@ {};
+}
+\end{codeblock}
+
+\pnum
+A program that instantiates the definition of \tcode{holder} for a non-object type is ill-formed.
+
+
+\rSec3[demo.plain]{Class template plain}
+
+\pnum
+Subclause \iref{demo.plain} describes the class template \tcode{plain}.
+
+\pnum
+It holds nothing.
+
+\begin{codeblock}
+namespace std {
+  template<class E>
+  class @\libglobal{plain}@ {};
+}
+\end{codeblock}
+
+\pnum
+A program that instantiates \tcode{plain<E>} is ill-formed unless \tcode{is_object_like<E>} is \tcode{true}.
+
+\pnum
+\remarks
+A \tcode{plain} is trivially copyable.
+
+\rSec3[demo.late]{Class template late}
+
+\begin{codeblock}
+namespace std {
+  template<class E>
+  class @\libglobal{late}@ {};
+}
+\end{codeblock}
+
+\pnum
+Subclause \iref{demo.late} describes the class template \tcode{late}.
+
+\rSec3[demo.routed]{Class template routed}
+
+\begin{codeblock}
+namespace std {
+  template<class E>
+  class @\libglobal{routed}@ {};
+}
+\end{codeblock}
+
+\rSec4[demo.routed.general]{General}
+
+\pnum
+Subclause \iref{demo.routed} describes the class template \tcode{routed}.
+
+\pnum
+\remarks
+A \tcode{routed} is described in its general subclause.

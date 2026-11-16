@@ -145,6 +145,16 @@ than leaving a paper silently stale.
   one of `;{}#@` — which a requires-expression in a template-head constraint places between
   the header and the name, so a lookup through the templated decl would silently lose the
   docblock (issue #20).
+- **A trailing plain comment does not displace a docblock** (issue #296). Clang's search
+  looks behind a declaration before it looks ahead of it, and under `-fparse-all-comments` an
+  ordinary comment that follows code on its line is a trailing comment, so
+  `int size_ = 0; // a note` made the note the member's comment and the `//! \expos` above it
+  was never read: every marker an in-class declaration carries, and a hidden friend's whole
+  description, lost without a finding. `attached_raw_comment` takes Clang's answer except
+  there: a trailing comment that carries no markup gives way to a docblock directly before
+  the declaration, found by Clang's own rule for that half of the search (the last comment
+  ending before the declaration, with none of `;{}#@` between). A trailing comment that *is*
+  markup is still the declaration's.
 - The preprocessor's **skipped ranges are recorded** during the parse, so extraction (§4.2)
   can resolve conditional compilation down to the branch Clang selected.
 
@@ -293,6 +303,17 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   `//! \merge`. A nested class owns its own group headers. The liveness test is AST-based, so
   a group containing only declarations in an inactive preprocessor branch is out of scope for
   this rule.
+- **A nested class's function members follow the per-function rules** (issue #298). A named
+  nested class that stays in the synopsis as a definition is not flattened, and its text
+  used to be carried as written: a nested member kept its body, its `\omit`ted declaration,
+  its deleted tail's message, and the requires-clause its own item declaration states as
+  *Constraints* (§5.1). The rules that are about one function and nothing around it now
+  apply at any depth, by the same edits the member walk makes: `\omit`/`\merge`/`\elsewhere`
+  removes the declaration, a clause in `build_constraints_stated` is removed, a body is
+  spliced to `;`, a deleted tail reads `= delete;`. An exposition-only nested class shown as
+  a definition is on the same path. Access labels, `\ref` groups and the private-member
+  rule stay the enclosing class's alone: a nested class owns its own group headers and has
+  no roster of its own, so an unmarked private member of one is still printed.
 - **Direct class-scope `static_assert`s are general wording.** They are removed from the
   class synopsis regardless of access; their conditions become an adjacent paragraph per §5.2.
   Assertions in a nested class belong to that nested class.
@@ -767,6 +788,21 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   declares as deleted. The two are distinct flags because [lib-intro] gives the comments
   distinct meanings. Either marker may live on an out-of-line definition even though the
   suffix is emitted on the earlier in-class declaration (§3.4).
+- `\synopsis-here` — on a class definition's own docblock: where the class synopsis stands
+  among the leading paragraphs (issue #292). All of a class's own wording used to follow
+  its synopsis, and the draft does not always order a general subclause so:
+  [expected.un.general] opens with a paragraph, then the synopsis, then the "is ill-formed"
+  paragraph. The marker is positional, so the grammar handles it directly, like
+  `\verbatim-itemdecl`: `Markers::synopsis_here` is the number of leading blocks before it.
+  It ends the paragraph in progress, is an Error after a labelled element, a Warning when
+  repeated, and an Error off a class. `attach_class_description` moves those blocks out of
+  the description into `SynopsisDecl::opening`, which `build_tree` pushes ahead of the
+  synopsis at the same placement key as a signatureless `SpecItem`, the node kind detached
+  section prose already is, so it takes every wording check and needs nothing of a backend
+  (§6). Where there is no synopsis to stand ahead of, because `\at` routed the class's
+  wording or the class is folded into a gathered region, the opening prose leads the
+  class's own nodes. A detached block is not a substitute: Clang attaches a lone comment
+  before a class to that class across any number of blank lines.
 - `\specified` — on a `namespace`: its declarations render inside it rather than flattened
   into the enclosing one (§3.5, issue #209). The only marker a namespace takes, and it takes
   nothing else beside it; on anything but a namespace it is an Error.
@@ -924,7 +960,9 @@ A class or class-template **definition**'s own docblock describes the *type*. It
 description elements become a **description-only item** — an ItemDescr carrying no
 ItemDecl — placed immediately after the class synopsis and after the derived
 class-scope paragraph of §5.2, in the same frame and at the same placement key, so
-the three stay together through the placement sort and through a `--split`. An `\at`
+the three stay together through the placement sort and through a `--split`. The
+leading paragraphs ahead of a `\synopsis-here` marker (§4.3) are a fourth node, placed
+ahead of the synopsis at that same key. An `\at`
 on that docblock sends both of the class's own nodes — the derived paragraph and this
 item, in that order — to the section it names instead, keyed by the class's own offset,
 which is the same route an in-class member and a folded-in namespace entity already take
@@ -1130,7 +1168,11 @@ environment an unknown number prints as a glyph. The latex backend writes
 the macro itself belongs to the draft macros. This is the one wording form not
 yet in all three backends, because mpark and org have no macro to call; the
 option is a usage error there, not an ignored flag. A name that matches no
-top-level section of what is rendered is an error, the same rule `--root` has.
+top-level section of the paper is an error, as is an empty number and a second number for
+one name. The name is checked against the documents as they came, before a wording diff
+drops the sections that did not change (issue #287): a section's number is a fact about the
+paper, so a build may list every section's and keep working when one stops changing. The
+number of a section the diff leaves out is simply not written.
 
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
@@ -1480,6 +1522,15 @@ input, so older readers cannot silently discard coverage claims.
   diagnostics capture runs from the header's own directory and the fragment splits run from
   inside their output directory with a relative `--split wording`. Captures are regenerated
   from a non-sanitizer build and committed.
+  The document's checked-in GFM export, `docs/examples.md`, embeds every file the document
+  transcludes, and `examples.export.current` checks that it embeds their current text, byte
+  for byte, without needing the Emacs that exporting does (issue #294). The export had
+  fallen several releases behind unnoticed, and had stopped working: org-transclusion
+  wraps a file's text in a source block as it is, so an org capture's first headline ended
+  its block and the rest was exported as part of the document, until a capture with
+  wg21org's change links made the export fail on a link it could not resolve. The export
+  setup now comma-escapes transcluded text on the way in, which org removes again when it
+  exports the block.
 - **Acid test (draft)**: reverse-engineer [optional] into a Beman-style header;
   diff generated LaTeX against the std source. The residual diff enumerates
   missing markers and tunes the FormatStyle. The measurement against the untouched upstream
