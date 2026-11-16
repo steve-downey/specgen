@@ -1,0 +1,108 @@
+\begin{codeblock}
+namespace std {
+  class @\libglobal{cursor}@ {
+  public:
+    // \ref{cursor.obs}, observers
+    bool empty() const;
+    int get() const;
+    int twice() const;
+    int size() const;
+    int count() const;
+    bool more() const;
+
+    // \ref{cursor.mod}, modifiers
+    void rebind(int value);
+
+  private:
+    int @\exposidnc{value}@ = 0;         // exposition only
+    int* @\exposidnc{ptr}@ = nullptr;    // exposition only
+    bool @\exposidnc{has-next}@ = false; // exposition only
+    int @\exposidnc{count}@ = 0;         // exposition only
+  };
+}
+\end{codeblock}
+
+\rSec3[cursor.obs]{Observers}
+
+\indexlibrarymember{empty}{cursor}%
+\begin{itemdecl}
+bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\exposid{value}.
+\end{itemdescr}
+
+\indexlibrarymember{get}{cursor}%
+\begin{itemdecl}
+int get() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{true} if \tcode{\exposid{value} == 0}, otherwise \tcode{*\exposid{ptr} == \exposid{value}}.
+\end{itemdescr}
+
+\indexlibrarymember{twice}{cursor}%
+\begin{itemdecl}
+int twice() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\exposid{value} if \tcode{\exposid{value} == 0}, otherwise \tcode{*\exposid{ptr}}.
+\end{itemdescr}
+
+\indexlibrarymember{size}{cursor}%
+\begin{itemdecl}
+int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{\exposid{value} + *\exposid{ptr}}.
+\end{itemdescr}
+
+\indexlibrarymember{count}{cursor}%
+\begin{itemdecl}
+int count() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The number of calls, which \tcode{count()} also reports through \exposid{count}.
+\end{itemdescr}
+
+\indexlibrarymember{more}{cursor}%
+\begin{itemdecl}
+bool more() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{\exposid{has-next} \&\& rhs.\exposid{has-next}}, where \tcode{"has_next_"} is not a name.
+\end{itemdescr}
+
+\rSec3[cursor.mod]{Modifiers}
+
+\indexlibrarymember{rebind}{cursor}%
+\begin{itemdecl}
+void rebind(int value);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Assigns \tcode{value} to \exposid{value}.
+
+\pnum
+\ensures
+\tcode{\exposid{value} == value} is \tcode{true}.
+\end{itemdescr}

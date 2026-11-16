@@ -1601,6 +1601,22 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deleted_tail_wording/expected.json"
 )
 
+# An exposition-only member renders under its exposition name wherever it
+# appears in an authored code span, by either spelling (issue #286): the
+# header's `value_` inside `value_ == 0`, and the paper's `value`. A name the
+# wording already uses for something else -- a parameter, another member --
+# is not read as an exposition name. The LaTeX render is where the difference
+# shows: `\tcode{\exposid{value} == 0}`, not `\tcode{value_ == 0}`.
+specgen_add_golden(
+    expos_code_spans
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_code_spans.hpp"
+)
+specgen_add_golden(
+    expos_code_spans_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_code_spans/expected.json"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,

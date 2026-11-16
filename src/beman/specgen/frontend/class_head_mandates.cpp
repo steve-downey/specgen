@@ -146,7 +146,7 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
     out.descr_covers   = std::move(block.covers);
     // Within the class's own wording, uses of its exposition-only members
     // render as \exposid -- the same rewrite a member's description gets.
-    rewrite_prose_expos(out.descr, expos_spellings(record, expos_set));
+    rewrite_prose_expos(out.descr, expos_spellings(record, expos_set), taken_names(record, expos_set));
 
     std::optional<ClassMandates> derived = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
     if (!derived)

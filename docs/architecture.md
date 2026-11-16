@@ -505,7 +505,18 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
 - Multi-paragraph: blank `//!` line separates paragraphs; next `\tag` ends the
   element.
 - Backticks → `\tcode`, and backticked spans are reference-resolved: expos names
-  render as `\exposid`, the leakage checker runs inside prose.
+  render as `\exposid`, the leakage checker runs inside prose. **Every use in a span is
+  renamed, not only a span that is exactly the name** (issue #286): `` `*p_ == value_` ``
+  renders `*\exposid{ptr} == \exposid{value}`, the form extracted code takes, where it used
+  to keep the implementation's spelling without a finding. A use is a whole identifier, and
+  the contents of a string or character literal are text. Either spelling names the member,
+  the written C++ one or the exposition name (`value`, `has-value`), so wording transcribed
+  from a paper renders the same as wording written against the header. This is §3.5's
+  name-match exception, confined as there to the class's own fragments; and since an
+  exposition name is text with nothing behind it to resolve, one the wording already uses
+  for something else (`taken_names`: the class, its other members, the described function's
+  parameters) is never read as an exposition name. A kebab-case name is matched between
+  boundaries that exclude `-`, which keeps `has-value` out of `not-has-value`.
 - `\item` starts an authored item on the current element or leading unlabelled
   body (including detached section prose); nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.

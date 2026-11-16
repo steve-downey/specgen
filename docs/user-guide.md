@@ -1091,6 +1091,16 @@ wording follows [structure.specifications].
   exposition-only with it, so an extracted body that names one uses the
   exposition name.
 
+  In a description, a backticked span names an exposition-only member of the
+  class by either spelling, anywhere in the span: `` `value_ == 0` `` and
+  `` `value == 0` `` both render `\tcode{\exposid{value} == 0}`, as an
+  extracted body would. Wording can therefore be written in the paper's
+  vocabulary or the header's. The exposition name is matched as text, so a
+  name the wording already uses for something else is not read as one: a
+  parameter called `value`, or a member function `value()`, stays what it is,
+  and only `value_` then names the exposition-only member. The contents of a
+  string literal and of a `\codeblock` are left as written.
+
   A partial or explicit specialization follows its primary and needs no marker
   of its own: it is the same entity and renders under the same exposition name.
   The marked declaration may reside in an included implementation header

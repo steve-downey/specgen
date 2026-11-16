@@ -664,7 +664,7 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                 diagnostic_file_name(sm, sm.getFileID(def->getBeginLoc()))});
         }
     }
-    rewrite_prose_expos(attached.item.descr, expos_names);
+    rewrite_prose_expos(attached.item.descr, expos_names, taken_names(enclosing_record(def), expos_set, def));
 
     return attached;
 }
@@ -700,8 +700,9 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
     } else if (alias->getDeclContext()->isFileContext()) {
         attached.item.decl.index.push_back({ir::IndexKind::Global, alias->getNameAsString(), {}});
     }
-    rewrite_prose_expos(attached.item.descr,
-                        expos_spellings(llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext()), expos_set));
+    const auto* alias_record = llvm::dyn_cast<clang::CXXRecordDecl>(alias->getDeclContext());
+    rewrite_prose_expos(
+        attached.item.descr, expos_spellings(alias_record, expos_set), taken_names(alias_record, expos_set));
     return attached;
 }
 
@@ -822,7 +823,7 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
     if (!exposition)
         attached.item.decl.index.push_back(
             {ir::IndexKind::Member, decl->getNameAsString(), record->getNameAsString()});
-    rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set));
+    rewrite_prose_expos(attached.item.descr, expos_spellings(record, expos_set), taken_names(record, expos_set));
     return attached;
 }
 
