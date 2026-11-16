@@ -689,6 +689,10 @@ group headers and `\syn` comments are kept. Comments that specgen writes
 itself, such as `// exposition only` and `// freestanding`, come from markers
 and are not affected.
 
+A comment after a declaration on its line does not interfere with the docblock
+above that declaration: a member may carry `//! \expos` or `//! \omit` and an
+implementation note beside it.
+
 `generate --keep-synopsis-comments` selects the earlier behaviour, in which
 every plain comment of a class body stays in the synopsis. A `\syn` comment is
 printed without its marker under either setting, so a header can be marked

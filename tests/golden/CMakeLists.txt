@@ -1692,6 +1692,23 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_comments/expected.json"
 )
 
+# A plain comment after a declaration, on its line, does not displace the
+# docblock above it (issue #296): Clang prefers a trailing comment to the one
+# before the declaration, which lost every marker an in-class declaration
+# carries -- `\expos`, `\omit`, `\seebelow`, `\freestanding` -- and a hidden
+# friend's description, without a finding. The LaTeX render shows each one
+# taking effect.
+specgen_add_golden(
+    trailing_comment_docblock
+    MODE generate
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_trailing_comment_docblock.hpp"
+)
+specgen_add_golden(
+    trailing_comment_docblock_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/trailing_comment_docblock/expected.json"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(

@@ -108,6 +108,13 @@ docblock_diagnostics(const clang::RawComment*                rc,
 // purpose: getRawCommentForAnyRedecl, the public alternative whose signature
 // happens to span both LLVM 22 and 23, walks the redeclaration chain and finds
 // comments this anchor rule is written to reject.
+//
+// One answer of that lookup is not taken as given (issue #296): a plain
+// comment *after* the declaration on its line, which Clang prefers to the
+// comment before it. When that trailing comment carries no markup and a
+// docblock stands directly before the declaration, the docblock is the
+// answer, so an implementation note after a member does not cost it its
+// `\expos` or `\omit`.
 const clang::RawComment* attached_raw_comment(const clang::Decl* decl);
 
 // Does `decl` carry a `//!`/`/*!` docblock of its own? The two-step the

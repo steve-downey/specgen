@@ -145,6 +145,16 @@ than leaving a paper silently stale.
   one of `;{}#@` — which a requires-expression in a template-head constraint places between
   the header and the name, so a lookup through the templated decl would silently lose the
   docblock (issue #20).
+- **A trailing plain comment does not displace a docblock** (issue #296). Clang's search
+  looks behind a declaration before it looks ahead of it, and under `-fparse-all-comments` an
+  ordinary comment that follows code on its line is a trailing comment, so
+  `int size_ = 0; // a note` made the note the member's comment and the `//! \expos` above it
+  was never read: every marker an in-class declaration carries, and a hidden friend's whole
+  description, lost without a finding. `attached_raw_comment` takes Clang's answer except
+  there: a trailing comment that carries no markup gives way to a docblock directly before
+  the declaration, found by Clang's own rule for that half of the search (the last comment
+  ending before the declaration, with none of `;{}#@` between). A trailing comment that *is*
+  markup is still the declaration's.
 - The preprocessor's **skipped ranges are recorded** during the parse, so extraction (§4.2)
   can resolve conditional compilation down to the branch Clang selected.
 

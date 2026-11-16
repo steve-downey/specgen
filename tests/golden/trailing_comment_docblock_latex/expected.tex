@@ -1,0 +1,51 @@
+\begin{codeblock}
+namespace std {
+  class @\libglobal{bin}@ {
+  public:
+    // \ref{demo.bin.obs}, observers
+    int find(int key) const;
+
+    int capacity() const; // freestanding
+
+    friend void swap(bin& a, bin& b);
+
+  private:
+    int @\exposidnc{size}@ = 0; // exposition only
+  };
+}
+\end{codeblock}
+
+\rSec3[demo.bin.obs]{Observers}
+
+\indexlibrarymember{find}{bin}%
+\begin{itemdecl}
+int find(int key) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The position of \tcode{key}.
+\end{itemdescr}
+
+\indexlibrarymember{capacity}{bin}%
+\begin{itemdecl}
+int capacity() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The number of elements the bin can hold.
+\end{itemdescr}
+
+\indexlibraryglobal{swap}%
+\begin{itemdecl}
+friend void swap(bin& a, bin& b);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Exchanges the contents of \tcode{a} and \tcode{b}.
+\end{itemdescr}
