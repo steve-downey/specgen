@@ -1105,9 +1105,7 @@ ParseResult parse_docblock(std::string_view raw) {
                          0,
                          "\\asdraft-synopsis takes the baseline's synopsis, so it cannot be \\verbatim-synopsis"});
     if (!block.kind_covers.empty() && !block.markers.asdraft)
-        diags.push_back({Severity::Error,
-                         block.kind_covers.front().line,
-                         "\\covers naming an element applies to inherited wording, so it requires \\asdraft"});
+        diags.push_back({Severity::Error, block.kind_covers.front().line, std::string(kCoversNeedsAsdraft)});
     if (block.markers.elsewhere && block.markers.omit)
         diags.push_back({Severity::Error, 0, "\\elsewhere and \\omit are mutually exclusive"});
     if (block.markers.elsewhere && block.markers.merge)

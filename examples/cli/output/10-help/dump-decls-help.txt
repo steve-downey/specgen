@@ -35,6 +35,11 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --keep-synopsis-comments  keep every plain comment of a class body in its
+                             synopsis. By default a synopsis keeps a
+                             `// \ref{x}, title` group header and a comment
+                             that starts `\syn`, printed without the marker,
+                             and drops the rest as implementation comments
   --source <file>           a source file defining members the preceding
                              header declares: a documented definition in it
                              supplies that member's wording, as one in the
@@ -48,6 +53,10 @@ generate options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -137,6 +146,10 @@ render options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org

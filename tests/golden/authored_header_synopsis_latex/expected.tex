@@ -1,0 +1,24 @@
+\rSec3[u.syn]{Header synopsis}
+
+\begin{codeblock}
+// mostly freestanding
+namespace std {
+  // \ref{u.thing}, class template thing
+  template<class E> class thing;
+}
+\end{codeblock}
+
+\begin{codeblock}
+namespace std {
+  template<class T> inline constexpr bool @\exposidnc{helper-v}@ = false; // exposition only
+}
+\end{codeblock}
+
+\rSec3[u.thing]{Class template thing}
+
+\begin{codeblock}
+namespace std {
+  template<class E>
+  class @\libglobal{thing}@ {};
+}
+\end{codeblock}

@@ -53,6 +53,12 @@ struct ParseOptions {
     // (tests/golden/CMakeLists.txt) is this project's precedent for spelling
     // an opt-out explicitly and greppably rather than leaving it incidental.
     bool probe_compile_commands = false;
+    // `--keep-synopsis-comments`: every plain comment in a class body stays
+    // in the synopsis, as it did before a synopsis kept only the comments it
+    // recognizes or the author marks (issue #280). Not about how the header
+    // is parsed, but it is the one options value the front end is handed, and
+    // it is the front end that extracts synopses.
+    bool keep_synopsis_comments = false;
 };
 
 // One entry of a compilation database's CompileCommand::CommandLine, filtered

@@ -5,6 +5,7 @@
 
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
@@ -151,6 +152,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
+                                              const ConstraintsStated&                         constraints_stated,
+                                              bool                                             keep_comments,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl) {
     const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
@@ -592,9 +595,18 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             add_exposid(fn, it->second);
         mark_survivor();
 
-        // A survivor of `\merge`d twins says only what the pair shares; the
-        // cuts are dominant like the see-below edits, and applied with them.
-        seebelow_edits.append_range(twin_cut_edits(fn, sm, lang_opts));
+        // A requires-clause the item declaration states as *Constraints* is
+        // not in the synopsis either (issue #281): the two used to disagree,
+        // and the draft's class synopses do not repeat a clause the
+        // *Constraints* paragraph states. Dominant, like the see-below edits,
+        // since a qualifier or exposition-only edit may sit inside the clause.
+        // Otherwise the clause stays, and a survivor of `\merge`d twins says
+        // only what the pair shares; a cut inside a clause that is going
+        // whole would overlap its removal and suppress it.
+        if (constraints_stated.contains(fn->getCanonicalDecl()))
+            seebelow_edits.append_range(requires_clause_removals(fn, sm, lang_opts));
+        else
+            seebelow_edits.append_range(twin_cut_edits(fn, sm, lang_opts));
 
         // Bare \seebelow replaces the return type. The named
         // targets replace only the operand of noexcept(...) / explicit(...),
@@ -624,6 +636,13 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // its range can be the final character of `default`, and splicing it
         // would turn `= default;` into `= defaul;;`.
         if (fn->isDefaulted() || fn->isDeleted() || !fn->doesThisDeclarationHaveABody()) {
+            // A deleted tail reads `= delete;` however the header spells it
+            // (issue #282). Nothing is edited inside it, as for any replaced
+            // range.
+            if (const std::optional<DeletedTail> tail = deleted_tail(member, sm, lang_opts)) {
+                edits.push_back(SynopsisEdit{tail->begin, tail->end, std::string(kDeletedTail)});
+                removed_ranges.emplace_back(tail->begin, tail->end);
+            }
             if (!freestanding_comment.empty()) {
                 const unsigned semi_end = member_declaration_end(fn, sm, lang_opts);
                 edits.push_back(SynopsisEdit{semi_end, semi_end, std::string(freestanding_comment)});
@@ -716,18 +735,59 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     for (SynopsisEdit& edit : seebelow_edits)
         add_dominant_edit(edits, std::move(edit));
 
-    // Docblocks: any raw comment inside the class span carrying specgen
-    // markup (`//!`, `/*!`) or Doxygen (`///`, `/** */`) is removed outright;
-    // draft-form comments (plain `//`, e.g. `\ref{...}` group headers) are
-    // left in place verbatim. The two Doxygen spellings are not markup, but
-    // the draft does not print implementation documentation either, so they
-    // are cut here rather than kept.
+    // Comments (design §1). Any raw comment inside the class span carrying
+    // specgen markup (`//!`, `/*!`) or Doxygen (`///`, `/** */`) is removed
+    // outright: the draft does not print implementation documentation. Of the
+    // plain ones, a synopsis keeps what it recognizes or the author marks
+    // (issue #280): a `\ref{...}` group header, and a comment starting
+    // `\syn`, printed without the marker. Every other plain comment is the
+    // implementation's, and is dropped, so that a class in an annotated
+    // header is somewhere an implementation note can be written. Five in six
+    // of the comments in the draft's own synopses are forms specgen reads as
+    // structure or writes itself from a marker; the free text is what `\syn`
+    // is for. `keep_comments` is the earlier rule, under which every plain
+    // comment stayed.
+    //
+    // One plain comment, by its range in `raw` (a line of a `//` run, or a
+    // `/* */` whole), turned into at most one edit.
+    const auto plain_comment_edit = [&](unsigned raw_begin, llvm::StringRef raw, std::size_t begin, std::size_t end) {
+        const std::size_t lead = raw.slice(begin, end).find_first_not_of(" \t");
+        if (lead == llvm::StringRef::npos)
+            return;
+        const llvm::StringRef text  = raw.slice(begin + lead, end);
+        const unsigned        start = raw_begin + static_cast<unsigned>(begin + lead);
+        if (const auto marker = synopsis_comment_marker(text)) {
+            edits.push_back(SynopsisEdit{
+                start + static_cast<unsigned>(marker->first), start + static_cast<unsigned>(marker->second), ""});
+            return;
+        }
+        if (keep_comments || (text.starts_with("//") && parse_ref(std::string_view(text.data(), text.size()))))
+            return;
+        unsigned          remove_begin = start;
+        unsigned          remove_end   = raw_begin + static_cast<unsigned>(end);
+        const unsigned    line_begin   = line_start(remove_begin);
+        const std::size_t code_end     = buffer.substr(line_begin, remove_begin - line_begin).find_last_not_of(" \t");
+        if (code_end == llvm::StringRef::npos) {
+            // On lines of its own: the indentation and the newline go too, so
+            // nothing is left between the members it sat among.
+            remove_begin = line_begin;
+            if (remove_end < class_end && buffer[remove_end] == '\r')
+                ++remove_end;
+            if (remove_end < class_end && buffer[remove_end] == '\n')
+                ++remove_end;
+        } else {
+            // After a declaration on its line: the spaces before it go, and
+            // the newline stays.
+            remove_begin = line_begin + static_cast<unsigned>(code_end) + 1;
+        }
+        edits.push_back(SynopsisEdit{remove_begin, remove_end, ""});
+    };
     if (comments != nullptr) {
         // substrate generic algorithm: the offset-bounds check is filtered
         // above, but what a surviving comment turns into
         // (stripped_comment_start's scan, the line-start recomputation, the
         // trailing \r\n absorption)
-        // is a conditional, multi-step computation of one SynopsisEdit --
+        // is a conditional, multi-step computation of its SynopsisEdits --
         // a filter-map with no std::ranges name (there is no
         // views::filter_map), and the optional-then-filter-then-transform
         // pattern that would fake one is harder to read than this loop.
@@ -736,12 +796,30 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
              })) {
             const llvm::StringRef            raw_text    = comment->getRawText(sm);
             const std::optional<std::size_t> markup_from = stripped_comment_start(raw_text);
+            const unsigned    raw_begin = sm.getDecomposedLoc(comment->getSourceRange().getBegin()).second;
+            const std::size_t plain_end = markup_from.value_or(raw_text.size());
+            // The plain part ahead of any markup: a `/* */` comment is one
+            // unit, and a run of `//` lines, which Clang merges into one raw
+            // comment, is taken a line at a time, since a `\ref` header and
+            // an implementation note commonly share one.
+            if (raw_text.starts_with("/*")) {
+                plain_comment_edit(raw_begin, raw_text, 0, plain_end);
+            } else {
+                // substrate generic algorithm: a physical-line scan that keeps
+                // each line's byte offset, as the ref-group scan above does.
+                for (std::size_t begin = 0; begin < plain_end;) {
+                    const std::size_t newline = raw_text.find('\n', begin);
+                    plain_comment_edit(raw_begin, raw_text, begin, std::min(newline, plain_end));
+                    if (newline == llvm::StringRef::npos)
+                        break;
+                    begin = newline + 1;
+                }
+            }
             if (!markup_from)
                 continue;
             // Strip from the first non-draft line on, so a `\ref` group header
             // merged into the same RawComment survives in the synopsis.
-            unsigned comment_begin =
-                sm.getDecomposedLoc(comment->getSourceRange().getBegin()).second + static_cast<unsigned>(*markup_from);
+            unsigned                    comment_begin = raw_begin + static_cast<unsigned>(*markup_from);
             const clang::SourceLocation comment_end_tok =
                 clang::Lexer::getLocForEndOfToken(comment->getSourceRange().getEnd(), 0, sm, lang_opts);
             unsigned comment_end = sm.getDecomposedLoc(comment_end_tok).second;

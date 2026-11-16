@@ -34,7 +34,7 @@ class sentinel_case {
     //! \expos
     int field10;
 
-    // terminal_suffix
+    // \syn terminal_suffix
 };
 
 } // namespace demo

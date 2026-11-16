@@ -1153,9 +1153,12 @@ TEST_CASE("validate - drift comparison reads authored flat table cells") {
     CHECK(diags.front().message.find("contradicts") != std::string::npos);
 }
 
-TEST_CASE("validate - a derived conjunct absent from unrelated authored prose warns it has no authored counterpart") {
+TEST_CASE("validate - a derived conjunct absent from unrelated authored prose notes it has no authored counterpart") {
     // This is the reference-E converting-constructor bug: authored prose that
-    // never mentions the derived subject at all used to validate clean.
+    // never mentions the derived subject at all used to validate clean. A
+    // Note, not a Warning (issue #285): the validator knows only that it
+    // recognized no counterpart, and whether the prose has one is for a
+    // person to read.
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
@@ -1168,7 +1171,7 @@ TEST_CASE("validate - a derived conjunct absent from unrelated authored prose wa
 
     const Diagnostics diags = validate(ir::Node{item});
     REQUIRE(diags.size() == 1);
-    CHECK(diags.front().severity == Severity::Warning);
+    CHECK(diags.front().severity == Severity::Note);
     CHECK(diags.front().context == "mandates");
     CHECK(diags.front().message.find("has no authored") != std::string::npos);
     CHECK(diags.front().message.find("`is_copy_constructible_v<int>`") != std::string::npos);
@@ -1196,7 +1199,7 @@ TEST_CASE("validate - a derived conjunct documented only in a sibling Remarks el
     CHECK(validate(ir::Node{item}).empty());
 }
 
-TEST_CASE("validate - only the undocumented conjunct in a partially covered requires-clause warns") {
+TEST_CASE("validate - only the undocumented conjunct in a partially covered requires-clause is noted") {
     // Two-conjunct requires-clause where only the first is echoed in prose:
     // the missing-counterpart check fires only for the second.
     ir::DescriptionElement authored;
@@ -1635,6 +1638,42 @@ TEST_CASE("validate - code normalization preserves token boundaries and literal 
     item.descr.elements.front().conjuncts = {conjunct_paragraph(R"(trait<"a b">)", "true")};
     item.descr.elements.front().body      = {ir::BodyParagraph{authored_paragraph(R"(trait<"ab">)", "true")}};
     CHECK_FALSE(validate(ir::Node{item}).empty());
+}
+
+TEST_CASE("validate - a claim on an element with no body is about the leading prose") {
+    // The stand-in a class's leading prose leaves behind (issue #283): the
+    // derived conjuncts and the claims that answer them, on a Mandates element
+    // with nothing to render.
+    ir::DescriptionElement stand_in;
+    stand_in.kind      = ir::ElementKind::Mandates;
+    stand_in.conjuncts = {conjunct_paragraph("is_object_v<E>", "true"), conjunct_paragraph("is_array_v<E>", "false")};
+    stand_in.coverage  = {conjunct_paragraph("is_object_v<E>", "true")};
+
+    ir::SpecItem item;
+    item.descr.leading  = {ir::BodyParagraph{{ir::TextInline{"A program that instantiates it for a non-object "
+                                                             "type or an array type is ill-formed."}}}};
+    item.descr.elements = {stand_in};
+
+    // The claimed conjunct is quiet; the other is the usual note.
+    const Diagnostics findings = validate(ir::Node{item});
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == Severity::Note);
+    CHECK(findings.front().message.find("`is_array_v<E>`") != std::string::npos);
+
+    // It survives saved IR.
+    const auto saved = ir::parse_item(ir::emit_json(item));
+    REQUIRE(saved.has_value());
+    CHECK(validate(ir::Node{*saved}) == findings);
+
+    SECTION("with no leading prose there is nothing for the claim to be about") {
+        item.decl.signatures.push_back({"void f();", {}});
+        item.descr.leading.clear();
+        const auto unworded = validate(ir::Node{item});
+        CHECK(std::ranges::any_of(unworded, [](const auto& finding) {
+            return finding.severity == Severity::Error &&
+                   finding.message.find("invalid explicit coverage claim") != std::string::npos;
+        }));
+    }
 }
 
 TEST_CASE("validate - explicit coverage checks exact targets and polarity through saved IR") {

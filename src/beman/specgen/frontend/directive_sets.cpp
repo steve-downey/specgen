@@ -528,4 +528,75 @@ FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, c
     return result;
 }
 
+ConstraintsStated build_constraints_stated(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm) {
+    namespace grammar  = beman::specgen::grammar;
+    namespace lowering = beman::specgen::lowering;
+
+    // The docblock on `decl`, lowered, or nothing when it has none.
+    const auto lowered_docblock = [&sm](const clang::Decl* decl) -> std::optional<lowering::Lowered> {
+        const clang::RawComment* rc = attached_raw_comment(decl);
+        if (rc == nullptr)
+            return std::nullopt;
+        const llvm::StringRef            raw   = rc->getRawText(sm);
+        const std::optional<std::size_t> start = docblock_start(raw);
+        if (!start)
+            return std::nullopt;
+        return lowering::lower(grammar::parse_docblock(raw.substr(*start).str()).block);
+    };
+    const auto states = [](const lowering::ItemDirectives& directives) {
+        return !directives.constraints_in_decl && !suppresses_generated_entity(directives);
+    };
+
+    // A definition at namespace scope, which attach_function turns into an
+    // item (build_spec_item): an out-of-line member's always, documented or
+    // not, and a free function's when it is documented.
+    const auto stated_out_of_line = [&](const clang::FunctionDecl* fn) {
+        if (fn == nullptr || !fn->isThisDeclarationADefinition())
+            return false;
+        const auto* method = llvm::dyn_cast<clang::CXXMethodDecl>(fn);
+        if (method != nullptr ? !method->isOutOfLine()
+                              : !(fn->getDeclContext()->isFileContext() &&
+                                  fn->getLexicalDeclContext()->isFileContext() && has_docblock(fn, sm)))
+            return false;
+        return states(docblock_directives(fn, sm));
+    };
+    ConstraintsStated result = decls | std::views::transform(as_out_of_line_function) |
+                               std::views::filter(stated_out_of_line) |
+                               std::views::transform([](const clang::FunctionDecl* fn) -> const clang::Decl* {
+                                   return fn->getFirstDecl()->getCanonicalDecl();
+                               }) |
+                               std::ranges::to<ConstraintsStated>();
+
+    // A member whose markup is in the class (collect_inclass_items): one with
+    // a body of its own, a hidden friend included, or a `= default`,
+    // `= delete` or definition-less pure virtual member that is described.
+    const auto stated_in_class = [&](const clang::FunctionDecl* fn) {
+        if (fn == nullptr)
+            return false;
+        const std::optional<lowering::Lowered> lowered = lowered_docblock(fn);
+        if (!lowered || !states(lowered->directives))
+            return false;
+        const bool tail_only = fn->isDefaulted() || fn->isDeleted();
+        if (fn->doesThisDeclarationHaveABody() && !tail_only)
+            return true;
+        if (!tail_only && !(fn->isPureVirtual() && fn->getDefinition() == nullptr))
+            return false;
+        return lowered->directives.describe || lowered->directives.asdraft ||
+               beman::specgen::ir::has_description(lowered->descr);
+    };
+    const auto stated_members_of = [&](const clang::CXXRecordDecl* record) {
+        const std::vector<const clang::Decl*> members(record->decls_begin(), record->decls_end());
+        return members | std::views::transform(member_function_or_template) | std::views::filter(stated_in_class) |
+               std::views::transform(
+                   [](const clang::FunctionDecl* fn) -> const clang::Decl* { return fn->getCanonicalDecl(); }) |
+               std::ranges::to<std::vector<const clang::Decl*>>();
+    };
+    result.insert_range(decls | std::views::transform(as_record_decl) |
+                        std::views::filter([](const clang::CXXRecordDecl* record) {
+                            return record != nullptr && record->isThisDeclarationADefinition();
+                        }) |
+                        std::views::transform(stated_members_of) | std::views::join);
+    return result;
+}
+
 } // namespace beman::specgen::frontend

@@ -167,12 +167,13 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
         collect_expos_scope_decl(decl, sm, main_file, expos_decls);
 
-    std::set<const clang::Decl*>                    omit_set         = build_omit_set(decls, sm);
-    const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(expos_decls, sm);
-    const std::optional<std::vector<std::string>>   paper_entities   = collect_paper_entities(decls, sm);
-    SeeBelowMap                                     seebelow_map     = build_seebelow_map(decls, sm);
-    FreestandingMap                                 freestanding_map = build_freestanding_map(decls, sm);
-    const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
+    std::set<const clang::Decl*>                    omit_set           = build_omit_set(decls, sm);
+    const std::map<const clang::Decl*, std::string> expos_set          = build_expos_set(expos_decls, sm);
+    const std::optional<std::vector<std::string>>   paper_entities     = collect_paper_entities(decls, sm);
+    SeeBelowMap                                     seebelow_map       = build_seebelow_map(decls, sm);
+    FreestandingMap                                 freestanding_map   = build_freestanding_map(decls, sm);
+    ConstraintsStated                               constraints_stated = build_constraints_stated(decls, sm);
+    const std::set<std::string>                     ns_drop_set        = build_namespace_drop_set(decls);
     // The nested namespaces that render as interface rather than flatten
     // (design §3.5, issue #209), with the findings their docblocks drew.
     const SpecifiedNamespaces    specified     = build_specified_namespace_set(decls, ctx, sm);
@@ -219,6 +220,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             freestanding_map.emplace(decl, FreestandingKind::Deleted);
         else if (markup->attached.directives.freestanding)
             freestanding_map.emplace(decl, FreestandingKind::Freestanding);
+        // A definition in a source file gets its item like any other, and
+        // its itemdecl drops the clause on the same terms (issue #281).
+        if (!markup->attached.directives.constraints_in_decl &&
+            !suppresses_generated_entity(markup->attached.directives))
+            constraints_stated.insert(decl);
     });
 
     // The docblock ranges some declaration consumed — top-level decls and
@@ -327,6 +333,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         expos_set,
                         seebelow_map,
                         freestanding_map,
+                        constraints_stated,
+                        options.keep_synopsis_comments,
                         ns_drop_set,
                         specified_set,
                         skipped,
@@ -422,6 +430,15 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         // into that namespace's block, and the blocks open and close in source
         // order, which is what the enclosing `namespace std {` then indents.
         NamespaceRuns runs;
+        // Whether the region holds an authored synopsis and nothing gathered
+        // (issue #284). A detached `\verbatim-synopsis` in an otherwise empty
+        // region *is* the header synopsis, the author's whole text with its
+        // own namespace, as it is in a section of any other name; it used to
+        // be wrapped in a second `namespace std {`. Beside gathered
+        // declarations it stays what it was, a payload appended to their code
+        // inside the one enclosure.
+        bool authored_synopsis = false;
+        bool gathered_code     = false;
         // substrate generic algorithm: a source-order fold composing semantic
         // CodeText fragments while the outer cursor skips the consumed range.
         for (std::size_t j = i + 1; j <= *close_index; ++j) {
@@ -447,6 +464,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                     // forward declarations) to take that rather than teach
                     // classify where it is being called from.
                     runs.append(std::move(synopsis->synopsis.code), nested);
+                    gathered_code = true;
                     gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                     // The class's routed in-class members ride along. They
                     // are not part of the gathered synopsis -- build_tree
@@ -572,6 +590,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         // synopsis, so a masked variable is inside one by
                         // construction, and that is where the mask stopped
                         // being applied.
+                        gathered_code = true;
                         AttachedItem marked;
                         attach_docblock(marked, item.decl, sm);
                         const VariableMask mask =
@@ -587,7 +606,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                                        expos_set,
                                                        mask.unspecified,
                                                        see_below,
-                                                       nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent),
+                                                       nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent,
+                                                       constraints_stated),
                             nested);
                     }
                 }
@@ -606,6 +626,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 continue;
             }
             if (auto* synopsis = std::get_if<db::SynopsisDecl>(&classified)) {
+                authored_synopsis = authored_synopsis || synopsis->exact;
+                gathered_code     = gathered_code || !synopsis->exact;
                 runs.append_comment(std::move(synopsis->synopsis.code));
                 gathered.diagnostics.append_range(std::move(synopsis->diagnostics));
                 continue;
@@ -622,23 +644,52 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 const std::size_t      newline  = item.comment_text.find('\n', line_begin);
                 const std::size_t      line_end = newline == std::string::npos ? item.comment_text.size() : newline;
                 const std::string_view line(item.comment_text.data() + line_begin, line_end - line_begin);
-                if (line_vocabulary(llvm::StringRef{line}.ltrim(" \t")) == CommentVocabulary::Draft) {
+                if (const llvm::StringRef comment = llvm::StringRef{line}.ltrim(" \t");
+                    line_vocabulary(comment) == CommentVocabulary::Draft) {
                     if (const std::optional<std::string> ref = parse_ref(line)) {
                         current_ref = *ref;
                         if (!refs.empty())
                             refs.push_back('\n');
                         refs.append(line);
+                    } else if (const auto marker = synopsis_comment_marker(comment)) {
+                        // A comment the author marked for the synopsis
+                        // (issue #280), kept as in a class body, without its
+                        // marker. It heads no group, so the standing `\ref`
+                        // is unchanged.
+                        if (!refs.empty())
+                            refs.push_back('\n');
+                        refs.append(comment.substr(0, marker->first));
+                        refs.append(comment.substr(marker->second));
                     }
                 }
                 if (newline == std::string::npos)
                     break;
                 line_begin = newline + 1;
             }
+            gathered_code = gathered_code || !refs.empty();
             runs.append_comment(header_comment_code(std::move(refs)));
         }
         gathered.synopsis.code = runs.finish();
+        // An authored-only region is not a gathered one: it is the section it
+        // would be under any other name, so its synopsis is left exactly as
+        // written and its fence closes it (design §3.2). A helper written
+        // after `/// END [x.syn]` then returns to the enclosing frame instead
+        // of landing in the header synopsis's fragment. The gatherer consumed
+        // the fence, so the close is pushed here. A gathered region's fence
+        // only bounds the gather, as it always has: headers nest their class
+        // subclauses beneath a gathered `.syn` section, and closing it would
+        // lift every one of them out.
+        const bool authored_only = authored_synopsis && !gathered_code;
+        gathered.exact           = authored_only;
         events.push_back(std::move(gathered));
         events.append_range(std::move(extras));
+        if (authored_only) {
+            const RawItem& closer       = raw_items[*close_index];
+            const unsigned fence_offset = closer.offset + static_cast<unsigned>(close->line_begin);
+            const auto [file, local]    = doc.locate(fence_offset);
+            events.push_back(
+                db::SectionClose{header->stable, sm.getLineNumber(file, local), diagnostic_file_name(sm, file)});
+        }
         i = *close_index + 1;
     }
 

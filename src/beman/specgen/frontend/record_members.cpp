@@ -25,6 +25,7 @@
 
 #include <cstddef>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -170,6 +171,44 @@ member_declaration_end(const clang::Decl* decl, const clang::SourceManager& sm, 
         semi && semi->is(clang::tok::semi))
         return sm.getDecomposedLoc(semi->getLocation()).second + 1;
     return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(end, 0, sm, lang_opts)).second;
+}
+
+std::optional<DeletedTail>
+deleted_tail(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts) {
+    const clang::FunctionDecl* fn = member_function_or_template(decl);
+    if (fn == nullptr || !fn->isDeletedAsWritten())
+        return std::nullopt;
+    const unsigned semi = member_declaration_end(decl, sm, lang_opts) - 1;
+
+    std::optional<unsigned> equal_end;
+    int                     depth = 0;
+    // substrate generic algorithm: the same token-at-a-time scan as
+    // deleted_or_defaulted_semi, stopping at the `;` that function found and
+    // keeping the last `=` seen outside a bracket.
+    for (std::optional<clang::Token> tok =
+             clang::Lexer::findNextToken(sm.getFileLoc(decl->getBeginLoc()), sm, lang_opts);
+         tok.has_value();
+         tok = clang::Lexer::findNextToken(tok->getLocation(), sm, lang_opts)) {
+        const unsigned at = sm.getDecomposedLoc(tok->getLocation()).second;
+        if (at >= semi)
+            break;
+        if (tok->isOneOf(clang::tok::l_paren, clang::tok::l_square, clang::tok::l_brace))
+            ++depth;
+        else if (tok->isOneOf(clang::tok::r_paren, clang::tok::r_square, clang::tok::r_brace))
+            --depth;
+        else if (depth == 0 && tok->is(clang::tok::equal))
+            equal_end = at + 1;
+    }
+    if (!equal_end || *equal_end > semi)
+        return std::nullopt;
+    bool                  invalid = false;
+    const llvm::StringRef buffer  = sm.getBufferData(sm.getFileID(sm.getFileLoc(decl->getBeginLoc())), &invalid);
+    if (invalid || semi > buffer.size())
+        return std::nullopt;
+    const llvm::StringRef written = buffer.substr(*equal_end, semi - *equal_end);
+    if (std::string_view(written.data(), written.size()) == kDeletedTail)
+        return std::nullopt;
+    return DeletedTail{*equal_end, semi};
 }
 
 } // namespace beman::specgen::frontend

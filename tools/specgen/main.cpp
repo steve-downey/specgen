@@ -128,6 +128,11 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --keep-synopsis-comments  keep every plain comment of a class body in its
+                             synopsis. By default a synopsis keeps a
+                             `// \ref{x}, title` group header and a comment
+                             that starts `\syn`, printed without the marker,
+                             and drops the rest as implementation comments
   --source <file>           a source file defining members the preceding
                              header declares: a documented definition in it
                              supplies that member's wording, as one in the
@@ -141,6 +146,10 @@ generate options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -230,6 +239,10 @@ render options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -327,7 +340,11 @@ struct WordingOptions {
     std::string split_dir;        // --split <dir>
     std::string root;             // --root <name>, with --split
     bool        validate = false; // --validate
-    bool        paper    = false; // --paper
+    // --warnings-as-errors: a Warning from --validate fails the run as an
+    // Error does (issue #285). Notes never do: a Warning reports what the
+    // validator verified, a Note what a person has to check.
+    bool warnings_as_errors = false;
+    bool paper              = false; // --paper
     // --new-root <name> (mpark and org), accumulated: the flag repeats, once per
     // header the paper proposes, and every occurrence adds a root (issue #94).
     std::vector<std::string> new_roots;
@@ -540,6 +557,10 @@ std::expected<RenderOptions, OptionError> render_option(RenderOptions opts, cons
         opts.wording.validate = true;
         return opts;
     }
+    if (arg == "--warnings-as-errors") {
+        opts.wording.warnings_as_errors = true;
+        return opts;
+    }
     if (arg == "--paper") {
         opts.wording.paper = true;
         return opts;
@@ -631,6 +652,9 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
             return std::string("specgen: --depfile names what this run produced, so it needs -o, --split, "
                                "or --dep-target");
     }
+    if (options.warnings_as_errors && !options.validate)
+        return std::string("specgen: --warnings-as-errors makes a --validate warning fail the run, so it applies "
+                           "only with --validate");
     if (!options.dep_targets.empty() && options.depfile.empty())
         return std::string("specgen: --dep-target names a target in a dependency fragment, so it applies "
                            "only with --depfile");
@@ -650,11 +674,25 @@ WordingOptions output_dash_is_stdout(WordingOptions options) {
 // `--validate`'s one inserted stage, between the document and the render. Off
 // by default, so this is the identity on every existing golden — byte identity
 // by construction, not by inspection.
-std::expected<void, std::string> validate_document(const ir::Document& document, bool enabled) {
+// Whether a finding of this severity stops the render: an Error always, and a
+// Warning under --warnings-as-errors. A Note never does (issue #285).
+bool fails_run(beman::specgen::Severity severity, bool warnings_as_errors) {
+    return severity == beman::specgen::Severity::Error ||
+           (warnings_as_errors && severity == beman::specgen::Severity::Warning);
+}
+
+bool any_fails_run(const validate::Diagnostics& findings, bool warnings_as_errors) {
+    return std::ranges::any_of(findings, [&](const validate::Diagnostic& finding) {
+        return fails_run(finding.severity, warnings_as_errors);
+    });
+}
+
+std::expected<void, std::string>
+validate_document(const ir::Document& document, bool enabled, bool warnings_as_errors) {
     if (!enabled)
         return {};
     const validate::Diagnostics findings = validate::validate(document);
-    if (!validate::has_errors(findings)) {
+    if (!any_fails_run(findings, warnings_as_errors)) {
         // substrate generic algorithm
         // Formatted output, not a fold: nothing is accumulated and nothing is
         // returned, so there is no verb to name here (mirrors the diagnostic
@@ -891,7 +929,7 @@ emit_wording(const ir::Document& document, const WordingOptions& options, const 
     // Validate, then diff, then render (decision expected-error-taxonomy): an
     // error-severity finding short-circuits the rest, which is what "aborts the
     // render" means.
-    return validate_document(document, options.validate)
+    return validate_document(document, options.validate, options.warnings_as_errors)
         .and_then([&]() -> std::expected<std::optional<ir::Document>, std::string> {
             if (baseline == nullptr)
                 return std::optional<ir::Document>{};
@@ -939,8 +977,10 @@ emit_wording(const ir::Document& document, const WordingOptions& options, const 
 // The same report-or-abort shape validate_document gives one document:
 // warnings are printed here and rendering continues, any error returns every
 // finding for the caller to print and renders nothing.
-std::expected<void, std::string>
-validate_paper(const std::vector<std::string>& labels, const std::vector<ir::Document>& documents, bool run) {
+std::expected<void, std::string> validate_paper(const std::vector<std::string>&  labels,
+                                                const std::vector<ir::Document>& documents,
+                                                bool                             run,
+                                                bool                             warnings_as_errors) {
     if (!run)
         return {};
 
@@ -975,7 +1015,7 @@ validate_paper(const std::vector<std::string>& labels, const std::vector<ir::Doc
                 diagnostics | std::views::transform([&](const validate::Diagnostic& finding) {
                     return std::format("specgen: {}: {}", label, validate::format_diagnostic(finding));
                 }) | std::ranges::to<std::vector<std::string>>(),
-                validate::has_errors(diagnostics),
+                any_fails_run(diagnostics, warnings_as_errors),
             };
         },
         findings_monoid);
@@ -1002,7 +1042,7 @@ std::expected<Written, std::string> emit_paper(const std::vector<std::string>&  
                                                std::span<const ir::Document>    baselines = {}) {
     // Validate the paper as it came; what is then written is each document's
     // diff against its baseline when there is one (docs/plans/wording-diff.md).
-    return validate_paper(labels, current, options.validate)
+    return validate_paper(labels, current, options.validate, options.warnings_as_errors)
         .and_then([&] { return diffed_all(baselines, current, options); })
         .and_then([&](const std::optional<std::vector<ir::Document>>& marked) -> std::expected<Written, std::string> {
             const std::vector<ir::Document>& documents = marked ? *marked : current;
@@ -1362,6 +1402,9 @@ int generate_command(const std::vector<std::string>& args) {
     WordingOptions           wording;
     bool                     emit_ir             = false;
     bool                     no_compile_commands = false;
+    // --keep-synopsis-comments: a front-end option, so it applies to
+    // `--emit-ir` as well as to a render (issue #280).
+    bool keep_synopsis_comments = false;
     // The first wording-only option seen, for the `--emit-ir` conflict below:
     // naming the one the user actually typed beats listing all five. -o is not
     // one of them -- it names where either mode's single output goes.
@@ -1417,6 +1460,9 @@ int generate_command(const std::vector<std::string>& args) {
         } else if (arg == "--validate") {
             wording_only();
             wording.validate = true;
+        } else if (arg == "--warnings-as-errors") {
+            wording_only();
+            wording.warnings_as_errors = true;
         } else if (arg == "--paper") {
             wording_only();
             wording.paper = true;
@@ -1525,6 +1571,8 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
         } else if (arg == "--no-compile-commands") {
             no_compile_commands = true;
+        } else if (arg == "--keep-synopsis-comments") {
+            keep_synopsis_comments = true;
         } else if (arg == "--source") {
             std::string source;
             if (!next(source))
@@ -1637,7 +1685,8 @@ int generate_command(const std::vector<std::string>& args) {
     // build_document performs no second filesystem probe.
     const frontend::ParseOptions raw_options{.extra_args             = tail,
                                              .compile_commands_dir   = compile_commands_dir,
-                                             .probe_compile_commands = !no_compile_commands};
+                                             .probe_compile_commands = !no_compile_commands,
+                                             .keep_synopsis_comments = keep_synopsis_comments};
     // Resolved per header, not once for the paper: a compilation database
     // answers about a file, and two headers of one paper can perfectly well
     // have been compiled with different flags. Papers whose headers share a
@@ -1650,8 +1699,10 @@ int generate_command(const std::vector<std::string>& args) {
                          "specgen: using compile flags for '{}' from the database entry in '{}'",
                          header,
                          resolved.source);
-        return frontend::ParseOptions{
-            .extra_args = resolved.args, .compile_commands_dir = {}, .probe_compile_commands = false};
+        return frontend::ParseOptions{.extra_args             = resolved.args,
+                                      .compile_commands_dir   = {},
+                                      .probe_compile_commands = false,
+                                      .keep_synopsis_comments = keep_synopsis_comments};
     };
 
     // Build, then emit, as one and_then pipeline (decision

@@ -9,10 +9,13 @@
 #include <beman/specgen/span_sentinels.hpp>
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/decl_projections.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/qualifiers.hpp>
+#include <beman/specgen/frontend/record_members.hpp>
+#include <beman/specgen/frontend/requires_clauses.hpp>
 #include <beman/specgen/frontend/synopsis_extraction.hpp>
 #include <beman/specgen/frontend/classify.hpp>
 
@@ -27,7 +30,6 @@
 #include <clang/Basic/LangOptions.h>
 #include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
-#include <clang/Basic/TokenKinds.h>
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/Token.h>
@@ -207,13 +209,14 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const std::map<const clang::Decl*, std::string>& expos_set,
                                                         const clang::VarDecl*                            unspecified,
                                                         std::optional<clang::SourceRange>                see_below,
-                                                        unsigned                                         indent) {
-    const unsigned        decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    clang::SourceLocation end_loc    = clang::Lexer::getLocForEndOfToken(decl->getEndLoc(), 0, sm, lang_opts);
-    if (const std::optional<clang::Token> semi = clang::Lexer::findNextToken(decl->getEndLoc(), sm, lang_opts);
-        semi && semi->is(clang::tok::semi))
-        end_loc = clang::Lexer::getLocForEndOfToken(semi->getLocation(), 0, sm, lang_opts);
-    const unsigned decl_end = sm.getDecomposedLoc(end_loc).second;
+                                                        unsigned                                         indent,
+                                                        const ConstraintsStated& constraints_stated) {
+    const unsigned decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    // Through the `;`, which for a deleted or defaulted function is past a
+    // tail the declaration's recorded end does not reach (issue #282): the
+    // declaration used to stop at its parameter list, with no `= delete` and
+    // no semicolon.
+    const unsigned decl_end = member_declaration_end(decl, sm, lang_opts);
 
     const llvm::StringRef           buffer = file_buffer(sm, decl->getBeginLoc());
     std::string                     text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
@@ -242,6 +245,12 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                 edits.push_back(SynopsisEdit{body_begin, decl_end, ";"});
             }
         }
+    // A deleted tail reads `= delete;` however it is spelled, as in a class
+    // body, and like a body it is a replaced range no other edit may enter.
+    if (const std::optional<DeletedTail> tail = deleted_tail(decl, sm, lang_opts)) {
+        body_splice = std::pair{tail->begin, tail->end};
+        edits.push_back(SynopsisEdit{tail->begin, tail->end, std::string(kDeletedTail)});
+    }
     const auto outside_body = [&](unsigned begin, unsigned end) {
         return !body_splice || end <= body_splice->first || begin >= body_splice->second;
     };
@@ -268,6 +277,18 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
 
     add_declaration_masks(
         edits, sentinels, span_n, unspecified, see_below, buffer, decl_begin, decl_end, sm, lang_opts);
+
+    // A requires-clause the item declaration states as *Constraints* (issue
+    // #281), removed as extract_synopsis removes a member's. Dominant, since
+    // a qualifier or exposition-only edit may sit inside the clause.
+    if (const clang::FunctionDecl* fn = function_or_template(decl);
+        fn != nullptr && constraints_stated.contains(fn->getCanonicalDecl())) {
+        // substrate generic algorithm: each dominant edit erases the edits
+        // nested in it, which mutates the list it is added to.
+        for (SynopsisEdit& removal : requires_clause_removals(fn, sm, lang_opts))
+            if (removal.begin >= decl_begin && removal.end <= decl_end)
+                add_dominant_edit(edits, std::move(removal));
+    }
 
     const auto*                named    = llvm::dyn_cast<clang::NamedDecl>(decl);
     const clang::FunctionDecl* named_fn = named != nullptr ? llvm::dyn_cast<clang::FunctionDecl>(named) : nullptr;

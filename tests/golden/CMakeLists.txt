@@ -1585,6 +1585,122 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_spelling.hpp"
 )
 
+# What a deleted tail *says* (issue #282): `= delete;`, whether the header
+# wrote the keyword, P2573's message, or a macro standing for either. Pinned
+# at the three places a declaration is printed, in the rendered LaTeX as well
+# as the IR: the class synopsis, the item declaration of a `\describe`d
+# member (a lone `;` for the macro spelling, before), and a gathered header
+# synopsis (no tail and no `;` at all, before).
+specgen_add_golden(
+    deleted_tail_wording
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_deleted_tail_wording.hpp"
+)
+specgen_add_golden(
+    deleted_tail_wording_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/deleted_tail_wording/expected.json"
+)
+
+# An exposition-only member renders under its exposition name wherever it
+# appears in an authored code span, by either spelling (issue #286): the
+# header's `value_` inside `value_ == 0`, and the paper's `value`. A name the
+# wording already uses for something else -- a parameter, another member --
+# is not read as an exposition name. The LaTeX render is where the difference
+# shows: `\tcode{\exposid{value} == 0}`, not `\tcode{value_ == 0}`.
+specgen_add_golden(
+    expos_code_spans
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_code_spans.hpp"
+)
+specgen_add_golden(
+    expos_code_spans_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_code_spans/expected.json"
+)
+
+# An authored header synopsis (issue #284): a detached `\verbatim-synopsis`
+# alone in a `.syn` section is that section's synopsis exactly as written,
+# with no second `namespace std {` around it, and `/// END` closes the
+# section, so the helper after the fence is at the document root and not in
+# the header synopsis's subclause. The IR pins the tree; the LaTeX the text.
+specgen_add_golden(
+    authored_header_synopsis
+    MODE generate
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_authored_header_synopsis.hpp"
+)
+specgen_add_golden(
+    authored_header_synopsis_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/authored_header_synopsis/expected.json"
+)
+
+# A class's leading prose standing for the paragraph its static_asserts derive
+# (issue #283): `\covers mandates P` on the class's docblock suppresses the
+# derived "is ill-formed unless" paragraph and keeps its conjuncts as drift
+# evidence on a Mandates element with no body, which renders nothing. The
+# `.validate` sibling is the proof that the claims and the one conjunct the
+# validator reads for itself answer every assertion. Rendered through all
+# three backends, since "an element with no body writes no label" is each
+# backend's own rule.
+specgen_add_golden(
+    class_prose_covers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers.hpp"
+)
+specgen_add_golden(
+    class_prose_covers_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_prose_covers/expected.json"
+)
+foreach(backend mpark org)
+    specgen_add_golden(
+        class_prose_covers_wording
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_prose_covers/expected.json"
+    )
+endforeach()
+# A synopsis drops a requires-clause wherever the item declaration drops it
+# (issue #281): stated as *Constraints*, it is in neither; kept by
+# `\constraints-in-decl`, it is in both; and a `= default` member with no
+# item keeps the clause nothing else would state. Both clause positions, a
+# hidden friend, and a namespace-scope function in a header synopsis. The
+# LaTeX render puts the synopsis beside the item declarations it must agree
+# with.
+specgen_add_golden(
+    synopsis_constraints
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_constraints.hpp"
+)
+specgen_add_golden(
+    synopsis_constraints_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_constraints/expected.json"
+)
+
+# Synopsis comments (issue #280): a synopsis keeps a `\ref` group header and a
+# comment the author marks with `\syn`, printed without the marker, and drops
+# every other plain comment as the implementation's -- on a line of its own,
+# after a declaration, as `/* */`, and above an `\omit`ted member. A marked
+# comment at namespace scope in a gathered header synopsis is kept too. The
+# earlier rule, `--keep-synopsis-comments`, is a front-end option the harness
+# has no argument for, and is pinned by a unit test over the same header
+# (synopsis.test.cpp).
+specgen_add_golden(
+    synopsis_comments
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_comments.hpp"
+)
+specgen_add_golden(
+    synopsis_comments_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_comments/expected.json"
+)
+
+# The claim misplaced: on a class with no static_assert, in a docblock with no
+# leading prose, naming Constraints, and on a function without `\asdraft`.
+specgen_add_golden(
+    class_prose_covers_diagnostics
+    MODE diagnose
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,
@@ -2825,6 +2941,52 @@ foreach(
         PROPERTIES PASS_REGULAR_EXPRESSION "${refusal_message}"
     )
 endforeach()
+
+# --warnings-as-errors (issue #285): a Warning is what the validator verified,
+# so a build may require a run with none, and a Note is what a person has to
+# check, so it never fails one. Three inputs that already have validate
+# goldens: one whose findings are all Warnings, which now stops the render;
+# one whose finding is a Note, which does not; and the derived conjunct with
+# no recognized counterpart, a Warning before and a Note now, beside two
+# Warnings that still fail. The flag means nothing without --validate.
+add_test(
+    NAME golden.warnings_as_errors.warning_fails
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --validate --warnings-as-errors
+)
+set_tests_properties(
+    golden.warnings_as_errors.warning_fails
+    PROPERTIES WILL_FAIL TRUE
+)
+add_test(
+    NAME golden.warnings_as_errors.note_passes
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_private_data/input.json"
+        --validate --warnings-as-errors -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.note_passes.tex"
+)
+add_test(
+    NAME golden.warnings_as_errors.without_flag_passes
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --validate -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.without_flag_passes.tex"
+)
+add_test(
+    NAME golden.warnings_as_errors.needs_validate
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --warnings-as-errors
+)
+set_tests_properties(
+    golden.warnings_as_errors.needs_validate
+    PROPERTIES PASS_REGULAR_EXPRESSION "applies only with --validate"
+)
 
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(

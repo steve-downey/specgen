@@ -10,6 +10,7 @@
 
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/ir.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/attach.hpp>
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
@@ -95,6 +96,9 @@ class NamespaceRuns {
 // as the established class and namespace-exposition paths. `indent` is how
 // far the text is indented once enclosed (draft_format.hpp): one level
 // inside `namespace std {`, two inside a nested namespace block.
+// A function in `constraints_stated` loses its requires-clauses, as a class
+// member does and for the same reason (issue #281): its item declaration
+// states them as *Constraints*.
 beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*                                     decl,
                                                         const clang::SourceManager&                      sm,
                                                         const clang::LangOptions&                        lang_opts,
@@ -102,7 +106,8 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const std::map<const clang::Decl*, std::string>& expos_set,
                                                         const clang::VarDecl*             unspecified = nullptr,
                                                         std::optional<clang::SourceRange> see_below   = std::nullopt,
-                                                        unsigned                          indent = kNamespaceIndent);
+                                                        unsigned                          indent = kNamespaceIndent,
+                                                        const ConstraintsStated&          constraints_stated = {});
 
 beman::specgen::ir::CodeText header_comment_code(std::string text);
 

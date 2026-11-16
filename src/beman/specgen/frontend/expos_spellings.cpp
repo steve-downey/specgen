@@ -21,8 +21,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <functional>
 #include <map>
+#include <optional>
 #include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -60,6 +63,34 @@ std::map<std::string, std::string> expos_spellings(const clang::CXXRecordDecl*  
         spellings[named->getName().str()] = expos_set.at(named->getCanonicalDecl());
     }
     return spellings;
+}
+
+std::set<std::string> taken_names(const clang::CXXRecordDecl*                      record,
+                                  const std::map<const clang::Decl*, std::string>& expos_set,
+                                  const clang::FunctionDecl*                       function) {
+    std::set<std::string> taken;
+    if (record != nullptr) {
+        if (record->getIdentifier() != nullptr)
+            taken.insert(record->getName().str());
+        taken.insert_range(
+            real_record_members(record) | std::views::transform([](const RealRecordMember& member) {
+                const auto* member_fn = member_function_or_template(member.decl);
+                return member_fn != nullptr ? llvm::dyn_cast<clang::NamedDecl>(member_fn)
+                                            : llvm::dyn_cast<clang::NamedDecl>(member.decl);
+            }) |
+            std::views::filter([&](const clang::NamedDecl* named) {
+                return named != nullptr && named->getIdentifier() != nullptr &&
+                       !expos_set.contains(named->getCanonicalDecl());
+            }) |
+            std::views::transform([](const clang::NamedDecl* named) { return named->getName().str(); }));
+    }
+    if (function != nullptr)
+        taken.insert_range(
+            function->parameters() | std::views::filter([](const clang::ParmVarDecl* parameter) {
+                return parameter->getIdentifier() != nullptr;
+            }) |
+            std::views::transform([](const clang::ParmVarDecl* parameter) { return parameter->getName().str(); }));
+    return taken;
 }
 
 bool is_ident_char(char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; }
@@ -142,9 +173,86 @@ std::string apply_ref_sentinels(std::string text, unsigned& span_n, std::map<std
 namespace {
 namespace ir = beman::specgen::ir;
 
+// One authored code span, with every use of an exposition-only member
+// renamed (issue #286). A use is a whole identifier that is the member's
+// written spelling, or the member's exposition name where that name is not
+// `taken` by something else the wording can mean. The contents of string and
+// character literals are text, not names.
+ir::CodeText rename_expos_uses(std::string_view                          text,
+                               const std::map<std::string, std::string>& spellings,
+                               const std::set<std::string>&              taken) {
+    // The exposition names an author may write directly, longest first so
+    // `has-value` is tried before `has`.
+    std::vector<std::string_view> displays =
+        spellings | std::views::values |
+        std::views::filter([&](const std::string& display) { return !display.empty() && !taken.contains(display); }) |
+        std::views::transform([](const std::string& display) { return std::string_view(display); }) |
+        std::ranges::to<std::vector>();
+    std::ranges::sort(displays, std::ranges::greater{}, &std::string_view::size);
+
+    // A kebab-case exposition name is not one identifier, so it is matched as
+    // text between boundaries: no identifier character and no `-` on either
+    // side, which keeps `has-value` out of `not-has-value`.
+    const auto boundary     = [](char c) { return !is_ident_char(c) && c != '-'; };
+    const auto display_here = [&](std::size_t pos) -> std::optional<std::string_view> {
+        if (pos > 0 && !boundary(text[pos - 1]))
+            return std::nullopt;
+        const auto found = std::ranges::find_if(displays, [&](std::string_view display) {
+            return text.substr(pos).starts_with(display) &&
+                   (pos + display.size() == text.size() || boundary(text[pos + display.size()]));
+        });
+        return found == displays.end() ? std::nullopt : std::optional<std::string_view>(*found);
+    };
+
+    ir::CodeText out;
+    const auto   add_span = [&out](std::string_view display) {
+        const std::size_t begin = out.text.size();
+        out.text += display;
+        out.spans.push_back(ir::Span{begin, out.text.size(), ir::SpanKind::ExposId, std::string(display)});
+    };
+    std::size_t pos = 0;
+    // substrate generic algorithm: the same position-tracking left-to-right
+    // substitution walk as apply_expos_sentinels above, writing spans rather
+    // than sentinels because authored prose is never reformatted.
+    while (pos < text.size()) {
+        const char c = text[pos];
+        if (c == '"' || c == '\'') {
+            // A literal, copied through its closing quote; an unterminated one
+            // runs to the end of the span.
+            std::size_t end = pos + 1;
+            // substrate generic algorithm: a scan for the closing quote that
+            // steps over backslash escapes, which no find primitive expresses.
+            while (end < text.size() && text[end] != c)
+                end += text[end] == '\\' ? 2 : 1;
+            end = std::min(end + 1, text.size());
+            out.text += text.substr(pos, end - pos);
+            pos = end;
+            continue;
+        }
+        if (!is_ident_char(c) || (pos > 0 && is_ident_char(text[pos - 1]))) {
+            out.text += text[pos++];
+            continue;
+        }
+        const std::size_t end =
+            static_cast<std::size_t>(std::ranges::find_if_not(text.substr(pos), is_ident_char) - text.begin());
+        if (const auto it = spellings.find(std::string(text.substr(pos, end - pos))); it != spellings.end()) {
+            add_span(it->second);
+            pos = end;
+        } else if (const std::optional<std::string_view> display = display_here(pos)) {
+            add_span(*display);
+            pos += display->size();
+        } else {
+            out.text += text.substr(pos, end - pos);
+            pos = end;
+        }
+    }
+    return out;
+}
+
 template <class Block>
 struct ProseLeafRewriter {
     const std::map<std::string, std::string>& spellings;
+    const std::set<std::string>&              taken;
     ir::Paragraph                             paragraph(ir::Paragraph) const;
     // A paragraph, list, and both table shapes carry semantic prose inlines.
     Block operator()(ir::BodyParagraph) const;
@@ -158,14 +266,10 @@ struct ProseLeafRewriter {
 template <class Block>
 ir::Paragraph ProseLeafRewriter<Block>::paragraph(ir::Paragraph p) const {
     return std::move(p) | std::views::as_rvalue | std::views::transform([this](ir::Inline piece) {
-               auto* code = std::get_if<ir::CodeInline>(&piece);
-               if (code != nullptr && code->code.spans.empty()) {
-                   const auto name = code->code.text.substr(0, code->code.text.find('<'));
-                   if (const auto it = spellings.find(name); it != spellings.end()) {
-                       code->code.text.replace(0, name.size(), it->second);
-                       code->code.spans = {ir::Span{0, it->second.size(), ir::SpanKind::ExposId, it->second}};
-                   }
-               }
+               // A span that already carries spans was resolved against the
+               // AST when it was extracted, and is left alone.
+               if (auto* code = std::get_if<ir::CodeInline>(&piece); code != nullptr && code->code.spans.empty())
+                   code->code = rename_expos_uses(code->code.text, spellings, taken);
                return piece;
            }) |
            std::ranges::to<ir::Paragraph>();
@@ -219,11 +323,13 @@ Block ProseLeafRewriter<Block>::operator()(ir::AuthoredCode code) const {
     return code;
 }
 
-ir::InformativeBody rewrite_informative(ir::InformativeBody, const std::map<std::string, std::string>&);
+ir::InformativeBody
+rewrite_informative(ir::InformativeBody, const std::map<std::string, std::string>&, const std::set<std::string>&);
 ir::InformativeBody rewrite_informative(ir::InformativeBody                       body,
-                                        const std::map<std::string, std::string>& spellings) {
+                                        const std::map<std::string, std::string>& spellings,
+                                        const std::set<std::string>&              taken) {
     return std::move(body) | std::views::as_rvalue | std::views::transform([&](ir::InformativeBlock block) {
-               return std::visit(foundation::overloaded{ProseLeafRewriter<ir::InformativeBlock>{spellings}},
+               return std::visit(foundation::overloaded{ProseLeafRewriter<ir::InformativeBlock>{spellings, taken}},
                                  std::move(block));
            }) |
            std::ranges::to<ir::InformativeBody>();
@@ -239,19 +345,21 @@ struct ProseExposRewriter : ProseLeafRewriter<ir::BodyBlock> {
 
 ir::BodyBlock ProseExposRewriter::operator()(ir::EquivalentTo code) const { return code; }
 ir::BodyBlock ProseExposRewriter::operator()(ir::Note note) const {
-    note.body = rewrite_informative(std::move(note.body), spellings);
+    note.body = rewrite_informative(std::move(note.body), spellings, taken);
     return note;
 }
 ir::BodyBlock ProseExposRewriter::operator()(ir::Example example) const {
-    example.body = rewrite_informative(std::move(example.body), spellings);
+    example.body = rewrite_informative(std::move(example.body), spellings, taken);
     return example;
 }
 } // namespace
 
-void rewrite_prose_expos(ir::ItemDescr& descr, const std::map<std::string, std::string>& spellings) {
+void rewrite_prose_expos(ir::ItemDescr&                            descr,
+                         const std::map<std::string, std::string>& spellings,
+                         const std::set<std::string>&              taken) {
     if (spellings.empty())
         return;
-    const ProseExposRewriter rewrite{{spellings}};
+    const ProseExposRewriter rewrite{{spellings, taken}};
     descr.leading = std::move(descr.leading) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
                         return std::visit(foundation::overloaded{rewrite}, std::move(b));
                     }) |

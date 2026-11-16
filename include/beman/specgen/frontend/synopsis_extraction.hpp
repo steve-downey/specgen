@@ -10,6 +10,7 @@
 #define BEMAN_SPECGEN_FRONTEND_SYNOPSIS_EXTRACTION_HPP
 
 #include <beman/specgen/frontend/declaration_masks.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/span_sentinels.hpp>
@@ -61,6 +62,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
+                                              const ConstraintsStated&                         constraints_stated,
+                                              bool                                             keep_comments,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl = nullptr);
 

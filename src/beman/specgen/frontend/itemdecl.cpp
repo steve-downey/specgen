@@ -79,6 +79,14 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
         const clang::Stmt* body       = in_class->getBody();
         const unsigned     body_begin = spliced_tail_begin(in_class, body, sm);
         text                          = source_text.substr(0, body_begin - decl_begin).str();
+    } else if (const std::optional<DeletedTail> tail = deleted_tail(range_decl, sm, lang_opts)) {
+        // `= delete`, however the header spells the tail (issue #282). Read
+        // from the file rather than from the token range above: a tail spelled
+        // through a macro leaves the declaration's recorded end inside the
+        // expansion, and the range's text is then empty.
+        const llvm::StringRef buffer = sm.getBufferData(sm.getFileID(sm.getFileLoc(begin_loc)));
+        text                         = buffer.substr(decl_begin, tail->begin - decl_begin).str();
+        text += kDeletedTail;
     } else {
         text = source_text.str();
     }

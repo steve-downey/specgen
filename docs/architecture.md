@@ -47,8 +47,11 @@ Comment lines in a header are one of **three** things:
   because the draft does not print implementation documentation. `///` is *not* a second
   spelling of `//!`: a member documented only in Doxygen is an undocumented member as far as
   the coverage invariant (§9) is concerned.
-- A plain `//` or `/* … */` is **draft-form** and survives verbatim (`\ref` group headers,
-  `see~\ref` trailers, ordinary comments inside extracted bodies).
+- A plain `//` or `/* … */` is an **ordinary comment**. An extracted body keeps it verbatim.
+  A synopsis keeps the ones it recognizes or the author marks (§3.4): a `\ref` group
+  header, and a comment that starts `\syn`, printed without the marker. The rest are the
+  implementation's and are dropped (issue #280). `\rSec` and `END` lines are structure and
+  never text.
 
 A header documented entirely in Doxygen still has to *work* (parse, exit 0, and emit IR that
 reads back and renders) even though the wording it produces is empty and the validator reports
@@ -166,7 +169,7 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   Both mirror clause order by the input contract.
 - Comment classification follows the three-way vocabulary of §1: only `//!`/`/*!` chunks reach
   the docblock grammar; Doxygen chunks are collected so synopsis extraction can drop them;
-  draft-form chunks are collected so it can keep them.
+  plain chunks are collected so it can keep the ones a synopsis keeps (§3.4).
 - **Every physical `\rSec` line is a structure event**, even when Clang coalesces adjacent
   line comments into one raw comment. Collection splits comment chunks only around recognized
   section-marker lines, retaining their absolute offsets; other multi-line chunks, including
@@ -189,7 +192,8 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   clauses stay out of the preceding clause's fragment. A mismatched fence or one with no
   section open reports a Warning and leaves the tree unchanged. A `.syn` fence is instead
   consumed by the bounded header-synopsis gatherer below; it does not produce a second close
-  event or diagnostic.
+  event or diagnostic. The one `.syn` fence that does close its section is an authored
+  region's (§3.4, issue #284), which is not gathered at all.
 
 ### 3.3 Redeclaration-chain attachment
 
@@ -249,8 +253,39 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   first and its overlap watermark would suppress the removal — which is how a body naming a
   droppable qualifier once survived into the synopsis while its unqualified twin spliced
   cleanly.
-- Strip docblocks/markup comments and Doxygen comments; keep draft-form comments (`\ref`,
-  `see~\ref`).
+- **A deleted tail reads `= delete;` however the header spells it** (issue #282): P2573's
+  `= delete("reason")` loses its message, the implementation's diagnostic and no part of the
+  interface, and a macro standing for the keyword
+  (`= BEMAN_EXPECTED_DELETE_MSG("...")`, so that a pre-C++26 build still compiles) is the
+  implementation's spelling of it. The AST says the function is deleted and the lexer only
+  measures the tail, as for where it ends: it starts after the last `=` outside a bracket
+  before the terminating `;`, earlier ones being `operator=` and a template head's default
+  arguments. One helper (`deleted_tail`) serves the three places a declaration is printed:
+  the class synopsis, the item declaration of a `\describe`d member, and a gathered header
+  synopsis, where a deleted namespace-scope function is also read through its `;` rather
+  than to the end of its parameter list.
+- Strip docblocks/markup comments and Doxygen comments.
+- **A synopsis keeps the plain comments it recognizes or the author marks, and drops the
+  rest** (issue #280). Every plain comment in a class body used to be synopsis text, which
+  made a class in an annotated header a place an implementation comment could not be
+  written: the ways out were `///`, which hands Doxygen an implementation note as the next
+  declaration's documentation, or moving the comment away from what it explains. The
+  draft's own synopses do carry comments, but about five in six are forms specgen reads as
+  structure or writes from a marker (`// \ref{x}, title`, `// exposition only`,
+  `// freestanding`); the free text is the remaining sixth. So: a `\ref` group header is
+  kept; a comment whose text starts `\syn` is kept without its marker
+  (`synopsis_comment_marker`), on a line of its own, after a declaration, or as `/* */`,
+  and stays an ordinary comment to the compiler, Doxygen and clang-format, in the manner of
+  `// \ref` and `// \rSec`; every other plain comment is removed, a whole line with its
+  newline, a trailing one with the spaces before it. That includes the comment above an
+  `\omit`ted or `\merge`d member, which used to survive without its declaration. Clang
+  merges a run of `//` lines into one raw comment, so the run is taken a line at a time: a
+  `\ref` header and an implementation note commonly share one. `--keep-synopsis-comments`
+  (`ParseOptions::keep_synopsis_comments`) is the earlier rule, under which every plain
+  comment stays; a marked comment loses its marker under either, so a header can be marked
+  before the option is dropped. The option is the front end's, so it applies to `--emit-ir`
+  too. An extracted `\effects-equiv` body is exposed deliberately and keeps its comments
+  (§4.2).
 - **An empty class-scope `\ref` group is not printed.** A group header is retained only when
   at least one direct declaration in its run (before the next group header) survives the
   ordinary synopsis filters. If every declaration is merged, omitted, or otherwise removed,
@@ -281,7 +316,9 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   a `\ref` header *between* declarations is gathered as a standalone group header: one inside
   a class body is already carried by that class's extraction, so a consumed-range watermark
   skips comments a preceding declaration covers rather than appending them twice (issue #31).
-  Doxygen, markup, and namespace scaffolding are dropped; declaration, Ref, exposition, and
+  Doxygen, markup, and namespace scaffolding are dropped, and so is a plain comment that is
+  neither a `\ref` header nor marked `\syn` (issue #280, the class-body rule; a marked one is
+  kept without its marker); declaration, Ref, exposition, and
   index spans retain their semantics; a terminal `\verbatim-synopsis` payload is appended
   byte-for-byte. A folded-in class keeps everything of its own that the gathered node cannot
   hold: its routed in-class members ride the gathered event to the `\rSec` each `\ref` names
@@ -305,6 +342,18 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   the route was asked for — without it a typo loses the wording as silently as not routing it
   at all did, and a namespace entity has no other roster entry to be caught by. A missing or mismatched
   fence warns and does not consume later sections.
+- **An authored header synopsis is not a gathered one** (issue #284). A `.syn` region that
+  holds a detached `\verbatim-synopsis` and gathers nothing -- no declaration, no `\ref`
+  header -- is the section it would be under any other name: the block is the section's
+  synopsis exactly as written, its own namespace included, and the fence closes the section,
+  so a helper after it returns to the enclosing frame. The name alone used to turn the
+  gatherer on, which wrapped the block in a second `namespace std {` and left the section
+  open across its fence. A gathered region cannot stand in for this: it folds a class's
+  whole synopsis into the header synopsis, where [expected.syn] has a forward declaration
+  and the class synopsis is in the class's subclause. Beside gathered declarations a
+  `\verbatim-synopsis` payload is still appended to their code inside the one enclosure,
+  and a gathered region's fence still only bounds the gather: headers nest their class
+  subclauses beneath a gathered `.syn` section, and closing it would lift them out.
 - The `\freestanding` / `\freestanding-deleted` markers (§4.3) emit their literal comment
   suffix on the **in-class declaration** even when the marker lives on the out-of-line
   definition. Neither status enters the IR as metadata; after extraction it is ordinary
@@ -494,7 +543,18 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
 - Multi-paragraph: blank `//!` line separates paragraphs; next `\tag` ends the
   element.
 - Backticks → `\tcode`, and backticked spans are reference-resolved: expos names
-  render as `\exposid`, the leakage checker runs inside prose.
+  render as `\exposid`, the leakage checker runs inside prose. **Every use in a span is
+  renamed, not only a span that is exactly the name** (issue #286): `` `*p_ == value_` ``
+  renders `*\exposid{ptr} == \exposid{value}`, the form extracted code takes, where it used
+  to keep the implementation's spelling without a finding. A use is a whole identifier, and
+  the contents of a string or character literal are text. Either spelling names the member,
+  the written C++ one or the exposition name (`value`, `has-value`), so wording transcribed
+  from a paper renders the same as wording written against the header. This is §3.5's
+  name-match exception, confined as there to the class's own fragments; and since an
+  exposition name is text with nothing behind it to resolve, one the wording already uses
+  for something else (`taken_names`: the class, its other members, the described function's
+  parameters) is never read as an exposition name. A kebab-case name is matched between
+  boundaries that exclude `-`, which keeps `has-value` out of `not-has-value`.
 - `\item` starts an authored item on the current element or leading unlabelled
   body (including detached section prose); nonblank following
   lines continue it, and its punctuation is preserved. A blank ends the item.
@@ -740,6 +800,21 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - Default: the requires-clause is removed from the itemdecl and rendered as a
   *Constraints:* paragraph — a trailing clause by truncation, a template-head
   clause by excision. `\constraints-in-decl` overrides per decl, for either.
+- **The synopsis drops the clause wherever the itemdecl drops it** (issue #281), so the
+  synopsis and the item declaration of one member agree, and the clause is stated once: the
+  draft's [expected.object.general] declares the converting constructors bare and
+  [expected.object.cons] has their constraints. Which members those are is one pre-pass set,
+  `build_constraints_stated`, keyed by canonical declaration like the freestanding map,
+  because a class synopsis is extracted before the out-of-line definition carrying the
+  markup is reached: every function that gets an item (an out-of-line member definition, a
+  documented free function, a member whose markup is in the class, a definition in a
+  `--source` file) and does not say `\constraints-in-decl`. `requires_clause_removals`
+  turns both clause positions into dominant edits for the class synopsis (§3.4) and for a
+  gathered header synopsis. A member with **no item** keeps its clause, since nothing else
+  would state it: a `= default`/`= delete` member that is not described, and anything
+  `\omit`ted or `\merge`d. A clause that goes whole takes no twin cut (§4.3), which would
+  overlap its removal. The leakage findings for a name that only a dropped clause carried
+  are now reported once, at the *Constraints* element, where they were reported twice.
 - `detail::` concepts in constraints trip the leakage checker; fixits: replace
   the derived paragraph with authored `\constraints` prose, or mark that
   namespace-scope concept `\expos` so resolved uses become `\exposid` spans.
@@ -767,6 +842,21 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - An authored `\mandates` in the class definition's *own* docblock replaces
   that paragraph and inherits its conjuncts, the same replacement rule and the
   same validator-only drift evidence a member's authored Mandates gets.
+- **The class's leading prose can stand for that paragraph instead** (issue #283). An
+  authored `\mandates` renders under a label, and the draft states this requirement
+  unlabelled, in its own words ([expected.un.general]: "A program that instantiates the
+  definition of `unexpected` for a non-object type, an array type, ... is ill-formed").
+  `\covers mandates P` on the class's docblock, without `\asdraft`, says the leading prose
+  is that paragraph: the derived one is not rendered, and its conjuncts ride on a Mandates
+  element with **no body**, carrying the claims. Nothing renders for it, a backend writing
+  an element's label on its first block, and nothing is new in the IR: the element is the
+  one an authored `\mandates` would have been, minus its words. The validator takes a claim
+  on such an element to be about the leading prose (§9), reads that prose for the conjuncts
+  it can recognize, as it always did for any item, and notes one that is neither recognized
+  nor claimed. The claim is an Error on a class with no `static_assert`, in a docblock with
+  no leading prose, and as `\covers constraints`, a class deriving no Constraints. The
+  grammar reports the scoped form without `\asdraft` wherever it is written, not knowing
+  what a docblock is attached to; `record_docblock` takes that finding back.
 
 ### 5.3 Conjunct rendering
 
@@ -1178,6 +1268,15 @@ visitation; note and example bodies cannot contain further informative bodies.
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
 
+**The severity says who has the evidence** (issue #285). A Warning reports something the
+validator verified: it holds both sides of what it compared, as when authored prose
+contradicts a derived conjunct or a `noexcept` signature carries a *Throws* that throws. A
+Note points at something a person has to check outside the tool, because the validator
+cannot settle it: that it recognized no authored counterpart for a derived conjunct, that a
+private member is unmarked, that a hidden helper is used by a body nothing extracts. The
+split is what lets a build gate on one and read the other: `--warnings-as-errors` makes a
+Warning stop the render as an Error does, and a Note never fails a run.
+
 1. **Coverage invariant** (Error, either direction): every class-body declaration is exactly
    one of: merged twin, defaulted/deleted, `\omit`ted, a *public data member* — whose
    declaration is its specification, so there is no itemdescr to ask for
@@ -1259,7 +1358,8 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    `noexcept` signature. Warn-only for a load-bearing reason: an Error would skip rendering,
    and a wrong *Throws:* paragraph should not cost the whole document. No reverse check, per
    §5.4.
-4. **Mandates/Constraints drift** (Warning): authored prose vs. the suppressed derivation's
+4. **Mandates/Constraints drift** (Warning; Note for a conjunct with no recognized
+   counterpart): authored prose vs. the suppressed derivation's
    conjuncts (§5.2), located at the specific assert. Agreement with suppressed
    derivation evidence is quiet; contradiction warns. Separately rendered
    derived/authored duplicates still warn. Same-type prose (`X is [not] the
@@ -1270,7 +1370,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    The reverse direction is checked too: a derived conjunct with no comparable reading
    anywhere in the item's wording — not just its paired element, so a conjunct legitimately
    documented in a sibling element (e.g. `\remarks` instead of `\constraints`) stays silent —
-   warns that it has no authored counterpart. A miss on either direction costs nothing; an
+   is reported as having no authored counterpart. That one is a **Note**: the validator
+   reads boolean assertions, same-type prose and `Let` bindings, so what it knows is that it
+   recognized no counterpart, and whether "is a specialization of `expected`" covers
+   `is-expected-specialization<U>::value` is a question about English. `\covers` answers it,
+   and an answered one is quiet. A miss on either direction costs nothing; an
    authored `\constraints` that is a strict textual subset of the real `requires`-clause used
    to validate clean, which this closes.
 5. **Ordering lint** (Note): authored element order vs. canonical. This rule lives in the
@@ -1294,7 +1398,9 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
 Validator metadata on a Constraints or Mandates element may include explicit
 `\covers [!]predicate` claims (decision `explicit-constraint-coverage`).
 Each claim must identify exactly one derived conjunct of that kind and agree
-with its polarity. Claims neither render nor participate in leakage checks;
+with its polarity. A claim needs wording to be about: its own element's, or,
+for an element with no body, the description's leading prose (§5.2, the
+stand-in a class's leading prose leaves behind). Claims neither render nor participate in leakage checks;
 recognizable contradictions and unrelated missing counterparts remain findings.
 Items emit as `item-v4`, accepting legacy `item`, `item-v2`, and `item-v3` on
 input, so older readers cannot silently discard coverage claims.

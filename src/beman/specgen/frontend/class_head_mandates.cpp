@@ -4,12 +4,14 @@
 #include <beman/specgen/frontend/class_head_mandates.hpp>
 
 #include <beman/specgen/conjuncts.hpp>
+#include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/document_build.hpp>
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/frontend/constraints.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
+#include <beman/specgen/frontend/file_views.hpp>
 #include <beman/specgen/frontend/requires_clauses.hpp>
 
 #include <clang/AST/ASTContext.h>
@@ -146,18 +148,71 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
     out.descr_covers   = std::move(block.covers);
     // Within the class's own wording, uses of its exposition-only members
     // render as \exposid -- the same rewrite a member's description gets.
-    rewrite_prose_expos(out.descr, expos_spellings(record, expos_set));
+    rewrite_prose_expos(out.descr, expos_spellings(record, expos_set), taken_names(record, expos_set));
+
+    // `\covers <element> P` beside `\asdraft` is a claim about the inherited
+    // description, resolved later (inherit.hpp). Without `\asdraft` it is the
+    // class's own: `\covers mandates P` says the leading prose stands for the
+    // derived paragraph (issue #283).
+    std::vector<ir::Paragraph> stand_in;
+    const auto                 reject = [&](std::string message) {
+        out.diagnostics.push_back(
+            beman::specgen::document_build::Diagnostic{beman::specgen::Severity::Error,
+                                                       sm.getSpellingLineNumber(record->getBeginLoc()),
+                                                       std::move(message),
+                                                       diagnostic_file_name(sm, sm.getFileID(record->getBeginLoc()))});
+    };
+    if (!out.descr_as_draft) {
+        if (std::ranges::any_of(out.descr_covers,
+                                [](const ir::InheritedCover& c) { return c.kind != ir::ElementKind::Mandates; }))
+            reject("\\covers constraints on a class definition needs \\asdraft: a class derives no Constraints");
+        stand_in =
+            std::move(out.descr_covers) | std::views::as_rvalue |
+            std::views::filter([](const ir::InheritedCover& c) { return c.kind == ir::ElementKind::Mandates; }) |
+            std::views::transform([](ir::InheritedCover c) { return std::move(c.claim); }) |
+            std::ranges::to<std::vector>();
+        out.descr_covers.clear();
+    }
 
     std::optional<ClassMandates> derived = derive_class_mandates(record, sm, lang_opts, ns_drop_set, expos_set);
-    if (!derived)
+    if (!derived) {
+        if (!stand_in.empty())
+            reject("\\covers mandates on a class definition answers the paragraph its static_asserts derive, and "
+                   "this class has none");
         return;
+    }
     const auto authored = std::ranges::find_if(out.descr.elements, [](const ir::DescriptionElement& element) {
         return element.kind == ir::ElementKind::Mandates && !element.derived;
     });
-    if (authored != out.descr.elements.end())
+    if (authored != out.descr.elements.end()) {
         authored->conjuncts = std::move(derived->conjuncts);
-    else
+        authored->coverage.append_range(std::move(stand_in));
+        return;
+    }
+    if (!stand_in.empty() && out.descr.leading.empty()) {
+        reject("\\covers mandates on a class definition says its leading prose states what the static_asserts "
+               "require, and this docblock has no leading prose");
+        stand_in.clear();
+    }
+    if (stand_in.empty()) {
         out.general = std::move(derived->text);
+        return;
+    }
+    // The draft states this requirement as an unlabelled paragraph in its own
+    // words ([expected.un.general]), which an authored `\mandates` cannot
+    // give: it replaces the derived paragraph but renders under a label. So
+    // the leading prose stands for the paragraph, and the derivation rides
+    // along as an element with no body: nothing to render, since a backend
+    // writes an element's label on its first block, and the same
+    // validator-only evidence an authored `\mandates` inherits. The claims
+    // answer the conjuncts the prose covers in words the validator does not
+    // read; one it neither recognizes nor is told about is the usual note.
+    out.descr.elements.push_back(ir::DescriptionElement{.kind      = ir::ElementKind::Mandates,
+                                                        .body      = {},
+                                                        .derived   = false,
+                                                        .conjuncts = std::move(derived->conjuncts),
+                                                        .coverage  = std::move(stand_in)});
+    ir::canonicalize(out.descr);
 }
 
 void route_class_description(beman::specgen::document_build::SynopsisDecl&   out,

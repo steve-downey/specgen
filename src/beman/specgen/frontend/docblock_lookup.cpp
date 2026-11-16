@@ -86,6 +86,20 @@ std::optional<std::size_t> stripped_comment_start(llvm::StringRef raw) {
     return vocabulary_start(raw, [](CommentVocabulary v) { return v != CommentVocabulary::Draft; });
 }
 
+std::optional<std::pair<std::size_t, std::size_t>> synopsis_comment_marker(llvm::StringRef comment) {
+    static constexpr llvm::StringLiteral kMarker{"\\syn"};
+    if (!comment.starts_with("//") && !comment.starts_with("/*"))
+        return std::nullopt;
+    const std::size_t begin = comment.find_first_not_of(" \t", 2);
+    if (begin == llvm::StringRef::npos || !comment.substr(begin).starts_with(kMarker))
+        return std::nullopt;
+    const std::size_t after = begin + kMarker.size();
+    if (after < comment.size() && llvm::StringRef(" \t\r\n").find(comment[after]) == llvm::StringRef::npos)
+        return std::nullopt;
+    const std::size_t end = comment.find_first_not_of(" \t", after);
+    return std::pair{begin, end == llvm::StringRef::npos ? comment.size() : end};
+}
+
 bool is_docblock_comment(llvm::StringRef raw) { return docblock_start(raw).has_value(); }
 
 std::vector<beman::specgen::document_build::Diagnostic>
@@ -156,7 +170,14 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
     if (!start)
         return {};
 
-    const grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
+    grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
+    // On a class definition `\covers mandates P` needs no `\asdraft`: it says
+    // the class's leading prose stands for the paragraph its static_asserts
+    // derive (issue #283, attach_class_description). The grammar reports the
+    // scoped form without `\asdraft` wherever it is written, so the finding
+    // is taken back here, the one place that knows the docblock is a class's.
+    std::erase_if(parsed.diags,
+                  [](const grammar::Diagnostic& d) { return d.message == grammar::kCoversNeedsAsdraft; });
 
     RecordDocblock out;
     out.diagnostics = docblock_diagnostics(rc, *start, parsed.diags, sm);

@@ -14,6 +14,7 @@
 #include <beman/specgen/frontend/build_failure.hpp>
 #include <beman/specgen/frontend/compile_args.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/document_files.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
 
@@ -68,6 +69,8 @@ beman::specgen::document_build::DocEvent classify(const RawItem&                
                                                   const std::map<const clang::Decl*, std::string>& expos_set,
                                                   const SeeBelowMap&                               seebelow_map,
                                                   const FreestandingMap&                           freestanding_map,
+                                                  const ConstraintsStated&                         constraints_stated,
+                                                  bool                                             keep_comments,
                                                   const std::set<std::string>&                     ns_drop_set,
                                                   const std::set<std::string>&                     specified_set,
                                                   const SkippedRanges&                             skipped,

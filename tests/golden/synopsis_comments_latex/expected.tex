@@ -1,0 +1,109 @@
+\rSec3[demo.tray.syn]{Header synopsis}
+
+\begin{codeblock}
+namespace std {
+  // forward declarations
+
+  class @\libglobal{tray}@;
+
+  // \ref{demo.tray.ops}, operations
+
+  void @\libglobal{tidy}@(tray&);
+}
+\end{codeblock}
+
+\rSec3[demo.tray]{Class tray}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{tray}@ {
+  public:
+    // \ref{demo.tray.cons}, constructors
+    tray();
+
+    // access functions
+    // \ref{demo.tray.obs}, observers
+    bool empty() const;
+    int size() const; // see below
+    /* the count of elements */
+    int count(int) const;
+
+    int capacity() const;
+
+  private:
+    int @\exposidnc{size}@ = 0; // exposition only
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.tray.cons]{Constructors}
+
+\indexlibraryctor{tray}%
+\begin{itemdecl}
+tray();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an empty tray.
+\end{itemdescr}
+
+\rSec4[demo.tray.obs]{Observers}
+
+\indexlibrarymember{empty}{tray}%
+\begin{itemdecl}
+bool empty() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{size() == 0}.
+\end{itemdescr}
+
+\indexlibrarymember{size}{tray}%
+\begin{itemdecl}
+int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The number of elements.
+\end{itemdescr}
+
+\indexlibrarymember{count}{tray}%
+\begin{itemdecl}
+int count(int /* unused */) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The number of elements, whatever the argument.
+\end{itemdescr}
+
+\indexlibrarymember{capacity}{tray}%
+\begin{itemdecl}
+int capacity() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The number of elements the tray can hold.
+\end{itemdescr}
+
+\rSec4[demo.tray.ops]{Operations}
+
+\indexlibraryglobal{tidy}%
+\begin{itemdecl}
+void tidy(tray&);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Tidies \tcode{t}.
+\end{itemdescr}

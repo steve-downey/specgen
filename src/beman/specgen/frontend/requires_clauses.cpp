@@ -3,13 +3,21 @@
 
 #include <beman/specgen/frontend/requires_clauses.hpp>
 
+#include <beman/specgen/synopsis_edits.hpp>
+
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclBase.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
 #include <clang/AST/OperationKinds.h>
+#include <clang/Basic/LangOptions.h>
+#include <clang/Basic/SourceLocation.h>
+#include <clang/Basic/SourceManager.h>
+#include <clang/Lex/Lexer.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 
+#include <string_view>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -45,6 +53,36 @@ const clang::TemplateParameterList* function_head_parameters(const clang::Functi
 const clang::Expr* head_requires_clause(const clang::FunctionDecl* fn) {
     const clang::TemplateParameterList* params = function_head_parameters(fn);
     return params != nullptr ? params->getRequiresClause() : nullptr;
+}
+
+std::vector<synopsis_edits::SynopsisEdit> requires_clause_removals(const clang::FunctionDecl*  fn,
+                                                                   const clang::SourceManager& sm,
+                                                                   const clang::LangOptions&   lang_opts) {
+    const auto past = [&](clang::SourceLocation loc) {
+        return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(loc, 0, sm, lang_opts)).second;
+    };
+    std::vector<synopsis_edits::SynopsisEdit> out;
+    if (const clang::Expr* head = head_requires_clause(fn)) {
+        const unsigned begin = past(function_head_parameters(fn)->getRAngleLoc());
+        const unsigned end   = past(head->getEndLoc());
+        if (end > begin)
+            out.push_back(synopsis_edits::SynopsisEdit{begin, end, " "});
+    }
+    const clang::Expr* trailing = fn->getTrailingRequiresClause().ConstraintExpr;
+    if (trailing != nullptr && trailing->getBeginLoc().isFileID()) {
+        const auto [file, expr_begin]                    = sm.getDecomposedLoc(trailing->getBeginLoc());
+        const llvm::StringRef                buffer      = sm.getBufferData(file);
+        static constexpr std::string_view    kWhitespace = " \t\n\v\f\r";
+        static constexpr llvm::StringLiteral kRequires{"requires"};
+        const llvm::StringRef                before = buffer.substr(0, expr_begin).rtrim(kWhitespace);
+        if (before.ends_with(kRequires)) {
+            const llvm::StringRef declarator = before.drop_back(kRequires.size()).rtrim(kWhitespace);
+            const unsigned        end        = past(trailing->getEndLoc());
+            if (end > declarator.size())
+                out.push_back(synopsis_edits::SynopsisEdit{static_cast<unsigned>(declarator.size()), end, ""});
+        }
+    }
+    return out;
 }
 
 } // namespace beman::specgen::frontend

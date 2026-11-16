@@ -19,6 +19,7 @@
 #include <clang/Basic/SourceManager.h>
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,15 @@ namespace beman::specgen::frontend {
 // `record`'s exposition-only members as written-spelling → exposid display name.
 std::map<std::string, std::string> expos_spellings(const clang::CXXRecordDecl*                      record,
                                                    const std::map<const clang::Decl*, std::string>& expos_set);
+
+// The names `record`'s wording already uses for something that is not an
+// exposition-only member: the class itself, its other members, and
+// `function`'s parameters when the wording is a function's. An author who
+// writes one of these in a code span means that entity, so it is never read
+// as an exposition name (rewrite_prose_expos).
+std::set<std::string> taken_names(const clang::CXXRecordDecl*                      record,
+                                  const std::map<const clang::Decl*, std::string>& expos_set,
+                                  const clang::FunctionDecl*                       function = nullptr);
 
 bool is_ident_char(char c);
 
@@ -57,13 +67,24 @@ std::string apply_expos_sentinels(std::string                                   
 std::string
 apply_ref_sentinels(std::string text, unsigned& span_n, std::map<std::string, span_sentinels::SpanInfo>& sentinels);
 
-// Rewrite expos spellings inside a description's inline code spans (design §4.1:
-// "backticked spans are reference-resolved: expos names render as \exposid").
-// A `` `value_` `` in prose becomes an ExposId span carrying the exposid name,
-// so the backend emits \exposid{value} rather than \tcode{value_}.
-// The leading template name in `value_<T>` also matches; template arguments and
-// surrounding code stay intact. Authored code blocks remain verbatim.
-void rewrite_prose_expos(beman::specgen::ir::ItemDescr& descr, const std::map<std::string, std::string>& spellings);
+// Rename exposition-only members inside a description's inline code spans
+// (design §4.1: "backticked spans are reference-resolved: expos names render
+// as \exposid"). Every use in a span is renamed, not only a span that is
+// exactly the name (issue #286): `` `*p_ == value_` `` renders
+// `*\exposid{ptr} == \exposid{value}`, the form extracted code already takes.
+// A use is a whole identifier, so a member named `val` does not rewrite the
+// `val` inside `evaluate`, and the contents of a string or character literal
+// are left alone.
+//
+// Either spelling names the member: the written C++ one (`value_`) or the
+// exposition name (`value`, `has-value`), so wording written in the paper's
+// vocabulary renders the same as wording written in the header's. The
+// exposition name is text, with nothing behind it to resolve, so a name in
+// `taken` -- another member, the class, a parameter -- is not read as one.
+// Authored code blocks remain verbatim.
+void rewrite_prose_expos(beman::specgen::ir::ItemDescr&            descr,
+                         const std::map<std::string, std::string>& spellings,
+                         const std::set<std::string>&              taken = {});
 
 } // namespace beman::specgen::frontend
 

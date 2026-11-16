@@ -1,0 +1,115 @@
+\rSec3[demo.cell.syn]{Header synopsis}
+
+\begin{codeblock}
+namespace std {
+  template<class T> class @\libglobal{cell}@;
+
+  template<class T> void @\libglobal{exchange}@(cell<T>& a, cell<T>& b);
+}
+\end{codeblock}
+
+\rSec3[demo.cell]{Class template cell}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{cell}@ {
+  public:
+    // \ref{demo.cell.cons}, constructors
+    template<class U> explicit cell(U&& u);
+
+    cell(const cell&)
+      requires copyable_like<T>
+    = default;
+
+    // \ref{demo.cell.mod}, modifiers
+    void assign(const T& v);
+
+    void reset()
+      requires resettable_like<T>;
+
+    friend void swap(cell& a, cell& b);
+
+  private:
+    T @\exposidnc{value}@; // exposition only
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.cell.cons]{Constructors}
+
+\indexlibraryctor{cell}%
+\begin{itemdecl}
+template<class U>
+  explicit cell(U&& u);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{convertible_like<U, T>} is \tcode{true} and \tcode{convertible_like<U, cell<T>>} is \tcode{false}.
+
+\pnum
+\effects
+Initializes the value with \tcode{u}.
+\end{itemdescr}
+
+\rSec4[demo.cell.mod]{Modifiers}
+
+\indexlibrarymember{assign}{cell}%
+\begin{itemdecl}
+void assign(const T& v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{copyable_like<T>} is \tcode{true}.
+
+\pnum
+\effects
+Assigns \tcode{v} to the value.
+\end{itemdescr}
+
+\indexlibrarymember{reset}{cell}%
+\begin{itemdecl}
+void reset()
+  requires resettable_like<T>;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Resets the value.
+\end{itemdescr}
+
+\indexlibraryglobal{swap}%
+\begin{itemdecl}
+friend void swap(cell& a, cell& b);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{copyable_like<T>} is \tcode{true}.
+
+\pnum
+\effects
+Exchanges the values of \tcode{a} and \tcode{b}.
+\end{itemdescr}
+
+\indexlibraryglobal{exchange}%
+\begin{itemdecl}
+template<class T>
+  void exchange(cell<T>& a, cell<T>& b);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{copyable_like<T>} is \tcode{true}.
+
+\pnum
+\effects
+Exchanges the values of \tcode{a} and \tcode{b}.
+\end{itemdescr}

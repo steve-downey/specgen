@@ -32,11 +32,7 @@ namespace std {
   public:
     // @[demo.coverage.ctors]{- .sref}@, constructors
 
-    template<class F>
-      requires(!is_same_v<remove_cvref_t<F>, move_only_function>) &&
-              (!detail::is_in_place_type<remove_cvref_t<F>>) &&
-              ($is-callable-from$<decay_t<F>>)
-    constexpr move_only_function(F&& f);
+    template<class F> constexpr move_only_function(F&& f);
 
     template<class T> constexpr explicit move_only_function(in_place_type_t<T>);
   };

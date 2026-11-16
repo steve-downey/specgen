@@ -642,12 +642,61 @@ Comment spelling is significant:
   elements and structural markers.
 - `///` and `/** ... */` are Doxygen. They are removed from synopses and
   extracted bodies, and are never promoted into specification wording.
-- Plain `//` and `/* ... */` comments are draft-form comments. They are retained
-  wherever the corresponding source is rendered.
+- Plain `//` and `/* ... */` comments are ordinary comments. An extracted
+  function body keeps them. A synopsis keeps only the ones it recognizes or
+  the author marks, as described next.
 
-Clang treats an unbroken run of comment lines as one comment, so a draft-form
-line in the same run as a Doxygen line is removed with it. A blank line between
-the two keeps the draft-form comment.
+A synopsis is the specification's text, so a plain comment in a class body is
+the implementation's unless it says otherwise:
+
+```cpp
+class widget {
+  public:
+    // \ref{w.cons}, constructors
+    // Implementation note: the trivial path is unconstrained on purpose.
+    widget();
+
+    // \syn access functions
+    bool empty() const; // never throws in practice
+    int  size() const;  // \syn see below
+};
+```
+
+renders
+
+```cpp
+class widget {
+public:
+  // [w.cons], constructors
+  widget();
+
+  // access functions
+  bool empty() const;
+  int size() const; // see below
+};
+```
+
+- A `// \ref{x}, title` group header is kept.
+- A comment whose text starts with `\syn` is kept, without the marker. It is
+  an ordinary comment to the compiler, to Doxygen and to clang-format, in the
+  manner of `// \ref` and `// \rSec`. It may be on a line of its own, after a
+  declaration, or a `/* ... */` comment.
+- Every other plain comment is dropped, including one after a declaration on
+  its line and one above an `\omit`ted or `\merge`d member.
+
+The same holds at namespace scope inside a gathered header synopsis: `\ref`
+group headers and `\syn` comments are kept. Comments that specgen writes
+itself, such as `// exposition only` and `// freestanding`, come from markers
+and are not affected.
+
+`generate --keep-synopsis-comments` selects the earlier behaviour, in which
+every plain comment of a class body stays in the synopsis. A `\syn` comment is
+printed without its marker under either setting, so a header can be marked
+first and give the option up afterwards.
+
+Clang treats an unbroken run of comment lines as one comment, so a plain
+line in the same run as a Doxygen line or a docblock, and after it, is removed
+with it. A blank line between the two separates them.
 
 A header documented only with Doxygen is valid input and can produce empty
 wording. Validation then reports its class members as undocumented. Those
@@ -687,6 +736,28 @@ or an END fence when no section is open, is a warning and does not change
 placement. Closing a nested section resumes its parent; closing a top-level
 section resumes the document root. The same spelling bounds a gathered `.syn`
 region, as described below; that fence is consumed by the gatherer.
+
+A header synopsis can also be authored instead of gathered. A `.syn` section
+that holds a detached `\verbatim-synopsis` and no declarations is an ordinary
+section: the block is its synopsis exactly as written, and the fence closes it
+as it would a section of any other name.
+
+```cpp
+// \rSec2[expected.syn]{Header `<expected>` synopsis}
+
+//! \verbatim-synopsis
+//! namespace std {
+//!   // \ref{expected.expected}, class template expected
+//!   template<class T, class E> class expected;
+//! }
+
+/// END [expected.syn]
+```
+
+This is the form for a header whose content is classes: a gathered region
+folds each class's whole synopsis into the header synopsis, where the draft
+writes a forward declaration there and the class synopsis in the class's own
+subclause.
 
 Inside a class, a draft-form group header routes the documented in-class
 members that follow it to the section with the matching stable name:
@@ -737,7 +808,27 @@ The docblock of a class or class-template definition describes the *type*. Its
 description elements are rendered immediately after the class synopsis, with no
 item declaration of their own, which is the shape the draft uses for a class's
 general subclause. An authored `\mandates` there replaces the paragraph derived
-from the class's direct `static_assert`s. A `\at stable.name` on the class
+from the class's direct `static_assert`s, under a *Mandates* label. To state
+the requirement as the draft often does, in an unlabelled paragraph of its
+own words, write that paragraph as leading prose and add `\covers mandates P`
+for each derived predicate it covers:
+
+```cpp
+//! A program that instantiates the definition of `unexpected` for a
+//! non-object type or an array type is ill-formed.
+//! \covers mandates is_object_v<E>
+//! \covers mandates !is_array_v<E>
+template <class E>
+class unexpected {
+    static_assert(std::is_object_v<E>);
+    static_assert(!std::is_array_v<E>);
+```
+
+The derived "is ill-formed unless" paragraph is then not rendered, and the
+assertions remain the evidence the prose is checked against, as they are for an
+authored `\mandates`. A predicate the prose states in a form the validator
+reads needs no claim, and one it neither reads nor is told about is a note.
+Without a claim the derived paragraph renders as before. A `\at stable.name` on the class
 definition routes both that derived paragraph and the class's own description
 to the named section, in that order; this is particularly useful for a class
 gathered from a component header whose `\rSec` outline is in an umbrella header.
@@ -916,13 +1007,19 @@ but it does not satisfy a normative drift obligation or assert a Throws guarante
   expression. The marker's old name, `\returns-equiv`, is an error that names
   `\returns-expr`.
 - `\constraints-in-decl` retains the requires-clause in the item declaration
-  instead of deriving a separate *Constraints:* element.
+  instead of deriving a separate *Constraints:* element. The synopsis keeps the
+  clause for that member too.
 
 `\effects-equiv` and an authored `\effects` are mutually exclusive, as are
 `\returns-expr` and an authored `\returns`.
 
 By default, associated constraints are removed from the item declaration and
-rendered as derived *Constraints*. A leading run of body-local type aliases
+rendered as derived *Constraints*. The synopsis drops the clause for the same
+member, in a class body and in a gathered header synopsis, so the two always
+agree: a clause is stated once, as *Constraints*, or shown in both under
+`\constraints-in-decl`. A member with no item of its own, such as a
+`= default` member that is not described, keeps its clause in the synopsis,
+since nothing else would state it. A leading run of body-local type aliases
 followed by `static_assert`s produces derived *Mandates*; the aliases remain in
 an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
@@ -1054,6 +1151,11 @@ and `\asdraft-synopsis` applies only to a class definition.
   `&&` chain; any other shape is left whole.
 - `\describe` forces an item declaration for a documented `= default` or
   `= delete` entity.
+- A deleted function reads `= delete;` in a synopsis and in an item
+  declaration however the header spells the tail. A C++26 message
+  (`= delete("reason")`) is dropped, and so is a macro standing for the
+  keyword, so a header that writes `= MY_DELETE("reason")` to compile before
+  C++26 generates the same wording as one that writes `= delete`.
 - A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in
@@ -1085,6 +1187,16 @@ wording follows [structure.specifications].
   only`, which is how the draft writes a view's iterator. Its own members are
   exposition-only with it, so an extracted body that names one uses the
   exposition name.
+
+  In a description, a backticked span names an exposition-only member of the
+  class by either spelling, anywhere in the span: `` `value_ == 0` `` and
+  `` `value == 0` `` both render `\tcode{\exposid{value} == 0}`, as an
+  extracted body would. Wording can therefore be written in the paper's
+  vocabulary or the header's. The exposition name is matched as text, so a
+  name the wording already uses for something else is not read as one: a
+  parameter called `value`, or a member function `value()`, stays what it is,
+  and only `value_` then names the exposition-only member. The contents of a
+  string literal and of a `\codeblock` are left as written.
 
   A partial or explicit specialization follows its primary and needs no marker
   of its own: it is the same entity and renders under the same exposition name.
@@ -1155,7 +1267,9 @@ wording follows [structure.specifications].
   roster, and routing are processed as usual, including the
   `namespace std {` enclosure that every synopsis receives. Detached, the block
   stands alone as an anonymous synopsis and is left exactly as written, so it
-  must supply its own namespace.
+  must supply its own namespace. That holds in a `.syn` section too, when the
+  block is all the section contains; beside gathered declarations it is
+  appended to their code, inside the enclosure they share.
 - `\verbatim-itemdecl` is terminal. Authored elements before it remain the item
   description; all following decorated lines form one exact item declaration,
   free of spans. Multiple declaration lines are not split, parsed, formatted,
@@ -1207,10 +1321,12 @@ checks:
 - Local references in synopsis code must name generated sections. Prose `\iref`
   references may deliberately name external standard subclauses.
 - Authored *Constraints* and *Mandates* are checked against the derived
-  conjuncts they suppress. Agreement is quiet; contradictions and conjuncts
-  without an authored counterpart warn. Separately rendered derived/authored
-  duplicates still warn. The validator recognizes same-type prose and local
-  normative `Let X be Y.` bindings; notes and examples supply no evidence.
+  conjuncts they suppress. Agreement is quiet; a contradiction warns, and a
+  conjunct with no recognized authored counterpart is a note, since whether
+  the prose covers it in other words is for a person to read. Separately
+  rendered derived/authored duplicates still warn. The validator recognizes
+  same-type prose and local normative `Let X be Y.` bindings; notes and
+  examples supply no evidence.
 - An authored *Throws:* paragraph must not contradict an unconditionally
   `noexcept` signature, and *Throws:* Nothing on such a signature is reported
   as redundant. There is deliberately no check in the reverse direction.
@@ -1236,6 +1352,18 @@ that parsed successfully, so even an error does not prevent output or change
 After notes and warnings, rendering continues. If any finding has error
 severity, every finding is printed, rendering is skipped, and the command exits
 with status 1.
+
+The severity says what kind of finding it is. A warning reports something
+specgen verified: authored wording that contradicts or repeats what the code
+derives, or a *Throws* paragraph on a `noexcept` function. A note points at
+something to check outside the tool: a derived conjunct for which specgen
+recognized no authored counterpart, private data left unmarked, a hidden
+helper used by a body that is not extracted. A note about a derived conjunct
+is answered with `\covers`, and an answered one is quiet.
+
+`--warnings-as-errors`, with `--validate`, makes a warning stop the render
+and exit with status 1, as an error does. A note never fails a run, so a
+build can require a run with no warnings and still read the notes.
 
 ## Debugging aids
 
@@ -1372,6 +1500,9 @@ specgen generate include/beman/example/example.hpp \
   all of them before writing anything and stops at the first that fails.
 - `render` exits with status 1 on unreadable or invalid JSON, an output
   failure, a fragment error, or an error-severity validation finding.
+- Under `--warnings-as-errors`, a warning-severity validation finding exits
+  with status 1 from either command. Without `--validate` the option is a
+  usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already
   produced the wording. `--depfile` with nothing to name as a target, and
@@ -1383,7 +1514,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.33.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.40.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1419,7 +1550,10 @@ prose, acknowledge its correspondence on the authored element:
 ```
 
 `\covers` belongs to the current normative Constraints or Mandates element, or,
-beside `\asdraft`, names the element it is about (`\covers constraints P`).
+beside `\asdraft`, names the element it is about (`\covers constraints P`). On
+a class definition, `\covers mandates P` needs no `\asdraft`: it says that the
+class's leading prose stands for the paragraph derived from its
+`static_assert`s.
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

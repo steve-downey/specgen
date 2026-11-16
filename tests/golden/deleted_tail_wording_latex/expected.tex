@@ -1,0 +1,70 @@
+\rSec3[demo.latch.syn]{Header synopsis}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{latch}@;
+
+  void @\libglobal{rearm}@(latch&) = delete;
+
+  void @\libglobal{release}@(latch&) = delete;
+
+  void @\libglobal{reset}@(latch&) = delete;
+}
+\end{codeblock}
+
+\rSec3[demo.latch]{Class latch}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{latch}@ {
+  public:
+    // \ref{demo.latch.cons}, constructors
+    explicit latch(int count);
+
+    latch(double) = delete;
+
+    latch(const void*) = delete;
+
+    latch(const latch&) = delete;
+
+    template<class U = int> latch& operator=(U&&) = delete;
+
+    friend void swap(latch&, latch&) = delete;
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.latch.cons]{Constructors}
+
+\indexlibraryctor{latch}%
+\begin{itemdecl}
+explicit latch(int count);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes the count with \tcode{count}.
+\end{itemdescr}
+
+\indexlibraryctor{latch}%
+\begin{itemdecl}
+latch(double) = delete;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A latch does not count in floating point.
+\end{itemdescr}
+
+\indexlibraryctor{latch}%
+\begin{itemdecl}
+latch(const void*) = delete;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\remarks
+A latch is not constructed from a pointer.
+\end{itemdescr}

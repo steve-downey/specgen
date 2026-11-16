@@ -38,3 +38,26 @@ TEST_CASE("docblock_lookup - \\omit, \\merge and \\elsewhere suppress the genera
     directives.merge = true;
     CHECK(frontend::suppresses_generated_entity(directives));
 }
+
+TEST_CASE("docblock_lookup - a synopsis comment is marked by a leading \\syn") {
+    // The range is the marker and the whitespace after it: what a synopsis
+    // leaves out of the comment it keeps (issue #280).
+    const auto line = frontend::synopsis_comment_marker("// \\syn access functions");
+    REQUIRE(line.has_value());
+    CHECK(line->first == 3);
+    CHECK(line->second == 8);
+
+    const auto block = frontend::synopsis_comment_marker("/* \\syn the count */");
+    REQUIRE(block.has_value());
+    CHECK(block->first == 3);
+
+    // The marker alone, and with no space after the comment introducer.
+    CHECK(frontend::synopsis_comment_marker("//\\syn").has_value());
+
+    // Not the marker: another command, a longer word, the marker later in
+    // the text, and anything that is not a plain comment's start.
+    CHECK_FALSE(frontend::synopsis_comment_marker("// \\ref{optional.ctor}, constructors").has_value());
+    CHECK_FALSE(frontend::synopsis_comment_marker("// \\synopsis of the class").has_value());
+    CHECK_FALSE(frontend::synopsis_comment_marker("// see \\syn").has_value());
+    CHECK_FALSE(frontend::synopsis_comment_marker("int x; // \\syn").has_value());
+}

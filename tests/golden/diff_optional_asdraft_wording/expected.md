@@ -14,11 +14,7 @@ namespace std {
     // @[optional.assign]{- .sref}@, assignment
     constexpr optional<T>& operator=(nullopt_t) noexcept;
 
-    template<class U = remove_cv_t<T>>
-    constexpr optional& operator=(U&& v)
-      requires(!is_same_v<remove_cvref_t<U>, optional>) &&
-              (!(is_scalar_v<T> && is_same_v<T, U>)) && is_constructible_v<T, U> &&
-              is_assignable_v<T&, U>;
+    template<class U = remove_cv_t<T>> constexpr optional& operator=(U&& v);
   };
 }
 ```
