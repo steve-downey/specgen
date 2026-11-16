@@ -48,6 +48,10 @@ generate options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -137,6 +141,10 @@ render options:
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
                              (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org

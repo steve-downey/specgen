@@ -1246,10 +1246,12 @@ checks:
 - Local references in synopsis code must name generated sections. Prose `\iref`
   references may deliberately name external standard subclauses.
 - Authored *Constraints* and *Mandates* are checked against the derived
-  conjuncts they suppress. Agreement is quiet; contradictions and conjuncts
-  without an authored counterpart warn. Separately rendered derived/authored
-  duplicates still warn. The validator recognizes same-type prose and local
-  normative `Let X be Y.` bindings; notes and examples supply no evidence.
+  conjuncts they suppress. Agreement is quiet; a contradiction warns, and a
+  conjunct with no recognized authored counterpart is a note, since whether
+  the prose covers it in other words is for a person to read. Separately
+  rendered derived/authored duplicates still warn. The validator recognizes
+  same-type prose and local normative `Let X be Y.` bindings; notes and
+  examples supply no evidence.
 - An authored *Throws:* paragraph must not contradict an unconditionally
   `noexcept` signature, and *Throws:* Nothing on such a signature is reported
   as redundant. There is deliberately no check in the reverse direction.
@@ -1275,6 +1277,18 @@ that parsed successfully, so even an error does not prevent output or change
 After notes and warnings, rendering continues. If any finding has error
 severity, every finding is printed, rendering is skipped, and the command exits
 with status 1.
+
+The severity says what kind of finding it is. A warning reports something
+specgen verified: authored wording that contradicts or repeats what the code
+derives, or a *Throws* paragraph on a `noexcept` function. A note points at
+something to check outside the tool: a derived conjunct for which specgen
+recognized no authored counterpart, private data left unmarked, a hidden
+helper used by a body that is not extracted. A note about a derived conjunct
+is answered with `\covers`, and an answered one is quiet.
+
+`--warnings-as-errors`, with `--validate`, makes a warning stop the render
+and exit with status 1, as an error does. A note never fails a run, so a
+build can require a run with no warnings and still read the notes.
 
 ## Debugging aids
 
@@ -1411,6 +1425,9 @@ specgen generate include/beman/example/example.hpp \
   all of them before writing anything and stops at the first that fails.
 - `render` exits with status 1 on unreadable or invalid JSON, an output
   failure, a fragment error, or an error-severity validation finding.
+- Under `--warnings-as-errors`, a warning-severity validation finding exits
+  with status 1 from either command. Without `--validate` the option is a
+  usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already
   produced the wording. `--depfile` with nothing to name as a target, and

@@ -1213,6 +1213,15 @@ visitation; note and example bodies cannot contain further informative bodies.
 rendering; Warnings and Notes leave the exit code at 0. Findings follow a shared severity and
 reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.md)).
 
+**The severity says who has the evidence** (issue #285). A Warning reports something the
+validator verified: it holds both sides of what it compared, as when authored prose
+contradicts a derived conjunct or a `noexcept` signature carries a *Throws* that throws. A
+Note points at something a person has to check outside the tool, because the validator
+cannot settle it: that it recognized no authored counterpart for a derived conjunct, that a
+private member is unmarked, that a hidden helper is used by a body nothing extracts. The
+split is what lets a build gate on one and read the other: `--warnings-as-errors` makes a
+Warning stop the render as an Error does, and a Note never fails a run.
+
 1. **Coverage invariant** (Error, either direction): every class-body declaration is exactly
    one of: merged twin, defaulted/deleted, `\omit`ted, a *public data member* — whose
    declaration is its specification, so there is no itemdescr to ask for
@@ -1294,7 +1303,8 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    `noexcept` signature. Warn-only for a load-bearing reason: an Error would skip rendering,
    and a wrong *Throws:* paragraph should not cost the whole document. No reverse check, per
    §5.4.
-4. **Mandates/Constraints drift** (Warning): authored prose vs. the suppressed derivation's
+4. **Mandates/Constraints drift** (Warning; Note for a conjunct with no recognized
+   counterpart): authored prose vs. the suppressed derivation's
    conjuncts (§5.2), located at the specific assert. Agreement with suppressed
    derivation evidence is quiet; contradiction warns. Separately rendered
    derived/authored duplicates still warn. Same-type prose (`X is [not] the
@@ -1305,7 +1315,11 @@ reporting taxonomy ([expected-error-taxonomy](decisions/expected-error-taxonomy.
    The reverse direction is checked too: a derived conjunct with no comparable reading
    anywhere in the item's wording — not just its paired element, so a conjunct legitimately
    documented in a sibling element (e.g. `\remarks` instead of `\constraints`) stays silent —
-   warns that it has no authored counterpart. A miss on either direction costs nothing; an
+   is reported as having no authored counterpart. That one is a **Note**: the validator
+   reads boolean assertions, same-type prose and `Let` bindings, so what it knows is that it
+   recognized no counterpart, and whether "is a specialization of `expected`" covers
+   `is-expected-specialization<U>::value` is a question about English. `\covers` answers it,
+   and an answered one is quiet. A miss on either direction costs nothing; an
    authored `\constraints` that is a strict textual subset of the real `requires`-clause used
    to validate clean, which this closes.
 5. **Ordering lint** (Note): authored element order vs. canonical. This rule lives in the

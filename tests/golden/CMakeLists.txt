@@ -2874,6 +2874,52 @@ foreach(
     )
 endforeach()
 
+# --warnings-as-errors (issue #285): a Warning is what the validator verified,
+# so a build may require a run with none, and a Note is what a person has to
+# check, so it never fails one. Three inputs that already have validate
+# goldens: one whose findings are all Warnings, which now stops the render;
+# one whose finding is a Note, which does not; and the derived conjunct with
+# no recognized counterpart, a Warning before and a Note now, beside two
+# Warnings that still fail. The flag means nothing without --validate.
+add_test(
+    NAME golden.warnings_as_errors.warning_fails
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --validate --warnings-as-errors
+)
+set_tests_properties(
+    golden.warnings_as_errors.warning_fails
+    PROPERTIES WILL_FAIL TRUE
+)
+add_test(
+    NAME golden.warnings_as_errors.note_passes
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_private_data/input.json"
+        --validate --warnings-as-errors -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.note_passes.tex"
+)
+add_test(
+    NAME golden.warnings_as_errors.without_flag_passes
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --validate -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.without_flag_passes.tex"
+)
+add_test(
+    NAME golden.warnings_as_errors.needs_validate
+    COMMAND
+        specgen render --from-ir
+        "${CMAKE_CURRENT_SOURCE_DIR}/validate_noexcept_throws/input.json"
+        --warnings-as-errors
+)
+set_tests_properties(
+    golden.warnings_as_errors.needs_validate
+    PROPERTIES PASS_REGULAR_EXPRESSION "applies only with --validate"
+)
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

@@ -1419,7 +1419,12 @@ Diagnostics check_missing_pair(const ir::DescriptionElement& derived,
             if (covered)
                 return {};
 
-            return {{Severity::Warning,
+            // A Note, where the two findings above are Warnings (issue #285):
+            // those hold both texts, and this one holds only the fact that
+            // no counterpart was *recognized*. Whether the prose covers the
+            // conjunct in words the readings do not parse is a question about
+            // English, for a person to check, and `\covers` to answer.
+            return {{Severity::Note,
                      kind_name,
                      "the derived `" + conjunct->subject + "` conjunct has no authored " + kind_name +
                          " counterpart anywhere in the description"}};

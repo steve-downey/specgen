@@ -1153,9 +1153,12 @@ TEST_CASE("validate - drift comparison reads authored flat table cells") {
     CHECK(diags.front().message.find("contradicts") != std::string::npos);
 }
 
-TEST_CASE("validate - a derived conjunct absent from unrelated authored prose warns it has no authored counterpart") {
+TEST_CASE("validate - a derived conjunct absent from unrelated authored prose notes it has no authored counterpart") {
     // This is the reference-E converting-constructor bug: authored prose that
-    // never mentions the derived subject at all used to validate clean.
+    // never mentions the derived subject at all used to validate clean. A
+    // Note, not a Warning (issue #285): the validator knows only that it
+    // recognized no counterpart, and whether the prose has one is for a
+    // person to read.
     ir::DescriptionElement authored;
     authored.kind      = ir::ElementKind::Mandates;
     authored.conjuncts = {conjunct_paragraph("is_copy_constructible_v<int>", "true")};
@@ -1168,7 +1171,7 @@ TEST_CASE("validate - a derived conjunct absent from unrelated authored prose wa
 
     const Diagnostics diags = validate(ir::Node{item});
     REQUIRE(diags.size() == 1);
-    CHECK(diags.front().severity == Severity::Warning);
+    CHECK(diags.front().severity == Severity::Note);
     CHECK(diags.front().context == "mandates");
     CHECK(diags.front().message.find("has no authored") != std::string::npos);
     CHECK(diags.front().message.find("`is_copy_constructible_v<int>`") != std::string::npos);
@@ -1196,7 +1199,7 @@ TEST_CASE("validate - a derived conjunct documented only in a sibling Remarks el
     CHECK(validate(ir::Node{item}).empty());
 }
 
-TEST_CASE("validate - only the undocumented conjunct in a partially covered requires-clause warns") {
+TEST_CASE("validate - only the undocumented conjunct in a partially covered requires-clause is noted") {
     // Two-conjunct requires-clause where only the first is echoed in prose:
     // the missing-counterpart check fires only for the second.
     ir::DescriptionElement authored;
