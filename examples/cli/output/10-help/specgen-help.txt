@@ -35,6 +35,11 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --keep-synopsis-comments  keep every plain comment of a class body in its
+                             synopsis. By default a synopsis keeps a
+                             `// \ref{x}, title` group header and a comment
+                             that starts `\syn`, printed without the marker,
+                             and drops the rest as implementation comments
   --source <file>           a source file defining members the preceding
                              header declares: a documented definition in it
                              supplies that member's wording, as one in the

@@ -86,6 +86,20 @@ std::optional<std::size_t> stripped_comment_start(llvm::StringRef raw) {
     return vocabulary_start(raw, [](CommentVocabulary v) { return v != CommentVocabulary::Draft; });
 }
 
+std::optional<std::pair<std::size_t, std::size_t>> synopsis_comment_marker(llvm::StringRef comment) {
+    static constexpr llvm::StringLiteral kMarker{"\\syn"};
+    if (!comment.starts_with("//") && !comment.starts_with("/*"))
+        return std::nullopt;
+    const std::size_t begin = comment.find_first_not_of(" \t", 2);
+    if (begin == llvm::StringRef::npos || !comment.substr(begin).starts_with(kMarker))
+        return std::nullopt;
+    const std::size_t after = begin + kMarker.size();
+    if (after < comment.size() && llvm::StringRef(" \t\r\n").find(comment[after]) == llvm::StringRef::npos)
+        return std::nullopt;
+    const std::size_t end = comment.find_first_not_of(" \t", after);
+    return std::pair{begin, end == llvm::StringRef::npos ? comment.size() : end};
+}
+
 bool is_docblock_comment(llvm::StringRef raw) { return docblock_start(raw).has_value(); }
 
 std::vector<beman::specgen::document_build::Diagnostic>

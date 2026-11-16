@@ -244,6 +244,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const SeeBelowMap&                               seebelow_map,
                       const FreestandingMap&                           freestanding_map,
                       const ConstraintsStated&                         constraints_stated,
+                      bool                                             keep_comments,
                       const std::set<std::string>&                     ns_drop_set,
                       const std::set<std::string>&                     specified_set,
                       const SkippedRanges&                             skipped,
@@ -483,6 +484,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                   seebelow_map,
                                                   freestanding_map,
                                                   constraints_stated,
+                                                  keep_comments,
                                                   ns_drop_set);
         out.synopsis.as_draft  = block.synopsis_as_draft;
         // An authored or inherited synopsis is text nothing ties to the
@@ -528,6 +530,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                   seebelow_map,
                                                   freestanding_map,
                                                   constraints_stated,
+                                                  keep_comments,
                                                   ns_drop_set,
                                                   tmpl);
         out.synopsis.as_draft  = block.synopsis_as_draft;

@@ -47,8 +47,11 @@ Comment lines in a header are one of **three** things:
   because the draft does not print implementation documentation. `///` is *not* a second
   spelling of `//!`: a member documented only in Doxygen is an undocumented member as far as
   the coverage invariant (§9) is concerned.
-- A plain `//` or `/* … */` is **draft-form** and survives verbatim (`\ref` group headers,
-  `see~\ref` trailers, ordinary comments inside extracted bodies).
+- A plain `//` or `/* … */` is an **ordinary comment**. An extracted body keeps it verbatim.
+  A synopsis keeps the ones it recognizes or the author marks (§3.4): a `\ref` group
+  header, and a comment that starts `\syn`, printed without the marker. The rest are the
+  implementation's and are dropped (issue #280). `\rSec` and `END` lines are structure and
+  never text.
 
 A header documented entirely in Doxygen still has to *work* (parse, exit 0, and emit IR that
 reads back and renders) even though the wording it produces is empty and the validator reports
@@ -166,7 +169,7 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   Both mirror clause order by the input contract.
 - Comment classification follows the three-way vocabulary of §1: only `//!`/`/*!` chunks reach
   the docblock grammar; Doxygen chunks are collected so synopsis extraction can drop them;
-  draft-form chunks are collected so it can keep them.
+  plain chunks are collected so it can keep the ones a synopsis keeps (§3.4).
 - **Every physical `\rSec` line is a structure event**, even when Clang coalesces adjacent
   line comments into one raw comment. Collection splits comment chunks only around recognized
   section-marker lines, retaining their absolute offsets; other multi-line chunks, including
@@ -261,8 +264,28 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   the class synopsis, the item declaration of a `\describe`d member, and a gathered header
   synopsis, where a deleted namespace-scope function is also read through its `;` rather
   than to the end of its parameter list.
-- Strip docblocks/markup comments and Doxygen comments; keep draft-form comments (`\ref`,
-  `see~\ref`).
+- Strip docblocks/markup comments and Doxygen comments.
+- **A synopsis keeps the plain comments it recognizes or the author marks, and drops the
+  rest** (issue #280). Every plain comment in a class body used to be synopsis text, which
+  made a class in an annotated header a place an implementation comment could not be
+  written: the ways out were `///`, which hands Doxygen an implementation note as the next
+  declaration's documentation, or moving the comment away from what it explains. The
+  draft's own synopses do carry comments, but about five in six are forms specgen reads as
+  structure or writes from a marker (`// \ref{x}, title`, `// exposition only`,
+  `// freestanding`); the free text is the remaining sixth. So: a `\ref` group header is
+  kept; a comment whose text starts `\syn` is kept without its marker
+  (`synopsis_comment_marker`), on a line of its own, after a declaration, or as `/* */`,
+  and stays an ordinary comment to the compiler, Doxygen and clang-format, in the manner of
+  `// \ref` and `// \rSec`; every other plain comment is removed, a whole line with its
+  newline, a trailing one with the spaces before it. That includes the comment above an
+  `\omit`ted or `\merge`d member, which used to survive without its declaration. Clang
+  merges a run of `//` lines into one raw comment, so the run is taken a line at a time: a
+  `\ref` header and an implementation note commonly share one. `--keep-synopsis-comments`
+  (`ParseOptions::keep_synopsis_comments`) is the earlier rule, under which every plain
+  comment stays; a marked comment loses its marker under either, so a header can be marked
+  before the option is dropped. The option is the front end's, so it applies to `--emit-ir`
+  too. An extracted `\effects-equiv` body is exposed deliberately and keeps its comments
+  (§4.2).
 - **An empty class-scope `\ref` group is not printed.** A group header is retained only when
   at least one direct declaration in its run (before the next group header) survives the
   ordinary synopsis filters. If every declaration is merged, omitted, or otherwise removed,
@@ -293,7 +316,9 @@ From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
   a `\ref` header *between* declarations is gathered as a standalone group header: one inside
   a class body is already carried by that class's extraction, so a consumed-range watermark
   skips comments a preceding declaration covers rather than appending them twice (issue #31).
-  Doxygen, markup, and namespace scaffolding are dropped; declaration, Ref, exposition, and
+  Doxygen, markup, and namespace scaffolding are dropped, and so is a plain comment that is
+  neither a `\ref` header nor marked `\syn` (issue #280, the class-body rule; a marked one is
+  kept without its marker); declaration, Ref, exposition, and
   index spans retain their semantics; a terminal `\verbatim-synopsis` payload is appended
   byte-for-byte. A folded-in class keeps everything of its own that the gathered node cannot
   hold: its routed in-class members ride the gathered event to the `\rSec` each `\ref` names

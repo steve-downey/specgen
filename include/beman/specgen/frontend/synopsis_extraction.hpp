@@ -63,6 +63,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
                                               const ConstraintsStated&                         constraints_stated,
+                                              bool                                             keep_comments,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl = nullptr);
 

@@ -334,6 +334,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         seebelow_map,
                         freestanding_map,
                         constraints_stated,
+                        options.keep_synopsis_comments,
                         ns_drop_set,
                         specified_set,
                         skipped,
@@ -643,12 +644,22 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 const std::size_t      newline  = item.comment_text.find('\n', line_begin);
                 const std::size_t      line_end = newline == std::string::npos ? item.comment_text.size() : newline;
                 const std::string_view line(item.comment_text.data() + line_begin, line_end - line_begin);
-                if (line_vocabulary(llvm::StringRef{line}.ltrim(" \t")) == CommentVocabulary::Draft) {
+                if (const llvm::StringRef comment = llvm::StringRef{line}.ltrim(" \t");
+                    line_vocabulary(comment) == CommentVocabulary::Draft) {
                     if (const std::optional<std::string> ref = parse_ref(line)) {
                         current_ref = *ref;
                         if (!refs.empty())
                             refs.push_back('\n');
                         refs.append(line);
+                    } else if (const auto marker = synopsis_comment_marker(comment)) {
+                        // A comment the author marked for the synopsis
+                        // (issue #280), kept as in a class body, without its
+                        // marker. It heads no group, so the standing `\ref`
+                        // is unchanged.
+                        if (!refs.empty())
+                            refs.push_back('\n');
+                        refs.append(comment.substr(0, marker->first));
+                        refs.append(comment.substr(marker->second));
                     }
                 }
                 if (newline == std::string::npos)

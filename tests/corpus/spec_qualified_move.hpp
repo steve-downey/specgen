@@ -14,7 +14,7 @@ namespace demo {
 template <class T>
 class gadget {
   public:
-    // Wrappers store, move, and call objects.
+    // \syn Wrappers store, move, and call objects.
     //! \at gadget.class
     //! \effects Equivalent to: `gadget(std::move(g)).swap(*this);`
     void assign(gadget&) {}

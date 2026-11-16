@@ -1674,6 +1674,24 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_constraints/expected.json"
 )
 
+# Synopsis comments (issue #280): a synopsis keeps a `\ref` group header and a
+# comment the author marks with `\syn`, printed without the marker, and drops
+# every other plain comment as the implementation's -- on a line of its own,
+# after a declaration, as `/* */`, and above an `\omit`ted member. A marked
+# comment at namespace scope in a gathered header synopsis is kept too. The
+# earlier rule, `--keep-synopsis-comments`, is a front-end option the harness
+# has no argument for, and is pinned by a unit test over the same header
+# (synopsis.test.cpp).
+specgen_add_golden(
+    synopsis_comments
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_comments.hpp"
+)
+specgen_add_golden(
+    synopsis_comments_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_comments/expected.json"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(

@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace beman::specgen::frontend {
@@ -54,6 +55,16 @@ std::optional<std::size_t> docblock_start(llvm::StringRef raw);
 // Byte offset within `raw` of the first line a synopsis must not show —
 // specgen markup *or* Doxygen. What extract_synopsis cuts from.
 std::optional<std::size_t> stripped_comment_start(llvm::StringRef raw);
+
+// A synopsis comment the author marked to be kept (issue #280): a plain
+// comment whose text starts with `\syn`, in the manner of `// \ref` and
+// `// \rSec`, so it stays an ordinary comment to the compiler, to Doxygen and
+// to clang-format. `comment` starts at its `//` or `/*`. The answer is the
+// byte range, within it, of the marker and the whitespace after it, which is
+// what a synopsis leaves out: `// \syn access functions` prints
+// `// access functions`. Nothing for an unmarked comment, `\synopsis`
+// included.
+std::optional<std::pair<std::size_t, std::size_t>> synopsis_comment_marker(llvm::StringRef comment);
 
 // Does `raw` carry markup anywhere (see docblock_start)?
 bool is_docblock_comment(llvm::StringRef raw);

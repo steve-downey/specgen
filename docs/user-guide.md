@@ -642,12 +642,61 @@ Comment spelling is significant:
   elements and structural markers.
 - `///` and `/** ... */` are Doxygen. They are removed from synopses and
   extracted bodies, and are never promoted into specification wording.
-- Plain `//` and `/* ... */` comments are draft-form comments. They are retained
-  wherever the corresponding source is rendered.
+- Plain `//` and `/* ... */` comments are ordinary comments. An extracted
+  function body keeps them. A synopsis keeps only the ones it recognizes or
+  the author marks, as described next.
 
-Clang treats an unbroken run of comment lines as one comment, so a draft-form
-line in the same run as a Doxygen line is removed with it. A blank line between
-the two keeps the draft-form comment.
+A synopsis is the specification's text, so a plain comment in a class body is
+the implementation's unless it says otherwise:
+
+```cpp
+class widget {
+  public:
+    // \ref{w.cons}, constructors
+    // Implementation note: the trivial path is unconstrained on purpose.
+    widget();
+
+    // \syn access functions
+    bool empty() const; // never throws in practice
+    int  size() const;  // \syn see below
+};
+```
+
+renders
+
+```cpp
+class widget {
+public:
+  // [w.cons], constructors
+  widget();
+
+  // access functions
+  bool empty() const;
+  int size() const; // see below
+};
+```
+
+- A `// \ref{x}, title` group header is kept.
+- A comment whose text starts with `\syn` is kept, without the marker. It is
+  an ordinary comment to the compiler, to Doxygen and to clang-format, in the
+  manner of `// \ref` and `// \rSec`. It may be on a line of its own, after a
+  declaration, or a `/* ... */` comment.
+- Every other plain comment is dropped, including one after a declaration on
+  its line and one above an `\omit`ted or `\merge`d member.
+
+The same holds at namespace scope inside a gathered header synopsis: `\ref`
+group headers and `\syn` comments are kept. Comments that specgen writes
+itself, such as `// exposition only` and `// freestanding`, come from markers
+and are not affected.
+
+`generate --keep-synopsis-comments` selects the earlier behaviour, in which
+every plain comment of a class body stays in the synopsis. A `\syn` comment is
+printed without its marker under either setting, so a header can be marked
+first and give the option up afterwards.
+
+Clang treats an unbroken run of comment lines as one comment, so a plain
+line in the same run as a Doxygen line or a docblock, and after it, is removed
+with it. A blank line between the two separates them.
 
 A header documented only with Doxygen is valid input and can produce empty
 wording. Validation then reports its class members as undocumented. Those
