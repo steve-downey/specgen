@@ -21,6 +21,18 @@
 # BEMAN_SPECGEN_BUILD_TOOLS off. The parity cases do not: they compare two
 # checked-in files and need no driver at all, which is why a build without the
 # driver still checks even the *generated* captures.
+# The exported document. docs/examples.md is checked in, and exporting it
+# needs Emacs, so nothing here rebuilds it; this checks without Emacs that it
+# embeds the current text of every file docs/examples.org transcludes (issue
+# #294). It compares checked-in files only, so it registers on every lane.
+add_test(
+    NAME examples.export.current
+    COMMAND
+        "${CMAKE_COMMAND}" "-DORG=${PROJECT_SOURCE_DIR}/docs/examples.org"
+        "-DEXPORT=${PROJECT_SOURCE_DIR}/docs/examples.md" -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/check-export.cmake"
+)
+
 set(EXAMPLES_CLI "${PROJECT_SOURCE_DIR}/examples/cli")
 set(EXAMPLES_OUT "${EXAMPLES_CLI}/output")
 set(GOLDEN_DIR "${PROJECT_SOURCE_DIR}/tests/golden")

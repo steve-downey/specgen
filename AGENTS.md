@@ -92,7 +92,9 @@ The full statements live in `docs/architecture.md`; headlines only:
   every output it shows is a captured file checked by `ctest -R examples.`.
   After changing anything a captured file depends on, re-run
   `examples/cli/run-all.sh` from a **non-sanitizer** build
-  (`make install-release`) and commit the result.
+  (`make install-release`), re-export `docs/examples.md` with
+  `make examples-md` (Emacs), and commit both; `ctest -R examples.export`
+  fails when the export lags the captures.
 - Output discipline (decision `format-print-output`): interpolate
   with `std::format`, print with `std::print`/`std::println`; streams move
   bytes that are already built.

@@ -337,7 +337,14 @@ $(ORGFILES:%.org=%.html.deps):
 
 -include $(ORGFILES:%.org=%.html.deps)
 
-docs/examples.md : docs/examples.org
+# The files docs/examples.org transcludes, read off the document itself, so
+# the export is out of date as soon as a capture changes. The .deps file below
+# says the same, but only once an export has been made in this tree; without
+# this a fresh checkout answered "nothing to be done" after `run-all.sh`
+# rewrote the captures, which is how the export fell behind them (issue #294).
+EXAMPLES_MD_INPUTS := $(shell sed -n 's#^.*\[\[file:\([^]:]*\)\(::[^]]*\)\?\]\].*$$#docs/\1#p' docs/examples.org | sort -u)
+
+docs/examples.md : docs/examples.org $(EXAMPLES_MD_INPUTS)
 	@test -n "$(EMACS)" || { echo "emacs not found; install emacs or set EMACS"; exit 1; }
 	$(EMACS) --init-directory=.emacs.d/ \
 		--batch --load .emacs.d/init.el \

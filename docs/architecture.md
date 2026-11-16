@@ -1522,6 +1522,15 @@ input, so older readers cannot silently discard coverage claims.
   diagnostics capture runs from the header's own directory and the fragment splits run from
   inside their output directory with a relative `--split wording`. Captures are regenerated
   from a non-sanitizer build and committed.
+  The document's checked-in GFM export, `docs/examples.md`, embeds every file the document
+  transcludes, and `examples.export.current` checks that it embeds their current text, byte
+  for byte, without needing the Emacs that exporting does (issue #294). The export had
+  fallen several releases behind unnoticed, and had stopped working: org-transclusion
+  wraps a file's text in a source block as it is, so an org capture's first headline ended
+  its block and the rest was exported as part of the document, until a capture with
+  wg21org's change links made the export fail on a link it could not resolve. The export
+  setup now comma-escapes transcluded text on the way in, which org removes again when it
+  exports the block.
 - **Acid test (draft)**: reverse-engineer [optional] into a Beman-style header;
   diff generated LaTeX against the std source. The residual diff enumerates
   missing markers and tunes the FormatStyle. The measurement against the untouched upstream

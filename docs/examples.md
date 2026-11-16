@@ -3,8 +3,8 @@
 - [Minimal Header](#minimal-header)
 - [The Three Backends](#the-three-backends)
 - [Paper Mode](#paper-mode)
-  - [Observers [gadget.observe]](#gadget.observe)
-  - [Modifiers [gadget.mod]](#gadget.mod)
+- [The Wording Diff](#the-wording-diff)
+  - [Against the working draft](#the-wording-diff-draft)
 - [Fragment Output](#fragment-output)
 - [A Paper Of Several Headers](#a-paper-of-several-headers)
 - [Validation](#validation)
@@ -33,27 +33,28 @@ The ordinary way to use specgen is a single `generate` command, which parses a h
 
 # CLI Coverage
 
-| Command or option                 | Example section                       |
-|--------------------------------- |------------------------------------- |
-| `--help`                          | General command information           |
-| `generate <header>`               | Minimal header                        |
-| `generate --emit-ir`              | Minimal header                        |
-| `--no-compile-commands`           | Minimal header                        |
-| `-o`, `--output`                  | Minimal header, Larger header example |
-| `-- <clang args>...`              | Explicit include path                 |
-| `--compile-commands <dir>`        | Explicit include path                 |
-| `dump-decls`                      | Declaration interleave                |
-| `split_inline <header>`           | Converting a header                   |
-| `split_inline --move-comments`    | Converting a header                   |
-| `render --from-ir <file>`         | The three backends                    |
-| `render --from-ir -`              | Minimal header                        |
-| `--backend latex`, `mpark`, `org` | The three backends                    |
-| `--validate`                      | Validation                            |
-| `--paper`                         | Paper mode                            |
-| `--split`, `--root`               | Fragment output                       |
-| `generate <header>...` (a paper)  | A paper of several headers            |
-| `-o` with `--split`               | A paper of several headers            |
-| `--depfile`, `--dep-target`       | A paper of several headers            |
+| Command or option                                      | Example section                       |
+|------------------------------------------------------ |------------------------------------- |
+| `--help`                                               | General command information           |
+| `generate <header>`                                    | Minimal header                        |
+| `generate --emit-ir`                                   | Minimal header                        |
+| `--no-compile-commands`                                | Minimal header                        |
+| `-o`, `--output`                                       | Minimal header, Larger header example |
+| `-- <clang args>...`                                   | Explicit include path                 |
+| `--compile-commands <dir>`                             | Explicit include path                 |
+| `dump-decls`                                           | Declaration interleave                |
+| `split_inline <header>`                                | Converting a header                   |
+| `split_inline --move-comments`                         | Converting a header                   |
+| `render --from-ir <file>`                              | The three backends                    |
+| `render --from-ir -`                                   | Minimal header                        |
+| `--backend latex`, `mpark`, `org`                      | The three backends                    |
+| `--validate`                                           | Validation                            |
+| `--paper`                                              | Paper mode                            |
+| `--baseline-header`, `--baseline-ir`, `--diff-context` | The wording diff                      |
+| `--split`, `--root`                                    | Fragment output                       |
+| `generate <header>...` (a paper)                       | A paper of several headers            |
+| `-o` with `--split`                                    | A paper of several headers            |
+| `--depfile`, `--dep-target`                            | A paper of several headers            |
 
 
 <a id="general-command-information"></a>
@@ -75,6 +76,7 @@ cd "$REPO_ROOT"
 "$SPECGEN" generate --help > "$OUT/generate-help.txt"
 "$SPECGEN" render --help > "$OUT/render-help.txt"
 "$SPECGEN" dump-decls --help > "$OUT/dump-decls-help.txt"
+"$SPECGEN" import --help > "$OUT/import-help.txt"
 ```
 
 Every command accepts `--help`, and all four invocations print the same usage text, so only one is shown here.
@@ -85,124 +87,201 @@ usage: specgen <command> [options]
 commands:
   render      render IR JSON to wording fragments
   generate    render a C++ header to wording fragments
+  import      read subclauses of the working draft's LaTeX into IR JSON
   dump-decls  print a header's decl/comment interleave (debug)
+
+import options:
+  <file.tex>                the draft source file holding the subclauses
+                             (exactly one)
+  --section <stable-name>   a subclause to import, with its subsections; the
+                             result has one top-level section per use, in the
+                             order given. Required, and may be repeated
+  -o, --output <file>       write the IR here instead of to standard output
+
+  A construct the IR has no kind for is kept as raw LaTeX and reported as a
+  warning naming it and the subclause. A name the file lacks is an error.
 
 dump-decls options:
   <header>                  the header to parse (exactly one)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
-			     compile_commands.json
+                             compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
-			     above <header>, which is otherwise done by
-			     default (no effect alongside --compile-commands
-			     or a `--` tail; both already outrank the search)
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
   -- <clang args>...        pass these to Clang verbatim instead of consulting
-			     any compile_commands.json; everything after the
-			     first bare `--` is taken as-is, with no further
-			     option parsing
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
 
 generate options:
   <header>...                the headers to parse, one document each and all
-			     of them one paper, in the order named; with none,
-			     parse a stock snippet as a link-proving smoke
-			     check
+                             of them one paper, in the order named; with none,
+                             parse a stock snippet as a link-proving smoke
+                             check
+  --keep-synopsis-comments  keep every plain comment of a class body in its
+                             synopsis. By default a synopsis keeps a
+                             `// \ref{x}, title` group header and a comment
+                             that starts `\syn`, printed without the marker,
+                             and drops the rest as implementation comments
+  --source <file>           a source file defining members the preceding
+                             header declares: a documented definition in it
+                             supplies that member's wording, as one in the
+                             header would. Parsed as its own translation unit,
+                             with its own compile flags; may be repeated
   --emit-ir                 emit the document tree (design §3.2) as IR JSON
-			     for a later `render --from-ir`, instead of
-			     rendering wording here. One document per file is
-			     what the format is, so this takes one header
+                             for a later `render --from-ir`, instead of
+                             rendering wording here. One document per file is
+                             what the format is, so this takes one header
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
-			     finding at error severity aborts the render
-			     (exit 1) instead
-  --paper                   mark the fragment as an addition and number its
-			     paragraphs as added (mpark and org)
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
   --new-root <name>         treat <name> and every stable name beneath it as
-			     a clause proposed by this paper (mpark and org),
-			     rather than one already in the working draft. May be
-			     repeated; references beneath any root use a local
-			     target
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --baseline-header <path>  the wording diff against this header's wording,
+                             parsed with the same compile flags as the header
+                             it pairs with, in order. May be repeated
+  --baseline-rev <rev>      the wording diff against the headers as they were
+                             at this git revision of their repository, checked
+                             out into a scratch tree for the run; a header the
+                             revision lacks is new wording. One per run
+  --baseline-draft <dir>    the wording diff against the C++ working draft:
+                             the top-level sections the headers generate are
+                             read, by stable name, from the *.tex files in
+                             this draft source directory; a section it lacks
+                             is new wording. One per run
+  --inherit-draft <dir>     resolve \asdraft against the draft in this
+                             directory, as --baseline-draft does, but render
+                             the wording itself and not a diff. One per run
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
-			     sections descend from it (mpark and org only;
-			     2 by default). One to six under mpark, markdown's
-			     deepest heading; org has no upper limit
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
-			     descend from it (latex only; 3 by default, the
-			     draft's library split granularity)
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --section-number <name>=<number>
+                            give a top-level section its number in the draft
+                             (latex only): `\clausenumber{<number>}` is written
+                             ahead of its \rSec, so a fragment's headings and
+                             references print 22.10.17.4 and not the draft
+                             macros' unknown-number glyph. May be repeated
   --split <dir>             write one fragment per top-level section into <dir>,
-			     named from its stable name (optional.ctor.tex), and
-			     list the paths written on standard output
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
-			     section (--split only); derived from the sections'
-			     common stable-name prefix when omitted. With
-			     several headers, repeats to name each document's
-			     root fragment, pairing in order
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted. With
+                             several headers, repeats to name each document's
+                             root fragment, pairing in order
   -o, --output <file>       write the whole here instead of standard output
-			     ("-" is standard output); alongside --split, write
-			     both the whole and the fragments
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
-			     this run produced and every file its parse read,
-			     with an empty rule per prerequisite so a deleted
-			     header rebuilds rather than erroring. System
-			     headers are left out
+                             this run produced and every file its parse read,
+                             with an empty rule per prerequisite so a deleted
+                             header rebuilds rather than erroring. System
+                             headers are left out
   --dep-target <name>       name this target in the dependency fragment
-			     instead of the files actually written; repeats
-			     (--depfile only)
+                             instead of the files actually written; repeats
+                             (--depfile only)
   --compile-commands <dir>  read compile flags for <header> from <dir>'s
-			     compile_commands.json
+                             compile_commands.json
   --no-compile-commands     suppress the search for a compile_commands.json
-			     above <header>, which is otherwise done by
-			     default (no effect alongside --compile-commands
-			     or a `--` tail; both already outrank the search)
+                             above <header>, which is otherwise done by
+                             default (no effect alongside --compile-commands
+                             or a `--` tail; both already outrank the search)
   -- <clang args>...        pass these to Clang verbatim instead of consulting
-			     any compile_commands.json; everything after the
-			     first bare `--` is taken as-is, with no further
-			     option parsing
+                             any compile_commands.json; everything after the
+                             first bare `--` is taken as-is, with no further
+                             option parsing
 
 render options:
   --from-ir <file>          IR JSON to read; "-" for standard input (required).
-			     May be repeated, once per document of one paper:
-			     --validate then runs across the union of their
-			     documented names, so a name specified by a
-			     sibling document is not foreign. Several inputs
-			     render as one paper -- joined in order for a
-			     single output, split into per-clause fragments,
-			     or both -- and --root, when given at all, repeats
-			     too, pairing with each --from-ir in order
+                             May be repeated, once per document of one paper:
+                             --validate then runs across the union of their
+                             documented names, so a name specified by a
+                             sibling document is not foreign. Several inputs
+                             render as one paper -- joined in order for a
+                             single output, split into per-clause fragments,
+                             or both -- and --root, when given at all, repeats
+                             too, pairing with each --from-ir in order
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
-			     finding at error severity aborts the render
-			     (exit 1) instead
-  --paper                   mark the fragment as an addition and number its
-			     paragraphs as added (mpark and org)
+                             finding at error severity aborts the render
+                             (exit 1) instead
+  --warnings-as-errors      with --validate: a finding at warning severity
+                             aborts the render too. A warning is something
+                             specgen verified; a note is something to check
+                             outside it, and never fails the run
+  --paper                   mark the whole fragment as added wording: the
+                             editing-instruction form of each backend, with
+                             paragraphs numbered as added under mpark and org
   --new-root <name>         treat <name> and every stable name beneath it as
-			     a clause proposed by this paper (mpark and org),
-			     rather than one already in the working draft. May be
-			     repeated; references beneath any root use a local
-			     target
+                             a clause proposed by this paper (mpark and org),
+                             rather than one already in the working draft. May be
+                             repeated; references beneath any root use a local
+                             target
+  --baseline-ir <file>      the wording diff: render what changed since this
+                             saved IR, marked in the backend's editing form.
+                             May be repeated, one per document in order;
+                             implies --paper
+  --diff-context <level>    with a baseline: `changed` (the default) keeps the
+                             sections that changed, `all` keeps every section,
+                             `items` also elides the unchanged items inside a
+                             changed section; `decls` also elides an unchanged
+                             description inside a changed item
   --base-heading-level <n>  heading level of a top-level section; nested
-			     sections descend from it (mpark and org only;
-			     2 by default). One to six under mpark, markdown's
-			     deepest heading; org has no upper limit
+                             sections descend from it (mpark and org only;
+                             2 by default). One to six under mpark, markdown's
+                             deepest heading; org has no upper limit
   --base-section-depth <n>  \rSec depth of a top-level section; nested sections
-			     descend from it (latex only; 3 by default, the
-			     draft's library split granularity)
+                             descend from it (latex only; 3 by default, the
+                             draft's library split granularity)
+  --section-number <name>=<number>
+                            give a top-level section its number in the draft
+                             (latex only): `\clausenumber{<number>}` is written
+                             ahead of its \rSec, so a fragment's headings and
+                             references print 22.10.17.4 and not the draft
+                             macros' unknown-number glyph. May be repeated
   --split <dir>             write one fragment per top-level section into <dir>,
-			     named from its stable name (optional.ctor.tex), and
-			     list the paths written on standard output
+                             named from its stable name (optional.ctor.tex), and
+                             list the paths written on standard output
   --root <name>             name the fragment holding the nodes outside every
-			     section (--split only); derived from the sections'
-			     common stable-name prefix when omitted. With
-			     several --from-ir inputs, repeats to name each
-			     document's root fragment, pairing in order
+                             section (--split only); derived from the sections'
+                             common stable-name prefix when omitted. With
+                             several --from-ir inputs, repeats to name each
+                             document's root fragment, pairing in order
   -o, --output <file>       write the whole here instead of standard output
-			     ("-" is standard output); alongside --split, write
-			     both the whole and the fragments
+                             ("-" is standard output); alongside --split, write
+                             both the whole and the fragments
   --depfile <file>          write a Makefile dependency fragment naming what
-			     this run produced and the IR files it read, with
-			     an empty rule per prerequisite. Standard input is
-			     not a file, so it is left out
+                             this run produced and the IR files it read, with
+                             an empty rule per prerequisite. Standard input is
+                             not a file, so it is left out
   --dep-target <name>       name this target in the dependency fragment
-			     instead of the files actually written; repeats
-			     (--depfile only)
+                             instead of the files actually written; repeats
+                             (--depfile only)
 
 general:
   -h, --help                show this message
@@ -302,7 +381,7 @@ cd "$REPO_ROOT"
 # between them on a pipe. Byte for byte the file above.
 "$SPECGEN" generate --emit-ir tests/corpus/spec_widget.hpp --no-compile-commands |
     "$SPECGEN" render --from-ir - --backend latex \
-	-o "$OUT/widget-piped.tex"
+        -o "$OUT/widget-piped.tex"
 ```
 
 The first command writes the IR to `widget.json`. It is the same document the golden suite pins, so it is checked rather than shown.
@@ -438,42 +517,42 @@ These commands render the small hand-written `value_or` IR fixture through each 
     {
       "type": "item",
       "decl": {
-	"signatures": [
-	  {
-	    "text": "template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;",
-	    "spans": []
-	  }
-	],
-	"index": [
-	  { "kind": "member", "name": "value_or", "parent": "optional" }
-	]
+        "signatures": [
+          {
+            "text": "template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& v) const &;",
+            "spans": []
+          }
+        ],
+        "index": [
+          { "kind": "member", "name": "value_or", "parent": "optional" }
+        ]
       },
       "descr": {
-	"elements": [
-	  {
-	    "kind": "mandates",
-	    "paragraphs": [
-	      [
-		{ "t": "code", "code": { "text": "is_copy_constructible_v<T>", "spans": [] } },
-		{ "t": "text", "text": " is " },
-		{ "t": "code", "code": { "text": "true", "spans": [] } },
-		{ "t": "text", "text": " and " },
-		{ "t": "code", "code": { "text": "is_convertible_v<U, T>", "spans": [] } },
-		{ "t": "text", "text": " is " },
-		{ "t": "code", "code": { "text": "true", "spans": [] } },
-		{ "t": "text", "text": "." }
-	      ]
-	    ]
-	  },
-	  {
-	    "kind": "effects",
-	    "paragraphs": [],
-	    "equivalent": {
-	      "text": "return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));",
-	      "spans": []
-	    }
-	  }
-	]
+        "elements": [
+          {
+            "kind": "mandates",
+            "paragraphs": [
+              [
+                { "t": "code", "code": { "text": "is_copy_constructible_v<T>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "true", "spans": [] } },
+                { "t": "text", "text": " and " },
+                { "t": "code", "code": { "text": "is_convertible_v<U, T>", "spans": [] } },
+                { "t": "text", "text": " is " },
+                { "t": "code", "code": { "text": "true", "spans": [] } },
+                { "t": "text", "text": "." }
+              ]
+            ]
+          },
+          {
+            "kind": "effects",
+            "paragraphs": [],
+            "equivalent": {
+              "text": "return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));",
+              "spans": []
+            }
+          }
+        ]
       }
     }
   ]
@@ -650,86 +729,667 @@ constexpr void reset() noexcept;
 
 The same input in org:
 
-\#+begin\_src org
-
-<div class="addedblock" id="orge3a7409">
-<div class="codeblock" id="org6e52c32">
-<p>
+```org
+#+begin_addedblock
+#+begin_codeblock
 class gadget {
 public:
   constexpr bool ready() const noexcept;
 };
-</p>
+#+end_codeblock
+#+end_addedblock
 
-</div>
+** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
 
-</div>
-
-
-<a id="gadget.observe"></a>
-
-## Observers [gadget.observe]
-
-<div class="itemdecl" id="orga6f4d82">
-<p>
+#+begin_itemdecl
 constexpr bool ready() const noexcept;
-</p>
+#+end_itemdecl
 
-</div>
+#+begin_pnum x
+/Constraints/:
 
-<div class="pnum" id="org3a67bc0">
-<p>
-<i>Constraints</i>:
-</p>
+- ~is_copy_constructible_v<T>~ is ~true~,
+- ~is_move_constructible_v<T>~ is ~true~.
+#+end_pnum
 
-<ul class="org-ul">
-<li><code>is_copy_constructible_v&lt;T&gt;</code> is <code>true</code>,</li>
-<li><code>is_move_constructible_v&lt;T&gt;</code> is <code>true</code>.</li>
-</ul>
+#+begin_pnum x+1
+/Returns/: ~true~ if and only if the gadget is ready.
+#+end_pnum
 
-</div>
-
-<div class="pnum" id="org247a6f9">
-<p>
-<i>Returns</i>: <code>true</code> if and only if the gadget is ready.
-</p>
-
-</div>
-
-<div class="pnum" id="orgf81c899">
-<p>
+#+begin_pnum x+2
 A second paragraph, so the added numbering has to advance.
-</p>
+#+end_pnum
 
-</div>
-
-<div class="pnum" id="orgb5b0e81">
-<p>
+#+begin_pnum x+3
 A free paragraph closing the subclause.
-</p>
+#+end_pnum
 
-</div>
+** Modifiers [gadget.mod]
+:PROPERTIES:
+:CUSTOM_ID: gadget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
 
-
-<a id="gadget.mod"></a>
-
-## Modifiers [gadget.mod]
-
-<div class="itemdecl" id="orgf8662d7">
-<p>
+#+begin_itemdecl
 constexpr void reset() noexcept;
-</p>
+#+end_itemdecl
 
-</div>
+#+begin_pnum x+4
+/Effects/: Resets the gadget.
+#+end_pnum
+```
 
-<div class="pnum" id="orge45719a">
-<p>
-<i>Effects</i>: Resets the gadget.
-</p>
 
-</div>
+<a id="the-wording-diff"></a>
 
-\#+end\_src
+# The Wording Diff
+
+A baseline turns the render into a diff: the wording comes out marked with what the revision added and removed, in each backend's own editing form. The corpus pair is one header a revision apart; `--baseline-header` parses the old one, `--baseline-ir` would read a saved IR instead. Only the sections that changed are kept by default; `--diff-context items` also elides the members inside them that did not.
+
+```sh
+#!/bin/sh
+# examples/cli/45-wording-diff.sh                                     -*-sh-*-
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# The wording diff: a header rendered against a baseline, the wording coming
+# out marked with what the revision added and removed. The corpus pair is the
+# same header one revision apart; `--baseline-header` parses the old one.
+. "$(dirname -- "$0")/env.sh"
+
+OUT=$(out_dir 45-wording-diff)
+cd "$REPO_ROOT"
+
+"$SPECGEN" generate tests/corpus/diff/gadget.after.hpp \
+    --baseline-header tests/corpus/diff/gadget.before.hpp \
+    --backend mpark \
+    --no-compile-commands \
+    -o "$OUT/gadget-diff.md"
+
+"$SPECGEN" generate tests/corpus/diff/gadget.after.hpp \
+    --baseline-header tests/corpus/diff/gadget.before.hpp \
+    --backend org \
+    --no-compile-commands \
+    -o "$OUT/gadget-diff.org"
+
+# The `items` context elides the members that did not change.
+"$SPECGEN" generate tests/corpus/diff/gadget.after.hpp \
+    --baseline-header tests/corpus/diff/gadget.before.hpp \
+    --diff-context items \
+    --backend mpark \
+    --no-compile-commands \
+    -o "$OUT/gadget-diff-items.md"
+```
+
+````markdown
+```cpp
+namespace std {
+  class gadget {
+  public:
+    // @[gadget.observe]{- .sref}@, observers
+    bool ready() const @[noexcept]{.add}@;
+    int level() const;
+
+    // @[gadget.mod]{- .sref}@, modifiers
+    void @[reset]{.rm}@@[clear]{.add}@();
+    void arm(int level);
+
+    @[// [gadget.query]{- .sref}, queries]{.add}@
+    @[bool armed() const;]{.add}@
+  };
+}
+```
+
+::: wording
+
+## Observers [gadget.observe]{- .sref} {-}
+
+```cpp
+bool ready() const @[noexcept]{.add}@;
+```
+
+[#]{.pnum} *Returns*: `true` if the gadget is [ready.]{.rm}[armed.]{.add}
+
+::: add
+
+[x]{.pnum} *Complexity*: Constant.
+
+:::
+
+```cpp
+int level() const;
+```
+
+[#]{.pnum} *Returns*: The current level.
+
+[#]{.pnum} *Remarks*: A gadget starts at level zero.
+
+:::
+
+::: wording
+
+## Modifiers [gadget.mod]{- .sref} {-}
+
+::: rm
+
+```cpp
+void reset();
+```
+
+[#]{.pnum} *Effects*: Resets the gadget to level zero.
+
+:::
+
+::: add
+
+```cpp
+void clear();
+```
+
+[x+1]{.pnum} *Effects*: Clears the gadget, returning it to level zero.
+
+:::
+
+```cpp
+void arm(int level);
+```
+
+[#]{.pnum} *Preconditions*: `level` is [positive.]{.rm}[greater than zero.]{.add}
+
+[#]{.pnum} *Effects*: Arms the gadget at `level`.
+
+::: add
+
+[x+2]{.pnum} Arming an armed gadget replaces its level.
+
+:::
+
+:::
+
+::: add
+
+::: wording
+
+## Queries [gadget.query]{- .sref} {-}
+
+```cpp
+bool armed() const;
+```
+
+[x+3]{.pnum} *Returns*: `true` if the gadget has been armed.
+
+:::
+
+:::
+````
+
+The same diff in org:
+
+```org
+#+begin_codeblock
+namespace std {
+  class gadget {
+  public:
+    // \ref{gadget.observe}, observers
+    bool ready() const @\added{noexcept}@;
+    int level() const;
+
+    // \ref{gadget.mod}, modifiers
+    void @\removed{reset}@@\added{clear}@();
+    void arm(int level);
+
+    @\added{// \ref{gadget.query}, queries}@
+    @\added{bool armed() const;}@
+  };
+}
+#+end_codeblock
+
+** Observers [gadget.observe]
+:PROPERTIES:
+:CUSTOM_ID: gadget.observe
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+bool ready() const @\added{noexcept}@;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: ~true~ if the gadget is [[delete:][ready.]][[insert:][armed.]]
+#+end_pnum
+
+#+begin_addedblock
+#+begin_pnum x
+/Complexity/: Constant.
+#+end_pnum
+#+end_addedblock
+
+#+begin_itemdecl
+int level() const;
+#+end_itemdecl
+
+#+begin_pnum
+/Returns/: The current level.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: A gadget starts at level zero.
+#+end_pnum
+
+** Modifiers [gadget.mod]
+:PROPERTIES:
+:CUSTOM_ID: gadget.mod
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_removedblock
+#+begin_itemdecl
+void reset();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Resets the gadget to level zero.
+#+end_pnum
+#+end_removedblock
+
+#+begin_addedblock
+#+begin_itemdecl
+void clear();
+#+end_itemdecl
+
+#+begin_pnum x+1
+/Effects/: Clears the gadget, returning it to level zero.
+#+end_pnum
+#+end_addedblock
+
+#+begin_itemdecl
+void arm(int level);
+#+end_itemdecl
+
+#+begin_pnum
+/Preconditions/: ~level~ is [[delete:][positive.]][[insert:][greater than zero.]]
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Arms the gadget at ~level~.
+#+end_pnum
+
+#+begin_addedblock
+#+begin_pnum x+2
+Arming an armed gadget replaces its level.
+#+end_pnum
+#+end_addedblock
+
+** Queries [gadget.query]
+:PROPERTIES:
+:CUSTOM_ID: gadget.query
+:UNNUMBERED: t
+:WG21_WORDING: t
+:WG21_CHANGE: add
+:END:
+
+#+begin_itemdecl
+bool armed() const;
+#+end_itemdecl
+
+#+begin_pnum x+3
+/Returns/: ~true~ if the gadget has been armed.
+#+end_pnum
+```
+
+And under the `items` context, where `level()` collapses to the ellipsis:
+
+````markdown
+```cpp
+namespace std {
+  class gadget {
+  public:
+    // @[gadget.observe]{- .sref}@, observers
+    bool ready() const @[noexcept]{.add}@;
+    int level() const;
+
+    // @[gadget.mod]{- .sref}@, modifiers
+    void @[reset]{.rm}@@[clear]{.add}@();
+    void arm(int level);
+
+    @[// [gadget.query]{- .sref}, queries]{.add}@
+    @[bool armed() const;]{.add}@
+  };
+}
+```
+
+::: wording
+
+## Observers [gadget.observe]{- .sref} {-}
+
+```cpp
+bool ready() const @[noexcept]{.add}@;
+```
+
+[#]{.pnum} *Returns*: `true` if the gadget is [ready.]{.rm}[armed.]{.add}
+
+::: add
+
+[x]{.pnum} *Complexity*: Constant.
+
+:::
+
+[…]
+
+:::
+
+::: wording
+
+## Modifiers [gadget.mod]{- .sref} {-}
+
+::: rm
+
+```cpp
+void reset();
+```
+
+[#]{.pnum} *Effects*: Resets the gadget to level zero.
+
+:::
+
+::: add
+
+```cpp
+void clear();
+```
+
+[x+1]{.pnum} *Effects*: Clears the gadget, returning it to level zero.
+
+:::
+
+```cpp
+void arm(int level);
+```
+
+[#]{.pnum} *Preconditions*: `level` is [positive.]{.rm}[greater than zero.]{.add}
+
+[#]{.pnum} *Effects*: Arms the gadget at `level`.
+
+::: add
+
+[x+2]{.pnum} Arming an armed gadget replaces its level.
+
+:::
+
+:::
+
+::: add
+
+::: wording
+
+## Queries [gadget.query]{- .sref} {-}
+
+[…]
+
+:::
+
+:::
+````
+
+
+<a id="the-wording-diff-draft"></a>
+
+## Against the working draft
+
+The baseline can also be the standard's own wording. `--baseline-draft` takes the draft's `source` directory and reads, by stable name, the sections the header generates, so a paper changes what it changes and the rest comes from the draft. The header here declares one item of [optional.assign]; its description is reworded, and the draft's other items, which the header leaves out, come out removed.
+
+```sh
+#!/bin/sh
+# examples/cli/47-wording-diff-draft.sh                               -*-sh-*-
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+#
+# The wording diff against the C++ working draft itself: no earlier revision of
+# the header, just the draft's LaTeX. `--baseline-draft` names the draft's
+# source directory and reads, by stable name, the sections the header
+# generates. Here the "draft" is the importer's corpus slice of
+# [optional.assign], staged as the `.tex` file the flag looks for.
+. "$(dirname -- "$0")/env.sh"
+
+OUT=$(out_dir 47-wording-diff-draft)
+cd "$REPO_ROOT"
+
+DRAFT=$(mktemp -d)
+trap 'rm -rf "$DRAFT"' EXIT
+cp tests/corpus/standard-slices/optional.assign.slice "$DRAFT/utilities.tex"
+
+"$SPECGEN" generate tests/corpus/diff/optional_assign.hpp \
+    --baseline-draft "$DRAFT" \
+    --backend mpark \
+    --no-compile-commands \
+    -o "$OUT/optional-assign-diff.md"
+```
+
+````markdown
+::: add
+
+```cpp
+namespace std {
+  struct nullopt_t {};
+}
+```
+
+```cpp
+namespace std {
+  template<class T>
+  class optional {
+  public:
+    // @[optional.assign]{- .sref}@, assignment
+    constexpr optional& operator=(nullopt_t) noexcept;
+  };
+}
+```
+
+:::
+
+::: wording
+
+## Assignment [optional.assign]{- .sref} {-}
+
+```cpp
+constexpr optional@[<T>]{.rm}@& operator=(nullopt_t) noexcept;
+```
+
+[#]{.pnum} *Effects*: [If `*this` contains a value, calls `$val$.T::~T()` to destroy the contained value; otherwise no effect.]{.rm}[Destroys the contained value, if there is one.]{.add}
+
+[#]{.pnum} *Postconditions*: `*this` does not contain a value.
+
+[#]{.pnum} *Returns*: `*this`.
+
+::: rm
+
+```cpp
+constexpr optional<T>& operator=(const optional& rhs);
+```
+
+[#]{.pnum} *Effects*: See [Table \[optional.assign.copy\]](#optional.assign.copy).
+
+| | `*this` contains a value | `*this` does not contain a value |
+|---|---|---|
+| **`rhs` contains a value** | assigns `rhs.$val$` to `$val$` | direct-non-list-initializes `$val$` with `rhs.$val$` |
+| **`rhs` does not contain a value** | destroys the contained value by calling `$val$.T::~T()` | no effect |
+: [`optional::operator=(const optional&)` effects]{#optional.assign.copy}
+
+[#]{.pnum} *Postconditions*: `rhs.has_value() == this->has_value()`.
+
+[#]{.pnum} *Returns*: `*this`.
+
+[#]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s copy constructor, no effect. If an exception is thrown during the call to `T`'s copy assignment, the state of its contained value is as defined by the exception safety guarantee of `T`'s copy assignment. This operator is defined as deleted unless `is_copy_constructible_v<T>` is `true` and `is_copy_assignable_v<T>` is `true`. If `is_trivially_copy_constructible_v<T> &&` `is_trivially_copy_assignable_v<T> &&` `is_trivially_destructible_v<T>` is `true`, this assignment operator is trivial.
+
+:::
+
+::: rm
+
+```cpp
+constexpr optional& operator=(optional&& rhs) noexcept($see below$);
+```
+
+[#]{.pnum} *Constraints*: `is_move_constructible_v<T>` is `true` and `is_move_assignable_v<T>` is `true`.
+
+[#]{.pnum} *Effects*: See [Table \[optional.assign.move\]](#optional.assign.move). The result of the expression `rhs.has_value()` remains unchanged.
+
+| | `*this` contains a value | `*this` does not contain a value |
+|---|---|---|
+| **`rhs` contains a value** | assigns `std::move(rhs.$val$)` to `$val$` | direct-non-list-initializes `$val$` with `std::move(rhs.$val$)` |
+| **`rhs` does not contain a value** | destroys the contained value by calling `$val$.T::~T()` | no effect |
+: [`optional::operator=(optional&&)` effects]{#optional.assign.move}
+
+[#]{.pnum} *Postconditions*: `rhs.has_value() == this->has_value()`.
+
+[#]{.pnum} *Returns*: `*this`.
+
+[#]{.pnum} *Remarks*: The exception specification is equivalent to:
+
+```cpp
+is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T>
+```
+
+[#]{.pnum} If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s move constructor, the state of `rhs.$val$` is determined by the exception safety guarantee of `T`'s move constructor. If an exception is thrown during the call to `T`'s move assignment, the states of `$val$` and `rhs.$val$` are determined by the exception safety guarantee of `T`'s move assignment. If `is_trivially_move_constructible_v<T> &&` `is_trivially_move_assignable_v<T> &&` `is_trivially_destructible_v<T>` is `true`, this assignment operator is trivial.
+
+:::
+
+::: rm
+
+```cpp
+template<class U = remove_cv_t<T>> constexpr optional& operator=(U&& v);
+```
+
+[#]{.pnum} *Constraints*:
+
+- [#.#]{.pnum} `is_same_v<remove_cvref_t<U>, optional>` is `false`,
+- [#.#]{.pnum} `conjunction_v<is_scalar<T>, is_same<T, decay_t<U>>>` is `false`,
+- [#.#]{.pnum} `is_constructible_v<T, U>` is `true`, and
+- [#.#]{.pnum} `is_assignable_v<T&, U>` is `true`.
+
+[#]{.pnum} *Effects*: If `*this` contains a value, assigns `std::forward<U>(v)` to `$val$`; otherwise direct-non-list-initializes `$val$` with `std::forward<U>(v)`.
+
+[#]{.pnum} *Postconditions*: `*this` contains a value.
+
+[#]{.pnum} *Returns*: `*this`.
+
+[#]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s constructor, the state of `v` is determined by the exception safety guarantee of `T`'s constructor. If an exception is thrown during the call to `T`'s assignment, the states of `$val$` and `v` are determined by the exception safety guarantee of `T`'s assignment.
+
+:::
+
+::: rm
+
+```cpp
+template<class U> constexpr optional<T>& operator=(const optional<U>& rhs);
+```
+
+[#]{.pnum} *Constraints*:
+
+- [#.#]{.pnum} `is_constructible_v<T, const U&>` is `true`,
+- [#.#]{.pnum} `is_assignable_v<T&, const U&>` is `true`,
+- [#.#]{.pnum} `$converts-from-any-cvref$<T, optional<U>>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, optional<U>&>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, optional<U>&&>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, const optional<U>&>` is `false`, and
+- [#.#]{.pnum} `is_assignable_v<T&, const optional<U>&&>` is `false`.
+
+[#]{.pnum} *Effects*: See [Table \[optional.assign.copy.templ\]](#optional.assign.copy.templ).
+
+| | `*this` contains a value | `*this` does not contain a value |
+|---|---|---|
+| **`rhs` contains a value** | assigns `rhs.operator*()` to `$val$` | direct-non-list-initializes `$val$` with `rhs.operator*()` |
+| **`rhs` does not contain a value** | destroys the contained value by calling `$val$.T::~T()` | no effect |
+: [`optional::operator=(const optional<U>&)` effects]{#optional.assign.copy.templ}
+
+[#]{.pnum} *Postconditions*: `rhs.has_value() == this->has_value()`.
+
+[#]{.pnum} *Returns*: `*this`.
+
+[#]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s constructor, the state of `rhs.$val$` is determined by the exception safety guarantee of `T`'s constructor. If an exception is thrown during the call to `T`'s assignment, the states of `$val$` and `rhs.$val$` are determined by the exception safety guarantee of `T`'s assignment.
+
+:::
+
+::: rm
+
+```cpp
+template<class U> constexpr optional<T>& operator=(optional<U>&& rhs);
+```
+
+[#]{.pnum} *Constraints*:
+
+- [#.#]{.pnum} `is_constructible_v<T, U>` is `true`,
+- [#.#]{.pnum} `is_assignable_v<T&, U>` is `true`,
+- [#.#]{.pnum} `$converts-from-any-cvref$<T, optional<U>>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, optional<U>&>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, optional<U>&&>` is `false`,
+- [#.#]{.pnum} `is_assignable_v<T&, const optional<U>&>` is `false`, and
+- [#.#]{.pnum} `is_assignable_v<T&, const optional<U>&&>` is `false`.
+
+[#]{.pnum} *Effects*: See [Table \[optional.assign.move.templ\]](#optional.assign.move.templ). The result of the expression `rhs.has_value()` remains unchanged.
+
+| | `*this` contains a value | `*this` does not contain a value |
+|---|---|---|
+| **`rhs` contains a value** | assigns `std::move(rhs).operator*()` to `$val$` | direct-non-list-initializes `$val$` with `std::move(rhs).operator*()` |
+| **`rhs` does not contain a value** | destroys the contained value by calling `$val$.T::~T()` | no effect |
+: [`optional::operator=(optional<U>&&)` effects]{#optional.assign.move.templ}
+
+[#]{.pnum} *Postconditions*: `rhs.has_value() == this->has_value()`.
+
+[#]{.pnum} *Returns*: `*this`.
+
+[#]{.pnum} *Remarks*: If any exception is thrown, the result of the expression `this->has_value()` remains unchanged. If an exception is thrown during the call to `T`'s constructor, the state of `rhs.$val$` is determined by the exception safety guarantee of `T`'s constructor. If an exception is thrown during the call to `T`'s assignment, the states of `$val$` and `rhs.$val$` are determined by the exception safety guarantee of `T`'s assignment.
+
+:::
+
+::: rm
+
+```cpp
+template<class... Args> constexpr T& emplace(Args&&... args);
+```
+
+[#]{.pnum} *Constraints*: `is_constructible_v<T, Args...>` is `true`.
+
+[#]{.pnum} *Effects*: Calls `*this = nullopt`. Then direct-non-list-initializes `$val$` with `std::forward<Args>(args)...`.
+
+[#]{.pnum} *Postconditions*: `*this` contains a value.
+
+[#]{.pnum} *Returns*: `$val$`.
+
+[#]{.pnum} *Throws*: Any exception thrown by the selected constructor of `T`.
+
+[#]{.pnum} *Remarks*: If an exception is thrown during the call to `T`'s constructor, `*this` does not contain a value, and the previous `$val$` (if any) has been destroyed.
+
+:::
+
+::: rm
+
+```cpp
+template<class U, class... Args> constexpr T& emplace(initializer_list<U> il, Args&&... args);
+```
+
+[#]{.pnum} *Constraints*: `is_constructible_v<T, initializer_list<U>&, Args...>` is `true`.
+
+[#]{.pnum} *Effects*: Calls `*this = nullopt`. Then direct-non-list-initializes `$val$` with `il, std::forward<Args>(args)...`.
+
+[#]{.pnum} *Postconditions*: `*this` contains a value.
+
+[#]{.pnum} *Returns*: `$val$`.
+
+[#]{.pnum} *Throws*: Any exception thrown by the selected constructor of `T`.
+
+[#]{.pnum} *Remarks*: If an exception is thrown during the call to `T`'s constructor, `*this` does not contain a value, and the previous `$val$` (if any) has been destroyed.
+
+:::
+
+:::
+````
 
 
 <a id="fragment-output"></a>
@@ -757,10 +1417,10 @@ IR=$REPO_ROOT/tests/golden/optional/expected.json
 for backend in latex mpark; do
     mkdir -p "$OUT/$backend"
     (
-	cd "$OUT/$backend"
-	"$SPECGEN" render --from-ir "$IR" \
-	    --backend "$backend" \
-	    --split wording > manifest
+        cd "$OUT/$backend"
+        "$SPECGEN" render --from-ir "$IR" \
+            --backend "$backend" \
+            --split wording > manifest
     )
 done
 
@@ -770,9 +1430,9 @@ mkdir -p "$OUT/org"
 (
     cd "$OUT/org"
     "$SPECGEN" render --from-ir "$IR" \
-	--backend org \
-	--root optional.syn \
-	--split wording > manifest
+        --backend org \
+        --root optional.syn \
+        --split wording > manifest
 )
 ```
 
@@ -825,7 +1485,8 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 
 \indexlibraryctor{optional}%
 \begin{itemdecl}
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -845,14 +1506,14 @@ Direct-non-list-initializes the contained value with \tcode{std::forward<Args>(a
 \indexlibraryctor{optional}%
 \begin{itemdecl}
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 \end{itemdecl}
 
 \begin{itemdescr}
 \pnum
 \constraints
 \begin{itemize}
-\item \tcode{is_constructible_v<T, const U&>} is \tcode{true},
+\item \tcode{is_constructible_v<T, const U\&>} is \tcode{true},
 \item \tcode{is_convertible_v<U, T>} is \tcode{true},
 \item \tcode{is_same_v<T, U>} is \tcode{false},
 \item \tcode{is_constructible_v<T, optional<U>>} is \tcode{false}.
@@ -891,7 +1552,8 @@ constexpr optional(const optional& rhs);
 [#]{.pnum} *Postconditions*: `has_value()` is equal to `rhs.has_value()`.
 
 ```cpp
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 ```
 
 [#]{.pnum} *Constraints*: `is_constructible_v<T, Args...>` is `true`.
@@ -902,7 +1564,7 @@ template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
 ```cpp
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ```
 
 [#]{.pnum} *Constraints*:
@@ -945,17 +1607,12 @@ namespace std {
     constexpr optional() noexcept;
     constexpr optional(nullopt_t) noexcept;
 
-    constexpr optional(const optional& rhs)
-      requires is_copy_constructible_v<T>;
+    constexpr optional(const optional& rhs);
 
-    template<class... Args>
-    constexpr explicit optional(in_place_t, Args&&... args)
-      requires is_constructible_v<T, Args...>;
+    template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
     template<class U>
-    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
-      requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
-	       (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
     // \ref{optional.assign}, assignment
     template<class... Args> constexpr T& emplace(Args&&... args);
@@ -1117,8 +1774,8 @@ OUT=$(out_dir 65-diagnostics)
 (
     cd "$REPO_ROOT/tests/corpus"
     "$SPECGEN" generate --emit-ir spec_diagnostics.hpp \
-	--no-compile-commands \
-	-o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag"
+        --no-compile-commands \
+        -o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag"
 )
 ```
 
@@ -1674,26 +2331,26 @@ class optional {
     constexpr optional(nullopt_t) noexcept;
 
     constexpr optional(const optional& rhs)
-	requires std::is_copy_constructible_v<T> && (!std::is_trivially_copy_constructible_v<T>);
+        requires std::is_copy_constructible_v<T> && (!std::is_trivially_copy_constructible_v<T>);
 
     //! \merge
     constexpr optional(const optional&)
-	requires std::is_copy_constructible_v<T> && std::is_trivially_copy_constructible_v<T>
+        requires std::is_copy_constructible_v<T> && std::is_trivially_copy_constructible_v<T>
     = default;
 
     template <class... Args>
     constexpr explicit optional(in_place_t, Args&&... args)
-	requires std::is_constructible_v<T, Args...>;
+        requires std::is_constructible_v<T, Args...>;
 
     template <class U>
     constexpr explicit(!std::is_convertible_v<U, T>) optional(const optional<U>& rhs)
-	requires std::is_constructible_v<T, const U&> && std::is_convertible_v<U, T> && (!std::is_same_v<T, U>) &&
-		 (!std::is_constructible_v<T, optional<U>>);
+        requires std::is_constructible_v<T, const U&> && std::is_convertible_v<U, T> && (!std::is_same_v<T, U>) &&
+                 (!std::is_constructible_v<T, optional<U>>);
 
     // \ref{optional.dtor}, destructor
     //! \merge
     constexpr ~optional()
-	requires std::is_trivially_destructible_v<T>
+        requires std::is_trivially_destructible_v<T>
     = default;
 
     // \ref{optional.assign}, assignment
@@ -1768,7 +2425,7 @@ template <class T>
 template <class U>
 constexpr optional<T>::optional(const optional<U>& rhs)
     requires std::is_constructible_v<T, const U&> && std::is_convertible_v<U, T> && (!std::is_same_v<T, U>) &&
-	     (!std::is_constructible_v<T, optional<U>>)
+             (!std::is_constructible_v<T, optional<U>>)
 {
     engaged_ = rhs.has_value();
 }
@@ -1890,17 +2547,12 @@ namespace std {
     constexpr optional() noexcept;
     constexpr optional(nullopt_t) noexcept;
 
-    constexpr optional(const optional& rhs)
-      requires is_copy_constructible_v<T>;
+    constexpr optional(const optional& rhs);
 
-    template<class... Args>
-    constexpr explicit optional(in_place_t, Args&&... args)
-      requires is_constructible_v<T, Args...>;
+    template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
     template<class U>
-    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
-      requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
-	       (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
     // @[optional.assign]{- .sref}@, assignment
     template<class... Args> constexpr T& emplace(Args&&... args);
@@ -1948,7 +2600,8 @@ constexpr optional(const optional& rhs);
 [#]{.pnum} *Postconditions*: `has_value()` is equal to `rhs.has_value()`.
 
 ```cpp
-template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
+template<class... Args>
+  constexpr explicit optional(in_place_t, Args&&... args);
 ```
 
 [#]{.pnum} *Constraints*: `is_constructible_v<T, Args...>` is `true`.
@@ -1959,7 +2612,7 @@ template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
 ```cpp
 template<class U>
-constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
+  constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ```
 
 [#]{.pnum} *Constraints*:
@@ -1980,7 +2633,8 @@ constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 ## Assignment [optional.assign]{- .sref} {-}
 
 ```cpp
-template<class... Args> constexpr T& emplace(Args&&... args);
+template<class... Args>
+  constexpr T& emplace(Args&&... args);
 ```
 
 [#]{.pnum} *Mandates*: `is_constructible_v<T, Args...>` is `true`.
@@ -2012,7 +2666,8 @@ constexpr const T& operator*() const&;
 [#]{.pnum} *Returns*: A reference to the contained value.
 
 ```cpp
-template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
+template<class U = remove_cv_t<T>>
+  constexpr remove_cv_t<T> value_or(U&& u) const&;
 ```
 
 [#]{.pnum} *Mandates*: `is_copy_constructible_v<T>` is `true` and `is_convertible_v<U, T>` is `true`.
@@ -2030,7 +2685,8 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 ## Monadic operations [optional.monadic]{- .sref} {-}
 
 ```cpp
-template<class F> constexpr $see below$ transform(F&& f) const&;
+template<class F>
+  constexpr $see below$ transform(F&& f) const&;
 ```
 
 [#]{.pnum} *Effects*: If `*this` contains a value, returns an optional holding the result of invoking `f` with the contained value; otherwise returns an empty optional.

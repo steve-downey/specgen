@@ -181,6 +181,12 @@ publishes the report as an artifact; nothing uploads to an external service.
   `examples/cli/run-all.sh` from a **non-sanitizer** build (`make install-release`,
   not the Asan default) and commit the result — the captures compare stderr byte for
   byte, and a sanitizer has standing permission to write there.
+- `docs/examples.md` is the checked-in GFM export of `docs/examples.org`, and it embeds
+  those captures. Re-export it with `make examples-md` whenever a capture changes, and
+  commit it with them: `ctest -R examples.export` fails when the export does not embed the
+  current text of every file the document transcludes. That check needs no Emacs; the
+  export does, with the `org-transclusion` and `ox-gfm` packages, which `.emacs.d/init.el`
+  installs on first use and so needs network access once per checkout.
 
 ## Release binary
 
