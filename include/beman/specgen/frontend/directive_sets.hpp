@@ -116,6 +116,22 @@ SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const cla
 // where the comment must be emitted.
 FreestandingMap build_freestanding_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm);
 
+// The functions whose requires-clause the wording states as a *Constraints*
+// element (design §5.1), by canonical declaration: every function that gets
+// an item and does not say `\constraints-in-decl`. The item declaration
+// drops the clause for exactly these, so a synopsis that kept it would
+// disagree with the item declaration of the same member (issue #281) -- and
+// the draft's class synopses do not carry a clause its *Constraints*
+// paragraph states. Same pre-pass shape as build_freestanding_map: an
+// out-of-line definition carries the markup, and the class synopsis is
+// extracted before it is reached.
+//
+// A member with no item keeps its clause, since nothing else would say it: a
+// `= default`/`= delete` member that is not described, and anything `\omit`ted
+// or `\merge`d.
+using ConstraintsStated = std::set<const clang::Decl*>;
+ConstraintsStated build_constraints_stated(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm);
+
 // The namespaces below the document's own that are part of the specified
 // interface (design §3.5, issue #209): every namespace some redeclaration of
 // which carries `\specified` as its docblock, by qualified path

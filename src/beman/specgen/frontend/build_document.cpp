@@ -167,12 +167,13 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     for (clang::Decl* decl : std::ranges::subrange(parsed.ast->top_level_begin(), parsed.ast->top_level_end()))
         collect_expos_scope_decl(decl, sm, main_file, expos_decls);
 
-    std::set<const clang::Decl*>                    omit_set         = build_omit_set(decls, sm);
-    const std::map<const clang::Decl*, std::string> expos_set        = build_expos_set(expos_decls, sm);
-    const std::optional<std::vector<std::string>>   paper_entities   = collect_paper_entities(decls, sm);
-    SeeBelowMap                                     seebelow_map     = build_seebelow_map(decls, sm);
-    FreestandingMap                                 freestanding_map = build_freestanding_map(decls, sm);
-    const std::set<std::string>                     ns_drop_set      = build_namespace_drop_set(decls);
+    std::set<const clang::Decl*>                    omit_set           = build_omit_set(decls, sm);
+    const std::map<const clang::Decl*, std::string> expos_set          = build_expos_set(expos_decls, sm);
+    const std::optional<std::vector<std::string>>   paper_entities     = collect_paper_entities(decls, sm);
+    SeeBelowMap                                     seebelow_map       = build_seebelow_map(decls, sm);
+    FreestandingMap                                 freestanding_map   = build_freestanding_map(decls, sm);
+    ConstraintsStated                               constraints_stated = build_constraints_stated(decls, sm);
+    const std::set<std::string>                     ns_drop_set        = build_namespace_drop_set(decls);
     // The nested namespaces that render as interface rather than flatten
     // (design §3.5, issue #209), with the findings their docblocks drew.
     const SpecifiedNamespaces    specified     = build_specified_namespace_set(decls, ctx, sm);
@@ -219,6 +220,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             freestanding_map.emplace(decl, FreestandingKind::Deleted);
         else if (markup->attached.directives.freestanding)
             freestanding_map.emplace(decl, FreestandingKind::Freestanding);
+        // A definition in a source file gets its item like any other, and
+        // its itemdecl drops the clause on the same terms (issue #281).
+        if (!markup->attached.directives.constraints_in_decl &&
+            !suppresses_generated_entity(markup->attached.directives))
+            constraints_stated.insert(decl);
     });
 
     // The docblock ranges some declaration consumed — top-level decls and
@@ -327,6 +333,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         expos_set,
                         seebelow_map,
                         freestanding_map,
+                        constraints_stated,
                         ns_drop_set,
                         specified_set,
                         skipped,
@@ -598,7 +605,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                                        expos_set,
                                                        mask.unspecified,
                                                        see_below,
-                                                       nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent),
+                                                       nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent,
+                                                       constraints_stated),
                             nested);
                     }
                 }

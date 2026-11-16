@@ -5,6 +5,7 @@
 
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
+#include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
@@ -151,6 +152,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               const SeeBelowMap&                               seebelow_map,
                                               const FreestandingMap&                           freestanding_map,
+                                              const ConstraintsStated&                         constraints_stated,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl) {
     const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
@@ -592,9 +594,18 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             add_exposid(fn, it->second);
         mark_survivor();
 
-        // A survivor of `\merge`d twins says only what the pair shares; the
-        // cuts are dominant like the see-below edits, and applied with them.
-        seebelow_edits.append_range(twin_cut_edits(fn, sm, lang_opts));
+        // A requires-clause the item declaration states as *Constraints* is
+        // not in the synopsis either (issue #281): the two used to disagree,
+        // and the draft's class synopses do not repeat a clause the
+        // *Constraints* paragraph states. Dominant, like the see-below edits,
+        // since a qualifier or exposition-only edit may sit inside the clause.
+        // Otherwise the clause stays, and a survivor of `\merge`d twins says
+        // only what the pair shares; a cut inside a clause that is going
+        // whole would overlap its removal and suppress it.
+        if (constraints_stated.contains(fn->getCanonicalDecl()))
+            seebelow_edits.append_range(requires_clause_removals(fn, sm, lang_opts));
+        else
+            seebelow_edits.append_range(twin_cut_edits(fn, sm, lang_opts));
 
         // Bare \seebelow replaces the return type. The named
         // targets replace only the operand of noexcept(...) / explicit(...),

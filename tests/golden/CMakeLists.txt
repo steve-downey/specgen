@@ -1657,6 +1657,23 @@ foreach(backend mpark org)
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_prose_covers/expected.json"
     )
 endforeach()
+# A synopsis drops a requires-clause wherever the item declaration drops it
+# (issue #281): stated as *Constraints*, it is in neither; kept by
+# `\constraints-in-decl`, it is in both; and a `= default` member with no
+# item keeps the clause nothing else would state. Both clause positions, a
+# hidden friend, and a namespace-scope function in a header synopsis. The
+# LaTeX render puts the synopsis beside the item declarations it must agree
+# with.
+specgen_add_golden(
+    synopsis_constraints
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_constraints.hpp"
+)
+specgen_add_golden(
+    synopsis_constraints_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/synopsis_constraints/expected.json"
+)
+
 # The claim misplaced: on a class with no static_assert, in a docblock with no
 # leading prose, naming Constraints, and on a function without `\asdraft`.
 specgen_add_golden(

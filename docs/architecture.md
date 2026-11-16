@@ -775,6 +775,21 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
 - Default: the requires-clause is removed from the itemdecl and rendered as a
   *Constraints:* paragraph — a trailing clause by truncation, a template-head
   clause by excision. `\constraints-in-decl` overrides per decl, for either.
+- **The synopsis drops the clause wherever the itemdecl drops it** (issue #281), so the
+  synopsis and the item declaration of one member agree, and the clause is stated once: the
+  draft's [expected.object.general] declares the converting constructors bare and
+  [expected.object.cons] has their constraints. Which members those are is one pre-pass set,
+  `build_constraints_stated`, keyed by canonical declaration like the freestanding map,
+  because a class synopsis is extracted before the out-of-line definition carrying the
+  markup is reached: every function that gets an item (an out-of-line member definition, a
+  documented free function, a member whose markup is in the class, a definition in a
+  `--source` file) and does not say `\constraints-in-decl`. `requires_clause_removals`
+  turns both clause positions into dominant edits for the class synopsis (§3.4) and for a
+  gathered header synopsis. A member with **no item** keeps its clause, since nothing else
+  would state it: a `= default`/`= delete` member that is not described, and anything
+  `\omit`ted or `\merge`d. A clause that goes whole takes no twin cut (§4.3), which would
+  overlap its removal. The leakage findings for a name that only a dropped clause carried
+  are now reported once, at the *Constraints* element, where they were reported twice.
 - `detail::` concepts in constraints trip the leakage checker; fixits: replace
   the derived paragraph with authored `\constraints` prose, or mark that
   namespace-scope concept `\expos` so resolved uses become `\exposid` spans.

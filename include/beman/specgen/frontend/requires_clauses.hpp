@@ -9,10 +9,14 @@
 #ifndef BEMAN_SPECGEN_FRONTEND_REQUIRES_CLAUSES_HPP
 #define BEMAN_SPECGEN_FRONTEND_REQUIRES_CLAUSES_HPP
 
+#include <beman/specgen/synopsis_edits.hpp>
+
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclBase.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
+#include <clang/Basic/LangOptions.h>
+#include <clang/Basic/SourceManager.h>
 
 #include <vector>
 
@@ -49,6 +53,17 @@ const clang::TemplateParameterList* function_head_parameters(const clang::Functi
 // written after the declarator. The two positions are equivalent C++ and both
 // feed design §5.1 (issue #119).
 const clang::Expr* head_requires_clause(const clang::FunctionDecl* fn);
+
+// The source edits that take `fn`'s requires-clauses out of its declaration,
+// both positions (design §5.1): the head clause from just past the template
+// parameter list's `>` through the clause, and the trailing one from the
+// whitespace before its `requires` keyword through the clause. What the item
+// declaration does by truncation and excision, as edits, for a synopsis
+// (issue #281). A trailing clause whose keyword is not found directly before
+// the expression, across whitespace only, is left alone.
+std::vector<synopsis_edits::SynopsisEdit> requires_clause_removals(const clang::FunctionDecl*  fn,
+                                                                   const clang::SourceManager& sm,
+                                                                   const clang::LangOptions&   lang_opts);
 
 } // namespace beman::specgen::frontend
 

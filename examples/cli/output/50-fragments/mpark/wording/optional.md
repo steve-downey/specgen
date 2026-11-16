@@ -23,17 +23,12 @@ namespace std {
     constexpr optional() noexcept;
     constexpr optional(nullopt_t) noexcept;
 
-    constexpr optional(const optional& rhs)
-      requires is_copy_constructible_v<T>;
+    constexpr optional(const optional& rhs);
 
-    template<class... Args>
-    constexpr explicit optional(in_place_t, Args&&... args)
-      requires is_constructible_v<T, Args...>;
+    template<class... Args> constexpr explicit optional(in_place_t, Args&&... args);
 
     template<class U>
-    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs)
-      requires is_constructible_v<T, const U&> && is_convertible_v<U, T> &&
-               (!is_same_v<T, U>) && (!is_constructible_v<T, optional<U>>);
+    constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
     // @[optional.assign]{- .sref}@, assignment
     template<class... Args> constexpr T& emplace(Args&&... args);

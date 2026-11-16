@@ -243,6 +243,7 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const std::map<const clang::Decl*, std::string>& expos_set,
                       const SeeBelowMap&                               seebelow_map,
                       const FreestandingMap&                           freestanding_map,
+                      const ConstraintsStated&                         constraints_stated,
                       const std::set<std::string>&                     ns_drop_set,
                       const std::set<std::string>&                     specified_set,
                       const SkippedRanges&                             skipped,
@@ -470,13 +471,20 @@ db::DocEvent classify(const RawItem&                                   ev,
         // description, attached below.
         RecordDocblock   block = record_docblock(record, sm);
         db::SynopsisDecl out;
-        out.offset           = ev.offset;
-        out.synopsis.name    = record->getNameAsString();
-        out.nested_namespace = rendered_namespace(record, ns_drop_set, specified_set).definition;
-        out.diagnostics      = std::move(block.diagnostics);
-        ir::CodeText extracted =
-            extract_synopsis(record, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set);
-        out.synopsis.as_draft = block.synopsis_as_draft;
+        out.offset             = ev.offset;
+        out.synopsis.name      = record->getNameAsString();
+        out.nested_namespace   = rendered_namespace(record, ns_drop_set, specified_set).definition;
+        out.diagnostics        = std::move(block.diagnostics);
+        ir::CodeText extracted = extract_synopsis(record,
+                                                  sm,
+                                                  lang_opts,
+                                                  omit_set,
+                                                  expos_set,
+                                                  seebelow_map,
+                                                  freestanding_map,
+                                                  constraints_stated,
+                                                  ns_drop_set);
+        out.synopsis.as_draft  = block.synopsis_as_draft;
         // An authored or inherited synopsis is text nothing ties to the
         // declarations, so the code's own is kept beside it for the check.
         if (block.synopsis || block.synopsis_as_draft)
@@ -512,9 +520,17 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.name      = templated->getNameAsString();
         out.nested_namespace   = rendered_namespace(tmpl, ns_drop_set, specified_set).definition;
         out.diagnostics        = std::move(block.diagnostics);
-        ir::CodeText extracted = extract_synopsis(
-            templated, sm, lang_opts, omit_set, expos_set, seebelow_map, freestanding_map, ns_drop_set, tmpl);
-        out.synopsis.as_draft = block.synopsis_as_draft;
+        ir::CodeText extracted = extract_synopsis(templated,
+                                                  sm,
+                                                  lang_opts,
+                                                  omit_set,
+                                                  expos_set,
+                                                  seebelow_map,
+                                                  freestanding_map,
+                                                  constraints_stated,
+                                                  ns_drop_set,
+                                                  tmpl);
+        out.synopsis.as_draft  = block.synopsis_as_draft;
         if (block.synopsis || block.synopsis_as_draft)
             out.synopsis.declared = extracted;
         out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}} : std::move(extracted);

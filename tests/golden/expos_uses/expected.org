@@ -106,8 +106,7 @@ namespace std {
   class gauge {
   public:
     // \ref{counter.gauge}, observers
-    int level() const
-      requires @\exposidnc{enabled}@<U>;
+    int level() const;
   };
 }
 #+end_codeblock

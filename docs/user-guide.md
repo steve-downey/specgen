@@ -958,13 +958,19 @@ but it does not satisfy a normative drift obligation or assert a Throws guarante
   expression. The marker's old name, `\returns-equiv`, is an error that names
   `\returns-expr`.
 - `\constraints-in-decl` retains the requires-clause in the item declaration
-  instead of deriving a separate *Constraints:* element.
+  instead of deriving a separate *Constraints:* element. The synopsis keeps the
+  clause for that member too.
 
 `\effects-equiv` and an authored `\effects` are mutually exclusive, as are
 `\returns-expr` and an authored `\returns`.
 
 By default, associated constraints are removed from the item declaration and
-rendered as derived *Constraints*. A leading run of body-local type aliases
+rendered as derived *Constraints*. The synopsis drops the clause for the same
+member, in a class body and in a gathered header synopsis, so the two always
+agree: a clause is stated once, as *Constraints*, or shown in both under
+`\constraints-in-decl`. A member with no item of its own, such as a
+`= default` member that is not described, keeps its clause in the synopsis,
+since nothing else would state it. A leading run of body-local type aliases
 followed by `static_assert`s produces derived *Mandates*; the aliases remain in
 an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
