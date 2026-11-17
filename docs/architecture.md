@@ -1024,7 +1024,7 @@ have no independent item description.
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
   ref(stable-name), library-index(optional enclosing class), cvqual, opt,
-  note, example.
+  math-variable, subscript, note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1237,6 +1237,12 @@ There are exactly three backends, and **adding wording to one means adding it to
   is text mode in a listing's escape too; `x@~_opt_~@` in mpark, the framework manual's own
   spelling; `x<sub><var>opt</var></sub>` in org's HTML. Neither macro sets the code font, so a
   code inline that is one of them whole keeps its `\tcode`, as a placeholder does.
+  Mathematics the draft writes inside code is two more kinds. `MathVariable` (`$i$`) is italic:
+  `$i$` in LaTeX and, by the shorthand, in mpark; `<var>i</var>` in org's HTML. `Subscript`
+  (`$_i$`) is a subscript, a name in italics and a number upright as mathematics sets them:
+  `@~_i_~@` and `@~1~@` in mpark, `<sub>` in org's HTML, and in LaTeX the mathematics again, with
+  a group when the subscript is longer than one character. The code's text has the subscript
+  after an underscore (`T_i`), which is how a reader of the text alone would write it.
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

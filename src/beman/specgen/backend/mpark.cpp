@@ -61,6 +61,13 @@ using beman::specgen::foundation::overloaded;
 
 // --- span substitution: the shared substrate's escape hook ----------------
 
+// A subscript in Markdown: `~x~`, with a name in italics and a number upright,
+// which is how mathematics sets the two (`T$_i$`, `T$_1$`).
+std::string subscript(std::string_view payload) {
+    const bool number = std::ranges::all_of(payload, [](char c) { return c >= '0' && c <= '9'; });
+    return number ? std::format("~{}~", payload) : std::format("~_{}_~", payload);
+}
+
 // mpark/wg21 turns on embedded Markdown for `cpp`, `default` and `diff` code
 // -- both fenced blocks and inline `code` -- with `@` as the Markdown
 // delimiter and `$` as an italics shorthand (`$x$` means `@*x*@`).
@@ -95,7 +102,12 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         // The draft's \opt prints its argument and an italic subscript
         // "opt". The framework's manual writes the same thing after code as
         // `~_opt_~`, which is Markdown and so sits in an `@...@`.
-        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "@~_opt_~@"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "@~_opt_~@"; }),
+        // A variable of the mathematics around the code is italic, which is
+        // what the shorthand is. A subscript is Markdown's `~x~`, in an
+        // `@...@` as `\opt`'s is.
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -124,7 +136,9 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
         foundation::when<ir::SpanKind::CvQualifier>([&] { return '*' + span.payload + '*'; }),
-        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
+        foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:

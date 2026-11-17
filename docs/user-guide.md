@@ -1522,9 +1522,18 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
 | `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
 | `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+| `$i$` in a `\tcode` | a variable of the mathematics around the code | `$i$` | `<var>i</var>` |
+| `$_i$`, `$_{10}$` in a `\tcode` | a subscript | `@~_i_~@`, `@~10~@` | `<sub><var>i</var></sub>`, `<sub>10</sub>` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
+
+Mathematics inside a `\tcode` is read when it is a variable (letters alone) or
+a subscript (one letter or digit, or a group of them). The code's text has the
+variable as its name and the subscript after an underscore, so
+`\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`.
+Any other mathematics there (`$i - 1$`, `$\dotsc$`) has no kind: the whole
+`\tcode` is kept as raw LaTeX and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin

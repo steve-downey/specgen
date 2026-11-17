@@ -519,6 +519,46 @@ R (*@\exposid{thunk-\brk{}ptr}@)(int);
     CHECK(rendered.contains("R (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
 }
 
+TEST_CASE("draft_import - a variable and a subscript written as mathematics in a \\tcode are spans") {
+    // The draft writes an index into code as mathematics. It is not code: as
+    // text the dollar signs were escaped and printed (issue #311).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The element is \tcode{std::forward<T$_i$>(get<$i$>(u))}, for \tcode{T$_{10}$} and \tcode{T$_{N}$}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& code = std::get<ir::CodeInline>(para.at(1)).code;
+    CHECK(code.text == "std::forward<T_i>(get<i>(u))");
+    REQUIRE(code.spans.size() == 2);
+    CHECK(code.spans[0] == ir::Span{14, 16, ir::SpanKind::Subscript, "i"});
+    CHECK(code.spans[1] == ir::Span{22, 23, ir::SpanKind::MathVariable, "i"});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    // A subscript of one character comes back without its group.
+    CHECK(rendered.contains(
+        "The element is \\tcode{std::forward<T$_i$>(get<$i$>(u))}, for \\tcode{T$_{10}$} and \\tcode{T$_N$}."));
+}
+
+TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole as raw LaTeX") {
+    // An expression has no span kind. The run is kept as the LaTeX it was and
+    // reported once, and the macros inside the mathematics are not read as code.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The range \tcode{a[$i - 1$]} through \tcode{a[$\dotsc$]}, and \tcode{b[$j$]}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "mathematics in \\tcode is kept as raw LaTeX");
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    REQUIRE(std::holds_alternative<ir::RawInline>(para.at(1)));
+    CHECK(std::get<ir::RawInline>(para.at(1)).latex == "\\tcode{a[$i - 1$]}");
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
+    CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\dotsc$]}, and \\tcode{b[$j$]}."));
+}
+
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
     // A span cannot hold another span, so the format grammar's
     // `\opt{\fmtgrammarterm{arg-id}}` stays what it was: unread, and reported.

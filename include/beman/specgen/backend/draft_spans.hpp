@@ -111,7 +111,12 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
         // The argument is the covered code, and a macro argument is text mode
         // wherever the macro sits -- in a \tcode and inside a listing's
         // `@...@` alike -- so it takes the text-mode escapes either way.
-        foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }),
+        // Mathematics inside code, as the draft writes it: `get<$i$>(u)` and
+        // `T$_i$`. A subscript of one character needs no group.
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::Subscript>(
+            [&] { return span.payload.size() == 1 ? "$_" + span.payload + '$' : "$_{" + span.payload + "}$"; }));
 }
 
 // Outside a codeblock we are already in LaTeX, so the macro is written
@@ -250,11 +255,12 @@ inline std::string draft_concept(const ir::ConceptRef& v) {
 inline std::string draft_code_inline(const ir::CodeInline& v) {
     // A placeholder is the exception: `\placeholder` sets italic, not the code
     // font, and the draft writes `\tcode{\placeholder{x}}` for it. `\cvqual`
-    // is the same italic, and `\opt` sets its argument in whatever font
-    // surrounds it, so those two keep the wrapper as well.
+    // is the same italic, `\opt` sets its argument in whatever font
+    // surrounds it, and mathematics is mathematics, so those keep the wrapper
+    // as well.
     const auto sets_code_font = [](ir::SpanKind kind) {
         return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
-               kind != ir::SpanKind::Optional;
+               kind != ir::SpanKind::Optional && kind != ir::SpanKind::MathVariable && kind != ir::SpanKind::Subscript;
     };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&

@@ -406,6 +406,16 @@ Log:
   `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
   in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
   left in the name.
+- 2026-11-17: mathematics inside a `\tcode` is read where it is a variable or a subscript
+  (issue #311): `get<$i$>(u)` and `T$_i$`. As code text the dollar signs were escaped by the
+  LaTeX backend and printed. They are two span kinds, `MathVariable` and `Subscript`, for the
+  reason `\cvqual` and `\opt` are. The text of a subscript span is the subscript after an
+  underscore, so the code reads `T_i` to everything that reads the text alone. Any other
+  mathematics in a `\tcode` keeps the whole `\tcode` as raw LaTeX, with a warning, which is
+  what a macro with no kind does. Measured on the library clauses: 691 `\tcode`s hold
+  mathematics, and 487 of them hold only these two shapes. In the other 204 the shapes are a
+  subscript on code written inside the mathematics (`$\tcode{T}_i$`, 132), an ellipsis
+  (`$\dotsc$`, 43), a subscripted variable (`$r_K$`, 24), and 59 others. Open: those.
 
 ### prose-line-joins
 

@@ -430,6 +430,30 @@ std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos,
     return it->second;
 }
 
+// The mathematics the draft writes inside code that has a span kind: a
+// variable (`$i$`, letters and nothing else) and a subscript (`$_i$`,
+// `$_{10}$`). `inner` is what stands between the dollar signs.
+struct MathSpan {
+    ir::SpanKind kind;
+    std::string  payload;
+};
+
+std::optional<MathSpan> math_span(std::string_view inner) {
+    const auto alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    if (!inner.empty() && std::ranges::all_of(inner, is_letter))
+        return MathSpan{ir::SpanKind::MathVariable, std::string(inner)};
+    if (!inner.starts_with('_'))
+        return std::nullopt;
+    std::string_view sub = inner.substr(1);
+    if (sub.size() > 2 && sub.front() == '{' && sub.back() == '}')
+        sub = sub.substr(1, sub.size() - 2);
+    else if (sub.size() != 1)
+        return std::nullopt;
+    if (sub.empty() || !std::ranges::all_of(sub, alnum))
+        return std::nullopt;
+    return MathSpan{ir::SpanKind::Subscript, std::string(sub)};
+}
+
 ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
     CodeBuilder out;
     std::size_t i = 0;
@@ -469,6 +493,26 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 out.text(raw.substr(i, close - i + 1));
             }
             i = close + 1;
+            continue;
+        }
+        if (!listing && c == '$') {
+            // Mathematics is not code (issue #311). A variable or a subscript
+            // is a span; anything else has no kind, and the caller keeps the
+            // whole run as the LaTeX it was.
+            const std::size_t close = raw.find('$', i + 1);
+            const std::size_t end   = close == std::string_view::npos ? raw.size() : close + 1;
+            const auto        math =
+                close == std::string_view::npos ? std::nullopt : math_span(raw.substr(i + 1, close - i - 1));
+            if (math) {
+                const std::string spelling =
+                    math->kind == ir::SpanKind::Subscript ? '_' + math->payload : math->payload;
+                out.span(math->kind, math->payload, spelling);
+            } else {
+                met_unknown_macro = true;
+                report(Severity::Warning, "mathematics in \\tcode is kept as raw LaTeX");
+                out.text(raw.substr(i, end - i));
+            }
+            i = end;
             continue;
         }
         if (c == '\\') {

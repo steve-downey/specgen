@@ -33,6 +33,8 @@ enum class SpanKind {
     LibraryIndex, // payload = enclosing class, or empty for a global name
     CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
     Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
+    MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
+    Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
 };
 
 } // namespace beman::specgen::ir
@@ -47,6 +49,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::LibraryIndex,
     beman::specgen::ir::SpanKind::CvQualifier,
     beman::specgen::ir::SpanKind::Optional,
+    beman::specgen::ir::SpanKind::MathVariable,
+    beman::specgen::ir::SpanKind::Subscript,
 };
 
 namespace beman::specgen::ir {

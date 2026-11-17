@@ -167,6 +167,30 @@ TEST_CASE("latex - a cv-qualifier span is \\cvqual and an optional span is \\opt
     CHECK(out.contains(", \\tcode{\\cvqual{cv2}} and \\tcode{\\opt{\\&}}."));
 }
 
+// Mathematics inside code (issue #311): a variable and a subscript, written as
+// the draft writes them, in an `@...@` inside a listing and bare in a \tcode.
+// A subscript of more than one character takes a group.
+TEST_CASE("latex - a math variable and a subscript in code are mathematics") {
+    const beman::specgen::ir::CodeText code{
+        "get<i>(T_i, T_10)",
+        {{4, 5, SpanKind::MathVariable, "i"}, {8, 10, SpanKind::Subscript, "i"}, {13, 16, SpanKind::Subscript, "10"}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The element "},
+                                      CodeInline{code},
+                                      TextInline{" and "},
+                                      CodeInline{{"i", {{0, 1, SpanKind::MathVariable, "i"}}}},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("get<@$i$@>(T@$_i$@, T@$_{10}$@)\n"));
+    CHECK(out.contains("The element \\tcode{get<$i$>(T$_i$, T$_{10}$)} and \\tcode{$i$}."));
+}
+
 // The draft has a no-italic-correction twin of each italic macro. A span that
 // does not say takes the context's form -- \exposidnc in a listing, the plain
 // macro elsewhere -- and one the draft importer read says which the draft wrote

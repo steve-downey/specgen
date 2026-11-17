@@ -35,6 +35,10 @@ std::string bracket_escape(const Span& span, std::string_view spelling) {
         return "[cvqual:" + span.payload + ']';
     case SpanKind::Optional:
         return "[opt:" + std::string(spelling) + ']';
+    case SpanKind::MathVariable:
+        return "[var:" + span.payload + ']';
+    case SpanKind::Subscript:
+        return "[sub:" + span.payload + ']';
     }
     return {};
 }

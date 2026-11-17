@@ -70,7 +70,9 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::Ref>("ref"sv),
                                 foundation::is<SpanKind::LibraryIndex>("library-index"sv),
                                 foundation::is<SpanKind::CvQualifier>("cvqual"sv),
-                                foundation::is<SpanKind::Optional>("opt"sv));
+                                foundation::is<SpanKind::Optional>("opt"sv),
+                                foundation::is<SpanKind::MathVariable>("math-variable"sv),
+                                foundation::is<SpanKind::Subscript>("subscript"sv));
 
 inline constexpr auto kLayoutHintNames =
     foundation::table<LayoutHintKind>(foundation::is<LayoutHintKind::Break>("brk"sv),

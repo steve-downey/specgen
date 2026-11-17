@@ -144,6 +144,27 @@ TEST_CASE("org - a cv-qualifier span and an optional span, in a code block and i
         "@@html:<code>R(G::*)(A...) <var>cv2</var> &amp;<sub><var>opt</var></sub> noexcept(E)</code>@@."));
 }
 
+// Mathematics inside code (issue #311): the draft's own bytes in a block and in
+// the LaTeX snippet; in HTML a variable is italic and a subscript is a
+// subscript, a name in italics and a number upright.
+TEST_CASE("org - a math variable and a subscript in code") {
+    const beman::specgen::ir::CodeText code{
+        "get<i>(T_i, T_1)",
+        {{4, 5, SpanKind::MathVariable, "i"}, {8, 10, SpanKind::Subscript, "i"}, {13, 15, SpanKind::Subscript, "1"}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The element "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("get<@$i$@>(T@$_i$@, T@$_1$@)\n"));
+    CHECK(out.contains("The element @@latex:\\tcode{get<$i$>(T$_i$, T$_1$)}@@"
+                       "@@html:<code>get&lt;<var>i</var>&gt;(T<sub><var>i</var></sub>, T<sub>1</sub>)</code>@@."));
+}
+
 // The LaTeX backend's Ref exception, inherited rather than re-decided:
 // `texcl=true` is set in
 // the shared `\lstset`, so it holds inside `codeblock` and `itemdecl` alike and

@@ -215,7 +215,14 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + html_escape(span.payload) + "]"; }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }),
         foundation::when<ir::SpanKind::CvQualifier>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
-        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }),
+        foundation::when<ir::SpanKind::MathVariable>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        // A name is italic and a number upright, as mathematics sets them.
+        foundation::when<ir::SpanKind::Subscript>([&] {
+            const bool number = std::ranges::all_of(span.payload, [](char c) { return c >= '0' && c <= '9'; });
+            return number ? "<sub>" + html_escape(span.payload) + "</sub>"
+                          : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
+        }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
