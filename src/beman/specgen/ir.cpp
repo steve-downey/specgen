@@ -72,6 +72,12 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::CvQualifier>("cvqual"sv),
                                 foundation::is<SpanKind::Optional>("opt"sv));
 
+inline constexpr auto kLayoutHintNames =
+    foundation::table<LayoutHintKind>(foundation::is<LayoutHintKind::Break>("brk"sv),
+                                      foundation::is<LayoutHintKind::Hyphen>("hyphen"sv),
+                                      foundation::is<LayoutHintKind::LineBreak>("linebreak"sv),
+                                      foundation::is<LayoutHintKind::NewLine>("newline"sv));
+
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
                                                                foundation::is<Change::Removed>("removed"sv),
@@ -109,6 +115,11 @@ std::optional<Disposition> disposition_from_name(std::string_view s) { return en
 
 std::string_view          member_kind_name(MemberKind k) { return kMemberKindNames[k]; }
 std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enumerator_named(kMemberKindNames, s); }
+
+std::string_view              layout_hint_name(LayoutHintKind k) { return kLayoutHintNames[k]; }
+std::optional<LayoutHintKind> layout_hint_from_name(std::string_view s) {
+    return enumerator_named(kLayoutHintNames, s);
+}
 
 std::string_view      change_name(Change c) { return kChangeNames[c]; }
 std::optional<Change> change_from_name(std::string_view s) { return enumerator_named(kChangeNames, s); }
@@ -302,6 +313,7 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
 
 CodeText without_typesetting(CodeText code) {
     std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
+    code.hints.clear();
     return code;
 }
 

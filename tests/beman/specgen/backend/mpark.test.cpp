@@ -169,6 +169,22 @@ TEST_CASE("mpark - a cv-qualifier span is italic and an optional span takes a su
     CHECK(mpark::render_to_string(changed).contains("@[R(G::*)(A...) *cv2* &~_opt_~ noexcept(E)]{.add}@"));
 }
 
+// The draft's line-break hints are LaTeX typesetting. They are beside the code,
+// not in it, so this backend writes the code and never sees them.
+TEST_CASE("mpark - a line-break hint is not written") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        CodeInline{{"std::forward<Args>(args)...", {}, {}, {{18, LayoutHintKind::Break, true}}}},
+        TextInline{" and "},
+        CodeInline{{"bound-entity", {{0, 12, SpanKind::ExposId, "bound-entity"}}, {}, {{8, LayoutHintKind::Hyphen}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+    CHECK(mpark::render_to_string(item).contains("`std::forward<Args>(args)...` and `$bound-entity$`."));
+}
+
 // A Ref span is a cross-reference in a synopsis group comment, where
 // the draft's `\ref` sets a bare "[optional.ctor]" -- so no parentheses, unlike
 // the RefInline case above, which is `\iref`'s parenthesized prose form. The

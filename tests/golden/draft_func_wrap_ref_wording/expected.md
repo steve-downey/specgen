@@ -120,7 +120,7 @@ template<class F> constexpr function_ref(F&& f) noexcept;
 - [#.#]{.pnum} `is_member_pointer_v<T>` is `false`, and
 - [#.#]{.pnum} `$is-invocable-using$<$cv$ T&>` is `true`.
 
-[#]{.pnum} *Effects*: If `$is-convertible-from-specialization$<remove_cv_t<T>>` is `false`, initializes `$bound-en\-tity$` with `addressof(f)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-\brk{}entity$, $call-args$...)` is expression-equivalent([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(static_cast<$cv$ T&>(f), $call-args$...)`. Otherwise, initializes `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-\brk{}ptr$` with the value of `f.$thunk-ptr$`.
+[#]{.pnum} *Effects*: If `$is-convertible-from-specialization$<remove_cv_t<T>>` is `false`, initializes `$bound-entity$` with `addressof(f)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(static_cast<$cv$ T&>(f), $call-args$...)`. Otherwise, initializes `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-ptr$` with the value of `f.$thunk-ptr$`.
 
 [#]{.pnum} *Remarks*: If `remove_cvref_t<F>` is a specialization of `function_ref`, an implementation may initialize `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-ptr$` with the value of `f.$thunk-ptr$`.
 
@@ -148,7 +148,7 @@ template<auto c, class F> constexpr function_ref(constant_wrapper<c, F> f) noexc
 [#]{.pnum} *Mandates*:
 
 - [#.#]{.pnum} If `is_pointer_v<F> || is_member_pointer_v<F>` is `true`, then `f.value != nullptr` is `true`, and
-- [#.#]{.pnum} if `ArgTypes` is not an empty pack and all types in `remove_cvref_t<ArgTypes>...` satisfy `$constexpr-param$` then `\tcode{constant_wrapper<\placeholdernc{INVOKE}(f.value, remove_cvref_t<ArgTypes>::\newline value...)>}`{=latex} is not a valid type.
+- [#.#]{.pnum} if `ArgTypes` is not an empty pack and all types in `remove_cvref_t<ArgTypes>...` satisfy `$constexpr-param$` then `constant_wrapper<$INVOKE$(f.value, remove_cvref_t<ArgTypes>::value...)>` is not a valid type.
 
 [#]{.pnum} *Effects*: Initializes `$bound-entity$` with a pointer to an unspecified object or null pointer value, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(f.value, $call-args$...)`.
 

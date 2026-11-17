@@ -1113,9 +1113,19 @@ have no independent item description.
   context takes (`default_no_correction`: the twin for an exposition-only name in a listing, the
   plain macro everywhere else), which is what every generated span has, and the importer sets
   it only where the draft wrote the other form. `PlaceholderInline` and `ConceptRef` carry a
-  plain flag, since prose takes the plain macro. Only a backend writing draft LaTeX reads any
-  of them. `without_typesetting` strips them, and the wording diff compares through it: two
+  plain flag, since prose takes the plain macro. The draft's line-break hints inside code
+  (`\brk`, `\-`, `\linebreak`, `\newline`) are the other half: `CodeText::hints`, a third
+  table beside `spans` and `changes`, each `LayoutHint` an offset into the text, a kind, and
+  whether the draft wrote the empty group after the macro. A table, and not zero-width spans
+  or the macro left in the text, because a hint can sit inside a span's name
+  (`\exposid{bound-en\-tity}`) and spans do not nest, and because code text and span payloads
+  that stay clean are what let the differ, the validator and the other two backends read the
+  name and not the LaTeX. Only a backend writing draft LaTeX reads any of this: the shared
+  span walk (`backend/code_spans.hpp`) takes a hint writer that defaults to writing nothing,
+  and writes a hint between the pieces of escaped text or into a span's payload.
+  `without_typesetting` strips all of it, and the wording diff compares through it: two
   pieces that differ only there are the same wording, and the current revision's is kept.
+  Code the diff does change is rebuilt from tokens and comes out with no hints.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a

@@ -199,6 +199,38 @@ TEST_CASE("latex - a span that says which form of its macro to write gets that f
                        "\\exposidnc{b}, \\placeholdernc{p} and \\exposconceptnc{k}."));
 }
 
+// The draft's line-break hints (issue #306): kept beside the code, and written
+// back as the draft's macros. In a \tcode a hint goes where it sits, between
+// the pieces of escaped text. In a listing only a hint inside a span's name is
+// written, inside that span's escape.
+TEST_CASE("latex - a line-break hint is the draft's macro, in a tcode and inside a span's name") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem item;
+    item.decl.signatures.push_back(
+        beman::specgen::ir::CodeText{"R (*thunk-ptr)(int);",
+                                     {{4, 13, SpanKind::ExposId, "thunk-ptr", false}},
+                                     {},
+                                     {{0, LayoutHintKind::Break, true}, {10, LayoutHintKind::Break, true}}});
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        CodeInline{{"std::forward<Args>(args)...", {}, {}, {{18, LayoutHintKind::Break, true}}}},
+        TextInline{", "},
+        CodeInline{{"A&&::value", {}, {}, {{5, LayoutHintKind::NewLine}, {10, LayoutHintKind::LineBreak}}}},
+        TextInline{", "},
+        CodeInline{{"bound-entity", {{0, 12, SpanKind::ExposId, "bound-entity"}}, {}, {{8, LayoutHintKind::Hyphen}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    // The hint in the listing's own text, at byte 0, is not written.
+    CHECK(out.contains("\nR (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
+    CHECK(out.contains("\\tcode{std::forward<Args>\\brk{}(args)...}, "));
+    // A control word with no group takes a space before a letter, and none at the end.
+    CHECK(out.contains("\\tcode{A\\&\\&::\\newline value\\linebreak}, "));
+    CHECK(out.contains(", \\exposid{bound-en\\-tity}."));
+}
+
 // The Ref *span* and the RefInline are two different cross-references
 // and must not share one mapping.
 // A span sits in a code comment, where the draft writes

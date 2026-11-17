@@ -58,6 +58,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -95,7 +96,14 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
 }
 
 std::string render_code(const ir::CodeText& code) {
-    return backend::render_code_spans(code, escape_span, escape_span_in_run, backend::draft_change_codeblock);
+    // The block's bytes are the draft's, so a line-break hint inside a span is
+    // written as the LaTeX backend writes it.
+    return backend::render_code_spans(code,
+                                      escape_span,
+                                      escape_span_in_run,
+                                      backend::draft_change_codeblock,
+                                      std::identity{},
+                                      backend::draft_layout_hint_listing);
 }
 
 // One special block. `env` is the draft environment name org will export to,

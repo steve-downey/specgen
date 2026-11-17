@@ -378,6 +378,34 @@ TEST_CASE("diff - the form of a span's macro is not a change, and the current re
     CHECK(code.spans[0] == Span{22, 27, SpanKind::ExposId, "ready", false});
 }
 
+// The draft's line-break hints are typesetting too. Code that differs only in
+// them is the same wording, and comes out as the current revision has it.
+TEST_CASE("diff - a line-break hint is not a change, and the current revision's hints are kept") {
+    const auto hinted = [](bool with_hints) {
+        Document d = gadget();
+        // "class gadget {\n  bool ready() const;\n};": `ready` is bytes [22, 27).
+        auto& synopsis = std::get<Synopsis>(d.nodes[0]).code;
+        synopsis.spans = {{22, 27, SpanKind::ExposId, "ready"}};
+        auto&    ready = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[0]);
+        CodeText code{"std::forward<Args>(args)", {}};
+        if (with_hints) {
+            synopsis.hints = {{24, LayoutHintKind::Hyphen}};
+            code.hints     = {{18, LayoutHintKind::Break, true}};
+        }
+        std::get<BodyParagraph>(ready.descr.elements[0].body[0]).text = {CodeInline{std::move(code)},
+                                                                         TextInline{" if the gadget is ready."}};
+        return d;
+    };
+    const Document before = hinted(false);
+    const Document after  = hinted(true);
+    CHECK(before != after);
+    const Document out = diff::compare(before, after, {.context = diff::Context::All});
+    CHECK(!diff::has_marks(out));
+    CHECK(out == after);
+    // And the other way: a revision that drops the hints has not changed the wording.
+    CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
+}
+
 TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
     // Issue #258: a keyword added before a declaration is marked
     // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.

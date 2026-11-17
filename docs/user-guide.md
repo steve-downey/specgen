@@ -1494,8 +1494,9 @@ wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
 `itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
 at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
 macros the IR has a kind for. The exceptions are layout only: line breaks inside
-a paragraph, `\brk`, `\-` and their relatives, and `\index...` entries other
-than `\indexlibrary...` are dropped.
+a paragraph, the line-break hints (`\brk`, `\-` and their relatives) that sit in
+running text, and `\index...` entries other than `\indexlibrary...` are
+dropped. A line-break hint inside code is kept; see below.
 
 The draft's own vocabulary is read too, where the IR has a kind for it. In
 prose:
@@ -1532,6 +1533,13 @@ includes the choice between a macro and its no-italic-correction twin
 one was written, so wording inherited with `\asdraft` prints as the draft
 spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
+
+The same holds for the draft's line-break hints inside code: `\brk`, `\-`,
+`\linebreak` and `\newline`, in a `\tcode` or inside a name
+(`\exposid{bound-en\-tity}`). The code and the name are read without them, so
+`std::for\-ward<Args>` is `std::forward<Args>` to the wording diff and to the
+mpark and org backends, and the LaTeX backend writes each hint back where it
+was.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the

@@ -52,13 +52,9 @@ std::string trim_copy(std::string_view s) {
     return std::string(s);
 }
 
-// The layout hints the importer drops: `\brk{}`, `\brk`, `\-`.
-std::string drop_hints(std::string text) {
-    for (const std::string_view hint : {"\\brk{}", "\\brk", "\\-"})
-        for (std::string::size_type at = 0; (at = text.find(hint, at)) != std::string::npos;)
-            text.erase(at, hint.size());
-    // `\~` is the accent macro the draft writes for a tilde in code; the
-    // backend writes the same character as `\textasciitilde{}`.
+// `\~` is the accent macro the draft writes for a tilde in code; the backend
+// writes the same character as `\textasciitilde{}`.
+std::string one_tilde_spelling(std::string text) {
     for (std::string::size_type at = 0; (at = text.find("\\~", at)) != std::string::npos;)
         text.replace(at, 2, "\\textasciitilde{}");
     return text;
@@ -66,9 +62,10 @@ std::string drop_hints(std::string text) {
 
 // What the importer is allowed to change in a round trip: line breaks inside a
 // paragraph, blank lines, `%` line joiners, comment lines, index entries
-// that are not library index entries, and the layout hints `drop_hints`
-// names. Everything else has to come back as it went in, the choice between
-// a macro and its no-italic-correction twin included.
+// that are not library index entries, and the spelling of a tilde in code.
+// Everything else has to come back as it went in, the line-break hints inside
+// code and the choice between a macro and its no-italic-correction twin
+// included.
 std::vector<std::string> normalize(std::string_view tex) {
     std::vector<std::string> out;
     bool                     verbatim = false;
@@ -83,13 +80,11 @@ std::vector<std::string> normalize(std::string_view tex) {
         if (!verbatim && line.ends_with('%'))
             line.pop_back();
         if (!verbatim)
-            line = drop_hints(line);
+            line = one_tilde_spelling(line);
         const bool opens =
             !verbatim && (line.starts_with("\\begin{codeblock}") || line.starts_with("\\begin{itemdecl}"));
         const bool closes = verbatim && (line.starts_with("\\end{codeblock}") || line.starts_with("\\end{itemdecl}"));
         if (verbatim || opens || closes) {
-            line = drop_hints(line);
-            raw  = drop_hints(raw);
             out.push_back(verbatim && !closes ? raw.substr(0, raw.find_last_not_of(" \t") + 1) : line);
             verbatim = !closes && (verbatim || opens);
             joining  = false;
@@ -475,6 +470,53 @@ bool @\exposid{a}@ = @\exposidnc{b}@(@\placeholdernc{noex}@, @\placeholder{q}@) 
                           "\\exposidnc{z}, \\placeholdernc{p}, \\exposconceptnc{k} and \\seebelownc."));
     CHECK(rendered.contains("bool @\\exposid{a}@ = @\\exposidnc{b}@(@\\placeholdernc{noex}@, @\\placeholder{q}@) "
                             "@\\seebelownc@;\n"));
+}
+
+TEST_CASE("draft_import - a line-break hint in code is kept beside the text, and written back where it was") {
+    // The hint is not code, so the text and a span's name are clean; and it is not
+    // dropped, so the LaTeX comes back as the draft has it (issue #306). The spaces
+    // after `\newline` are TeX's to discard and are not code either.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+With \tcode{std::forward<Args>\brk{}(args)...}, \tcode{ilist, std::for\-ward<Args>(args)...},
+\tcode{remove_cvref_t<ArgTypes>::\newline
+value...}, \exposid{bound-en\-tity}, \exposid{bound-\brk{}entity} and \tcode{x.\exposid{thunk-\brk ptr}}.
+\begin{codeblock}
+R (*@\exposid{thunk-\brk{}ptr}@)(int);
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    const auto  code_at = [&](std::size_t i) -> const ir::CodeText& {
+        return std::get<ir::CodeInline>(para.at(i)).code;
+    };
+    using Hints = std::vector<ir::LayoutHint>;
+    CHECK(code_at(1).text == "std::forward<Args>(args)...");
+    CHECK(code_at(1).hints == Hints{{18, ir::LayoutHintKind::Break, true}});
+    CHECK(code_at(3).text == "ilist, std::forward<Args>(args)...");
+    CHECK(code_at(3).hints == Hints{{15, ir::LayoutHintKind::Hyphen}});
+    CHECK(code_at(5).text == "remove_cvref_t<ArgTypes>::value...");
+    CHECK(code_at(5).hints == Hints{{26, ir::LayoutHintKind::NewLine}});
+    CHECK(code_at(7).text == "bound-entity");
+    CHECK(code_at(7).spans.at(0).payload == "bound-entity");
+    CHECK(code_at(7).hints == Hints{{8, ir::LayoutHintKind::Hyphen}});
+    CHECK(code_at(9).hints == Hints{{6, ir::LayoutHintKind::Break, true}});
+    CHECK(code_at(11).text == "x.thunk-ptr");
+    CHECK(code_at(11).spans.at(0) == ir::Span{2, 11, ir::SpanKind::ExposId, "thunk-ptr"});
+    CHECK(code_at(11).hints == Hints{{8, ir::LayoutHintKind::Break}});
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "R (*thunk-ptr)(int);");
+    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr", false});
+    CHECK(listing.hints == Hints{{10, ir::LayoutHintKind::Break, true}});
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "With \\tcode{std::forward<Args>\\brk{}(args)...}, \\tcode{ilist, std::for\\-ward<Args>(args)...}, "
+        "\\tcode{remove_cvref_t<ArgTypes>::\\newline value...}, \\exposid{bound-en\\-tity}, "
+        "\\exposid{bound-\\brk{}entity} and \\tcode{x.\\exposid{thunk-\\brk ptr}}."));
+    CHECK(rendered.contains("R (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
 }
 
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {

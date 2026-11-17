@@ -69,6 +69,9 @@ using beman::specgen::ir::Inline;
 using beman::specgen::ir::ItemDecl;
 using beman::specgen::ir::ItemDescr;
 using beman::specgen::ir::Itemize;
+using beman::specgen::ir::layout_hint_from_name;
+using beman::specgen::ir::layout_hint_name;
+using beman::specgen::ir::LayoutHint;
 using beman::specgen::ir::member_kind_from_name;
 using beman::specgen::ir::member_kind_name;
 using beman::specgen::ir::MemberKind;
@@ -113,15 +116,26 @@ struct json_descriptor<ChangeRun> {
     };
 };
 
+template <>
+struct json_descriptor<LayoutHint> {
+    static constexpr auto members = std::tuple{
+        field("at", &LayoutHint::at),
+        enum_field("kind", &LayoutHint::kind, layout_hint_name, layout_hint_from_name, "layout hint"),
+        defaulted_field("braced", &LayoutHint::braced),
+    };
+};
+
 // `changes` is omitted when empty (docs/plans/wording-diff.md): the marks
 // are the one field added to this frozen schema after the fact, and an
 // unmarked document has to serialize exactly as it did before they existed.
-// The same holds for every `change` key below.
+// The same holds for every `change` key below, and for `hints`, which only
+// code read from the draft has.
 template <>
 struct json_descriptor<CodeText> {
     static constexpr auto members = std::tuple{field("text", &CodeText::text),
                                                field("spans", &CodeText::spans),
-                                               defaulted_field("changes", &CodeText::changes)};
+                                               defaulted_field("changes", &CodeText::changes),
+                                               defaulted_field("hints", &CodeText::hints)};
 };
 
 template <>

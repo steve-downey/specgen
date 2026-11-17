@@ -393,3 +393,16 @@ Log:
   `without_typesetting`. Measured on the draft's library clauses: `@\exposid{...}@` in a
   listing 6,351 times against `@\exposidnc{...}@` 475, so the listing default this tool has
   always written is the draft's minority form; that default is not changed here.
+- 2026-11-16: the line-break hints inside code survive too (issue #306), which also reads the
+  last of the five macros, the `\newline` in a `\tcode` (issue #307): [func.wrap.ref] imports
+  with no warning. They are `CodeText::hints`, a table of offsets beside the span table. Three
+  other shapes were weighed. Leaving the macro in a span's payload is what happened before for
+  `\exposid{bound-en\-tity}`, and it put LaTeX in the mpark and org output and made the name
+  differ from the same name written plainly. Zero-width spans cannot sit inside another span.
+  U+00AD and U+200B in the text are the right characters for `\-` and `\brk`, and would have
+  covered prose as well, but they are invisible in a golden and every comparison of code text
+  would have had to remember to strip them. Measured on the library clauses: about 560 hints
+  inside a `\tcode` and 17 inside an `\exposid`. Open: the hints in running text (`\br` 180,
+  `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
+  in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
+  left in the name.

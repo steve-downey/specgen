@@ -25,19 +25,90 @@ namespace beman::specgen::backend {
 
 namespace code_spans_detail {
 
+// What a backend that does not write the draft's line-break hints does with
+// one: nothing. The hints are draft LaTeX typesetting (`CodeText::hints`), and
+// only a backend writing draft LaTeX passes a writer of its own.
+struct no_hints {
+    std::string operator()(const ir::LayoutHint&, std::string_view, bool) const { return {}; }
+};
+
+using hint_cursor = std::vector<ir::LayoutHint>::const_iterator;
+
+// The literal text [from, to) of `code.text` through the literal-text hook,
+// with each hint inside it written where it sits. The text is escaped in the
+// pieces between hints, so a hint's LaTeX is never escaped as code. `closed`
+// also takes the hints at `to` itself: before a span, and at the end of the
+// text, a hint there belongs to this piece; at the edge of a change run it
+// belongs to the piece that follows. `write_hint` gets the hint, the text that
+// follows it in this piece (which a LaTeX writer needs to know whether a
+// control word runs into a letter), and whether the hint is inside a span's
+// payload, which here it is not.
+template <typename EscapeText, typename WriteHint>
+std::string render_literal(const ir::CodeText& code,
+                           std::size_t         from,
+                           std::size_t         to,
+                           bool                closed,
+                           hint_cursor&        hint,
+                           EscapeText&&        escape_text,
+                           WriteHint&&         write_hint) {
+    const std::string_view text = code.text;
+    std::string            out;
+    std::size_t            pos = from;
+    // substrate generic algorithm: the position-tracking walk again, over the
+    // hint table inside one literal piece.
+    for (; hint != code.hints.end() && (hint->at < to || (closed && hint->at == to)); ++hint) {
+        if (hint->at < pos)
+            continue; // defensive: out of order, or left behind by a span that could not hold it
+        out += escape_text(text.substr(pos, hint->at - pos));
+        out += write_hint(*hint, text.substr(hint->at, to - hint->at), false);
+        pos = hint->at;
+    }
+    out += escape_text(text.substr(pos, to - pos));
+    return out;
+}
+
+// `span` with the hints strictly inside it written into its payload, which is
+// how `\exposid{bound-en\-tity}` comes back out. Only a span whose payload is
+// the text it covers can hold one, since the hint's offset is into the text;
+// that is every span the draft importer makes a hint inside. Any other span's
+// hints are passed over.
+template <typename WriteHint>
+ir::Span span_with_hints(const ir::CodeText& code, const ir::Span& span, hint_cursor& hint, WriteHint&& write_hint) {
+    const bool  holds = span.payload == std::string_view(code.text).substr(span.begin, span.end - span.begin);
+    ir::Span    woven = span;
+    std::size_t pos   = 0;
+    if (holds)
+        woven.payload.clear();
+    // substrate generic algorithm: the same walk, over the hints inside one span.
+    for (; hint != code.hints.end() && hint->at < span.end; ++hint) {
+        if (!holds || hint->at <= span.begin)
+            continue;
+        const std::size_t at = hint->at - span.begin;
+        woven.payload += std::string_view(span.payload).substr(pos, at - pos);
+        woven.payload += write_hint(*hint, std::string_view(span.payload).substr(at), true);
+        pos = at;
+    }
+    if (holds)
+        woven.payload += std::string_view(span.payload).substr(pos);
+    return woven;
+}
+
 // The slice [from, to) of `code.text`, with every span inside it substituted
 // through `escape_span`; `next` is the first span not yet consumed and is
-// advanced past the slice. A span that is malformed, overlaps, or straddles
+// advanced past the slice, and `hint` the first hint, likewise. A span that is
+// malformed, overlaps, or straddles
 // the slice's end is skipped and its text takes the literal-text hook -- the same
 // defence the single-table walk always had, now also protecting a change run
 // from a span the diff should never have let it cut.
-template <typename EscapeSpan, typename EscapeText>
+template <typename EscapeSpan, typename EscapeText, typename WriteHint>
 std::string render_slice(const ir::CodeText&                    code,
                          std::size_t                            from,
                          std::size_t                            to,
                          std::vector<ir::Span>::const_iterator& next,
+                         hint_cursor&                           hint,
                          EscapeSpan&&                           escape_span,
-                         EscapeText&&                           escape_text) {
+                         EscapeText&&                           escape_text,
+                         WriteHint&&                            write_hint) {
     std::string out;
     std::size_t pos = from;
     // substrate generic algorithm: a position-tracking left-to-right walk
@@ -49,11 +120,14 @@ std::string render_slice(const ir::CodeText&                    code,
         if (span.begin > code.text.size() || span.end > code.text.size() || span.begin < pos ||
             span.end < span.begin || span.end > to)
             continue; // defensive: ignore a malformed, overlapping or straddling span
-        out += escape_text(std::string_view(code.text).substr(pos, span.begin - pos));
-        out += escape_span(span, std::string_view(code.text).substr(span.begin, span.end - span.begin));
+        out += render_literal(code, pos, span.begin, true, hint, escape_text, write_hint);
+        const std::string_view spelling = std::string_view(code.text).substr(span.begin, span.end - span.begin);
+        const bool             inside   = hint != code.hints.end() && hint->at < span.end;
+        out += inside ? escape_span(span_with_hints(code, span, hint, write_hint), spelling)
+                      : escape_span(span, spelling);
         pos = span.end;
     }
-    out += escape_text(std::string_view(code.text).substr(pos, to - pos));
+    out += render_literal(code, pos, to, to == code.text.size(), hint, escape_text, write_hint);
     return out;
 }
 
@@ -95,29 +169,43 @@ std::string wrap_run_lines(std::string_view interior, ir::Change change, WrapRun
 // `escape_text` handles literal slices before span macros are inserted. Code
 // blocks keep the identity default; inline code in LaTeX escapes text-mode
 // special characters without corrupting macros or their source offsets.
-template <typename EscapeSpan, typename EscapeSpanInRun, typename WrapRun, typename EscapeText = std::identity>
+//
+// `write_hint` writes one of the draft's line-break hints (`CodeText::hints`)
+// where it sits, in literal text or inside a span's payload:
+// `(const ir::LayoutHint&, std::string_view following, bool in_span) ->
+// std::string`. The default writes nothing, which is right for every backend
+// but the ones writing draft LaTeX.
+template <typename EscapeSpan,
+          typename EscapeSpanInRun,
+          typename WrapRun,
+          typename EscapeText = std::identity,
+          typename WriteHint  = code_spans_detail::no_hints>
 std::string render_code_spans(const ir::CodeText& code,
                               EscapeSpan&&        escape_span,
                               EscapeSpanInRun&&   escape_span_in_run,
                               WrapRun&&           wrap_run,
-                              EscapeText&&        escape_text = {}) {
+                              EscapeText&&        escape_text = {},
+                              WriteHint&&         write_hint  = {}) {
     std::string out;
     std::size_t pos  = 0;
     auto        next = code.spans.begin();
+    auto        hint = code.hints.begin();
     // substrate generic algorithm: the same position-tracking walk one level
     // up, over the change-run table, each run bracketing a slice of the span
     // walk below it.
     for (const auto& run : code.changes) {
         if (run.begin > code.text.size() || run.end > code.text.size() || run.begin < pos || run.end < run.begin)
             continue; // defensive: ignore a malformed or overlapping run
-        out += code_spans_detail::render_slice(code, pos, run.begin, next, escape_span, escape_text);
+        out += code_spans_detail::render_slice(code, pos, run.begin, next, hint, escape_span, escape_text, write_hint);
         out += code_spans_detail::wrap_run_lines(
-            code_spans_detail::render_slice(code, run.begin, run.end, next, escape_span_in_run, escape_text),
+            code_spans_detail::render_slice(
+                code, run.begin, run.end, next, hint, escape_span_in_run, escape_text, write_hint),
             run.change,
             wrap_run);
         pos = run.end;
     }
-    out += code_spans_detail::render_slice(code, pos, code.text.size(), next, escape_span, escape_text);
+    out +=
+        code_spans_detail::render_slice(code, pos, code.text.size(), next, hint, escape_span, escape_text, write_hint);
     return out;
 }
 

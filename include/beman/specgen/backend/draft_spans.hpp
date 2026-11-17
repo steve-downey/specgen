@@ -183,6 +183,40 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
         foundation::when<ir::Change::Elided>([] { return std::optional<std::string_view>{}; }));
 }
 
+// One of the draft's line-break hints, as the draft writes it: the macro, and
+// the empty group after it when the source had one. A control word with no
+// group must not run into a letter, so it takes the space TeX would discard;
+// `following` is the text after the hint.
+inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::string_view following) {
+    std::string macro =
+        foundation::match(hint.kind,
+                          foundation::when<ir::LayoutHintKind::Break>([] { return std::string{"\\brk"}; }),
+                          foundation::when<ir::LayoutHintKind::Hyphen>([] { return std::string{"\\-"}; }),
+                          foundation::when<ir::LayoutHintKind::LineBreak>([] { return std::string{"\\linebreak"}; }),
+                          foundation::when<ir::LayoutHintKind::NewLine>([] { return std::string{"\\newline"}; }));
+    if (hint.braced)
+        return macro + "{}";
+    const bool letter_follows = !following.empty() && ((following.front() >= 'a' && following.front() <= 'z') ||
+                                                       (following.front() >= 'A' && following.front() <= 'Z'));
+    if (hint.kind != ir::LayoutHintKind::Hyphen && letter_follows)
+        macro += ' ';
+    return macro;
+}
+
+// The hint writer for code in prose, a \tcode: the text is LaTeX, so a hint is
+// its macro wherever it sits.
+inline std::string draft_layout_hint(const ir::LayoutHint& hint, std::string_view following, bool /*in_span*/) {
+    return draft_layout_hint_macro(hint, following);
+}
+
+// The hint writer for a listing. A hint inside a span's payload is inside the
+// span's `@...@` escape and is its macro. One in the listing's own text is
+// not written: that text is verbatim, a listing breaks its lines where its
+// text does, and the draft has no hint there for the importer to have read.
+inline std::string draft_layout_hint_listing(const ir::LayoutHint& hint, std::string_view following, bool in_span) {
+    return in_span ? draft_layout_hint_macro(hint, following) : std::string{};
+}
+
 // A placeholder name in prose, as the draft writes one: \cv{} for the one
 // placeholder the draft gives its own macro (which also sets right in math),
 // \cvqual for any other that stands for cv-qualifiers, \placeholder for the
@@ -225,9 +259,18 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
                             sets_code_font(v.code.spans.front().kind);
-    if (whole_span)
-        return draft_span_prose(v.code.spans.front(), v.code.text);
-    return "\\tcode{" + render_code_spans(v.code, draft_span_prose, draft_escape_code_text) + '}';
+    // A prose code inline takes no change mark of its own (the mark is on the
+    // inline), so the run hooks are the plain ones. The walk is taken for a
+    // whole-span inline too: it is what writes a line-break hint inside the
+    // span's name, and around one span it yields the bare macro.
+    const std::string code = render_code_spans(
+        v.code,
+        draft_span_prose,
+        draft_span_prose,
+        [](ir::Change, std::string_view text) { return std::string(text); },
+        draft_escape_code_text,
+        draft_layout_hint);
+    return whole_span ? code : "\\tcode{" + code + '}';
 }
 
 } // namespace beman::specgen::backend

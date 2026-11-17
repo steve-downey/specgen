@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -101,6 +102,55 @@ TEST_CASE("code_spans - a run spanning lines is wrapped one line at a time, empt
 TEST_CASE("code_spans - the spans-only walk leaves a run's text unmarked") {
     const CodeText code{"T VAL;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}}};
     CHECK(backend::render_code_spans(code, bracket_escape) == "T [expos:val];");
+}
+
+// --- the draft's line-break hints (CodeText::hints) --------------------------
+
+namespace {
+// A stand-in hint writer that shows everything it was handed: the kind, the
+// empty group, the first character of what follows, and whether the hint is
+// inside a span (braces) or in the text (parentheses).
+std::string show_hint(const LayoutHint& hint, std::string_view following, bool in_span) {
+    return std::string(in_span ? "{" : "(") + std::string(layout_hint_name(hint.kind)) + (hint.braced ? "!" : "") +
+           '|' + std::string(following.substr(0, 1)) + (in_span ? "}" : ")");
+}
+} // namespace
+
+TEST_CASE("code_spans - a hint is written where it sits: in the text, at a span's edges, and inside a span") {
+    // A hint at a span's first byte is before the span, one at its end is after
+    // it, and only one strictly inside goes into its payload.
+    const CodeText code{"ab VALUE cd",
+                        {{3, 8, SpanKind::ExposId, "VALUE"}},
+                        {},
+                        {{1, LayoutHintKind::Hyphen},
+                         {3, LayoutHintKind::Break, true},
+                         {5, LayoutHintKind::Hyphen},
+                         {8, LayoutHintKind::NewLine},
+                         {11, LayoutHintKind::LineBreak}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, std::identity{}, show_hint) ==
+          "a(hyphen|b)b (brk!|)[expos:VA{hyphen|L}LUE](newline| ) cd(linebreak|)");
+    // A backend that passes no writer writes none of them.
+    CHECK(backend::render_code_spans(code, bracket_escape) == "ab [expos:VALUE] cd");
+}
+
+TEST_CASE("code_spans - a hint inside a span whose payload is not its text is passed over") {
+    // The offset is into the text, so it says nothing about where in `val` to go.
+    const CodeText code{"T VALUE;", {{2, 7, SpanKind::ExposId, "val"}}, {}, {{4, LayoutHintKind::Hyphen}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, std::identity{}, show_hint) ==
+          "T [expos:val];");
+}
+
+TEST_CASE("code_spans - a hint at the edge of a change run is written once, inside the run") {
+    const CodeText code{"abcd", {}, {{2, 4, Change::Added}}, {{2, LayoutHintKind::Break}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, std::identity{}, show_hint) ==
+          "ab+((brk|c)cd)");
+}
+
+TEST_CASE("code_spans - a hint between the pieces of escaped text is not itself escaped") {
+    const auto     escape_text = [](std::string_view text) { return "<" + std::string(text) + ">"; };
+    const CodeText code{"a&b", {}, {}, {{2, LayoutHintKind::Break, true}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, escape_text, show_hint) ==
+          "<a&>(brk!|b)<b>");
 }
 
 TEST_CASE("code_spans - a malformed run is skipped and a span straddling a run's end passes through raw") {

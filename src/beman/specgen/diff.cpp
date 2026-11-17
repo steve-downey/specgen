@@ -557,7 +557,12 @@ void append_merged_group(BuiltCode&                      out,
 }
 
 ir::CodeText diff_code(const ir::CodeText& a, const ir::CodeText& b, const Options& options) {
-    if (a == b)
+    // The same wording is the current revision's code as it stands, with its
+    // typesetting. Code that did change is rebuilt below from tokens, and a
+    // token carries no line-break hint: the rebuilt code has none, which costs
+    // a listing nothing, since the draft's listings have them only inside a
+    // name and break their lines in their own text.
+    if (a == b || ir::without_typesetting(a) == ir::without_typesetting(b))
         return b;
     const std::vector<Line> la     = lines_of(a);
     const std::vector<Line> lb     = lines_of(b);

@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -71,8 +72,12 @@ using backend::draft_span_codeblock;
 // `@\added{...}@` with the spans inside it in their escaped form, since the
 // run has opened the `@...@` already (docs/plans/wording-diff.md).
 std::string render_code_codeblock(const ir::CodeText& code) {
-    return backend::render_code_spans(
-        code, draft_span_codeblock, backend::draft_span_escaped, backend::draft_change_codeblock);
+    return backend::render_code_spans(code,
+                                      draft_span_codeblock,
+                                      backend::draft_span_escaped,
+                                      backend::draft_change_codeblock,
+                                      std::identity{},
+                                      backend::draft_layout_hint_listing);
 }
 
 // A marked node or element in the draft's own environment for it,

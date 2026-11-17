@@ -127,10 +127,56 @@ struct ChangeRun {
     friend bool operator==(const ChangeRun&, const ChangeRun&) = default;
 };
 
+// A line-break hint in the draft's source: a place inside code where LaTeX may
+// break the line, or must. The draft writes them by hand where a long name
+// would overfill a line, and like `Span::no_correction` they are typesetting
+// that inherited wording has to carry to come back out as the draft spells it.
+enum class LayoutHintKind {
+    Break,     // \brk: the line may break here, with no hyphen
+    Hyphen,    // \-: the line may break here, with a hyphen
+    LineBreak, // \linebreak: break here if it helps
+    NewLine,   // \newline: break here
+};
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::LayoutHintKind> = std::array{
+    beman::specgen::ir::LayoutHintKind::Break,
+    beman::specgen::ir::LayoutHintKind::Hyphen,
+    beman::specgen::ir::LayoutHintKind::LineBreak,
+    beman::specgen::ir::LayoutHintKind::NewLine,
+};
+
+namespace beman::specgen::ir {
+
+std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
+std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
+
+// One hint, between two bytes of a CodeText's text: `at` is the offset of the
+// byte it precedes, or the text's size for one at the end. `braced` says the
+// draft wrote the empty group after the macro (`\brk{}`), which it mostly
+// does and which is the only other thing there is to its spelling.
+//
+// A third table beside `spans` and `changes`, for the reason `changes` is a
+// second one: a hint can sit inside a span (`\exposid{bound-en\-tity}`), and
+// spans do not nest. Keeping the hints out of `text` and out of a span's
+// payload is what lets everything that reads code -- the differ, the
+// validator, the other two backends -- go on reading the name and not the
+// LaTeX. Sorted by `at`. Only a backend that writes draft LaTeX reads them.
+struct LayoutHint {
+    std::size_t    at     = 0;
+    LayoutHintKind kind   = LayoutHintKind::Break;
+    bool           braced = false;
+
+    friend bool operator==(const LayoutHint&, const LayoutHint&) = default;
+};
+
 struct CodeText {
-    std::string            text;
-    std::vector<Span>      spans;        // sorted by begin, non-overlapping
-    std::vector<ChangeRun> changes = {}; // the wording diff's marks, usually none
+    std::string             text;
+    std::vector<Span>       spans;        // sorted by begin, non-overlapping
+    std::vector<ChangeRun>  changes = {}; // the wording diff's marks, usually none
+    std::vector<LayoutHint> hints   = {}; // the draft's line-break hints, usually none
 
     friend bool operator==(const CodeText&, const CodeText&) = default;
 };
@@ -241,8 +287,9 @@ using Inline    = std::variant<TextInline,
 using Paragraph = std::vector<Inline>;
 
 // A piece of wording with the draft's typesetting taken off: the choice
-// between a macro and its no-italic-correction twin. Two pieces that differ
-// only there say the same thing, which is how the wording diff compares them.
+// between a macro and its no-italic-correction twin, and the line-break
+// hints. Two pieces that differ only there say the same thing, which is how
+// the wording diff compares them.
 CodeText    without_typesetting(CodeText code);
 PlainInline without_typesetting(PlainInline piece);
 
