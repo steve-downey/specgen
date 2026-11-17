@@ -126,6 +126,45 @@ pair_item(const ir::SpecItem& item, const std::vector<ir::Node>& baseline, std::
     return std::get_if<ir::SpecItem>(&baseline[*best]);
 }
 
+// Which of its macro's two forms each span of `code` is written in, taken from
+// the span of `from` that says the same thing: the same kind and payload, the
+// first with the first. Only a span the document left to its context's default
+// takes one, so a form set by hand stays.
+void take_form(ir::CodeText& code, const ir::CodeText& from) {
+    std::vector<bool> taken(from.spans.size(), false);
+    // substrate generic algorithm: each span claims the first unclaimed span of
+    // the baseline that says the same, which writes the claim table.
+    for (ir::Span& span : code.spans) {
+        const auto indices = std::views::iota(std::size_t{0}, from.spans.size());
+        const auto found   = std::ranges::find_if(indices, [&](std::size_t i) {
+            return !taken[i] && from.spans[i].kind == span.kind && from.spans[i].payload == span.payload;
+        });
+        if (found == indices.end())
+            continue;
+        taken[*found] = true;
+        if (!span.no_correction)
+            span.no_correction = from.spans[*found].no_correction;
+    }
+}
+
+// A declaration that pairs with a baseline declaration is typeset as the
+// baseline's is (issue #330). The draft picks `\exposid` or `\exposidnc` by
+// hand, and the importer keeps the choice; an extracted declaration has none,
+// and took its context's default, so a paper's own wording differed from the
+// draft's in a token the paper does not change. Each signature takes the forms
+// of the baseline signature it reads most like. A baseline that was generated
+// has no forms to give, and nothing moves.
+void take_declaration_form(ir::SpecItem& item, const ir::SpecItem& from) {
+    if (from.decl.signatures.empty())
+        return;
+    std::ranges::for_each(item.decl.signatures, [&](ir::CodeText& code) {
+        const auto alike = [&](const ir::CodeText& other) {
+            return code == other ? 1.0 : diff::declaration_similarity(as_imported(code), as_imported(other));
+        };
+        take_form(code, *std::ranges::max_element(from.decl.signatures, std::ranges::less{}, alike));
+    });
+}
+
 // The description `item` ends with, given the baseline's.
 void inherit_description(ir::SpecItem& item, const ir::SpecItem& from, std::vector<Diagnostic>& out) {
     ir::ItemDescr resolved = from.descr;
@@ -198,6 +237,12 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                    const std::string&           where,
                    std::vector<Diagnostic>&     out) {
     std::vector<bool> claimed(baseline.size(), false);
+    // The items that ask to inherit, noted before the walk clears the request.
+    const std::vector<bool> asked = current | std::views::transform([](const ir::Node& node) {
+                                        const auto* item = std::get_if<ir::SpecItem>(&node);
+                                        return item != nullptr && item->as_draft;
+                                    }) |
+                                    std::ranges::to<std::vector>();
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
@@ -224,6 +269,7 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                                                           where)});
                                return;
                            }
+                           take_declaration_form(item, *from);
                            inherit_description(item, *from, out);
                        },
                        [&](ir::Synopsis& synopsis) {
@@ -246,6 +292,16 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                    },
                    node);
     }
+    // What is left of the baseline's items pairs with the items that inherit
+    // nothing, for the typesetting of their declarations alone. After the walk
+    // above, so that no `\asdraft` item loses its pair to one of these.
+    std::ranges::for_each(std::views::zip(current, asked), [&](auto&& entry) {
+        auto* item = std::get_if<ir::SpecItem>(&std::get<0>(entry));
+        if (item == nullptr || std::get<1>(entry) || item->decl.signatures.empty())
+            return;
+        if (const ir::SpecItem* from = pair_item(*item, baseline, claimed))
+            take_declaration_form(*item, *from);
+    });
 }
 
 bool any_unresolved(const std::vector<ir::Node>& nodes) {

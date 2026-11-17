@@ -1118,9 +1118,12 @@ have no independent item description.
   the choice survives the import. `Span::no_correction` is three-state: unset is the form the
   context takes (`default_no_correction`: the twin for an exposition-only name in a listing, the
   plain macro everywhere else), which is what every generated span has, and the importer sets
-  it only where the draft wrote the other form. `PlaceholderInline` and `ConceptRef` carry a
-  plain flag, since prose takes the plain macro. The draft's line-break hints inside code
-  (`\brk`, `\-`, `\linebreak`, `\newline`) are the other half: `CodeText::hints`, a third
+  it only where the draft wrote the other form. An extracted declaration that pairs with a
+  baseline declaration takes the baseline's form for each span the two share (`inherit`), so the
+  one token a paper does not change is not the one token its wording differs in.
+  `PlaceholderInline` and `ConceptRef` carry a plain flag, since prose takes the plain macro.
+  The draft's line-break hints inside code (`\brk`, `\-`, `\linebreak`, `\newline`) are the
+  other half: `CodeText::hints`, a third
   table beside `spans` and `changes`, each `LayoutHint` an offset into the text, a kind, and
   whether the draft wrote the empty group after the macro. A table, and not zero-width spans
   or the macro left in the text, because a hint can sit inside a span's name

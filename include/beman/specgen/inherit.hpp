@@ -52,6 +52,13 @@ bool has_unresolved(const ir::Document&);
 // conjuncts move onto it, as the validator's evidence the inherited prose is
 // checked against; a derived element the baseline has no counterpart for
 // stays, being new wording.
+//
+// Apart from the descriptions, every item that pairs with a baseline item,
+// marked or not, has its declaration typeset as the baseline's is: each span
+// takes the form (`Span::no_correction`) of the baseline span that says the
+// same, where the document left the form to the context. The marked items pair
+// first. This is typesetting only, so an item that finds no pair is not a
+// finding.
 std::vector<Diagnostic> resolve(ir::Document& current, const ir::Document& baseline);
 
 } // namespace beman::specgen::inherit

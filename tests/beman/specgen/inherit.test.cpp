@@ -10,6 +10,8 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -253,4 +255,74 @@ TEST_CASE("inherit - an item of some name that reads like no unnamed baseline it
     const auto findings = inherit::resolve(current, baseline);
     REQUIRE(findings.size() == 1);
     CHECK(findings.front().severity == beman::specgen::Severity::Error);
+}
+
+namespace {
+
+// `text` with one exposition-only name in it, in the form `nc` says.
+CodeText with_exposid(std::string text, std::string name, std::optional<bool> nc) {
+    const std::size_t begin = text.find(name);
+    return CodeText{std::move(text), {Span{begin, begin + name.size(), SpanKind::ExposId, std::move(name), nc}}};
+}
+
+SpecItem declared(CodeText signature, std::vector<std::string> entities) {
+    SpecItem it;
+    it.decl.signatures.push_back(std::move(signature));
+    it.decl.entities = std::move(entities);
+    return it;
+}
+
+} // namespace
+
+TEST_CASE("inherit - a paired declaration is typeset in the form the baseline's has") {
+    // The draft wrote `\exposid` where a listing's default is `\exposidnc`.
+    SpecItem drafted = declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", false), {});
+    drafted.descr.elements.push_back(element(ElementKind::Remarks, "The draft's."));
+    const Document baseline = in_section("s", {drafted});
+
+    SECTION("an item that inherits its description") {
+        SpecItem asking  = declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", {}), {"is_ok"});
+        asking.as_draft  = true;
+        Document current = in_section("s", {asking});
+        REQUIRE(inherit::resolve(current, baseline).empty());
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{false});
+        CHECK(element_of(item_at(current, 0), ElementKind::Remarks) != nullptr);
+    }
+    SECTION("an item with a description of its own, which it keeps") {
+        SpecItem authored = declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", {}), {"is_ok"});
+        authored.descr.elements.push_back(element(ElementKind::Remarks, "The paper's."));
+        Document current = in_section("s", {authored});
+        REQUIRE(inherit::resolve(current, baseline).empty());
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{false});
+        CHECK(element_of(item_at(current, 0), ElementKind::Remarks)->body ==
+              element(ElementKind::Remarks, "The paper's.").body);
+    }
+    SECTION("a form the document set stays") {
+        Document current =
+            in_section("s", {declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", true), {})});
+        REQUIRE(inherit::resolve(current, baseline).empty());
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{true});
+    }
+    SECTION("a span that says something else takes nothing") {
+        Document current =
+            in_section("s", {declared(with_exposid("static constexpr bool is-fine = see below;", "is-fine", {}), {})});
+        REQUIRE(inherit::resolve(current, baseline).empty());
+        CHECK_FALSE(item_at(current, 0).decl.signatures.front().spans.front().no_correction.has_value());
+    }
+}
+
+TEST_CASE("inherit - an item that inherits is paired before one that only takes the form") {
+    SpecItem first = declared(with_exposid("void f(int) with-x;", "with-x", false), {"f"});
+    first.descr.elements.push_back(element(ElementKind::Effects, "Int."));
+    const Document baseline = in_section("s", {first});
+
+    // The unmarked overload comes first and reads as much like the baseline's
+    // as the marked one does; the marked one still gets the pair.
+    SpecItem asking  = declared(with_exposid("void f(int) with-x;", "with-x", {}), {"f"});
+    asking.as_draft  = true;
+    Document current = in_section("s", {declared(with_exposid("void f(int) with-x;", "with-x", {}), {"f"}), asking});
+
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    CHECK_FALSE(item_at(current, 0).decl.signatures.front().spans.front().no_correction.has_value());
+    CHECK(element_of(item_at(current, 1), ElementKind::Effects) != nullptr);
 }

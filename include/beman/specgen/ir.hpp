@@ -106,7 +106,8 @@ struct Span {
     // the name. Unset is the form the context takes (`default_no_correction`),
     // which is what every generated span has. The draft importer sets it
     // where the draft wrote the other form, so that inherited wording comes
-    // back out as the draft spells it. Only a backend that writes draft LaTeX
+    // back out as the draft spells it, and a generated declaration takes it
+    // from the baseline declaration it pairs with (inherit.hpp). Only a backend that writes draft LaTeX
     // reads it, and the wording diff compares without it.
     std::optional<bool> no_correction = {};
 

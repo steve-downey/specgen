@@ -418,6 +418,17 @@ Log:
   `without_typesetting`. Measured on the draft's library clauses: `@\exposid{...}@` in a
   listing 6,351 times against `@\exposidnc{...}@` 475, so the listing default this tool has
   always written is the draft's minority form; that default is not changed here.
+- 2026-11-17: an extracted declaration takes the form its baseline declaration has (issue
+  #330). The entry above made inherited text keep the draft's form; a declaration is extracted
+  and not inherited, so the item for `is-callable-from` was written `\exposidnc` where the
+  draft's has `\exposid`, and that was the one token in which the consumer's plain wording
+  differed from the draft apart from what the paper changes. Every item that pairs with a
+  baseline item, `\asdraft` or not, now takes the baseline's form for each span of the same
+  kind and payload, where its own is unset. The `\asdraft` items pair first, so one that only
+  wants the form cannot take another's description. The listing default is still not changed:
+  with no baseline the output is what it was. Not done: a class synopsis that is extracted and
+  not `\asdraft-synopsis` keeps the default, and the line-break hints of a baseline declaration
+  are not carried over, since a hint is an offset into text the paper may have changed.
 - 2026-11-16: the line-break hints inside code survive too (issue #306), which also reads the
   last of the five macros, the `\newline` in a `\tcode` (issue #307): [func.wrap.ref] imports
   with no warning. They are `CodeText::hints`, a table of offsets beside the span table. Three

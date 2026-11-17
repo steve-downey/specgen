@@ -1578,6 +1578,13 @@ one was written, so wording inherited with `\asdraft` prints as the draft
 spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
 
+A declaration extracted from the code has no such choice recorded, and takes
+its context's default: `\exposidnc` in a listing. When a baseline is named and
+the item pairs with a baseline item, whether or not it is `\asdraft`, the
+declaration takes the baseline's choice for each name the two share, so an
+unchanged declaration prints as the draft has it. With no baseline, or a
+baseline that was generated, nothing changes.
+
 The same holds for the draft's line-break hints: `\brk`, `\-`, `\linebreak`
 and `\newline`, in a `\tcode`, in running text, or inside a name
 (`\exposid{bound-en\-tity}`, `\oldconcept{Unary\-Type\-Trait}`). The code, the
