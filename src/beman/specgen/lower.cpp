@@ -30,9 +30,17 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
                            // Empty span table: names are raw until the front end resolves them.
                            return ir::CodeInline{ir::CodeText{code.code, {}}};
                        },
-                       [](const grammar::InlineRef& ref) -> ir::Inline { return ir::RefInline{ref.stable_name}; },
-                       [](const grammar::InlinePlaceholder& p) -> ir::Inline { return ir::PlaceholderInline{p.text}; },
+                       [](const grammar::InlineRef& ref) -> ir::Inline {
+                           return ir::RefInline{.stable_name = ref.stable_name, .bare = ref.bare};
+                       },
+                       [](const grammar::InlinePlaceholder& p) -> ir::Inline {
+                           return ir::PlaceholderInline{.text = p.text, .cv_qualifier = p.cv_qualifier};
+                       },
                        [](const grammar::InlineOldConcept& c) -> ir::Inline { return ir::OldConceptRef{c.name}; },
+                       [](const grammar::InlineConcept& c) -> ir::Inline {
+                           return ir::ConceptRef{.name = c.name, .exposition = c.exposition};
+                       },
+                       [](const grammar::InlineTableRef& t) -> ir::Inline { return ir::TableRef{t.stable_name}; },
                    },
                    piece);
            }) |

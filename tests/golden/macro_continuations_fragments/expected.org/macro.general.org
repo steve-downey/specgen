@@ -19,6 +19,10 @@ namespace std {
 @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is a placeholder in leading prose.
 #+end_pnum
 
+#+begin_pnum
+Within subclause [[https://eel.is/c++draft/macro.general][@@html:[macro.general]@@@@latex:{[}macro.general{]}@@]], a type that satisfies @@latex:\exposconcept{gadget-like}@@@@html:<code><var>gadget-like</var></code>@@ models ~copyable~ for some @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@, as [[macro.flat][Table @@html:[macro.flat]@@@@latex:{[}macro.flat{]}@@]] shows.
+#+end_pnum
+
 #+begin_itemdecl
 int size() const;
 #+end_itemdecl

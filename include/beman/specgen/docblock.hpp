@@ -42,14 +42,24 @@ struct InlineCode {
 }; // backticked; unresolved
 struct InlineRef {
     std::string stable_name;
-}; // \iref{stable-name}; prose references may name an external subclause
+    bool        bare = false;
+}; // \iref{stable-name}, and \ref{stable-name} (bare); prose references may name an external subclause
 struct InlinePlaceholder {
     std::string text;
-}; // \placeholder{x}, and \cv{} (text "cv")
+    bool        cv_qualifier = false;
+}; // \placeholder{x}, \cv{} (text "cv"), and \cvqual{x} (cv_qualifier)
 struct InlineOldConcept {
     std::string name;
 }; // \oldconcept{X}
-using ProseInline    = std::variant<InlineText, InlineCode, InlineRef, InlinePlaceholder, InlineOldConcept>;
+struct InlineConcept {
+    std::string name;
+    bool        exposition = false;
+}; // \libconcept{c}, and \exposconcept{c} (exposition)
+struct InlineTableRef {
+    std::string stable_name;
+}; // \tref{stable-name}
+using ProseInline = std::
+    variant<InlineText, InlineCode, InlineRef, InlinePlaceholder, InlineOldConcept, InlineConcept, InlineTableRef>;
 using ProseParagraph = std::vector<ProseInline>;
 
 struct Table2DRow {

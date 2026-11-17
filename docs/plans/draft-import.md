@@ -354,6 +354,18 @@ typed synopsis for the class it declares, and diffs deleted and inserted lines t
 the same code over a different number of lines as one run of tokens, so a line break is not a
 change. Generation is not touched: a `\verbatim-itemdecl` stays exact, span-free text.
 
+Log:
+
+- 2026-11-17: the docblock grammar reads the rest of the importer's prose macros (issue #316):
+  `\ref`, `\tref`, `\libconcept`, `\exposconcept` and `\cvqual`, into the kinds and flags the
+  importer gives them. Part 1 of this plan said the grammar would read the same macros as the
+  importer; it read `\iref`, `\placeholder`, `\cv{}` and `\oldconcept`, and left the others as
+  text, which the mpark and org backends printed as written. The no-italic-correction twins
+  are not read: they are the draft's typesetting, which an author does not type and the differ
+  does not compare. Open: `~` in a docblock is still the character and not the tie the
+  importer reads (issue #312). In a paper written for mpark, `~x~` in prose is a subscript,
+  so reading it as a tie changes what existing text means.
+
 ### synopsis-source
 
 `\asdraft-synopsis` patches the draft's synopsis from the declarations the class makes, kept

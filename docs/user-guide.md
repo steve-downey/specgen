@@ -929,6 +929,26 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
+The draft's other prose macros that specgen has a kind for are read outside
+backticks too, and each backend writes them in its own form:
+
+| In a docblock | It is |
+| --- | --- |
+| `\iref{x}` | a reference in parentheses, as the draft prints "(22.10.17)" |
+| `\ref{x}` | the same reference, bare: "Within subclause \ref{x}, ..." |
+| `\tref{t}` | a reference to a table |
+| `\libconcept{c}` | a library concept |
+| `\exposconcept{c}` | an exposition-only concept |
+| `\placeholder{p}`, `\cv{}` | a placeholder |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers |
+| `\oldconcept{X}` | a C++17 named requirement, printed "Cpp17X" |
+
+These are the macros `specgen import` reads from the draft's own text (see
+[Reading the working draft's LaTeX](#reading-the-working-drafts-latex) for how
+each prints), so a sentence typed here and the same sentence inherited from the
+draft are the same wording to the wording diff. Any other macro stays text: the LaTeX backend passes it
+through, and the mpark and org backends print it as written.
+
 Write literal C++ characters inside backticks, including `&` and `&&`.
 The LaTeX backend escapes text-mode special characters inside `\tcode`;
 semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets

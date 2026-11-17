@@ -587,6 +587,12 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
+- The draft's other prose macros with an inline kind are read outside backticks
+  as well: `\ref{x}` (the bare reference), `\tref{t}`, `\libconcept{c}`,
+  `\exposconcept{c}`, `\placeholder{p}`, `\cv{}`, `\cvqual{p}` and
+  `\oldconcept{X}`. They are the ones the draft importer reads, into the same
+  kinds, so authored and inherited text of one sentence are one IR. A macro not
+  in that list stays text.
 - `\lib2dtab2[stable.name]{caption}` starts a two-dimensional table on the
   current element. Exactly two `\column` entries precede one or more `\row`
   entries, and each row has exactly two `\cell` entries before
