@@ -68,10 +68,12 @@ std::vector<std::string> split_lines(std::string_view text) {
 }
 
 // A prose line with its LaTeX comment removed. A `%` that is not escaped ends
-// the line; when it is the last thing on it, the line break is not a space.
+// the line, and TeX discards everything from it through the line end, so that
+// line break is not a space. A space written before the `%` is one all the
+// same (`is % Overfull`): only `text%` joins the next line to this one.
 struct ProseLine {
     std::string_view text;
-    bool             joins_next = false;
+    bool             space_after = true; // what follows on a later line is a word apart
 };
 
 ProseLine strip_comment(std::string_view line) {
@@ -83,29 +85,30 @@ ProseLine strip_comment(std::string_view line) {
             continue;
         }
         if (line[i] == '%') {
-            const std::string_view before = trim(line.substr(0, i));
-            return {before, true};
+            const bool spaced = i > 0 && std::isspace(static_cast<unsigned char>(line[i - 1])) != 0;
+            return {trim(line.substr(0, i)), spaced};
         }
     }
-    return {trim(line), false};
+    return {trim(line), true};
 }
 
 // Prose lines joined into one string: a line break is a space unless the
-// line ended in `%`.
+// line ended in `%` with no space before it. A line that is empty, or is a
+// comment and nothing else, says nothing and changes nothing: TeX skips the
+// spaces that open a line, so `a`, `% note`, `b` reads `a b` and `a%`,
+// `% note`, `b` reads `ab`.
 std::string join_prose(Lines lines) {
     std::string out;
-    bool        joined = true;
+    bool        space = false;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const std::string& raw : lines) {
         const ProseLine line = strip_comment(raw);
-        if (line.text.empty()) {
-            joined = joined || line.joins_next;
+        if (line.text.empty())
             continue;
-        }
-        if (!joined && !out.empty())
+        if (space && !out.empty())
             out += ' ';
         out += line.text;
-        joined = line.joins_next;
+        space = line.space_after;
     }
     return out;
 }

@@ -549,3 +549,25 @@ For \tcode{R(Args...) \grammarterm{id} noexcept}, and \tcode{plain}.
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains("For \\tcode{R(Args...) \\grammarterm{id} noexcept}, and \\tcode{plain}."));
 }
+
+TEST_CASE("draft_import - a comment ends its line, and the space before it is still a space") {
+    // TeX discards a comment through the line end, so `text%` runs into the
+    // next line and `text % note` does not; a line that is only a comment says
+    // nothing either way (issue #313).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\pnum
+The value is % Overfull
+\tcode{true}, the name is \tcode{a}%
+\tcode{b}, one
+% a note between two lines
+two, three%
+% a note after a joined line
+four.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.find("The value is \\tcode{true}, the name is \\tcode{a}\\tcode{b}, one two, threefour.") !=
+          std::string::npos);
+}

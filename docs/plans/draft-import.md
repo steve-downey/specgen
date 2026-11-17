@@ -406,3 +406,12 @@ Log:
   `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
   in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
   left in the name.
+
+### prose-line-joins
+
+How the lines of a paragraph join. A line break is a space, and a `%` takes the rest of its line
+and the line break with it. The importer had every `%` join its line to the next with no space,
+which is right for `text%` and wrong for `text % note`, where the space before the `%` is still a
+space: [tuple.cnstr] has `is\linebreak{} % Overfull` before a `\tcode`, and the two ran together
+(issue #313). The space before the comment now decides. A line that is only a comment says
+nothing either way, where before it joined the lines around it.
