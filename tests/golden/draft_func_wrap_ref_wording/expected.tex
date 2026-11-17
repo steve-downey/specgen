@@ -36,7 +36,7 @@ namespace std {
     template<class... T>
       static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelownc@;             // \expos
 
-    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholder{noex}@);      // \expos
+    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholdernc{noex}@);      // \expos
     @\exposidnc{BoundEntityType}@ @\exposidnc{bound-entity}@;                                       // \expos
   };
 
@@ -51,7 +51,7 @@ namespace std {
 \end{codeblock}
 
 \pnum
-An object of class \tcode{function_ref<R(Args...) \cv{} noexcept(\placeholder{noex})>} stores a pointer to function \exposid{thunk-ptr} and an object \exposid{bound-entity}. The object \exposid{bound-entity} has an unspecified trivially copyable type \exposid{BoundEntityType}, that models \libconcept{copyable} and is capable of storing a pointer to object value or a pointer to function value. The type of \exposid{thunk-ptr} is \tcode{R(*)(\exposid{BoundEntityType}, Args\&\&...) noexcept(\placeholder{noex})}.
+An object of class \tcode{function_ref<R(Args...) \cv{} noexcept(\placeholder{noex})>} stores a pointer to function \exposid{thunk-ptr} and an object \exposid{bound-entity}. The object \exposid{bound-entity} has an unspecified trivially copyable type \exposid{BoundEntityType}, that models \libconcept{copyable} and is capable of storing a pointer to object value or a pointer to function value. The type of \exposid{thunk-ptr} is \tcode{R(*)(\exposidnc{BoundEntityType}, Args\&\&...) noexcept(\placeholder{noex})}.
 
 \pnum
 Each specialization of \tcode{function_ref} is a trivially copyable type\iref{term.trivially.copyable.type} that models \libconcept{copyable}.
@@ -67,7 +67,7 @@ denote \tcode{ArgTypes\&\&...} respectively.
 
 \begin{itemdecl}
 template<class... T>
-  static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-invocable-using}@ = @\seebelow@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -84,7 +84,7 @@ is_invocable_r_v<R, T..., ArgTypes...>
 
 \begin{itemdecl}
 template<class F>
-  static constexpr bool @\exposidnc{is-convertible-from-specialization}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-convertible-from-specialization}@ = @\seebelow@;
 \end{itemdecl}
 
 \begin{itemdescr}

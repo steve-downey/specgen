@@ -344,6 +344,40 @@ TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {
         CHECK(code.text.substr(run.begin, run.end - run.begin).find('\n') == std::string::npos);
 }
 
+// Which of a macro's two forms the draft wrote is typesetting (issue #306). A
+// baseline that spells an exposition-only name `\exposid` and a revision that
+// spells it `\exposidnc` say the same thing.
+TEST_CASE("diff - the form of a span's macro is not a change, and the current revision's is kept") {
+    const auto spanned = [](std::optional<bool> span_nc, bool inline_nc) {
+        Document d = gadget();
+        // "class gadget {\n  bool ready() const;\n};": `ready` is bytes [22, 27).
+        std::get<Synopsis>(d.nodes[0]).code.spans = {{22, 27, SpanKind::ExposId, "ready", span_nc}};
+        auto& ready                               = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[0]);
+        std::get<BodyParagraph>(ready.descr.elements[0].body[0]).text = {
+            CodeInline{{"ready", {{0, 5, SpanKind::ExposId, "ready", span_nc}}}},
+            TextInline{" for "},
+            PlaceholderInline{.text = "p", .no_correction = inline_nc},
+            TextInline{" if the gadget is ready."}};
+        return d;
+    };
+    const Document before = spanned(std::nullopt, false);
+    Document       after  = spanned(false, true);
+    CHECK(before != after);
+    const Document same = diff::compare(before, after, {.context = diff::Context::All});
+    CHECK(!diff::has_marks(same));
+    CHECK(same == after);
+
+    // A real change on the same line is still found, alone, and the span beside
+    // it keeps the form the current revision gave it.
+    std::get<Synopsis>(after.nodes[0]).code.text = "class gadget {\n  bool ready() const noexcept;\n};";
+    const Document out                           = diff::compare(before, after, {.context = diff::Context::All});
+    const auto&    code                          = std::get<Synopsis>(out.nodes[0]).code;
+    REQUIRE(code.changes.size() == 1);
+    CHECK(code.text.substr(code.changes[0].begin, code.changes[0].end - code.changes[0].begin) == "noexcept");
+    REQUIRE(code.spans.size() == 1);
+    CHECK(code.spans[0] == Span{22, 27, SpanKind::ExposId, "ready", false});
+}
+
 TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
     // Issue #258: a keyword added before a declaration is marked
     // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.

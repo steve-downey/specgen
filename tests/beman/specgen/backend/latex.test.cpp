@@ -167,6 +167,38 @@ TEST_CASE("latex - a cv-qualifier span is \\cvqual and an optional span is \\opt
     CHECK(out.contains(", \\tcode{\\cvqual{cv2}} and \\tcode{\\opt{\\&}}."));
 }
 
+// The draft has a no-italic-correction twin of each italic macro. A span that
+// does not say takes the context's form -- \exposidnc in a listing, the plain
+// macro elsewhere -- and one the draft importer read says which the draft wrote
+// (issue #306).
+TEST_CASE("latex - a span that says which form of its macro to write gets that form, in a listing and in prose") {
+    const beman::specgen::ir::CodeText code{"A B C D E",
+                                            {{0, 1, SpanKind::ExposId, "a"},
+                                             {2, 3, SpanKind::ExposId, "b", false},
+                                             {4, 5, SpanKind::Placeholder, "c", true},
+                                             {6, 7, SpanKind::SeeBelow, "", true},
+                                             {8, 9, SpanKind::ImplDefined, "", true}}};
+    SpecItem                           item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{code},
+                                      TextInline{", "},
+                                      CodeInline{{"B", {{0, 1, SpanKind::ExposId, "b", true}}}},
+                                      TextInline{", "},
+                                      PlaceholderInline{.text = "p", .no_correction = true},
+                                      TextInline{" and "},
+                                      ConceptRef{.name = "k", .exposition = true, .no_correction = true},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("@\\exposidnc{a}@ @\\exposid{b}@ @\\placeholdernc{c}@ @\\seebelownc@ @\\impdefnc@\n"));
+    CHECK(out.contains("\\tcode{\\exposid{a} \\exposid{b} \\placeholdernc{c} \\seebelownc \\impdefnc}, "
+                       "\\exposidnc{b}, \\placeholdernc{p} and \\exposconceptnc{k}."));
+}
+
 // The Ref *span* and the RefInline are two different cross-references
 // and must not share one mapping.
 // A span sits in a code comment, where the draft writes

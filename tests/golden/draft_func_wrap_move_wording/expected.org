@@ -66,7 +66,7 @@ namespace std {
 
   private:
     template<class VT>
-      static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;       // \expos
+      static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@;       // \expos
   };
 }
 #+end_codeblock
@@ -91,7 +91,7 @@ Such small-object optimization can only be applied to a type ~T~ for which ~is_n
 
 #+begin_itemdecl
 template<class VT>
-  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum

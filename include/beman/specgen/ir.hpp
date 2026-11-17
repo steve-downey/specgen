@@ -95,9 +95,24 @@ struct Span {
     std::size_t end   = 0;
     SpanKind    kind  = SpanKind::ExposId;
     std::string payload;
+    // Typesetting, not wording: which of the draft's two forms of this span's
+    // macro is written. Each italic macro has a twin that leaves out the
+    // italic correction (\exposidnc, \placeholdernc, \seebelownc,
+    // \impdefnc), and the draft's source picks one by hand, by what follows
+    // the name. Unset is the form the context takes (`default_no_correction`),
+    // which is what every generated span has. The draft importer sets it
+    // where the draft wrote the other form, so that inherited wording comes
+    // back out as the draft spells it. Only a backend that writes draft LaTeX
+    // reads it, and the wording diff compares without it.
+    std::optional<bool> no_correction = {};
 
     friend bool operator==(const Span&, const Span&) = default;
 };
+
+// The form a span's macro takes when nothing says otherwise: the
+// no-correction form for an exposition-only name in a listing, which is what
+// this tool has always written there, and the plain form for everything else.
+constexpr bool default_no_correction(SpanKind kind, bool listing) { return listing && kind == SpanKind::ExposId; }
 
 // A run of changed bytes in a CodeText: a second table beside `spans` rather
 // than two more `SpanKind`s, because a change run *contains* semantic spans
@@ -152,6 +167,8 @@ struct RefInline {
 struct ConceptRef {
     std::string name;
     bool        exposition = false;
+    // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
+    bool no_correction = false;
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
@@ -166,6 +183,8 @@ struct ConceptRef {
 struct PlaceholderInline {
     std::string text;
     bool        cv_qualifier = false;
+    // The draft wrote \placeholdernc: typesetting, as `Span::no_correction` is.
+    bool no_correction = false;
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };
@@ -220,6 +239,12 @@ using Inline    = std::variant<TextInline,
                                RawInline,
                                ChangedInline>;
 using Paragraph = std::vector<Inline>;
+
+// A piece of wording with the draft's typesetting taken off: the choice
+// between a macro and its no-italic-correction twin. Two pieces that differ
+// only there say the same thing, which is how the wording diff compares them.
+CodeText    without_typesetting(CodeText code);
+PlainInline without_typesetting(PlainInline piece);
 
 // --- description elements --------------------------------------------------
 // Declaration order IS canonical [structure.specifications] order.

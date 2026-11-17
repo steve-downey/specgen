@@ -383,3 +383,13 @@ Log:
   nothing else, and the kind is what a backend dispatches on. `Optional` covers the code that
   may be absent, so its argument has to be code alone; an `\opt` around another macro is still
   kept raw, because spans do not nest.
+- 2026-11-16: the no-italic-correction forms survive the import (issue #306). The plan had them
+  dropped, with the layout hints, and the round-trip test normalized them away; the consumer's
+  claim is that unchanged wording is the draft's text, so they are kept. They are typesetting,
+  so they sit beside the wording and not in it: `Span::no_correction`, three-state, and a flag
+  on the two prose inlines. Unset means "what the context takes", and the importer sets it only
+  where the draft wrote the other form, so a generated span and an imported span that the
+  generator would have written the same way are the same IR. The differ compares through
+  `without_typesetting`. Measured on the draft's library clauses: `@\exposid{...}@` in a
+  listing 6,351 times against `@\exposidnc{...}@` 475, so the listing default this tool has
+  always written is the draft's minority form; that default is not changed here.

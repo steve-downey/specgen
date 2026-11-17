@@ -202,10 +202,13 @@ struct CodeBuilder {
     ir::CodeText code;
 
     void text(std::string_view s) { code.text += s; }
-    void span(ir::SpanKind kind, std::string payload, std::string_view spelling) {
+    void span(ir::SpanKind        kind,
+              std::string         payload,
+              std::string_view    spelling,
+              std::optional<bool> no_correction = std::nullopt) {
         const std::size_t begin = code.text.size();
         code.text += spelling;
-        code.spans.push_back({begin, code.text.size(), kind, std::move(payload)});
+        code.spans.push_back({begin, code.text.size(), kind, std::move(payload), no_correction});
     }
 };
 
@@ -235,25 +238,35 @@ std::optional<std::string> plain_code_argument(std::string_view arg) {
 
 // One draft macro with a code meaning, at `pos` (a backslash). Appends its
 // span to `out` and returns where it ended, or nullopt when it is not one.
-std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out) {
+// `listing` says whether the macro sits in a listing's `@...@` or in a
+// `\tcode`, which decides what an italic macro's plain form and its
+// no-correction twin record: the span says which was written only where that
+// is not what the context takes anyway.
+std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out, bool listing) {
     std::size_t end = pos + 1;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     while (end < s.size() && is_letter(s[end]))
         ++end;
     const std::string_view name = s.substr(pos + 1, end - pos - 1);
 
-    const auto one_arg = [&](ir::SpanKind kind, bool spelled_as_payload) -> std::optional<std::size_t> {
+    const auto written = [&](ir::SpanKind kind, bool no_correction) -> std::optional<bool> {
+        return no_correction == ir::default_no_correction(kind, listing) ? std::nullopt
+                                                                         : std::optional<bool>{no_correction};
+    };
+    const auto one_arg = [&](ir::SpanKind        kind,
+                             bool                spelled_as_payload,
+                             std::optional<bool> no_correction = std::nullopt) -> std::optional<std::size_t> {
         const auto arg = read_braced(s, end);
         if (!arg)
             return std::nullopt;
-        out.span(kind, arg->inner, spelled_as_payload ? arg->inner : "[" + arg->inner + "]");
+        out.span(kind, arg->inner, spelled_as_payload ? arg->inner : "[" + arg->inner + "]", no_correction);
         return arg->next;
     };
 
     if (name == "exposid" || name == "exposidnc")
-        return one_arg(ir::SpanKind::ExposId, true);
+        return one_arg(ir::SpanKind::ExposId, true, written(ir::SpanKind::ExposId, name == "exposidnc"));
     if (name == "placeholder" || name == "placeholdernc")
-        return one_arg(ir::SpanKind::Placeholder, true);
+        return one_arg(ir::SpanKind::Placeholder, true, written(ir::SpanKind::Placeholder, name == "placeholdernc"));
     if (name == "cvqual")
         return one_arg(ir::SpanKind::CvQualifier, true);
     if (name == "opt") {
@@ -271,12 +284,15 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
         const auto empty = read_braced(s, end);
         return empty ? empty->next : end;
     }
-    if (name == "seebelow") {
-        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW");
+    if (name == "seebelow" || name == "seebelownc") {
+        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(ir::SpanKind::SeeBelow, name == "seebelownc"));
         return end;
     }
-    if (name == "impdef") {
-        out.span(ir::SpanKind::ImplDefined, "", "implementation-defined");
+    if (name == "impdef" || name == "impdefnc") {
+        out.span(ir::SpanKind::ImplDefined,
+                 "",
+                 "implementation-defined",
+                 written(ir::SpanKind::ImplDefined, name == "impdefnc"));
         return end;
     }
     if (name == "libglobal") {
@@ -343,7 +359,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                     ok = false;
                     break;
                 }
-                const auto next = code_macro(inner, j, trial);
+                const auto next = code_macro(inner, j, trial, true);
                 if (!next) {
                     ok = false;
                     break;
@@ -370,7 +386,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             if (listing) {
                 // Inside a listing only the comment macros are TeX (texcl).
                 if (raw.substr(i).starts_with("\\ref{")) {
-                    if (const auto next = code_macro(raw, i, out)) {
+                    if (const auto next = code_macro(raw, i, out, true)) {
                         i = *next;
                         continue;
                     }
@@ -385,7 +401,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 i = next;
                 continue;
             }
-            if (const auto after = code_macro(raw, i, out)) {
+            if (const auto after = code_macro(raw, i, out, false)) {
                 i = *after;
                 continue;
             }
@@ -416,9 +432,12 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
 
 // --- prose --------------------------------------------------------------------
 
-ir::CodeText whole_span(ir::SpanKind kind, std::string payload, std::string spelling) {
+// A code inline that is one span whole, as `\exposid{x}` in prose is. A
+// no-correction twin says so; the plain form is what prose takes anyway.
+ir::CodeText whole_span(ir::SpanKind kind, std::string payload, std::string spelling, bool no_correction = false) {
     ir::CodeText code{std::move(spelling), {}};
-    code.spans.push_back({0, code.text.size(), kind, std::move(payload)});
+    code.spans.push_back(
+        {0, code.text.size(), kind, std::move(payload), no_correction ? std::optional<bool>{true} : std::nullopt});
     return code;
 }
 
@@ -490,17 +509,21 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = arg->next;
         } else if ((name == "exposid" || name == "exposidnc") && arg) {
             flush();
-            out.push_back(code_inline_of(whole_span(ir::SpanKind::ExposId, arg->inner, arg->inner)));
+            out.push_back(
+                code_inline_of(whole_span(ir::SpanKind::ExposId, arg->inner, arg->inner, name == "exposidnc")));
             i = arg->next;
-        } else if (name == "seebelow" || name == "impdef") {
+        } else if (name == "seebelow" || name == "seebelownc") {
             flush();
-            out.push_back(code_inline_of(name == "seebelow"
-                                             ? whole_span(ir::SpanKind::SeeBelow, "", "SEEBELOW")
-                                             : whole_span(ir::SpanKind::ImplDefined, "", "implementation-defined")));
+            out.push_back(code_inline_of(whole_span(ir::SpanKind::SeeBelow, "", "SEEBELOW", name == "seebelownc")));
+            i = end;
+        } else if (name == "impdef" || name == "impdefnc") {
+            flush();
+            out.push_back(code_inline_of(
+                whole_span(ir::SpanKind::ImplDefined, "", "implementation-defined", name == "impdefnc")));
             i = end;
         } else if ((name == "placeholder" || name == "placeholdernc") && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{arg->inner});
+            out.push_back(ir::PlaceholderInline{.text = arg->inner, .no_correction = name == "placeholdernc"});
             i = arg->next;
         } else if (name == "cvqual" && arg) {
             flush();
@@ -514,9 +537,10 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::OldConceptRef{arg->inner});
             i = arg->next;
-        } else if ((name == "libconcept" || name == "exposconcept") && arg) {
+        } else if ((name == "libconcept" || name == "exposconcept" || name == "exposconceptnc") && arg) {
             flush();
-            out.push_back(ir::ConceptRef{.name = arg->inner, .exposition = name == "exposconcept"});
+            out.push_back(ir::ConceptRef{
+                .name = arg->inner, .exposition = name != "libconcept", .no_correction = name == "exposconceptnc"});
             i = arg->next;
         } else if (name == "tref" && arg) {
             flush();

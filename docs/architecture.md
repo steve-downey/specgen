@@ -1105,6 +1105,17 @@ have no independent item description.
   and not shown, on one `FreeParagraph` standing in for a run of unchanged children, which
   every backend renders as its unnumbered ellipsis line. Under `decls`, an elided
   `BodyParagraph` similarly replaces an unchanged item description without a label or number.
+- **Typesetting the draft's source carries** is in the IR, off to the side of the wording. The
+  draft has a no-italic-correction twin of each italic macro (`\exposidnc`, `\placeholdernc`,
+  `\seebelownc`, `\impdefnc`, `\exposconceptnc`) and its source chooses between the two by
+  hand, so a paper that inherits a paragraph with `\asdraft` can only print the draft's text if
+  the choice survives the import. `Span::no_correction` is three-state: unset is the form the
+  context takes (`default_no_correction`: the twin for an exposition-only name in a listing, the
+  plain macro everywhere else), which is what every generated span has, and the importer sets
+  it only where the draft wrote the other form. `PlaceholderInline` and `ConceptRef` carry a
+  plain flag, since prose takes the plain macro. Only a backend writing draft LaTeX reads any
+  of them. `without_typesetting` strips them, and the wording diff compares through it: two
+  pieces that differ only there are the same wording, and the current revision's is kept.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a
@@ -1177,7 +1188,8 @@ number of a section the diff leaves out is simply not written.
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
-  description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
+  description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose), unless the
+  span says which of the two the draft wrote (`Span::no_correction`, §7);
   `\ref`/`\iref`; `\tcode`, `\libconcept` (`\exposconcept` for an exposition-only concept),
   `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
   cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the

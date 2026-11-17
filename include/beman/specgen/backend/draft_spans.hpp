@@ -74,18 +74,26 @@ inline std::string draft_escape_code_text(std::string_view text) {
            std::views::join | std::ranges::to<std::string>();
 }
 
-// Outside a codeblock we are already in LaTeX, so the macro is written
-// directly.
-inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
+// A span's macro, in prose (`listing` false) or inside a listing's escape. The
+// two differ only in which form an exposition-only name takes when the span
+// does not say (`ir::default_no_correction`): the draft has a
+// no-italic-correction twin of each italic macro, and a span the draft
+// importer read says which one the draft wrote.
+inline std::string draft_span_macro(const ir::Span& span, std::string_view spelling, bool listing) {
+    const bool nc = span.no_correction.value_or(ir::default_no_correction(span.kind, listing));
     return foundation::match(
         span.kind,
-        foundation::when<ir::SpanKind::ExposId>([&] { return "\\exposid{" + span.payload + '}'; }),
-        foundation::when<ir::SpanKind::SeeBelow>([&] { return std::string{"\\seebelow"}; }),
-        foundation::when<ir::SpanKind::ImplDefined>([&] { return std::string{"\\impdef"}; }),
+        foundation::when<ir::SpanKind::ExposId>(
+            [&] { return (nc ? "\\exposidnc{" : "\\exposid{") + span.payload + '}'; }),
+        foundation::when<ir::SpanKind::SeeBelow>([&] { return std::string{nc ? "\\seebelownc" : "\\seebelow"}; }),
+        foundation::when<ir::SpanKind::ImplDefined>([&] { return std::string{nc ? "\\impdefnc" : "\\impdef"}; }),
         // \cv{} is the one placeholder the draft gives its own macro, which the
         // draft's listings and its prose both use.
-        foundation::when<ir::SpanKind::Placeholder>(
-            [&] { return span.payload == "cv" ? std::string{"\\cv{}"} : "\\placeholder{" + span.payload + '}'; }),
+        foundation::when<ir::SpanKind::Placeholder>([&] {
+            if (span.payload == "cv")
+                return std::string{"\\cv{}"};
+            return (nc ? "\\placeholdernc{" : "\\placeholder{") + span.payload + '}';
+        }),
         // `\ref`, not `\iref`. A Ref *span* is a cross-reference
         // inside a code comment, which the draft writes bare --
         // `// \ref{optional.ctor}, constructors` -- where `\iref` is the
@@ -106,8 +114,15 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
         foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }));
 }
 
+// Outside a codeblock we are already in LaTeX, so the macro is written
+// directly.
+inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
+    return draft_span_macro(span, spelling, false);
+}
+
 // Inside a codeblock the draft escapes back into LaTeX with @...@. Exposition
-// identifiers use the no-correction form there. Ref is a separate exception,
+// identifiers use the no-correction form there unless the span says the
+// draft wrote the other. Ref is a separate exception,
 // and it is the draft's own, not ours. `macros.tex` sets the
 // listings option `texcl=true` ("all TeX commands are available within
 // comments") in the shared `\lstset`, alongside `escapechar=@` -- so it holds
@@ -125,9 +140,7 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
 // no-correction form there as it does in a codeblock; a Ref is the bare
 // `\ref` either way.
 inline std::string draft_span_escaped(const ir::Span& span, std::string_view spelling) {
-    if (span.kind == ir::SpanKind::ExposId)
-        return "\\exposidnc{" + span.payload + '}';
-    return draft_span_prose(span, spelling);
+    return draft_span_macro(span, spelling, true);
 }
 
 inline std::string draft_span_codeblock(const ir::Span& span, std::string_view spelling) {
@@ -178,13 +191,17 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
 inline std::string draft_placeholder(const ir::PlaceholderInline& v) {
     if (v.text == "cv" && !v.cv_qualifier)
         return "\\cv{}";
-    return (v.cv_qualifier ? "\\cvqual{" : "\\placeholder{") + v.text + '}';
+    if (v.cv_qualifier)
+        return "\\cvqual{" + v.text + '}';
+    return (v.no_correction ? "\\placeholdernc{" : "\\placeholder{") + v.text + '}';
 }
 
 // A concept name in prose: \libconcept, or \exposconcept for an
 // exposition-only one.
 inline std::string draft_concept(const ir::ConceptRef& v) {
-    return (v.exposition ? "\\exposconcept{" : "\\libconcept{") + v.name + '}';
+    if (!v.exposition)
+        return "\\libconcept{" + v.name + '}';
+    return (v.no_correction ? "\\exposconceptnc{" : "\\exposconcept{") + v.name + '}';
 }
 
 // A code inline, in prose, as the draft writes one. Shared for the same

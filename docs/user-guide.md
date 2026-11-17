@@ -1525,7 +1525,13 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
-The LaTeX backend writes each back as the macro it was read from.
+The LaTeX backend writes each back as the macro it was read from. That
+includes the choice between a macro and its no-italic-correction twin
+(`\exposidnc`, `\placeholdernc`, `\seebelownc`, `\impdefnc`,
+`\exposconceptnc`), which the draft makes by hand: the import records which
+one was written, so wording inherited with `\asdraft` prints as the draft
+spells it. The choice is typesetting, so the wording diff does not report it,
+and the mpark and org backends ignore it.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the

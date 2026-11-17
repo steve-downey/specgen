@@ -34,7 +34,7 @@ namespace std {
 
   private:
     template<class... T>
-      static constexpr bool $is-invocable-using$ = @\seebelownc@;             // \expos
+      static constexpr bool $is-invocable-using$ = $see below$;             // \expos
 
     R (*$thunk-ptr$)($BoundEntityType$, ArgTypes&&...) noexcept($noex$);      // \expos
     $BoundEntityType$ $bound-entity$;                                       // \expos

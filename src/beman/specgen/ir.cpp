@@ -300,6 +300,36 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
         });
 }
 
+CodeText without_typesetting(CodeText code) {
+    std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
+    return code;
+}
+
+namespace {
+
+// `without_typesetting`'s dispatch over the plain inline kinds: the three that
+// carry typesetting lose it, and the rest are returned as they came.
+struct TypesettingRemover {
+    PlainInline operator()(TextInline v) const { return v; }
+    PlainInline operator()(CodeInline v) const { return CodeInline{without_typesetting(std::move(v.code))}; }
+    PlainInline operator()(RefInline v) const { return v; }
+    PlainInline operator()(ConceptRef v) const {
+        v.no_correction = false;
+        return v;
+    }
+    PlainInline operator()(PlaceholderInline v) const {
+        v.no_correction = false;
+        return v;
+    }
+    PlainInline operator()(OldConceptRef v) const { return v; }
+    PlainInline operator()(TableRef v) const { return v; }
+    PlainInline operator()(RawInline v) const { return v; }
+};
+
+} // namespace
+
+PlainInline without_typesetting(PlainInline piece) { return std::visit(TypesettingRemover{}, std::move(piece)); }
+
 bool has_description(const ItemDescr& d) { return !d.leading.empty() || !d.elements.empty(); }
 
 void canonicalize(ItemDescr& d) {

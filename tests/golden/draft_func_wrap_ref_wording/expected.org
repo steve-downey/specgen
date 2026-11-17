@@ -49,7 +49,7 @@ namespace std {
     template<class... T>
       static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelownc@;             // \expos
 
-    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholder{noex}@);      // \expos
+    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholdernc{noex}@);      // \expos
     @\exposidnc{BoundEntityType}@ @\exposidnc{bound-entity}@;                                       // \expos
   };
 
@@ -64,7 +64,7 @@ namespace std {
 #+end_codeblock
 
 #+begin_pnum
-An object of class @@latex:\tcode{function_ref<R(Args...) \cv{} noexcept(\placeholder{noex})>}@@@@html:<code>function_ref&lt;R(Args...) <var>cv</var> noexcept(<var>noex</var>)&gt;</code>@@ stores a pointer to function @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ and an object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@. The object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ has an unspecified trivially copyable type @@latex:\exposid{BoundEntityType}@@@@html:<code><var>BoundEntityType</var></code>@@, that models ~copyable~ and is capable of storing a pointer to object value or a pointer to function value. The type of @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ is @@latex:\tcode{R(*)(\exposid{BoundEntityType}, Args\&\&...) noexcept(\placeholder{noex})}@@@@html:<code>R(*)(<var>BoundEntityType</var>, Args&amp;&amp;...) noexcept(<var>noex</var>)</code>@@.
+An object of class @@latex:\tcode{function_ref<R(Args...) \cv{} noexcept(\placeholder{noex})>}@@@@html:<code>function_ref&lt;R(Args...) <var>cv</var> noexcept(<var>noex</var>)&gt;</code>@@ stores a pointer to function @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ and an object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@. The object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ has an unspecified trivially copyable type @@latex:\exposid{BoundEntityType}@@@@html:<code><var>BoundEntityType</var></code>@@, that models ~copyable~ and is capable of storing a pointer to object value or a pointer to function value. The type of @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ is @@latex:\tcode{R(*)(\exposidnc{BoundEntityType}, Args\&\&...) noexcept(\placeholder{noex})}@@@@html:<code>R(*)(<var>BoundEntityType</var>, Args&amp;&amp;...) noexcept(<var>noex</var>)</code>@@.
 #+end_pnum
 
 #+begin_pnum
@@ -89,7 +89,7 @@ denote ~ArgTypes&&...~ respectively.
 
 #+begin_itemdecl
 template<class... T>
-  static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-invocable-using}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum
@@ -108,7 +108,7 @@ is_invocable_r_v<R, T..., ArgTypes...>
 
 #+begin_itemdecl
 template<class F>
-  static constexpr bool @\exposidnc{is-convertible-from-specialization}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-convertible-from-specialization}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum
