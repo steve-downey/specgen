@@ -6,6 +6,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <functional>
 #include <string>
 #include <string_view>
 
@@ -106,4 +107,25 @@ TEST_CASE("draft_spans - a prose inline's name takes its hints inside the macro"
     CHECK(backend::draft_placeholder(
               {.text = "cv2", .cv_qualifier = true, .hints = {{2, LayoutHintKind::Break, true}}}) ==
           "\\cvqual{cv\\brk{}2}");
+}
+
+// --- the tie (issue #312) ---------------------------------------------------
+
+TEST_CASE("draft_spans - a tie is written as ~ in place of the space it is on") {
+    CHECK(backend::draft_hinted_text("Within subclause ", {{16, LayoutHintKind::Tie}}) == "Within subclause~");
+    CHECK(backend::draft_hinted_text(" is in Table 4", {{0, LayoutHintKind::Tie}, {12, LayoutHintKind::Tie}}) ==
+          "~is in Table~4");
+    // A tie at the end of the text takes no space after it, as a control word would.
+    CHECK(backend::draft_hinted_text("a ", {{1, LayoutHintKind::Tie}}) == "a~");
+    // In code the same: the space before the optional part is the tie.
+    const CodeInline code{
+        {"R(*)(G, A...) noexcept", {{14, 22, SpanKind::Optional, ""}}, {}, {{13, LayoutHintKind::Tie}}}};
+    CHECK(backend::draft_code_inline(code) == "\\tcode{R(*)(G, A...)~\\opt{noexcept}}");
+    // In a listing the text is verbatim, where `~` is a tilde: the space stays.
+    CHECK(backend::render_code_spans(code.code,
+                                     backend::draft_span_codeblock,
+                                     backend::draft_span_escaped,
+                                     backend::draft_change_codeblock,
+                                     std::identity{},
+                                     backend::draft_layout_hint_listing) == "R(*)(G, A...) @\\opt{noexcept}@");
 }

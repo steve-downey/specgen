@@ -72,7 +72,7 @@ Each specialization of ~function_ref~ is a trivially copyable type([[https://eel
 #+end_pnum
 
 #+begin_pnum
-Within subclause~[[https://eel.is/c++draft/func.wrap.ref][@@html:[func.wrap.ref]@@@@latex:{[}func.wrap.ref{]}@@]], @@latex:\tcode{\placeholder{call-args}}@@@@html:<code><var>call-args</var></code>@@ is an argument pack with elements such that
+Within subclause\nbsp{}[[https://eel.is/c++draft/func.wrap.ref][@@html:[func.wrap.ref]@@@@latex:{[}func.wrap.ref{]}@@]], @@latex:\tcode{\placeholder{call-args}}@@@@html:<code><var>call-args</var></code>@@ is an argument pack with elements such that
 
 #+begin_codeblock
 decltype((@\placeholder{call-args}@))...

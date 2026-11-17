@@ -455,6 +455,41 @@ TEST_CASE("diff - a line-break hint in prose is not a change, and a kept word ke
     CHECK(std::get<TextInline>(para[4]) == TextInline{" and ", {{5, LayoutHintKind::Break, true}}});
 }
 
+// The draft's tie (issue #312) is a hint on a space. A baseline that ties a
+// word to what follows and a revision that writes a plain space say the same
+// thing; and where the tied space falls at the edge of a mark, the tie goes
+// with the space.
+TEST_CASE("diff - a tie is not a change, and stays on its space beside a changed word") {
+    const auto tied = [](bool with_tie, std::string_view noun) {
+        Document  d     = gadget();
+        auto&     reset = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[1]);
+        Paragraph para{TextInline{"See " + std::string(noun) + " "}, RefInline{.stable_name = "x", .bare = true}};
+        if (with_tie)
+            std::get<TextInline>(para[0]).hints = {{4 + noun.size(), LayoutHintKind::Tie}};
+        std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = std::move(para);
+        return d;
+    };
+    const auto para_of = [](const Document& d) {
+        return std::get<BodyParagraph>(
+                   std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[1]).descr.elements[0].body[0])
+            .text;
+    };
+    const Document before = tied(true, "subclause");
+    const Document after  = tied(false, "subclause");
+    CHECK(!diff::has_marks(diff::compare(before, after, {.context = diff::Context::All})));
+    CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
+
+    // The word before the tie is replaced. The mark is on the word, and the
+    // tied space after it is outside the mark with its tie.
+    const Paragraph para = para_of(diff::compare(tied(false, "subclause"), tied(true, "clause")));
+    REQUIRE(para.size() == 5);
+    CHECK(std::get<TextInline>(para[0]).text == "See ");
+    CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"subclause"}});
+    CHECK(std::get<ChangedInline>(para[2]).inlines == std::vector<PlainInline>{TextInline{"clause"}});
+    CHECK(std::get<TextInline>(para[3]) == TextInline{" ", {{0, LayoutHintKind::Tie}}});
+    CHECK(std::holds_alternative<RefInline>(para[4]));
+}
+
 TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
     // Issue #258: a keyword added before a declaration is marked
     // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.

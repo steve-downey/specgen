@@ -35,6 +35,7 @@
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
+#include <beman/specgen/backend/tied_text.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -180,8 +181,10 @@ struct PieceRenderer {
     // Plain prose text, verbatim -- the same treatment the LaTeX backend
     // gives it. The author's prose is the author's in both targets: prose
     // that would need escaping here (a bare `_`, a stray `[`) is prose that
-    // would already have needed escaping to reach the draft.
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    // would already have needed escaping to reach the draft. The draft's tie
+    // is the one piece of its typesetting with a meaning here: a no-break
+    // space, which Markdown writes as the entity.
+    std::string operator()(const ir::TextInline& v) const { return backend::tied_text(v, "&nbsp;"); }
 
     // Inline code. Unlike LaTeX there is no whole-span shortcut: backticks
     // supply the code font that `\tcode` supplies there, and `$...$` adds

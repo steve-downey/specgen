@@ -1550,6 +1550,14 @@ text and the name are read without them, so `std::for\-ward<Args>` is
 the LaTeX backend writes each hint back where it was. A `\linebreak[2]` or
 `\nolinebreak[3]`, which says how much a break is wanted, is dropped.
 
+The draft's tie, `~`, is a space the line may not break at
+(`subclause~\ref{x}`). It is read as a space with a hint on it, so the words
+on either side are two words to the wording diff. The LaTeX backend writes `~`
+back, in running text and in a `\tcode`. It is the one hint the other backends
+write too, in running text: `&nbsp;` in mpark and `\nbsp{}` in org. Inside
+code they write the space. A tilde in a `\tcode` is the draft's `\~`, and in a
+listing the character is the code's own.
+
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
 macro and the subclause:

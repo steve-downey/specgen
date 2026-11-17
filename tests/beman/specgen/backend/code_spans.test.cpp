@@ -157,6 +157,22 @@ TEST_CASE("code_spans - a hint between the pieces of escaped text is not itself 
           "<a&>(brk!|b)<b>");
 }
 
+TEST_CASE("code_spans - a tie that is written stands in place of its space, and one that is not leaves it") {
+    // The draft's `~` is a space, so the text has the space and the hint is on
+    // it (issue #312). A writer that writes the tie has written the space.
+    const CodeText code{
+        "a b VALUE", {{4, 9, SpanKind::ExposId, "VALUE"}}, {}, {{1, LayoutHintKind::Tie}, {3, LayoutHintKind::Tie}}};
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, std::identity{}, show_hint) ==
+          "a(tie| )b(tie| )[expos:VALUE]");
+    CHECK(backend::render_code_spans(code, bracket_escape) == "a b [expos:VALUE]");
+    // A writer that declines one tie leaves that space where it is.
+    const auto first_only = [](const LayoutHint& hint, std::string_view, bool) {
+        return hint.at == 1 ? std::string{"~"} : std::string{};
+    };
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change, std::identity{}, first_only) ==
+          "a~b [expos:VALUE]");
+}
+
 TEST_CASE("code_spans - a malformed run is skipped and a span straddling a run's end passes through raw") {
     const CodeText code{"abcdef", {{2, 5, SpanKind::ExposId, "x"}}, {{0, 3, Change::Added}, {9, 12, Change::Added}}};
     CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "+(abc)def");

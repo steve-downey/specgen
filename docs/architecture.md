@@ -1131,7 +1131,13 @@ have no independent item description.
   (`\oldconcept{Unary\-Type\-Trait}`), with offsets into the text or the name. A hint that
   sits between two other inlines is a `TextInline` with a hint and no text. The diff cuts a
   text's hints along with its words (`ir::text_piece`, `ir::append_text`), so a paragraph it
-  rebuilds keeps the hints in and beside the words it keeps.
+  rebuilds keeps the hints in and beside the words it keeps. The draft's tie (`~`) is a hint
+  of the same table, on the space it stands for (`LayoutHintKind::Tie`, `ir::tied_space`): the
+  text has a plain space, so the words either side are two words to everything that reads the
+  text, and a writer that writes the tie writes it in place of that space. It is the one hint
+  the other two backends write, in running text only, as their own no-break space
+  (`backend/tied_text.hpp`): the rest are advice to TeX's line breaker, and a tie is a
+  statement about the wording's layout that holds in any target.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a

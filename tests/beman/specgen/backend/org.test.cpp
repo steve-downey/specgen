@@ -165,6 +165,28 @@ TEST_CASE("org - a math variable and a subscript in code") {
                        "@@html:<code>get&lt;<var>i</var>&gt;(T<sub><var>i</var></sub>, T<sub>1</sub>)</code>@@."));
 }
 
+// The draft's tie (issue #312): org's entity for a no-break space in running
+// text, which exports to `~` and to `&nbsp;`; in a code inline's LaTeX snippet
+// the draft's own `~`, and in its HTML a space.
+TEST_CASE("org - a tie in running text is the no-break space entity") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Within subclause ", {{16, LayoutHintKind::Tie}}},
+        CodeInline{{"x", {{0, 1, SpanKind::ExposId, "x"}}}},
+        TextInline{", "},
+        CodeInline{{"R(*)(G) noexcept", {{8, 16, SpanKind::Optional, ""}}, {}, {{7, LayoutHintKind::Tie}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("Within subclause\\nbsp{}@@latex:\\exposid{x}@@"));
+    CHECK(out.contains("@@latex:\\tcode{R(*)(G)~\\opt{noexcept}}@@"
+                       "@@html:<code>R(*)(G) noexcept<sub><var>opt</var></sub></code>@@."));
+}
+
 // The LaTeX backend's Ref exception, inherited rather than re-decided:
 // `texcl=true` is set in
 // the shared `\lstset`, so it holds inside `codeblock` and `itemdecl` alike and

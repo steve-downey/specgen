@@ -49,6 +49,7 @@
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
+#include <beman/specgen/backend/tied_text.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -263,8 +264,10 @@ struct PieceRenderer {
     // `/` are emphasis), so prose that needs escaping fails more visibly than
     // it would elsewhere. Left as pass-through deliberately: identifiers reach
     // wording inside a code inline, where they are protected, and an escaper
-    // guessing at authored prose would corrupt more than it saved.
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    // guessing at authored prose would corrupt more than it saved. The
+    // draft's tie is written as org's entity for a no-break space, which
+    // exports to `~` in LaTeX and to `&nbsp;` in HTML.
+    std::string operator()(const ir::TextInline& v) const { return backend::tied_text(v, "\\nbsp{}"); }
 
     // A code inline. Org-native when org can express it, and a LaTeX export
     // snippet when it cannot -- which is a span (org's code markup is

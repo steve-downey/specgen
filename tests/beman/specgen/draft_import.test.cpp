@@ -709,3 +709,38 @@ and \tcode{a}\brk{}\tcode{b}, wanted\linebreak[2] or not.
         "otherwise, models \\libconcept{in\\-vocable}, for \\placeholder{long-\\brk{}name}, imple\\-men\\-ta\\-tion, "
         "and \\tcode{a}\\brk{}\\tcode{b}, wanted or not."));
 }
+
+TEST_CASE("draft_import - the draft's tie is a space the line may not break at, in prose and in a \\tcode") {
+    // `~` is a tie, not a tilde: read as the character it printed a tilde in a
+    // \tcode, and in prose in every backend but LaTeX (issue #312). A tilde in
+    // a \tcode is `\~`, and in a listing the character is the code's own.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Within subclause~\ref{x}, \tcode{T}~is \tcode{R(*)(G, A...)~\opt{noexcept}} and \tcode{val.T::\~T()}.
+\begin{codeblock}
+~T();
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    using Hints         = std::vector<ir::LayoutHint>;
+    CHECK(std::get<ir::TextInline>(para.at(0)) ==
+          ir::TextInline{"Within subclause ", {{16, ir::LayoutHintKind::Tie}}});
+    CHECK(std::get<ir::TextInline>(para.at(4)) == ir::TextInline{" is ", {{0, ir::LayoutHintKind::Tie}}});
+    const auto& code = std::get<ir::CodeInline>(para.at(5)).code;
+    CHECK(code.text == "R(*)(G, A...) noexcept");
+    CHECK(code.hints == Hints{{13, ir::LayoutHintKind::Tie}});
+    const auto& tilde = std::get<ir::CodeInline>(para.at(7)).code;
+    CHECK(tilde.text == "val.T::~T()");
+    CHECK(tilde.hints.empty());
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "~T();");
+    CHECK(listing.hints.empty());
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("Within subclause~\\ref{x}, \\tcode{T}~is \\tcode{R(*)(G, A...)~\\opt{noexcept}} and "
+                            "\\tcode{val.T::\\textasciitilde{}T()}."));
+    CHECK(rendered.contains("\n~T();\n"));
+}

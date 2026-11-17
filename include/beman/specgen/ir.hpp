@@ -140,6 +140,7 @@ enum class LayoutHintKind {
     Hyphen,    // \-: the line may break here, with a hyphen
     LineBreak, // \linebreak: break here if it helps
     NewLine,   // \newline: break here
+    Tie,       // ~: the space at this offset is one the line may not break at
 };
 
 } // namespace beman::specgen::ir
@@ -150,11 +151,12 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::LayoutHintKind::Hyphen,
     beman::specgen::ir::LayoutHintKind::LineBreak,
     beman::specgen::ir::LayoutHintKind::NewLine,
+    beman::specgen::ir::LayoutHintKind::Tie,
 };
 
 namespace beman::specgen::ir {
 
-std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
+std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline", "tie"
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 
 // One hint, between two bytes of a text -- a CodeText's, a TextInline's, or the
@@ -169,6 +171,13 @@ std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 // payload is what lets everything that reads code -- the differ, the
 // validator, the other two backends -- go on reading the name and not the
 // LaTeX. Sorted by `at`. Only a backend that writes draft LaTeX reads them.
+//
+// A tie is the one hint that stands for a byte and does not sit between two:
+// the draft's `~` is a space, so the text has a space at `at`, and the hint
+// says the line may not break there. A writer that writes the tie writes it in
+// place of that space (`tied_space`); one that does not leaves the space. It
+// is also the one hint with a meaning outside LaTeX, and the other backends
+// write a tie in running text as their own no-break space.
 struct LayoutHint {
     std::size_t    at     = 0;
     LayoutHintKind kind   = LayoutHintKind::Break;
@@ -176,6 +185,12 @@ struct LayoutHint {
 
     friend bool operator==(const LayoutHint&, const LayoutHint&) = default;
 };
+
+// Whether `hint` is a tie on a space of `text`: the byte a writer of the tie
+// writes it in place of.
+constexpr bool tied_space(const LayoutHint& hint, std::string_view text) {
+    return hint.kind == LayoutHintKind::Tie && hint.at < text.size() && text[hint.at] == ' ';
+}
 
 struct CodeText {
     std::string             text;

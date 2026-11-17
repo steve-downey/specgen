@@ -430,6 +430,15 @@ Log:
   the grammar environments (`macros.tex` defines it there only), so it is not a prose hint,
   and `\linebreak[n]` and `\nolinebreak[n]` are dropped with their bracket, which used to be
   left in the text.
+- 2026-11-17: the draft's tie is read (issue #312). `~` was read as the character: a tilde
+  printed in a `\tcode` (`R(*)(G, A...)~\opt{noexcept}`), and in prose mpark and org printed
+  one where LaTeX set a space. It is a hint kind, `Tie`, on the space it stands for, in the
+  tables that hold the other hints. The alternative was U+00A0 in the text, which is the right
+  character and was set aside for the reason U+00AD was for `\-`: the differ's words, and
+  every other reader of the text, would have had to know a second kind of space. The tie
+  differs from the other hints in two ways. It stands for a byte, so a writer that writes it
+  skips that byte. And it means something outside LaTeX, so mpark and org write it in running
+  text as their own no-break space; inside code they cannot, and write the space.
 
 ### prose-line-joins
 

@@ -192,7 +192,7 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
 }
 
 // One of the draft's line-break hints, as the draft writes it: the macro, and
-// the empty group after it when the source had one. A control word with no
+// the empty group after it when the source had one; or `~` for a tie. A control word with no
 // group must not run into a letter, so it takes the space TeX would discard;
 // `following` is the text after the hint.
 inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::string_view following) {
@@ -201,7 +201,11 @@ inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::stri
                           foundation::when<ir::LayoutHintKind::Break>([] { return std::string{"\\brk"}; }),
                           foundation::when<ir::LayoutHintKind::Hyphen>([] { return std::string{"\\-"}; }),
                           foundation::when<ir::LayoutHintKind::LineBreak>([] { return std::string{"\\linebreak"}; }),
-                          foundation::when<ir::LayoutHintKind::NewLine>([] { return std::string{"\\newline"}; }));
+                          foundation::when<ir::LayoutHintKind::NewLine>([] { return std::string{"\\newline"}; }),
+                          foundation::when<ir::LayoutHintKind::Tie>([] { return std::string{"~"}; }));
+    // A tie is a character, not a control word: nothing follows it.
+    if (hint.kind == ir::LayoutHintKind::Tie)
+        return macro;
     if (hint.braced)
         return macro + "{}";
     const bool letter_follows = !following.empty() && ((following.front() >= 'a' && following.front() <= 'z') ||
@@ -228,9 +232,11 @@ draft_hinted_text(std::string_view text, const std::vector<ir::LayoutHint>& hint
             continue; // defensive: out of order, or past the end
         out += escape_text(text.substr(pos, hint.at - pos));
         out += draft_layout_hint_macro(hint, text.substr(hint.at));
-        if (!hint.braced && hint.kind != ir::LayoutHintKind::Hyphen && hint.at == text.size())
+        const bool control_word = hint.kind != ir::LayoutHintKind::Hyphen && hint.kind != ir::LayoutHintKind::Tie;
+        if (!hint.braced && control_word && hint.at == text.size())
             out += ' ';
-        pos = hint.at;
+        // A tie stands in place of the space it is on.
+        pos = hint.at + (ir::tied_space(hint, text) ? 1 : 0);
     }
     out += escape_text(text.substr(pos));
     return out;

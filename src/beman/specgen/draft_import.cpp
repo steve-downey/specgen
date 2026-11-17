@@ -495,6 +495,14 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             i = close + 1;
             continue;
         }
+        if (!listing && c == '~') {
+            // A tie inside a \tcode is a space too; a tilde there is `\~`. In
+            // a listing the character is the code's own.
+            out.hint(ir::LayoutHintKind::Tie, false);
+            out.text(" ");
+            ++i;
+            continue;
+        }
         if (!listing && c == '$') {
             // Mathematics is not code (issue #311). A variable or a subscript
             // is a span; anything else has no kind, and the caller keeps the
@@ -610,6 +618,14 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             const std::size_t end   = close == std::string_view::npos ? text.size() : close + 1;
             raw(text.substr(i, end - i), "mathematics is kept as raw LaTeX");
             i = end;
+            continue;
+        }
+        if (c == '~') {
+            // The draft's tie: a space the line may not break at (issue #312).
+            // The text has the space, and the hint says which kind it is.
+            pending.hints.push_back({pending.text.size(), ir::LayoutHintKind::Tie, false});
+            pending.text += ' ';
+            ++i;
             continue;
         }
         if (c != '\\') {

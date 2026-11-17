@@ -79,7 +79,8 @@ inline constexpr auto kLayoutHintNames =
     foundation::table<LayoutHintKind>(foundation::is<LayoutHintKind::Break>("brk"sv),
                                       foundation::is<LayoutHintKind::Hyphen>("hyphen"sv),
                                       foundation::is<LayoutHintKind::LineBreak>("linebreak"sv),
-                                      foundation::is<LayoutHintKind::NewLine>("newline"sv));
+                                      foundation::is<LayoutHintKind::NewLine>("newline"sv),
+                                      foundation::is<LayoutHintKind::Tie>("tie"sv));
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
