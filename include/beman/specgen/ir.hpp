@@ -127,24 +127,41 @@ struct CodeInline {
 
     friend bool operator==(const CodeInline&, const CodeInline&) = default;
 }; // \tcode; spans allow exposid etc.
+// A cross-reference to a stable name. The draft has two forms, and which one
+// is written is part of the wording: \iref{x} is the parenthesized reference
+// that annotates what precedes it ("the requirements (22.10.17)"), and
+// \ref{x} is the number alone, which the sentence around it reads as a noun
+// ("Within subclause 22.10.17, ..."). `bare` is the second.
 struct RefInline {
     std::string stable_name;
+    bool        bare = false;
 
     friend bool operator==(const RefInline&, const RefInline&) = default;
 };
 // A library concept name, rendered with the draft's \libconcept macro (not
 // \tcode). Constraints prose uses the "`X` models `C`" form, where `C` is a
 // ConceptRef; see the Constraints derivation (design §5.1).
+//
+// `exposition` marks an exposition-only concept, the draft's \exposconcept{x}:
+// a name the wording defines for its own use, set in italics as an
+// exposition-only identifier is and indexed apart from the library's concepts.
 struct ConceptRef {
     std::string name;
+    bool        exposition = false;
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
 // An italic placeholder name: the draft's \placeholder{x}, and \cv{} (text
 // "cv"), which sets the same italic in text and in math. Not code: the name
 // stands for whatever the surrounding wording replaces it with.
+//
+// `cv_qualifier` marks a placeholder that stands for cv-qualifiers, the
+// draft's \cvqual{x} (`cv2`, say). It prints as any placeholder does, and the
+// LaTeX backend writes the macro the draft uses. \cv{} is \cvqual{cv}; it
+// stays the text "cv" with this unset, as it was before the flag existed.
 struct PlaceholderInline {
     std::string text;
+    bool        cv_qualifier = false;
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };

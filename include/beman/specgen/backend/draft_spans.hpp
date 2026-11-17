@@ -165,6 +165,23 @@ inline std::string draft_escape_code_text(std::string_view text) {
            std::views::join | std::ranges::to<std::string>();
 }
 
+// A placeholder name in prose, as the draft writes one: \cv{} for the one
+// placeholder the draft gives its own macro (which also sets right in math),
+// \cvqual for any other that stands for cv-qualifiers, \placeholder for the
+// rest. Shared because the org backend writes the same text in its LaTeX
+// export snippet.
+inline std::string draft_placeholder(const ir::PlaceholderInline& v) {
+    if (v.text == "cv" && !v.cv_qualifier)
+        return "\\cv{}";
+    return (v.cv_qualifier ? "\\cvqual{" : "\\placeholder{") + v.text + '}';
+}
+
+// A concept name in prose: \libconcept, or \exposconcept for an
+// exposition-only one.
+inline std::string draft_concept(const ir::ConceptRef& v) {
+    return (v.exposition ? "\\exposconcept{" : "\\libconcept{") + v.name + '}';
+}
+
 // A code inline, in prose, as the draft writes one. Shared for the same
 // reason the two above are: the org backend emits this exact text inside an
 // `@@latex:...@@` export snippet, because org's own `~code~` markup is

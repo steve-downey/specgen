@@ -186,8 +186,8 @@ Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \
     const auto& amp = std::get<ir::CodeInline>(para[4]).code;
     CHECK(amp.text == "&");
     CHECK(std::get<ir::PlaceholderInline>(para[6]).text == "ref");
-    CHECK(std::get<ir::RefInline>(para[8]).stable_name == "y");
-    CHECK(std::get<ir::ConceptRef>(para[10]).name == "c");
+    CHECK(std::get<ir::RefInline>(para[8]) == ir::RefInline{"y"});
+    CHECK(std::get<ir::ConceptRef>(para[10]) == ir::ConceptRef{"c"});
     const auto& expos = std::get<ir::CodeInline>(para[12]).code;
     CHECK(expos.text == "is-callable-from<VT>");
     REQUIRE(expos.spans.size() == 1);
@@ -197,6 +197,27 @@ Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \
     CHECK(bare.spans.size() == 1);
     CHECK(bare.spans[0].kind == ir::SpanKind::ExposId);
     CHECK(std::get<ir::CodeInline>(para[16]).code.spans[0].kind == ir::SpanKind::SeeBelow);
+}
+
+TEST_CASE("draft_import - a bare \\ref, an exposition-only concept and a cv-qualifier placeholder are kinds") {
+    // Each is the kind its nearest relative already imports to, with the one thing
+    // that tells them apart: `\ref` is `\iref` without the parentheses, `\exposconcept`
+    // a concept that is exposition-only, `\cvqual` a placeholder for cv-qualifiers.
+    // None is reported, and the LaTeX backend writes each macro back as it was read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Within subclause~\ref{y}, a type that satisfies \exposconcept{constexpr-param} for some \cvqual{cv2}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    REQUIRE(para.size() == 7);
+    CHECK(std::get<ir::RefInline>(para[1]) == ir::RefInline{.stable_name = "y", .bare = true});
+    CHECK(std::get<ir::ConceptRef>(para[3]) == ir::ConceptRef{.name = "constexpr-param", .exposition = true});
+    CHECK(std::get<ir::PlaceholderInline>(para[5]) == ir::PlaceholderInline{.text = "cv2", .cv_qualifier = true});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "Within subclause~\\ref{y}, a type that satisfies \\exposconcept{constexpr-param} for some \\cvqual{cv2}."));
 }
 
 TEST_CASE("draft_import - escapes in a listing become spans, and an unknown escape stays the author's") {

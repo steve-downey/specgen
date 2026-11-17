@@ -1178,8 +1178,9 @@ There are exactly three backends, and **adding wording to one means adding it to
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
   description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
-  `\ref`/`\iref`; `\tcode`, `\libconcept`, `\placeholder` (`\cv{}` for `cv`) and `\oldconcept`
-  inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
+  `\ref`/`\iref`; `\tcode`, `\libconcept` (`\exposconcept` for an exposition-only concept),
+  `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
+  cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
   `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
@@ -1207,6 +1208,11 @@ There are exactly three backends, and **adding wording to one means adding it to
   draft prints, in the target's own emphasis: `*x*` and `*Cpp17X*` in mpark, a LaTeX/HTML export
   snippet in org, because org's `/x/` fails beside the punctuation these names sit against. Those
   targets are not semantic markup the way the draft's macros are; the look is the contract.
+  The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
+  that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
+  exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A
+  `PlaceholderInline` that is a `cv_qualifier` (`\cvqual`) looks like any placeholder. A
+  `RefInline` that is `bare` (`\ref` in prose) is the reference without its parentheses.
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
@@ -1247,7 +1253,9 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   `mpark.test.cpp` asserts the opposite of its `latex.test.cpp` twin on purpose.
 - `SpanKind::Ref` is a cross-reference **inside a code comment** and `ir::RefInline` is the
   prose one: they render `\ref{x}` / `@[x]{- .sref}@` and `\iref{x}` / `([x]{- .sref})`
-  respectively, and the parentheses belong to the prose form only. A Ref span is also the one
+  respectively, and the parentheses belong to the prose form only. The draft also writes `\ref`
+  in prose, for the number a sentence reads as a noun ("Within subclause~`\ref{x}`, ..."): that
+  is a `RefInline` with `bare` set, `\ref{x}` / `[x]{- .sref}`, and still not a span. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters

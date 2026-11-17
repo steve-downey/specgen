@@ -1497,6 +1497,22 @@ macros the IR has a kind for. The exceptions are layout only: line breaks inside
 a paragraph, `\brk`, `\-` and their relatives, and `\index...` entries other
 than `\indexlibrary...` are dropped.
 
+The draft's own vocabulary is read too, where the IR has a kind for it. In
+prose:
+
+| The draft writes | It is read as | mpark | org |
+| --- | --- | --- | --- |
+| `\iref{x}` | a reference in parentheses | `([x]{- .sref})` | a link in parentheses |
+| `\ref{x}` | the same reference, bare | `[x]{- .sref}` | the link alone |
+| `\libconcept{c}` | a library concept | `` `c` `` | `~c~` |
+| `\exposconcept{c}` | an exposition-only concept | `` `$c$` `` | italic code |
+| `\placeholder{p}`, `\cv{}` | a placeholder | `*p*` | italic |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers | `*cv2*` | italic |
+| `\oldconcept{X}` | a C++17 named requirement | `*Cpp17X*` | italic |
+| `\tref{t}` | a reference to a table | a link to its caption | a link |
+
+The LaTeX backend writes each back as the macro it was read from.
+
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
 macro and the subclause:

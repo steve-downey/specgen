@@ -370,3 +370,11 @@ inherited.
 each as raw LaTeX and warns, and keeps a whole `\tcode` holding one as raw LaTeX, since the macro as
 text would be escaped. They occur only in [func.wrap.ref], where the headers author the wording, so
 `beman.constexpr_callables` lets exactly those warnings through. Open: the kinds.
+
+Log:
+
+- 2026-11-16: `\ref`, `\exposconcept` and `\cvqual` in prose are read (issue #307). None needed
+  an inline kind of its own: each is a flag on the kind its nearest relative imports to
+  (`RefInline::bare`, `ConceptRef::exposition`, `PlaceholderInline::cv_qualifier`), so every
+  consumer that dispatches on the inline's kind is untouched and the differ still sees one
+  token. [func.wrap.ref] is now a corpus slice, with a golden for what its import reports.

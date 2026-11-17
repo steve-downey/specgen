@@ -40,6 +40,10 @@
 #   import    INPUT is a slice of the working draft's LaTeX; run it through
 #             `specgen import` for the stable names in SECTIONS and compare
 #             the IR JSON it writes. Needs no Clang.
+#   import-diagnose  The same `specgen import`, comparing its *stderr* -- what
+#             the importer could not read into a kind, one warning each --
+#             instead of the IR, which goes to a scratch file. An empty
+#             expected file pins that a subclause imports with no finding.
 #   split     INPUT is IR JSON; run it through `specgen render --split`
 #             and compare the *directory* of fragments it writes, plus the
 #             manifest it prints, against a checked-in directory. ACTUAL is a
@@ -139,6 +143,20 @@ elseif(MODE STREQUAL "import")
         COMMAND "${SPECGEN}" ${import_args}
         RESULT_VARIABLE render_result
         ERROR_VARIABLE render_error
+    )
+elseif(MODE STREQUAL "import-diagnose")
+    # The importer's findings are the artifact, so the IR is discarded. They
+    # name the subclause and the macro and no path, so the run needs no
+    # particular working directory.
+    set(import_args import "${INPUT}" -o "${ACTUAL}.json")
+    string(REPLACE "|" ";" _sections "${SECTIONS}")
+    foreach(_section IN LISTS _sections)
+        list(APPEND import_args --section "${_section}")
+    endforeach()
+    execute_process(
+        COMMAND "${SPECGEN}" ${import_args}
+        RESULT_VARIABLE render_result
+        ERROR_FILE "${ACTUAL}"
     )
 elseif(MODE STREQUAL "diagnose")
     # The findings are the artifact here, so the IR is the thing discarded.

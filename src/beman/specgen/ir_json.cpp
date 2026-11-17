@@ -342,6 +342,9 @@ struct json_descriptor<ItemDescr> {
         std::tuple{field("elements", &ItemDescr::elements), field("leading", &ItemDescr::leading)};
 };
 
+// `bare`, `expos` and `cvqual` are omitted when unset, as `changes` is: each
+// was added to an inline that already had a tag, and a document that uses none
+// of them serializes as it did before.
 template <>
 struct json_descriptor<TextInline> {
     static constexpr auto members = std::tuple{field("text", &TextInline::text)};
@@ -354,17 +357,20 @@ struct json_descriptor<CodeInline> {
 
 template <>
 struct json_descriptor<RefInline> {
-    static constexpr auto members = std::tuple{field("stable", &RefInline::stable_name)};
+    static constexpr auto members =
+        std::tuple{field("stable", &RefInline::stable_name), defaulted_field("bare", &RefInline::bare)};
 };
 
 template <>
 struct json_descriptor<ConceptRef> {
-    static constexpr auto members = std::tuple{field("name", &ConceptRef::name)};
+    static constexpr auto members =
+        std::tuple{field("name", &ConceptRef::name), defaulted_field("expos", &ConceptRef::exposition)};
 };
 
 template <>
 struct json_descriptor<PlaceholderInline> {
-    static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text)};
+    static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text),
+                                               defaulted_field("cvqual", &PlaceholderInline::cv_qualifier)};
 };
 
 template <>

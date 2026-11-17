@@ -367,7 +367,12 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 continue;
             }
             met_unknown_macro = true;
-            report(Severity::Warning, "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 12)));
+            // Named as the prose warning names one: the control word, or the one
+            // character of a control symbol, and not a cut of the text after it.
+            const auto word_end = std::ranges::find_if_not(raw.substr(i + 1), is_letter);
+            const auto name_len = std::max<std::size_t>(1, static_cast<std::size_t>(word_end - (raw.begin() + i + 1)));
+            report(Severity::Warning,
+                   "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 1 + name_len)));
         }
         out.text(raw.substr(i, 1));
         ++i;
@@ -463,6 +468,10 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::PlaceholderInline{arg->inner});
             i = arg->next;
+        } else if (name == "cvqual" && arg) {
+            flush();
+            out.push_back(ir::PlaceholderInline{.text = arg->inner, .cv_qualifier = true});
+            i = arg->next;
         } else if (name == "cv") {
             flush();
             out.push_back(ir::PlaceholderInline{"cv"});
@@ -471,17 +480,17 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::OldConceptRef{arg->inner});
             i = arg->next;
-        } else if (name == "libconcept" && arg) {
+        } else if ((name == "libconcept" || name == "exposconcept") && arg) {
             flush();
-            out.push_back(ir::ConceptRef{arg->inner});
+            out.push_back(ir::ConceptRef{.name = arg->inner, .exposition = name == "exposconcept"});
             i = arg->next;
         } else if (name == "tref" && arg) {
             flush();
             out.push_back(ir::TableRef{arg->inner});
             i = arg->next;
-        } else if (name == "iref" && arg) {
+        } else if ((name == "iref" || name == "ref") && arg) {
             flush();
-            out.push_back(ir::RefInline{arg->inner});
+            out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
         } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" ||
                    name == "nolinebreak") {

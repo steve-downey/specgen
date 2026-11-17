@@ -169,17 +169,26 @@ struct PieceRenderer {
     // the draft, so the parentheses belong to this rendering and not to the
     // authored prose around it. Unnumbered (`{- .sref}`) for the reason the
     // section headings are: a wording cross-reference reads as the bracketed
-    // stable name, not as a section number.
-    std::string operator()(const ir::RefInline& v) const { return "([" + v.stable_name + "]{- .sref})"; }
+    // stable name, not as a section number. A bare reference is the draft's
+    // `\ref{x}`, the number alone, so it is the same span without the
+    // parentheses: "Within subclause [x], ...".
+    std::string operator()(const ir::RefInline& v) const {
+        const std::string span = "[" + v.stable_name + "]{- .sref}";
+        return v.bare ? span : '(' + span + ')';
+    }
 
     // A library concept name. The draft's \libconcept sets the code font and
     // links; markdown has only the code font to offer, which is what
-    // backticks give.
-    std::string operator()(const ir::ConceptRef& v) const { return '`' + v.name + '`'; }
+    // backticks give. An exposition-only concept is italic as well, as an
+    // exposition-only identifier is: the framework's `$x$` inside code.
+    std::string operator()(const ir::ConceptRef& v) const {
+        return v.exposition ? "`$" + v.name + "$`" : '`' + v.name + '`';
+    }
 
     // A placeholder name and a C++17 named requirement. The draft sets both
     // in italics, and markdown has italics, so that is what they get: the
     // look of the LaTeX rendering, not a semantic class the framework lacks.
+    // A placeholder for cv-qualifiers looks like any other.
     std::string operator()(const ir::PlaceholderInline& v) const { return '*' + v.text + '*'; }
     std::string operator()(const ir::OldConceptRef& v) const { return "*Cpp17" + v.name + '*'; }
 
