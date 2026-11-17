@@ -1494,9 +1494,8 @@ wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
 `itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
 at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
 macros the IR has a kind for. The exceptions are layout only: line breaks inside
-a paragraph, the line-break hints (`\brk`, `\-` and their relatives) that sit in
-running text, and `\index...` entries other than `\indexlibrary...` are
-dropped. A line-break hint inside code is kept; see below.
+a paragraph and `\index...` entries other than `\indexlibrary...` are dropped.
+The draft's line-break hints are kept; see below.
 
 The draft's own vocabulary is read too, where the IR has a kind for it. In
 prose:
@@ -1543,12 +1542,13 @@ one was written, so wording inherited with `\asdraft` prints as the draft
 spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
 
-The same holds for the draft's line-break hints inside code: `\brk`, `\-`,
-`\linebreak` and `\newline`, in a `\tcode` or inside a name
-(`\exposid{bound-en\-tity}`). The code and the name are read without them, so
-`std::for\-ward<Args>` is `std::forward<Args>` to the wording diff and to the
-mpark and org backends, and the LaTeX backend writes each hint back where it
-was.
+The same holds for the draft's line-break hints: `\brk`, `\-`, `\linebreak`
+and `\newline`, in a `\tcode`, in running text, or inside a name
+(`\exposid{bound-en\-tity}`, `\oldconcept{Unary\-Type\-Trait}`). The code, the
+text and the name are read without them, so `std::for\-ward<Args>` is
+`std::forward<Args>` to the wording diff and to the mpark and org backends, and
+the LaTeX backend writes each hint back where it was. A `\linebreak[2]` or
+`\nolinebreak[3]`, which says how much a break is wanted, is dropped.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the

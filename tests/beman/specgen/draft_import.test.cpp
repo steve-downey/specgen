@@ -663,3 +663,49 @@ Finally, a paragraph with no tag.
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(std::ranges::distance(std::views::split(rendered, std::string_view{"\\pnum"})) == 4);
 }
+
+TEST_CASE("draft_import - a line-break hint in running text and in a prose inline's name is kept beside the text") {
+    // In running text a hint used to be dropped, and in the argument of a prose
+    // inline it stayed in the name, which the other backends printed (issue #314).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Meets the \oldconcept{Unary\-Type\-Trait} requirements, is \tcode{true}, \linebreak \tcode{false} otherwise,
+models \libconcept{in\-vocable}, for \placeholder{long-\brk{}name}, imple\-men\-ta\-tion,
+and \tcode{a}\brk{}\tcode{b}, wanted\linebreak[2] or not.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    using Hints      = std::vector<ir::LayoutHint>;
+
+    const auto& old = std::get<ir::OldConceptRef>(para.at(1));
+    CHECK(old.name == "UnaryTypeTrait");
+    CHECK(old.hints == Hints{{5, ir::LayoutHintKind::Hyphen}, {9, ir::LayoutHintKind::Hyphen}});
+    // The hint between two code inlines sits at the end of the text before it;
+    // the spaces after the control word are TeX's to discard.
+    const auto& between = std::get<ir::TextInline>(para.at(4));
+    CHECK(between.text == ", ");
+    CHECK(between.hints == Hints{{2, ir::LayoutHintKind::LineBreak}});
+    const auto& concept_ref = std::get<ir::ConceptRef>(para.at(7));
+    CHECK(concept_ref.name == "invocable");
+    CHECK(concept_ref.hints == Hints{{2, ir::LayoutHintKind::Hyphen}});
+    const auto& placeholder = std::get<ir::PlaceholderInline>(para.at(9));
+    CHECK(placeholder.text == "long-name");
+    CHECK(placeholder.hints == Hints{{5, ir::LayoutHintKind::Break, true}});
+    const auto& word = std::get<ir::TextInline>(para.at(10));
+    CHECK(word.text == ", implementation, and ");
+    CHECK(word.hints ==
+          Hints{{7, ir::LayoutHintKind::Hyphen}, {10, ir::LayoutHintKind::Hyphen}, {12, ir::LayoutHintKind::Hyphen}});
+    // A hint with no text beside it is a text inline that holds it alone.
+    const auto& alone = std::get<ir::TextInline>(para.at(12));
+    CHECK(alone.text.empty());
+    CHECK(alone.hints == Hints{{0, ir::LayoutHintKind::Break, true}});
+    // \linebreak[2] has no kind: it is dropped, with its bracket.
+    CHECK(std::get<ir::TextInline>(para.at(14)).text == ", wanted or not.");
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "Meets the \\oldconcept{Unary\\-Type\\-Trait} requirements, is \\tcode{true}, \\linebreak \\tcode{false} "
+        "otherwise, models \\libconcept{in\\-vocable}, for \\placeholder{long-\\brk{}name}, imple\\-men\\-ta\\-tion, "
+        "and \\tcode{a}\\brk{}\\tcode{b}, wanted or not."));
+}

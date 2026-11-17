@@ -312,7 +312,7 @@ struct PieceRenderer {
         return "@@latex:" + backend::draft_placeholder(v) + "@@@@html:<i>" + v.text + "</i>@@";
     }
     std::string operator()(const ir::OldConceptRef& v) const {
-        return "@@latex:\\oldconcept{" + v.name + "}@@@@html:<i>Cpp17" + v.name + "</i>@@";
+        return "@@latex:" + backend::draft_old_concept(v) + "@@@@html:<i>Cpp17" + v.name + "</i>@@";
     }
 
     // A reference to a table: a link to its `#+name`, the bracketed stable name

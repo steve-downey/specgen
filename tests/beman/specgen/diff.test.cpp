@@ -406,6 +406,55 @@ TEST_CASE("diff - a line-break hint is not a change, and the current revision's 
     CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
 }
 
+// And in prose (issue #314): the hints in running text and in a prose inline's
+// name are beside the wording. Text that differs only in them is the same
+// wording; and where a word did change, the words that did not keep the hints
+// the current revision has in and beside them.
+TEST_CASE("diff - a line-break hint in prose is not a change, and a kept word keeps its hints") {
+    const auto hinted = [](bool with_hints, std::string_view verb) {
+        Document  d     = gadget();
+        auto&     reset = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[1]);
+        Paragraph para{TextInline{std::string(verb) + " the implementation, for "},
+                       OldConceptRef{"UnaryTypeTrait"},
+                       TextInline{" and "},
+                       CodeInline{{"x", {}}},
+                       TextInline{"."}};
+        if (with_hints) {
+            const std::size_t word                 = verb.size() + 5; // the start of "implementation"
+            std::get<TextInline>(para[0]).hints    = {{word + 5, LayoutHintKind::Hyphen},
+                                                      {verb.size() + 25, LayoutHintKind::LineBreak}};
+            std::get<OldConceptRef>(para[1]).hints = {{5, LayoutHintKind::Hyphen}};
+            std::get<TextInline>(para[2]).hints    = {{5, LayoutHintKind::Break, true}};
+        }
+        std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = std::move(para);
+        return d;
+    };
+    const auto para_of = [](const Document& d) {
+        return std::get<BodyParagraph>(
+                   std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[1]).descr.elements[0].body[0])
+            .text;
+    };
+    const Document before = hinted(false, "Resets");
+    const Document after  = hinted(true, "Resets");
+    CHECK(before != after);
+    const Document same = diff::compare(before, after, {.context = diff::Context::All});
+    CHECK(!diff::has_marks(same));
+    CHECK(same == after);
+    CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
+
+    // One word replaced: the mark is on that word, and the rest of the
+    // paragraph is the current revision's, hints and all.
+    const Document  changed = hinted(true, "Clears");
+    const Paragraph para    = para_of(diff::compare(before, changed));
+    REQUIRE(para.size() == 7);
+    CHECK(std::get<ChangedInline>(para[0]).inlines == std::vector<PlainInline>{TextInline{"Resets"}});
+    CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"Clears"}});
+    CHECK(std::get<TextInline>(para[2]) ==
+          TextInline{" the implementation, for ", {{10, LayoutHintKind::Hyphen}, {25, LayoutHintKind::LineBreak}}});
+    CHECK(std::get<OldConceptRef>(para[3]).hints == std::vector<LayoutHint>{{5, LayoutHintKind::Hyphen}});
+    CHECK(std::get<TextInline>(para[4]) == TextInline{" and ", {{5, LayoutHintKind::Break, true}}});
+}
+
 TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
     // Issue #258: a keyword added before a declaration is marked
     // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.

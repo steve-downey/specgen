@@ -58,9 +58,9 @@ bool is_space(char ch) { return ch == ' ' || ch == '\t' || ch == '\n' || ch == '
 // The words of a text, each carrying the whitespace after it, the way `wdiff`
 // and `git diff --word-diff` cut: a leading run of whitespace is a word of
 // its own, so that no byte of the text is lost to the cut.
-std::vector<std::string> words(std::string_view text) {
-    std::vector<std::string> out;
-    std::size_t              pos = 0;
+std::vector<std::pair<std::size_t, std::size_t>> word_bounds(std::string_view text) {
+    std::vector<std::pair<std::size_t, std::size_t>> out;
+    std::size_t                                      pos = 0;
     // substrate generic algorithm: a position-tracking scan cutting the text
     // at word boundaries is the tokenizer itself, with nothing smaller to
     // fold over.
@@ -75,7 +75,7 @@ std::vector<std::string> words(std::string_view text) {
         // whitespace the word carries.
         while (end < text.size() && is_space(text[end]))
             ++end;
-        out.emplace_back(text.substr(pos, end - pos));
+        out.emplace_back(pos, end);
         pos = end;
     }
     return out;
@@ -110,9 +110,13 @@ bool same_prose(const ProseToken& a, const ProseToken& b) {
 // `prose_tokens`' dispatch over the plain inline kinds; the last, a
 // changed run in an input that should carry none, flattens to its contents.
 struct PlainTokenizer {
+    // Each word takes the line-break hints that sit in it, so a kept word
+    // keeps them. A text inline that is a hint and no text is no word, and
+    // gives no token: marked as a change it would be a mark around nothing.
     std::vector<ProseToken> operator()(const ir::TextInline& v) const {
-        return words(v.text) |
-               std::views::transform([](std::string word) -> ProseToken { return ir::TextInline{std::move(word)}; }) |
+        return word_bounds(v.text) | std::views::transform([&](const auto& bounds) -> ProseToken {
+                   return ir::text_piece(v, bounds.first, bounds.second);
+               }) |
                std::ranges::to<std::vector>();
     }
     std::vector<ProseToken> operator()(const ir::CodeInline& v) const { return {v}; }
@@ -168,7 +172,7 @@ void append_plain(std::vector<ir::PlainInline>& run, ir::PlainInline piece) {
     auto* text = std::get_if<ir::TextInline>(&piece);
     auto* last = run.empty() ? nullptr : std::get_if<ir::TextInline>(&run.back());
     if (text != nullptr && last != nullptr)
-        last->text += text->text;
+        ir::append_text(*last, *text);
     else
         run.push_back(std::move(piece));
 }
@@ -183,7 +187,7 @@ void append_widened(ir::Paragraph& out, ir::Inline piece) {
     auto* text = std::get_if<ir::TextInline>(&piece);
     auto* last = out.empty() ? nullptr : std::get_if<ir::TextInline>(&out.back());
     if (text != nullptr && last != nullptr)
-        last->text += text->text;
+        ir::append_text(*last, *text);
     else
         out.push_back(std::move(piece));
 }
@@ -226,27 +230,29 @@ ir::Paragraph assemble_paragraph(const std::vector<ProseToken>& a,
     return std::move(state.out);
 }
 
-// The whitespace at one end of a run's text, cut off it; an inline emptied
-// by the cut leaves the run.
-std::string take_leading_space(std::vector<ir::PlainInline>& run) {
+// The whitespace at one end of a run's text, cut off it with the hints that
+// sit in it; an inline emptied by the cut leaves the run.
+ir::TextInline take_leading_space(std::vector<ir::PlainInline>& run) {
     auto* text = run.empty() ? nullptr : std::get_if<ir::TextInline>(&run.front());
     if (text == nullptr)
         return {};
     const std::size_t cut   = std::min(text->text.size(), text->text.find_first_not_of(" \t\n\r"));
-    std::string       space = text->text.substr(0, cut);
-    text->text.erase(0, cut);
+    ir::TextInline    space = ir::text_piece(*text, 0, cut);
+    *text                   = ir::text_piece(*text, cut, text->text.size());
     if (text->text.empty())
         run.erase(run.begin());
     return space;
 }
 
-std::string take_trailing_space(std::vector<ir::PlainInline>& run) {
+ir::TextInline take_trailing_space(std::vector<ir::PlainInline>& run) {
     auto* text = run.empty() ? nullptr : std::get_if<ir::TextInline>(&run.back());
     if (text == nullptr)
         return {};
-    const std::size_t keep  = rstripped(text->text).size();
-    std::string       space = text->text.substr(keep);
-    text->text.resize(keep);
+    const std::size_t keep = rstripped(text->text).size();
+    if (keep == text->text.size())
+        return {};
+    ir::TextInline space = ir::text_piece(*text, keep, text->text.size());
+    *text                = ir::text_piece(*text, 0, keep);
     if (text->text.empty())
         run.pop_back();
     return space;
@@ -266,17 +272,17 @@ ir::Paragraph settle_whitespace(ir::Paragraph in) {
             append_widened(out, std::move(in[i]));
             return;
         }
-        const std::string lead  = take_leading_space(run->inlines);
-        const std::string trail = take_trailing_space(run->inlines);
-        const auto*       next  = i + 1 < in.size() ? std::get_if<ir::ChangedInline>(&in[i + 1]) : nullptr;
-        const bool        replaced =
+        const ir::TextInline lead  = take_leading_space(run->inlines);
+        const ir::TextInline trail = take_trailing_space(run->inlines);
+        const auto*          next  = i + 1 < in.size() ? std::get_if<ir::ChangedInline>(&in[i + 1]) : nullptr;
+        const bool           replaced =
             run->change == ir::Change::Removed && next != nullptr && next->change == ir::Change::Added;
-        if (!lead.empty())
-            append_widened(out, ir::TextInline{lead});
+        if (!lead.text.empty())
+            append_widened(out, lead);
         if (!run->inlines.empty())
             out.push_back(std::move(*run));
-        if (!trail.empty() && !replaced)
-            append_widened(out, ir::TextInline{trail});
+        if (!trail.text.empty() && !replaced)
+            append_widened(out, trail);
     });
     return out;
 }

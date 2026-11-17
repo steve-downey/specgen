@@ -358,12 +358,13 @@ struct json_descriptor<ItemDescr> {
         std::tuple{field("elements", &ItemDescr::elements), field("leading", &ItemDescr::leading)};
 };
 
-// `bare`, `expos`, `cvqual` and `nc` are omitted when unset, as `changes` is: each
+// `bare`, `expos`, `cvqual`, `nc` and `hints` are omitted when unset, as `changes` is: each
 // was added to an inline that already had a tag, and a document that uses none
 // of them serializes as it did before.
 template <>
 struct json_descriptor<TextInline> {
-    static constexpr auto members = std::tuple{field("text", &TextInline::text)};
+    static constexpr auto members =
+        std::tuple{field("text", &TextInline::text), defaulted_field("hints", &TextInline::hints)};
 };
 
 template <>
@@ -381,19 +382,22 @@ template <>
 struct json_descriptor<ConceptRef> {
     static constexpr auto members = std::tuple{field("name", &ConceptRef::name),
                                                defaulted_field("expos", &ConceptRef::exposition),
-                                               defaulted_field("nc", &ConceptRef::no_correction)};
+                                               defaulted_field("nc", &ConceptRef::no_correction),
+                                               defaulted_field("hints", &ConceptRef::hints)};
 };
 
 template <>
 struct json_descriptor<PlaceholderInline> {
     static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text),
                                                defaulted_field("cvqual", &PlaceholderInline::cv_qualifier),
-                                               defaulted_field("nc", &PlaceholderInline::no_correction)};
+                                               defaulted_field("nc", &PlaceholderInline::no_correction),
+                                               defaulted_field("hints", &PlaceholderInline::hints)};
 };
 
 template <>
 struct json_descriptor<OldConceptRef> {
-    static constexpr auto members = std::tuple{field("name", &OldConceptRef::name)};
+    static constexpr auto members =
+        std::tuple{field("name", &OldConceptRef::name), defaulted_field("hints", &OldConceptRef::hints)};
 };
 
 template <>

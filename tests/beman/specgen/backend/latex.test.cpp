@@ -255,6 +255,38 @@ TEST_CASE("latex - a line-break hint is the draft's macro, in a tcode and inside
     CHECK(out.contains(", \\exposid{bound-en\\-tity}."));
 }
 
+// The hints in running text and in the name of a prose inline (issue #314):
+// written back where they sat. Table text escapes its `&` between the hints
+// and not across them, and a control word that ends a text takes the space the
+// draft writes before the macro that follows.
+TEST_CASE("latex - a line-break hint in running text and in a prose inline's name is the draft's macro") {
+    using beman::specgen::ir::LayoutHintKind;
+    using beman::specgen::ir::Paragraph;
+    const Paragraph prose{
+        TextInline{"An implementation, ", {{5, LayoutHintKind::Hyphen}, {19, LayoutHintKind::LineBreak}}},
+        beman::specgen::ir::OldConceptRef{"UnaryTypeTrait",
+                                          {{5, LayoutHintKind::Hyphen}, {9, LayoutHintKind::Hyphen}}},
+        TextInline{" & ", {{3, LayoutHintKind::Break, true}}},
+        beman::specgen::ir::ConceptRef{.name = "invocable", .hints = {{2, LayoutHintKind::Hyphen}}},
+        TextInline{"", {{0, LayoutHintKind::NewLine}}},
+        beman::specgen::ir::PlaceholderInline{.text = "long-name", .hints = {{5, LayoutHintKind::Break}}},
+        TextInline{"."}};
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{prose});
+    beman::specgen::ir::Table1D table;
+    table.stable_name = "t";
+    table.rows.push_back({prose, {}});
+    remarks.body.push_back(std::move(table));
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("An im\\-plementation, \\linebreak \\oldconcept{Unary\\-Type\\-Trait} & \\brk{}"
+                       "\\libconcept{in\\-vocable}\\newline \\placeholder{long-\\brk name}.\n"));
+    CHECK(out.contains("\\oldconcept{Unary\\-Type\\-Trait} \\& \\brk{}\\libconcept{in\\-vocable}"));
+}
+
 // The Ref *span* and the RefInline are two different cross-references
 // and must not share one mapping.
 // A span sits in a code comment, where the draft writes

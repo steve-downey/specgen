@@ -157,7 +157,8 @@ namespace beman::specgen::ir {
 std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 
-// One hint, between two bytes of a CodeText's text: `at` is the offset of the
+// One hint, between two bytes of a text -- a CodeText's, a TextInline's, or the
+// name of a prose inline: `at` is the offset of the
 // byte it precedes, or the text's size for one at the end. `braced` says the
 // draft wrote the empty group after the macro (`\brk{}`), which it mostly
 // does and which is the only other thing there is to its spelling.
@@ -186,11 +187,23 @@ struct CodeText {
 };
 
 // --- prose -----------------------------------------------------------------
+// Running text. `hints` are the draft's line-break hints in it, as
+// `CodeText::hints` are for code: offsets into `text`, sorted, typesetting and
+// not wording, and usually none. A hint that sits between two other inlines
+// has no text to sit in, and is a text inline with a hint and no text.
 struct TextInline {
-    std::string text;
+    std::string             text;
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const TextInline&, const TextInline&) = default;
 };
+
+// The bytes [begin, end) of a text inline, with the hints that sit in them: a
+// hint precedes the byte at its offset, so one at `end` belongs to the piece
+// that follows, unless `end` is the end of the text.
+TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end);
+// `more` joined onto the end of `text`, its hints moved along.
+void append_text(TextInline& text, const TextInline& more);
 struct CodeInline {
     CodeText code;
 
@@ -219,6 +232,9 @@ struct ConceptRef {
     bool        exposition = false;
     // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name (`\libconcept{con\-cept}`):
+    // offsets into `name`, which is the name without them.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
@@ -235,6 +251,8 @@ struct PlaceholderInline {
     bool        cv_qualifier = false;
     // The draft wrote \placeholdernc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name: offsets into `text`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };
@@ -242,6 +260,9 @@ struct PlaceholderInline {
 // \oldconcept{X}, which prints "Cpp17X" in italics. `name` is the X.
 struct OldConceptRef {
     std::string name;
+    // The draft's line-break hints inside the name
+    // (`\oldconcept{Unary\-Type\-Trait}`): offsets into `name`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const OldConceptRef&, const OldConceptRef&) = default;
 };

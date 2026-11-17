@@ -1126,6 +1126,12 @@ have no independent item description.
   `without_typesetting` strips all of it, and the wording diff compares through it: two
   pieces that differ only there are the same wording, and the current revision's is kept.
   Code the diff does change is rebuilt from tokens and comes out with no hints.
+  Prose has the same hints, in the same shape: a hint table on `TextInline` for running text,
+  and on `PlaceholderInline`, `OldConceptRef` and `ConceptRef` for a hint inside the name
+  (`\oldconcept{Unary\-Type\-Trait}`), with offsets into the text or the name. A hint that
+  sits between two other inlines is a `TextInline` with a hint and no text. The diff cuts a
+  text's hints along with its words (`ir::text_piece`, `ir::append_text`), so a paragraph it
+  rebuilds keeps the hints in and beside the words it keeps.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a

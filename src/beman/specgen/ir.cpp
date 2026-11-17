@@ -10,6 +10,7 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <array>
 #include <optional>
 #include <string_view>
@@ -313,6 +314,26 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
         });
 }
 
+TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end) {
+    const bool last = end >= text.text.size();
+    return TextInline{text.text.substr(begin, end - begin), text.hints | std::views::filter([&](const LayoutHint& h) {
+                                                                return h.at >= begin &&
+                                                                       (h.at < end || (last && h.at == end));
+                                                            }) | std::views::transform([&](LayoutHint h) {
+                                                                h.at -= begin;
+                                                                return h;
+                                                            }) | std::ranges::to<std::vector>()};
+}
+
+void append_text(TextInline& text, const TextInline& more) {
+    const std::size_t shift = text.text.size();
+    text.hints.append_range(more.hints | std::views::transform([&](LayoutHint h) {
+                                h.at += shift;
+                                return h;
+                            }));
+    text.text += more.text;
+}
+
 CodeText without_typesetting(CodeText code) {
     std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
     code.hints.clear();
@@ -321,21 +342,29 @@ CodeText without_typesetting(CodeText code) {
 
 namespace {
 
-// `without_typesetting`'s dispatch over the plain inline kinds: the three that
+// `without_typesetting`'s dispatch over the plain inline kinds: the five that
 // carry typesetting lose it, and the rest are returned as they came.
 struct TypesettingRemover {
-    PlainInline operator()(TextInline v) const { return v; }
+    PlainInline operator()(TextInline v) const {
+        v.hints.clear();
+        return v;
+    }
     PlainInline operator()(CodeInline v) const { return CodeInline{without_typesetting(std::move(v.code))}; }
     PlainInline operator()(RefInline v) const { return v; }
     PlainInline operator()(ConceptRef v) const {
         v.no_correction = false;
+        v.hints.clear();
         return v;
     }
     PlainInline operator()(PlaceholderInline v) const {
         v.no_correction = false;
+        v.hints.clear();
         return v;
     }
-    PlainInline operator()(OldConceptRef v) const { return v; }
+    PlainInline operator()(OldConceptRef v) const {
+        v.hints.clear();
+        return v;
+    }
     PlainInline operator()(TableRef v) const { return v; }
     PlainInline operator()(RawInline v) const { return v; }
 };

@@ -416,6 +416,20 @@ Log:
   mathematics, and 487 of them hold only these two shapes. In the other 204 the shapes are a
   subscript on code written inside the mathematics (`$\tcode{T}_i$`, 132), an ellipsis
   (`$\dotsc$`, 43), a subscripted variable (`$r_K$`, 24), and 59 others. Open: those.
+- 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
+  (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
+  `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`
+  has, for the same reason: everything that reads the text goes on reading words. The other
+  shape weighed was an inline of its own between two inlines. It would have cut a word with a
+  `\-` in it into two text inlines, and the differ would have had to pass over it when
+  cutting words and put it back when joining them; an author's text never has one, so every
+  hint would otherwise have shown as a removal. A hint between two macros has no text to sit
+  in, and is a text inline with a hint and no text. The differ cuts a text inline's hints
+  along with its words, so a paragraph it rebuilds keeps the hints of the words it keeps;
+  the hint-only inline is the exception, since it is no word. `\br` turned out to belong to
+  the grammar environments (`macros.tex` defines it there only), so it is not a prose hint,
+  and `\linebreak[n]` and `\nolinebreak[n]` are dropped with their bracket, which used to be
+  left in the text.
 
 ### prose-line-joins
 

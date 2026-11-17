@@ -586,11 +586,13 @@ ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_c
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
 
 ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
-    ir::Paragraph out;
-    std::string   pending;
-    const auto    flush = [&] {
-        if (!pending.empty())
-            out.push_back(ir::TextInline{std::exchange(pending, {})});
+    ir::Paragraph  out;
+    ir::TextInline pending;
+    // A hint with no text beside it -- between two macros, say -- is still kept,
+    // as a text inline that holds the hint alone.
+    const auto flush = [&] {
+        if (!pending.text.empty() || !pending.hints.empty())
+            out.push_back(std::exchange(pending, {}));
     };
     const auto raw = [&](std::string_view latex, std::string why) {
         flush();
@@ -611,22 +613,29 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             continue;
         }
         if (c != '\\') {
-            pending += c;
+            pending.text += c;
             ++i;
             continue;
         }
         if (i + 1 >= text.size()) {
-            pending += c;
+            pending.text += c;
             break;
+        }
+        // A line-break hint is not text, and not dropped either: it is kept
+        // beside the text, at the place it sits (issue #314).
+        if (const auto hint = layout_hint_at(text, i)) {
+            pending.hints.push_back({pending.text.size(), hint->kind, hint->braced});
+            i = hint->next;
+            continue;
         }
         if (!is_letter(text[i + 1])) {
             const char next = text[i + 1];
             if (next == ' ') {
-                pending += ' ';
+                pending.text += ' ';
             } else if (in_table && next == '&') {
-                pending += '&'; // the LaTeX backend escapes a table cell's `&` again
-            } else if (next != '-' && next != ',') {
-                pending += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
+                pending.text += '&'; // the LaTeX backend escapes a table cell's `&` again
+            } else if (next != ',') {
+                pending.text += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
             }
             i += 2;
             continue;
@@ -664,11 +673,16 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = end;
         } else if ((name == "placeholder" || name == "placeholdernc") && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{.text = arg->inner, .no_correction = name == "placeholdernc"});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::PlaceholderInline{.text          = std::move(hinted.name),
+                                                .no_correction = name == "placeholdernc",
+                                                .hints         = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "cvqual" && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{.text = arg->inner, .cv_qualifier = true});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::PlaceholderInline{
+                .text = std::move(hinted.name), .cv_qualifier = true, .hints = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "cv") {
             flush();
@@ -676,12 +690,16 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = arg ? arg->next : end;
         } else if (name == "oldconcept" && arg) {
             flush();
-            out.push_back(ir::OldConceptRef{arg->inner});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::OldConceptRef{std::move(hinted.name), std::move(hinted.hints)});
             i = arg->next;
         } else if ((name == "libconcept" || name == "exposconcept" || name == "exposconceptnc") && arg) {
             flush();
-            out.push_back(ir::ConceptRef{
-                .name = arg->inner, .exposition = name != "libconcept", .no_correction = name == "exposconceptnc"});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::ConceptRef{.name          = std::move(hinted.name),
+                                         .exposition    = name != "libconcept",
+                                         .no_correction = name == "exposconceptnc",
+                                         .hints         = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "tref" && arg) {
             flush();
@@ -691,9 +709,13 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
-        } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" ||
-                   name == "nolinebreak") {
-            i = arg && name != "brk" && name != "br" && name != "newline" ? arg->next : end;
+        } else if (name == "br" || name == "linebreak" || name == "nolinebreak") {
+            // What is left of the layout macros once the hints are read: `\br`,
+            // which is the grammar environments', and the two that say how
+            // much a break is wanted (`\linebreak[2]`, `\nolinebreak[3]`), for
+            // which a hint has no field. Dropped, with the bracket.
+            const auto urgency = read_braced(text, end, '[', ']');
+            i                  = urgency ? urgency->next : arg && name != "br" ? arg->next : end;
         } else {
             // Any other macro, with the groups that follow it, as written.
             std::size_t stop = end;

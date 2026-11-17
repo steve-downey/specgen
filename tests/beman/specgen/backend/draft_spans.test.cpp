@@ -6,6 +6,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <string>
+#include <string_view>
+
 using namespace beman::specgen::ir;
 namespace backend = beman::specgen::backend;
 
@@ -67,4 +70,40 @@ TEST_CASE("draft_spans - the change marks are macros.tex's own") {
     CHECK(!backend::draft_change_environment(Change::Same).has_value());
     CHECK(backend::draft_change_environment(Change::Added) == "addedblock");
     CHECK(backend::draft_change_environment(Change::Removed) == "removedblock");
+}
+
+// --- line-break hints in prose (issue #314) --------------------------------
+
+TEST_CASE("draft_spans - draft_hinted_text writes each hint where it sits and escapes only the text") {
+    const auto upper = [](std::string_view text) {
+        std::string out(text);
+        for (char& c : out)
+            c = c == 'a' ? 'A' : c;
+        return out;
+    };
+    CHECK(backend::draft_hinted_text("plain", {}) == "plain");
+    CHECK(backend::draft_hinted_text("UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}, {9, LayoutHintKind::Hyphen}}) ==
+          "Unary\\-Type\\-Trait");
+    // The text between hints goes through the hook; the hint does not.
+    CHECK(backend::draft_hinted_text("banana", {{3, LayoutHintKind::Break, true}}, upper) == "bAn\\brk{}AnA");
+    // A control word with no group takes a space before a letter and at the
+    // end of the text, where another inline's macro follows; not before
+    // punctuation, and never after `\-`.
+    CHECK(backend::draft_hinted_text("ab, ", {{1, LayoutHintKind::Break}, {2, LayoutHintKind::Break}}) ==
+          "a\\brk b\\brk, ");
+    CHECK(backend::draft_hinted_text("a, ", {{3, LayoutHintKind::LineBreak}}) == "a, \\linebreak ");
+    CHECK(backend::draft_hinted_text("a", {{1, LayoutHintKind::Hyphen}}) == "a\\-");
+    CHECK(backend::draft_hinted_text("", {{0, LayoutHintKind::NewLine, true}}) == "\\newline{}");
+    // A hint out of order or past the end is passed over.
+    CHECK(backend::draft_hinted_text("ab", {{9, LayoutHintKind::Break}}) == "ab");
+}
+
+TEST_CASE("draft_spans - a prose inline's name takes its hints inside the macro") {
+    CHECK(backend::draft_old_concept({"UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}}}) ==
+          "\\oldconcept{Unary\\-TypeTrait}");
+    CHECK(backend::draft_concept({.name = "invocable", .hints = {{2, LayoutHintKind::Hyphen}}}) ==
+          "\\libconcept{in\\-vocable}");
+    CHECK(backend::draft_placeholder(
+              {.text = "cv2", .cv_qualifier = true, .hints = {{2, LayoutHintKind::Break, true}}}) ==
+          "\\cvqual{cv\\brk{}2}");
 }
