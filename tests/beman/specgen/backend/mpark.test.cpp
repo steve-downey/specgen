@@ -169,6 +169,51 @@ TEST_CASE("mpark - a cv-qualifier span is italic and an optional span takes a su
     CHECK(mpark::render_to_string(changed).contains("@[R(G::*)(A...) *cv2* &~_opt_~ noexcept(E)]{.add}@"));
 }
 
+// Mathematics inside code (issue #311). A variable is italic, which is the
+// `$x$` shorthand. A subscript is Markdown's `~x~`, in an `@...@` unless a
+// changed run has opened one; a name in it is italic and a number upright.
+TEST_CASE("mpark - a math variable is italic and a subscript is a subscript") {
+    beman::specgen::ir::CodeText code{
+        "get<i>(T_i, T_1)",
+        {{4, 5, SpanKind::MathVariable, "i"}, {8, 10, SpanKind::Subscript, "i"}, {13, 15, SpanKind::Subscript, "1"}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The element "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.contains("\nget<$i$>(T@~_i_~@, T@~1~@)\n"));
+    CHECK(out.contains("The element `get<$i$>(T@~_i_~@, T@~1~@)`."));
+
+    code.changes.push_back({0, code.text.size(), beman::specgen::ir::Change::Added});
+    SpecItem changed;
+    changed.decl.signatures.push_back(code);
+    CHECK(mpark::render_to_string(changed).contains("@[get<*i*>(T~_i_~, T~1~)]{.add}@"));
+}
+
+// The draft's tie (issue #312) is the one hint with a meaning outside LaTeX. In
+// running text it is Markdown's no-break space; inside code the backticks are
+// verbatim, so the space stays a space.
+TEST_CASE("mpark - a tie in running text is a no-break space, and the other hints are not written") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Within subclause ", {{7, LayoutHintKind::Hyphen}, {16, LayoutHintKind::Tie}}},
+        beman::specgen::ir::RefInline{.stable_name = "gadget", .bare = true},
+        TextInline{", "},
+        CodeInline{{"R(*)(G) noexcept", {}, {}, {{7, LayoutHintKind::Tie}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.contains("Within subclause&nbsp;[gadget]{- .sref}, `R(*)(G) noexcept`."));
+}
+
 // The draft's line-break hints are LaTeX typesetting. They are beside the code,
 // not in it, so this backend writes the code and never sees them.
 TEST_CASE("mpark - a line-break hint is not written") {

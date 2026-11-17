@@ -33,6 +33,8 @@ enum class SpanKind {
     LibraryIndex, // payload = enclosing class, or empty for a global name
     CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
     Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
+    MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
+    Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
 };
 
 } // namespace beman::specgen::ir
@@ -47,6 +49,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::LibraryIndex,
     beman::specgen::ir::SpanKind::CvQualifier,
     beman::specgen::ir::SpanKind::Optional,
+    beman::specgen::ir::SpanKind::MathVariable,
+    beman::specgen::ir::SpanKind::Subscript,
 };
 
 namespace beman::specgen::ir {
@@ -136,6 +140,7 @@ enum class LayoutHintKind {
     Hyphen,    // \-: the line may break here, with a hyphen
     LineBreak, // \linebreak: break here if it helps
     NewLine,   // \newline: break here
+    Tie,       // ~: the space at this offset is one the line may not break at
 };
 
 } // namespace beman::specgen::ir
@@ -146,14 +151,16 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::LayoutHintKind::Hyphen,
     beman::specgen::ir::LayoutHintKind::LineBreak,
     beman::specgen::ir::LayoutHintKind::NewLine,
+    beman::specgen::ir::LayoutHintKind::Tie,
 };
 
 namespace beman::specgen::ir {
 
-std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
+std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline", "tie"
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 
-// One hint, between two bytes of a CodeText's text: `at` is the offset of the
+// One hint, between two bytes of a text -- a CodeText's, a TextInline's, or the
+// name of a prose inline: `at` is the offset of the
 // byte it precedes, or the text's size for one at the end. `braced` says the
 // draft wrote the empty group after the macro (`\brk{}`), which it mostly
 // does and which is the only other thing there is to its spelling.
@@ -164,6 +171,13 @@ std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 // payload is what lets everything that reads code -- the differ, the
 // validator, the other two backends -- go on reading the name and not the
 // LaTeX. Sorted by `at`. Only a backend that writes draft LaTeX reads them.
+//
+// A tie is the one hint that stands for a byte and does not sit between two:
+// the draft's `~` is a space, so the text has a space at `at`, and the hint
+// says the line may not break there. A writer that writes the tie writes it in
+// place of that space (`tied_space`); one that does not leaves the space. It
+// is also the one hint with a meaning outside LaTeX, and the other backends
+// write a tie in running text as their own no-break space.
 struct LayoutHint {
     std::size_t    at     = 0;
     LayoutHintKind kind   = LayoutHintKind::Break;
@@ -171,6 +185,12 @@ struct LayoutHint {
 
     friend bool operator==(const LayoutHint&, const LayoutHint&) = default;
 };
+
+// Whether `hint` is a tie on a space of `text`: the byte a writer of the tie
+// writes it in place of.
+constexpr bool tied_space(const LayoutHint& hint, std::string_view text) {
+    return hint.kind == LayoutHintKind::Tie && hint.at < text.size() && text[hint.at] == ' ';
+}
 
 struct CodeText {
     std::string             text;
@@ -182,11 +202,23 @@ struct CodeText {
 };
 
 // --- prose -----------------------------------------------------------------
+// Running text. `hints` are the draft's line-break hints in it, as
+// `CodeText::hints` are for code: offsets into `text`, sorted, typesetting and
+// not wording, and usually none. A hint that sits between two other inlines
+// has no text to sit in, and is a text inline with a hint and no text.
 struct TextInline {
-    std::string text;
+    std::string             text;
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const TextInline&, const TextInline&) = default;
 };
+
+// The bytes [begin, end) of a text inline, with the hints that sit in them: a
+// hint precedes the byte at its offset, so one at `end` belongs to the piece
+// that follows, unless `end` is the end of the text.
+TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end);
+// `more` joined onto the end of `text`, its hints moved along.
+void append_text(TextInline& text, const TextInline& more);
 struct CodeInline {
     CodeText code;
 
@@ -215,6 +247,9 @@ struct ConceptRef {
     bool        exposition = false;
     // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name (`\libconcept{con\-cept}`):
+    // offsets into `name`, which is the name without them.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
@@ -231,6 +266,8 @@ struct PlaceholderInline {
     bool        cv_qualifier = false;
     // The draft wrote \placeholdernc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name: offsets into `text`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };
@@ -238,6 +275,9 @@ struct PlaceholderInline {
 // \oldconcept{X}, which prints "Cpp17X" in italics. `name` is the X.
 struct OldConceptRef {
     std::string name;
+    // The draft's line-break hints inside the name
+    // (`\oldconcept{Unary\-Type\-Trait}`): offsets into `name`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const OldConceptRef&, const OldConceptRef&) = default;
 };

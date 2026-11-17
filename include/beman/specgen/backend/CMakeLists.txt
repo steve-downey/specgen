@@ -11,6 +11,7 @@ target_sources(
                 element_label.hpp
                 render_fold.hpp
                 section_title.hpp
+                tied_text.hpp
                 latex.hpp
                 mpark.hpp
                 org.hpp

@@ -173,6 +173,22 @@ TEST_CASE("lower - returns-expr leaves no placeholder element") {
     CHECK(out.directives.returns_expr);
 }
 
+TEST_CASE("lower - the draft's prose macros lower to the inline kinds the importer gives them") {
+    // The same IR a draft import of the same sentence has (issue #316).
+    auto out = lower_text("//! \\remarks Within subclause \\ref{func.wrap.ref}, a type that satisfies\n"
+                          "//! \\exposconcept{constexpr-param} models \\libconcept{copyable} for some\n"
+                          "//! \\cvqual{cv2}, as \\tref{gadget.table} shows\\iref{gadget.general}.\n");
+    REQUIRE(out.descr.elements.size() == 1);
+    const auto& p = body_test::paragraph(out.descr.elements[0], 0);
+    REQUIRE(p.size() == 13);
+    CHECK(std::get<ir::RefInline>(p[1]) == ir::RefInline{.stable_name = "func.wrap.ref", .bare = true});
+    CHECK(std::get<ir::ConceptRef>(p[3]) == ir::ConceptRef{.name = "constexpr-param", .exposition = true});
+    CHECK(std::get<ir::ConceptRef>(p[5]) == ir::ConceptRef{.name = "copyable"});
+    CHECK(std::get<ir::PlaceholderInline>(p[7]) == ir::PlaceholderInline{.text = "cv2", .cv_qualifier = true});
+    CHECK(std::get<ir::TableRef>(p[9]) == ir::TableRef{"gadget.table"});
+    CHECK(std::get<ir::RefInline>(p[11]) == ir::RefInline{.stable_name = "gadget.general"});
+}
+
 TEST_CASE("lower - directives are carried out of band, not into the IR") {
     auto out = lower_text("//! \\expos(has-value)\n"
                           "//! \\merge\n"

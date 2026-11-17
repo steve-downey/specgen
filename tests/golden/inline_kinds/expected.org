@@ -32,3 +32,7 @@ Within subclause [[https://eel.is/c++draft/gadget.placeholders][@@html:[gadget.p
 #+begin_pnum
 A revision [[delete:][cites {{{sref(gadget.table)}}}]][[insert:][cites subclause {{{sref(gadget.table)}}} for @@latex:\exposconcept{gadget-like}@@@@html:<code><var>gadget-like</var></code>@@ and @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@]].
 #+end_pnum
+
+#+begin_pnum
+A long implementation meets @@latex:\oldconcept{Unary\-Type\-Trait}@@@@html:<i>Cpp17UnaryTypeTrait</i>@@, @@latex:\placeholder{long-\brk{}name}@@@@html:<i>long-name</i>@@ and ~invocable~.
+#+end_pnum

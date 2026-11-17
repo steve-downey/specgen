@@ -587,6 +587,12 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
 - `\iref{stable.name}` outside backticks is a prose cross-reference. Its target
   can be a standard subclause outside the generated document, which is why the
   dangling-local-section check does not verify it.
+- The draft's other prose macros with an inline kind are read outside backticks
+  as well: `\ref{x}` (the bare reference), `\tref{t}`, `\libconcept{c}`,
+  `\exposconcept{c}`, `\placeholder{p}`, `\cv{}`, `\cvqual{p}` and
+  `\oldconcept{X}`. They are the ones the draft importer reads, into the same
+  kinds, so authored and inherited text of one sentence are one IR. A macro not
+  in that list stays text.
 - `\lib2dtab2[stable.name]{caption}` starts a two-dimensional table on the
   current element. Exactly two `\column` entries precede one or more `\row`
   entries, and each row has exactly two `\cell` entries before
@@ -1024,7 +1030,7 @@ have no independent item description.
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
   ref(stable-name), library-index(optional enclosing class), cvqual, opt,
-  note, example.
+  math-variable, subscript, note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1126,6 +1132,18 @@ have no independent item description.
   `without_typesetting` strips all of it, and the wording diff compares through it: two
   pieces that differ only there are the same wording, and the current revision's is kept.
   Code the diff does change is rebuilt from tokens and comes out with no hints.
+  Prose has the same hints, in the same shape: a hint table on `TextInline` for running text,
+  and on `PlaceholderInline`, `OldConceptRef` and `ConceptRef` for a hint inside the name
+  (`\oldconcept{Unary\-Type\-Trait}`), with offsets into the text or the name. A hint that
+  sits between two other inlines is a `TextInline` with a hint and no text. The diff cuts a
+  text's hints along with its words (`ir::text_piece`, `ir::append_text`), so a paragraph it
+  rebuilds keeps the hints in and beside the words it keeps. The draft's tie (`~`) is a hint
+  of the same table, on the space it stands for (`LayoutHintKind::Tie`, `ir::tied_space`): the
+  text has a plain space, so the words either side are two words to everything that reads the
+  text, and a writer that writes the tie writes it in place of that space. It is the one hint
+  the other two backends write, in running text only, as their own no-break space
+  (`backend/tied_text.hpp`): the rest are advice to TeX's line breaker, and a tie is a
+  statement about the wording's layout that holds in any target.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a
@@ -1237,6 +1255,12 @@ There are exactly three backends, and **adding wording to one means adding it to
   is text mode in a listing's escape too; `x@~_opt_~@` in mpark, the framework manual's own
   spelling; `x<sub><var>opt</var></sub>` in org's HTML. Neither macro sets the code font, so a
   code inline that is one of them whole keeps its `\tcode`, as a placeholder does.
+  Mathematics the draft writes inside code is two more kinds. `MathVariable` (`$i$`) is italic:
+  `$i$` in LaTeX and, by the shorthand, in mpark; `<var>i</var>` in org's HTML. `Subscript`
+  (`$_i$`) is a subscript, a name in italics and a number upright as mathematics sets them:
+  `@~_i_~@` and `@~1~@` in mpark, `<sub>` in org's HTML, and in LaTeX the mathematics again, with
+  a group when the subscript is longer than one character. The code's text has the subscript
+  after an underscore (`T_i`), which is how a reader of the text alone would write it.
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

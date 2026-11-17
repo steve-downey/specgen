@@ -68,10 +68,12 @@ std::vector<std::string> split_lines(std::string_view text) {
 }
 
 // A prose line with its LaTeX comment removed. A `%` that is not escaped ends
-// the line; when it is the last thing on it, the line break is not a space.
+// the line, and TeX discards everything from it through the line end, so that
+// line break is not a space. A space written before the `%` is one all the
+// same (`is % Overfull`): only `text%` joins the next line to this one.
 struct ProseLine {
     std::string_view text;
-    bool             joins_next = false;
+    bool             space_after = true; // what follows on a later line is a word apart
 };
 
 ProseLine strip_comment(std::string_view line) {
@@ -83,29 +85,30 @@ ProseLine strip_comment(std::string_view line) {
             continue;
         }
         if (line[i] == '%') {
-            const std::string_view before = trim(line.substr(0, i));
-            return {before, true};
+            const bool spaced = i > 0 && std::isspace(static_cast<unsigned char>(line[i - 1])) != 0;
+            return {trim(line.substr(0, i)), spaced};
         }
     }
-    return {trim(line), false};
+    return {trim(line), true};
 }
 
 // Prose lines joined into one string: a line break is a space unless the
-// line ended in `%`.
+// line ended in `%` with no space before it. A line that is empty, or is a
+// comment and nothing else, says nothing and changes nothing: TeX skips the
+// spaces that open a line, so `a`, `% note`, `b` reads `a b` and `a%`,
+// `% note`, `b` reads `ab`.
 std::string join_prose(Lines lines) {
     std::string out;
-    bool        joined = true;
+    bool        space = false;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const std::string& raw : lines) {
         const ProseLine line = strip_comment(raw);
-        if (line.text.empty()) {
-            joined = joined || line.joins_next;
+        if (line.text.empty())
             continue;
-        }
-        if (!joined && !out.empty())
+        if (space && !out.empty())
             out += ' ';
         out += line.text;
-        joined = line.joins_next;
+        space = line.space_after;
     }
     return out;
 }
@@ -427,6 +430,30 @@ std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos,
     return it->second;
 }
 
+// The mathematics the draft writes inside code that has a span kind: a
+// variable (`$i$`, letters and nothing else) and a subscript (`$_i$`,
+// `$_{10}$`). `inner` is what stands between the dollar signs.
+struct MathSpan {
+    ir::SpanKind kind;
+    std::string  payload;
+};
+
+std::optional<MathSpan> math_span(std::string_view inner) {
+    const auto alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    if (!inner.empty() && std::ranges::all_of(inner, is_letter))
+        return MathSpan{ir::SpanKind::MathVariable, std::string(inner)};
+    if (!inner.starts_with('_'))
+        return std::nullopt;
+    std::string_view sub = inner.substr(1);
+    if (sub.size() > 2 && sub.front() == '{' && sub.back() == '}')
+        sub = sub.substr(1, sub.size() - 2);
+    else if (sub.size() != 1)
+        return std::nullopt;
+    if (sub.empty() || !std::ranges::all_of(sub, alnum))
+        return std::nullopt;
+    return MathSpan{ir::SpanKind::Subscript, std::string(sub)};
+}
+
 ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
     CodeBuilder out;
     std::size_t i = 0;
@@ -466,6 +493,34 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 out.text(raw.substr(i, close - i + 1));
             }
             i = close + 1;
+            continue;
+        }
+        if (!listing && c == '~') {
+            // A tie inside a \tcode is a space too; a tilde there is `\~`. In
+            // a listing the character is the code's own.
+            out.hint(ir::LayoutHintKind::Tie, false);
+            out.text(" ");
+            ++i;
+            continue;
+        }
+        if (!listing && c == '$') {
+            // Mathematics is not code (issue #311). A variable or a subscript
+            // is a span; anything else has no kind, and the caller keeps the
+            // whole run as the LaTeX it was.
+            const std::size_t close = raw.find('$', i + 1);
+            const std::size_t end   = close == std::string_view::npos ? raw.size() : close + 1;
+            const auto        math =
+                close == std::string_view::npos ? std::nullopt : math_span(raw.substr(i + 1, close - i - 1));
+            if (math) {
+                const std::string spelling =
+                    math->kind == ir::SpanKind::Subscript ? '_' + math->payload : math->payload;
+                out.span(math->kind, math->payload, spelling);
+            } else {
+                met_unknown_macro = true;
+                report(Severity::Warning, "mathematics in \\tcode is kept as raw LaTeX");
+                out.text(raw.substr(i, end - i));
+            }
+            i = end;
             continue;
         }
         if (c == '\\') {
@@ -539,11 +594,13 @@ ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_c
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
 
 ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
-    ir::Paragraph out;
-    std::string   pending;
-    const auto    flush = [&] {
-        if (!pending.empty())
-            out.push_back(ir::TextInline{std::exchange(pending, {})});
+    ir::Paragraph  out;
+    ir::TextInline pending;
+    // A hint with no text beside it -- between two macros, say -- is still kept,
+    // as a text inline that holds the hint alone.
+    const auto flush = [&] {
+        if (!pending.text.empty() || !pending.hints.empty())
+            out.push_back(std::exchange(pending, {}));
     };
     const auto raw = [&](std::string_view latex, std::string why) {
         flush();
@@ -563,23 +620,38 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = end;
             continue;
         }
+        if (c == '~') {
+            // The draft's tie: a space the line may not break at (issue #312).
+            // The text has the space, and the hint says which kind it is.
+            pending.hints.push_back({pending.text.size(), ir::LayoutHintKind::Tie, false});
+            pending.text += ' ';
+            ++i;
+            continue;
+        }
         if (c != '\\') {
-            pending += c;
+            pending.text += c;
             ++i;
             continue;
         }
         if (i + 1 >= text.size()) {
-            pending += c;
+            pending.text += c;
             break;
+        }
+        // A line-break hint is not text, and not dropped either: it is kept
+        // beside the text, at the place it sits (issue #314).
+        if (const auto hint = layout_hint_at(text, i)) {
+            pending.hints.push_back({pending.text.size(), hint->kind, hint->braced});
+            i = hint->next;
+            continue;
         }
         if (!is_letter(text[i + 1])) {
             const char next = text[i + 1];
             if (next == ' ') {
-                pending += ' ';
+                pending.text += ' ';
             } else if (in_table && next == '&') {
-                pending += '&'; // the LaTeX backend escapes a table cell's `&` again
-            } else if (next != '-' && next != ',') {
-                pending += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
+                pending.text += '&'; // the LaTeX backend escapes a table cell's `&` again
+            } else if (next != ',') {
+                pending.text += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
             }
             i += 2;
             continue;
@@ -617,11 +689,16 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = end;
         } else if ((name == "placeholder" || name == "placeholdernc") && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{.text = arg->inner, .no_correction = name == "placeholdernc"});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::PlaceholderInline{.text          = std::move(hinted.name),
+                                                .no_correction = name == "placeholdernc",
+                                                .hints         = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "cvqual" && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{.text = arg->inner, .cv_qualifier = true});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::PlaceholderInline{
+                .text = std::move(hinted.name), .cv_qualifier = true, .hints = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "cv") {
             flush();
@@ -629,12 +706,16 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = arg ? arg->next : end;
         } else if (name == "oldconcept" && arg) {
             flush();
-            out.push_back(ir::OldConceptRef{arg->inner});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::OldConceptRef{std::move(hinted.name), std::move(hinted.hints)});
             i = arg->next;
         } else if ((name == "libconcept" || name == "exposconcept" || name == "exposconceptnc") && arg) {
             flush();
-            out.push_back(ir::ConceptRef{
-                .name = arg->inner, .exposition = name != "libconcept", .no_correction = name == "exposconceptnc"});
+            HintedName hinted = read_hinted_name(arg->inner);
+            out.push_back(ir::ConceptRef{.name          = std::move(hinted.name),
+                                         .exposition    = name != "libconcept",
+                                         .no_correction = name == "exposconceptnc",
+                                         .hints         = std::move(hinted.hints)});
             i = arg->next;
         } else if (name == "tref" && arg) {
             flush();
@@ -644,9 +725,13 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
-        } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" ||
-                   name == "nolinebreak") {
-            i = arg && name != "brk" && name != "br" && name != "newline" ? arg->next : end;
+        } else if (name == "br" || name == "linebreak" || name == "nolinebreak") {
+            // What is left of the layout macros once the hints are read: `\br`,
+            // which is the grammar environments', and the two that say how
+            // much a break is wanted (`\linebreak[2]`, `\nolinebreak[3]`), for
+            // which a hint has no field. Dropped, with the bracket.
+            const auto urgency = read_braced(text, end, '[', ']');
+            i                  = urgency ? urgency->next : arg && name != "br" ? arg->next : end;
         } else {
             // Any other macro, with the groups that follow it, as written.
             std::size_t stop = end;
@@ -1046,55 +1131,74 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
     bool                 new_para = false;
     bool                 fresh    = false; // a \pnum, and its tag if any, was the last thing read
 
+    // A list, a code block or a table that is the first thing in a body opens
+    // that body's numbered paragraph, as a backend writes it, so the prose
+    // after it continues the paragraph and does not take a number of its own
+    // (issue #315). One that is not first sits in the paragraph before it and
+    // leaves a pending number for the prose that follows.
+    const auto opens_paragraph = [&] {
+        if (target->empty())
+            new_para = false;
+    };
+
     std::size_t k = 0;
     // substrate generic algorithm: "Equivalent to:" looks one event ahead and
     // consumes it, so the index is the loop's state.
     while (k < events.size()) {
         const Event& event     = events[k++];
         const bool   was_fresh = std::exchange(fresh, false);
-        std::visit(
-            overloaded{[&](const EvPnum& e) {
-                           new_para = true;
-                           fresh    = true;
-                           if (e.tag) {
-                               descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
-                               target = &descr.elements.back().body;
-                           }
-                       },
-                       [&](const EvProse& e) {
-                           if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
-                               std::holds_alternative<EvCode>(events[k])) {
-                               target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
-                               ++k;
-                               new_para = false;
-                               return;
-                           }
-                           target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
-                           new_para = false;
-                       },
-                       [&](const EvItemize& e) {
-                           ir::Itemize list;
-                           // substrate generic algorithm: a cursor scan over variable-width input; the position is the
-                           // loop's state.
-                           for (const std::string& item : e.items)
-                               list.items.push_back(parse_prose(item));
-                           target->push_back(std::move(list));
-                       },
-                       [&](const EvCode& e) { target->push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
-                       [&](const EvNote& e) {
-                           if (e.example)
-                               target->push_back(ir::Example{parse_informative(e.inner)});
-                           else
-                               target->push_back(ir::Note{parse_informative(e.inner)});
-                       },
-                       [&](const EvTable& e) {
-                           if (e.flat)
-                               target->push_back(make_table1d(e));
-                           else
-                               target->push_back(make_table2d(e));
-                       },
-                       [&](const EvRaw& e) { target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true}); }},
-            event);
+        std::visit(overloaded{[&](const EvPnum& e) {
+                                  new_para = true;
+                                  fresh    = true;
+                                  if (e.tag) {
+                                      descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
+                                      target = &descr.elements.back().body;
+                                  }
+                              },
+                              [&](const EvProse& e) {
+                                  if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
+                                      std::holds_alternative<EvCode>(events[k])) {
+                                      target->push_back(
+                                          ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
+                                      ++k;
+                                      new_para = false;
+                                      return;
+                                  }
+                                  target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
+                                  new_para = false;
+                              },
+                              [&](const EvItemize& e) {
+                                  ir::Itemize list;
+                                  // substrate generic algorithm: a cursor scan over variable-width input; the position
+                                  // is the loop's state.
+                                  for (const std::string& item : e.items)
+                                      list.items.push_back(parse_prose(item));
+                                  opens_paragraph();
+                                  target->push_back(std::move(list));
+                              },
+                              [&](const EvCode& e) {
+                                  opens_paragraph();
+                                  target->push_back(ir::AuthoredCode{parse_code(e.code, true)});
+                              },
+                              [&](const EvNote& e) {
+                                  opens_paragraph();
+                                  if (e.example)
+                                      target->push_back(ir::Example{parse_informative(e.inner)});
+                                  else
+                                      target->push_back(ir::Note{parse_informative(e.inner)});
+                              },
+                              [&](const EvTable& e) {
+                                  opens_paragraph();
+                                  if (e.flat)
+                                      target->push_back(make_table1d(e));
+                                  else
+                                      target->push_back(make_table2d(e));
+                              },
+                              [&](const EvRaw& e) {
+                                  opens_paragraph();
+                                  target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true});
+                              }},
+                   event);
     }
     return descr;
 }

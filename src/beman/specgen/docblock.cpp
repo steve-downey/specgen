@@ -162,8 +162,8 @@ struct RawRef {
     bool        terminated;
 };
 
-// `\placeholder{x}`, `\cv{}` or `\oldconcept{X}`. `macro` is the command
-// name without the backslash; `body` is the braced argument.
+// One of the draft's prose macros with a braced argument (`macro_prefixes`).
+// `macro` is the command name without the backslash; `body` is the argument.
 struct RawMacro {
     std::string macro;
     std::string body;
@@ -172,7 +172,12 @@ struct RawMacro {
 
 using RawInline = std::variant<RawText, RawCode, RawRef, RawMacro>;
 
-constexpr std::string_view macro_prefixes[]{"\\placeholder{", "\\cv{", "\\oldconcept{"};
+// The draft's prose macros the IR has an inline kind for, less `\iref`, which
+// has a parser of its own. They are the ones the draft importer reads, so a
+// sentence typed in a docblock and the same sentence inherited from the draft
+// are the same IR (issue #316). A macro that is not here stays text.
+constexpr std::string_view macro_prefixes[]{
+    "\\placeholder{", "\\cv{", "\\cvqual{", "\\oldconcept{", "\\libconcept{", "\\exposconcept{", "\\ref{", "\\tref{"};
 
 std::string_view macro_prefix_at(std::string_view rest) {
     const auto it = std::ranges::find_if(macro_prefixes, [&](std::string_view p) { return rest.starts_with(p); });
@@ -312,8 +317,16 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
                                           {Severity::Error, line, "\\" + m.macro + " requires an argument"});
                                   } else if (m.macro == "placeholder") {
                                       para.push_back(InlinePlaceholder{std::move(m.body)});
-                                  } else {
+                                  } else if (m.macro == "cvqual") {
+                                      para.push_back(InlinePlaceholder{std::move(m.body), true});
+                                  } else if (m.macro == "oldconcept") {
                                       para.push_back(InlineOldConcept{std::move(m.body)});
+                                  } else if (m.macro == "libconcept" || m.macro == "exposconcept") {
+                                      para.push_back(InlineConcept{std::move(m.body), m.macro == "exposconcept"});
+                                  } else if (m.macro == "ref") {
+                                      para.push_back(InlineRef{std::move(m.body), true});
+                                  } else {
+                                      para.push_back(InlineTableRef{std::move(m.body)});
                                   }
                               }},
                    seg);

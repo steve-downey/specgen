@@ -102,13 +102,16 @@ std::string render_codeblock(const ir::CodeText& code) {
 struct PieceRenderer {
     bool in_table = false;
 
-    // Plain prose; table text protects its alignment characters.
+    // Plain prose, with the draft's line-break hints where they sat; table
+    // text protects its alignment characters.
     std::string operator()(const ir::TextInline& v) const {
         if (!in_table)
-            return v.text;
-        return v.text |
-               std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
-               std::views::join | std::ranges::to<std::string>();
+            return backend::draft_hinted_text(v.text, v.hints);
+        return backend::draft_hinted_text(v.text, v.hints, [](std::string_view text) {
+            return text |
+                   std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
+                   std::views::join | std::ranges::to<std::string>();
+        });
     }
 
     // A code inline, with the whole-span shortcut the draft's macros need.
@@ -132,7 +135,7 @@ struct PieceRenderer {
     std::string operator()(const ir::PlaceholderInline& v) const { return backend::draft_placeholder(v); }
 
     // A C++17 named requirement, italic with its Cpp17 prefix.
-    std::string operator()(const ir::OldConceptRef& v) const { return "\\oldconcept{" + v.name + '}'; }
+    std::string operator()(const ir::OldConceptRef& v) const { return backend::draft_old_concept(v); }
 
     // A reference to a table by its stable name.
     std::string operator()(const ir::TableRef& v) const { return "\\tref{" + v.stable_name + '}'; }

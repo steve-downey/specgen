@@ -100,6 +100,38 @@ TEST_CASE("ir - change names round-trip") {
     CHECK(!change_from_name("modified").has_value());
 }
 
+TEST_CASE("ir - a piece of a text inline takes the hints that sit in it, and joining gives them back") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    using beman::specgen::ir::TextInline;
+    const TextInline text{"an implementation, ",
+                          {{0, LayoutHintKind::Break},
+                           {8, LayoutHintKind::Hyphen},
+                           {17, LayoutHintKind::Break},
+                           {19, LayoutHintKind::LineBreak}}};
+    // A hint precedes the byte at its offset, so one at a cut belongs to the
+    // piece after it -- except at the end of the text, where there is none.
+    const TextInline first = beman::specgen::ir::text_piece(text, 0, 3);
+    const TextInline word  = beman::specgen::ir::text_piece(text, 3, 17);
+    const TextInline rest  = beman::specgen::ir::text_piece(text, 17, 19);
+    CHECK(first == TextInline{"an ", {{0, LayoutHintKind::Break}}});
+    CHECK(word == TextInline{"implementation", {{5, LayoutHintKind::Hyphen}}});
+    CHECK(rest == TextInline{", ", {{0, LayoutHintKind::Break}, {2, LayoutHintKind::LineBreak}}});
+
+    TextInline joined = first;
+    beman::specgen::ir::append_text(joined, word);
+    beman::specgen::ir::append_text(joined, rest);
+    CHECK(joined == text);
+
+    // Without its typesetting an inline is its wording alone.
+    using beman::specgen::ir::PlainInline;
+    CHECK(beman::specgen::ir::without_typesetting(PlainInline{text}) ==
+          PlainInline{TextInline{"an implementation, "}});
+    CHECK(beman::specgen::ir::without_typesetting(
+              PlainInline{beman::specgen::ir::OldConceptRef{"UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}}}}) ==
+          PlainInline{beman::specgen::ir::OldConceptRef{"UnaryTypeTrait"}});
+}
+
 TEST_CASE("ir - every node and element is unmarked by default") {
     CHECK(Section{}.change == Change::Same);
     CHECK(Synopsis{}.change == Change::Same);

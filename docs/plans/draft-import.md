@@ -354,6 +354,18 @@ typed synopsis for the class it declares, and diffs deleted and inserted lines t
 the same code over a different number of lines as one run of tokens, so a line break is not a
 change. Generation is not touched: a `\verbatim-itemdecl` stays exact, span-free text.
 
+Log:
+
+- 2026-11-17: the docblock grammar reads the rest of the importer's prose macros (issue #316):
+  `\ref`, `\tref`, `\libconcept`, `\exposconcept` and `\cvqual`, into the kinds and flags the
+  importer gives them. Part 1 of this plan said the grammar would read the same macros as the
+  importer; it read `\iref`, `\placeholder`, `\cv{}` and `\oldconcept`, and left the others as
+  text, which the mpark and org backends printed as written. The no-italic-correction twins
+  are not read: they are the draft's typesetting, which an author does not type and the differ
+  does not compare. Open: `~` in a docblock is still the character and not the tie the
+  importer reads (issue #312). In a paper written for mpark, `~x~` in prose is a subscript,
+  so reading it as a tie changes what existing text means.
+
 ### synopsis-source
 
 `\asdraft-synopsis` patches the draft's synopsis from the declarations the class makes, kept
@@ -406,3 +418,59 @@ Log:
   `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
   in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
   left in the name.
+- 2026-11-17: mathematics inside a `\tcode` is read where it is a variable or a subscript
+  (issue #311): `get<$i$>(u)` and `T$_i$`. As code text the dollar signs were escaped by the
+  LaTeX backend and printed. They are two span kinds, `MathVariable` and `Subscript`, for the
+  reason `\cvqual` and `\opt` are. The text of a subscript span is the subscript after an
+  underscore, so the code reads `T_i` to everything that reads the text alone. Any other
+  mathematics in a `\tcode` keeps the whole `\tcode` as raw LaTeX, with a warning, which is
+  what a macro with no kind does. Measured on the library clauses: 691 `\tcode`s hold
+  mathematics, and 487 of them hold only these two shapes. In the other 204 the shapes are a
+  subscript on code written inside the mathematics (`$\tcode{T}_i$`, 132), an ellipsis
+  (`$\dotsc$`, 43), a subscripted variable (`$r_K$`, 24), and 59 others. Open: those.
+- 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
+  (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
+  `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`
+  has, for the same reason: everything that reads the text goes on reading words. The other
+  shape weighed was an inline of its own between two inlines. It would have cut a word with a
+  `\-` in it into two text inlines, and the differ would have had to pass over it when
+  cutting words and put it back when joining them; an author's text never has one, so every
+  hint would otherwise have shown as a removal. A hint between two macros has no text to sit
+  in, and is a text inline with a hint and no text. The differ cuts a text inline's hints
+  along with its words, so a paragraph it rebuilds keeps the hints of the words it keeps;
+  the hint-only inline is the exception, since it is no word. `\br` turned out to belong to
+  the grammar environments (`macros.tex` defines it there only), so it is not a prose hint,
+  and `\linebreak[n]` and `\nolinebreak[n]` are dropped with their bracket, which used to be
+  left in the text.
+- 2026-11-17: the draft's tie is read (issue #312). `~` was read as the character: a tilde
+  printed in a `\tcode` (`R(*)(G, A...)~\opt{noexcept}`), and in prose mpark and org printed
+  one where LaTeX set a space. It is a hint kind, `Tie`, on the space it stands for, in the
+  tables that hold the other hints. The alternative was U+00A0 in the text, which is the right
+  character and was set aside for the reason U+00AD was for `\-`: the differ's words, and
+  every other reader of the text, would have had to know a second kind of space. The tie
+  differs from the other hints in two ways. It stands for a byte, so a writer that writes it
+  skips that byte. And it means something outside LaTeX, so mpark and org write it in running
+  text as their own no-break space; inside code they cannot, and write the space.
+
+### prose-line-joins
+
+How the lines of a paragraph join. A line break is a space, and a `%` takes the rest of its line
+and the line break with it. The importer had every `%` join its line to the next with no space,
+which is right for `text%` and wrong for `text % note`, where the space before the `%` is still a
+space: [tuple.cnstr] has `is\linebreak{} % Overfull` before a `\tcode`, and the two ran together
+(issue #313). The space before the comment now decides. A line that is only a comment says
+nothing either way, where before it joined the lines around it.
+
+### paragraph-after-a-block
+
+Which paragraph the prose after a list, a code block or a table belongs to. A backend numbers
+the first block of a body, whatever it is, and a `BodyParagraph` says whether it continues the
+paragraph before it. The importer set that from whether prose had been read since the last
+`\pnum`, so when the block came first, directly after the element's tag, the prose after it was
+read as a new numbered paragraph: [optional.specalg]'s *Constraints* for `swap` is a code block
+and then "is `true`.", and it came back with two numbers (issue #315). The first block of a body
+now takes the pending number, whatever kind it is. A block that is not first in its body leaves
+the number pending, because the IR has no way to say that a block which is not prose opens a
+numbered paragraph in the middle of a body. Open: that. The draft numbers a note or an example
+by itself often (502 times in the library clauses, 255 of them inside an `itemdescr`), and such
+a note loses its number unless it is first in its body (issue #321).

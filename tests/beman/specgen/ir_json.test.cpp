@@ -692,6 +692,28 @@ TEST_CASE("ir_json - table-reference and raw inlines round-trip") {
     CHECK(emit_json(*back) == json);
 }
 
+TEST_CASE("ir_json - a prose inline's line-break hints round-trip and are omitted when there are none") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{TextInline{"An implementation ", {{5, LayoutHintKind::Hyphen}}},
+                                       OldConceptRef{"UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}}},
+                                       ConceptRef{.name = "invocable", .hints = {{2, LayoutHintKind::Break, true}}},
+                                       PlaceholderInline{.text = "long-name", .hints = {{5, LayoutHintKind::Break}}},
+                                       TextInline{"."}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("{\"t\":\"text\",\"text\":\"An implementation \",\"hints\":[{\"at\":5,\"kind\":\"hyphen\"}]}") !=
+          std::string::npos);
+    CHECK(json.find("{\"t\":\"oldconcept\",\"name\":\"UnaryTypeTrait\",\"hints\":[{\"at\":5,\"kind\":\"hyphen\"}]}") !=
+          std::string::npos);
+    CHECK(json.find("\"hints\":[{\"at\":2,\"kind\":\"brk\",\"braced\":true}]") != std::string::npos);
+    CHECK(json.find("{\"t\":\"text\",\"text\":\".\"}") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
 TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
     SpecItem plain;
     plain.decl.signatures.push_back({"void f();", {}});

@@ -60,8 +60,10 @@ std::string render_literal(const ir::CodeText& code,
         if (hint->at < pos)
             continue; // defensive: out of order, or left behind by a span that could not hold it
         out += escape_text(text.substr(pos, hint->at - pos));
-        out += write_hint(*hint, text.substr(hint->at, to - hint->at), false);
-        pos = hint->at;
+        const std::string written = write_hint(*hint, text.substr(hint->at, to - hint->at), false);
+        out += written;
+        // A tie that was written stands in place of the space it is on.
+        pos = hint->at + (!written.empty() && hint->at < to && ir::tied_space(*hint, text) ? 1 : 0);
     }
     out += escape_text(text.substr(pos, to - pos));
     return out;
@@ -85,8 +87,9 @@ ir::Span span_with_hints(const ir::CodeText& code, const ir::Span& span, hint_cu
             continue;
         const std::size_t at = hint->at - span.begin;
         woven.payload += std::string_view(span.payload).substr(pos, at - pos);
-        woven.payload += write_hint(*hint, std::string_view(span.payload).substr(at), true);
-        pos = at;
+        const std::string written = write_hint(*hint, std::string_view(span.payload).substr(at), true);
+        woven.payload += written;
+        pos = at + (!written.empty() && ir::tied_space(*hint, code.text) ? 1 : 0);
     }
     if (holds)
         woven.payload += std::string_view(span.payload).substr(pos);

@@ -9,6 +9,10 @@ namespace demo {
 // \rSec3[macro.general]{Macro continuations}
 
 //! \placeholder{noex} is a placeholder in leading prose.
+//!
+//! Within subclause \ref{macro.general}, a type that satisfies
+//! \exposconcept{gadget-like} models \libconcept{copyable} for some
+//! \cvqual{cv2}, as \tref{macro.flat} shows.
 
 template <class T>
 class gadget {

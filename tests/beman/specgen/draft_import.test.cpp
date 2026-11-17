@@ -519,6 +519,46 @@ R (*@\exposid{thunk-\brk{}ptr}@)(int);
     CHECK(rendered.contains("R (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
 }
 
+TEST_CASE("draft_import - a variable and a subscript written as mathematics in a \\tcode are spans") {
+    // The draft writes an index into code as mathematics. It is not code: as
+    // text the dollar signs were escaped and printed (issue #311).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The element is \tcode{std::forward<T$_i$>(get<$i$>(u))}, for \tcode{T$_{10}$} and \tcode{T$_{N}$}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& code = std::get<ir::CodeInline>(para.at(1)).code;
+    CHECK(code.text == "std::forward<T_i>(get<i>(u))");
+    REQUIRE(code.spans.size() == 2);
+    CHECK(code.spans[0] == ir::Span{14, 16, ir::SpanKind::Subscript, "i"});
+    CHECK(code.spans[1] == ir::Span{22, 23, ir::SpanKind::MathVariable, "i"});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    // A subscript of one character comes back without its group.
+    CHECK(rendered.contains(
+        "The element is \\tcode{std::forward<T$_i$>(get<$i$>(u))}, for \\tcode{T$_{10}$} and \\tcode{T$_N$}."));
+}
+
+TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole as raw LaTeX") {
+    // An expression has no span kind. The run is kept as the LaTeX it was and
+    // reported once, and the macros inside the mathematics are not read as code.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The range \tcode{a[$i - 1$]} through \tcode{a[$\dotsc$]}, and \tcode{b[$j$]}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "mathematics in \\tcode is kept as raw LaTeX");
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    REQUIRE(std::holds_alternative<ir::RawInline>(para.at(1)));
+    CHECK(std::get<ir::RawInline>(para.at(1)).latex == "\\tcode{a[$i - 1$]}");
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
+    CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\dotsc$]}, and \\tcode{b[$j$]}."));
+}
+
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
     // A span cannot hold another span, so the format grammar's
     // `\opt{\fmtgrammarterm{arg-id}}` stays what it was: unread, and reported.
@@ -548,4 +588,159 @@ For \tcode{R(Args...) \grammarterm{id} noexcept}, and \tcode{plain}.
     CHECK(std::holds_alternative<ir::CodeInline>(para[3]));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains("For \\tcode{R(Args...) \\grammarterm{id} noexcept}, and \\tcode{plain}."));
+}
+
+TEST_CASE("draft_import - a comment ends its line, and the space before it is still a space") {
+    // TeX discards a comment through the line end, so `text%` runs into the
+    // next line and `text % note` does not; a line that is only a comment says
+    // nothing either way (issue #313).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\pnum
+The value is % Overfull
+\tcode{true}, the name is \tcode{a}%
+\tcode{b}, one
+% a note between two lines
+two, three%
+% a note after a joined line
+four.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.find("The value is \\tcode{true}, the name is \\tcode{a}\\tcode{b}, one two, threefour.") !=
+          std::string::npos);
+}
+
+TEST_CASE("draft_import - prose after a block that opens an element continues the element's paragraph") {
+    // The block is the first thing after the tag, so it opens the numbered
+    // paragraph, and what follows it is the rest of that paragraph (issue #315).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\begin{itemdecl}
+void swap(optional& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{codeblock}
+is_reference_v<T> || is_swappable_v<T>
+\end{codeblock}
+is \tcode{true}.
+
+\pnum
+\effects
+\begin{itemize}
+\item
+If a, nothing.
+\item
+Otherwise, b.
+\end{itemize}
+Then the result is \tcode{x}.
+
+\pnum
+Finally, a paragraph with no tag.
+\end{itemdescr}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& descr = item_at(only_section(r), 0).descr;
+    REQUIRE(descr.elements.size() == 2);
+
+    const auto& constraints = descr.elements[0].body;
+    REQUIRE(constraints.size() == 2);
+    CHECK(std::holds_alternative<ir::AuthoredCode>(constraints[0]));
+    CHECK(std::get<ir::BodyParagraph>(constraints[1]).continuation);
+
+    const auto& effects = descr.elements[1].body;
+    REQUIRE(effects.size() == 3);
+    CHECK(std::holds_alternative<ir::Itemize>(effects[0]));
+    CHECK(std::get<ir::BodyParagraph>(effects[1]).continuation);
+    // The untagged paragraph has a \pnum of its own, and keeps it.
+    CHECK_FALSE(std::get<ir::BodyParagraph>(effects[2]).continuation);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(std::ranges::distance(std::views::split(rendered, std::string_view{"\\pnum"})) == 4);
+}
+
+TEST_CASE("draft_import - a line-break hint in running text and in a prose inline's name is kept beside the text") {
+    // In running text a hint used to be dropped, and in the argument of a prose
+    // inline it stayed in the name, which the other backends printed (issue #314).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Meets the \oldconcept{Unary\-Type\-Trait} requirements, is \tcode{true}, \linebreak \tcode{false} otherwise,
+models \libconcept{in\-vocable}, for \placeholder{long-\brk{}name}, imple\-men\-ta\-tion,
+and \tcode{a}\brk{}\tcode{b}, wanted\linebreak[2] or not.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    using Hints      = std::vector<ir::LayoutHint>;
+
+    const auto& old = std::get<ir::OldConceptRef>(para.at(1));
+    CHECK(old.name == "UnaryTypeTrait");
+    CHECK(old.hints == Hints{{5, ir::LayoutHintKind::Hyphen}, {9, ir::LayoutHintKind::Hyphen}});
+    // The hint between two code inlines sits at the end of the text before it;
+    // the spaces after the control word are TeX's to discard.
+    const auto& between = std::get<ir::TextInline>(para.at(4));
+    CHECK(between.text == ", ");
+    CHECK(between.hints == Hints{{2, ir::LayoutHintKind::LineBreak}});
+    const auto& concept_ref = std::get<ir::ConceptRef>(para.at(7));
+    CHECK(concept_ref.name == "invocable");
+    CHECK(concept_ref.hints == Hints{{2, ir::LayoutHintKind::Hyphen}});
+    const auto& placeholder = std::get<ir::PlaceholderInline>(para.at(9));
+    CHECK(placeholder.text == "long-name");
+    CHECK(placeholder.hints == Hints{{5, ir::LayoutHintKind::Break, true}});
+    const auto& word = std::get<ir::TextInline>(para.at(10));
+    CHECK(word.text == ", implementation, and ");
+    CHECK(word.hints ==
+          Hints{{7, ir::LayoutHintKind::Hyphen}, {10, ir::LayoutHintKind::Hyphen}, {12, ir::LayoutHintKind::Hyphen}});
+    // A hint with no text beside it is a text inline that holds it alone.
+    const auto& alone = std::get<ir::TextInline>(para.at(12));
+    CHECK(alone.text.empty());
+    CHECK(alone.hints == Hints{{0, ir::LayoutHintKind::Break, true}});
+    // \linebreak[2] has no kind: it is dropped, with its bracket.
+    CHECK(std::get<ir::TextInline>(para.at(14)).text == ", wanted or not.");
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "Meets the \\oldconcept{Unary\\-Type\\-Trait} requirements, is \\tcode{true}, \\linebreak \\tcode{false} "
+        "otherwise, models \\libconcept{in\\-vocable}, for \\placeholder{long-\\brk{}name}, imple\\-men\\-ta\\-tion, "
+        "and \\tcode{a}\\brk{}\\tcode{b}, wanted or not."));
+}
+
+TEST_CASE("draft_import - the draft's tie is a space the line may not break at, in prose and in a \\tcode") {
+    // `~` is a tie, not a tilde: read as the character it printed a tilde in a
+    // \tcode, and in prose in every backend but LaTeX (issue #312). A tilde in
+    // a \tcode is `\~`, and in a listing the character is the code's own.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Within subclause~\ref{x}, \tcode{T}~is \tcode{R(*)(G, A...)~\opt{noexcept}} and \tcode{val.T::\~T()}.
+\begin{codeblock}
+~T();
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    using Hints         = std::vector<ir::LayoutHint>;
+    CHECK(std::get<ir::TextInline>(para.at(0)) ==
+          ir::TextInline{"Within subclause ", {{16, ir::LayoutHintKind::Tie}}});
+    CHECK(std::get<ir::TextInline>(para.at(4)) == ir::TextInline{" is ", {{0, ir::LayoutHintKind::Tie}}});
+    const auto& code = std::get<ir::CodeInline>(para.at(5)).code;
+    CHECK(code.text == "R(*)(G, A...) noexcept");
+    CHECK(code.hints == Hints{{13, ir::LayoutHintKind::Tie}});
+    const auto& tilde = std::get<ir::CodeInline>(para.at(7)).code;
+    CHECK(tilde.text == "val.T::~T()");
+    CHECK(tilde.hints.empty());
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "~T();");
+    CHECK(listing.hints.empty());
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("Within subclause~\\ref{x}, \\tcode{T}~is \\tcode{R(*)(G, A...)~\\opt{noexcept}} and "
+                            "\\tcode{val.T::\\textasciitilde{}T()}."));
+    CHECK(rendered.contains("\n~T();\n"));
 }

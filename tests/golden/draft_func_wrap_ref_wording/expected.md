@@ -54,7 +54,7 @@ namespace std {
 
 [#]{.pnum} Each specialization of `function_ref` is a trivially copyable type([term.trivially.copyable.type]{- .sref}) that models `copyable`.
 
-[#]{.pnum} Within subclause~[func.wrap.ref]{- .sref}, `$call-args$` is an argument pack with elements such that
+[#]{.pnum} Within subclause&nbsp;[func.wrap.ref]{- .sref}, `$call-args$` is an argument pack with elements such that
 
 ```cpp
 decltype(($call-args$))...

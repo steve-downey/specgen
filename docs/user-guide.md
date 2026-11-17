@@ -929,6 +929,26 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
+The draft's other prose macros that specgen has a kind for are read outside
+backticks too, and each backend writes them in its own form:
+
+| In a docblock | It is |
+| --- | --- |
+| `\iref{x}` | a reference in parentheses, as the draft prints "(22.10.17)" |
+| `\ref{x}` | the same reference, bare: "Within subclause \ref{x}, ..." |
+| `\tref{t}` | a reference to a table |
+| `\libconcept{c}` | a library concept |
+| `\exposconcept{c}` | an exposition-only concept |
+| `\placeholder{p}`, `\cv{}` | a placeholder |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers |
+| `\oldconcept{X}` | a C++17 named requirement, printed "Cpp17X" |
+
+These are the macros `specgen import` reads from the draft's own text (see
+[Reading the working draft's LaTeX](#reading-the-working-drafts-latex) for how
+each prints), so a sentence typed here and the same sentence inherited from the
+draft are the same wording to the wording diff. Any other macro stays text: the LaTeX backend passes it
+through, and the mpark and org backends print it as written.
+
 Write literal C++ characters inside backticks, including `&` and `&&`.
 The LaTeX backend escapes text-mode special characters inside `\tcode`;
 semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets
@@ -1494,9 +1514,8 @@ wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
 `itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
 at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
 macros the IR has a kind for. The exceptions are layout only: line breaks inside
-a paragraph, the line-break hints (`\brk`, `\-` and their relatives) that sit in
-running text, and `\index...` entries other than `\indexlibrary...` are
-dropped. A line-break hint inside code is kept; see below.
+a paragraph and `\index...` entries other than `\indexlibrary...` are dropped.
+The draft's line-break hints are kept; see below.
 
 The draft's own vocabulary is read too, where the IR has a kind for it. In
 prose:
@@ -1522,9 +1541,18 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
 | `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
 | `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+| `$i$` in a `\tcode` | a variable of the mathematics around the code | `$i$` | `<var>i</var>` |
+| `$_i$`, `$_{10}$` in a `\tcode` | a subscript | `@~_i_~@`, `@~10~@` | `<sub><var>i</var></sub>`, `<sub>10</sub>` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
+
+Mathematics inside a `\tcode` is read when it is a variable (letters alone) or
+a subscript (one letter or digit, or a group of them). The code's text has the
+variable as its name and the subscript after an underscore, so
+`\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`.
+Any other mathematics there (`$i - 1$`, `$\dotsc$`) has no kind: the whole
+`\tcode` is kept as raw LaTeX and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1534,12 +1562,21 @@ one was written, so wording inherited with `\asdraft` prints as the draft
 spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
 
-The same holds for the draft's line-break hints inside code: `\brk`, `\-`,
-`\linebreak` and `\newline`, in a `\tcode` or inside a name
-(`\exposid{bound-en\-tity}`). The code and the name are read without them, so
-`std::for\-ward<Args>` is `std::forward<Args>` to the wording diff and to the
-mpark and org backends, and the LaTeX backend writes each hint back where it
-was.
+The same holds for the draft's line-break hints: `\brk`, `\-`, `\linebreak`
+and `\newline`, in a `\tcode`, in running text, or inside a name
+(`\exposid{bound-en\-tity}`, `\oldconcept{Unary\-Type\-Trait}`). The code, the
+text and the name are read without them, so `std::for\-ward<Args>` is
+`std::forward<Args>` to the wording diff and to the mpark and org backends, and
+the LaTeX backend writes each hint back where it was. A `\linebreak[2]` or
+`\nolinebreak[3]`, which says how much a break is wanted, is dropped.
+
+The draft's tie, `~`, is a space the line may not break at
+(`subclause~\ref{x}`). It is read as a space with a hint on it, so the words
+on either side are two words to the wording diff. The LaTeX backend writes `~`
+back, in running text and in a `\tcode`. It is the one hint the other backends
+write too, in running text: `&nbsp;` in mpark and `\nbsp{}` in org. Inside
+code they write the space. A tilde in a `\tcode` is the draft's `\~`, and in a
+listing the character is the code's own.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
@@ -1588,7 +1625,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.42.3 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.42.9 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
