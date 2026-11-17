@@ -198,51 +198,195 @@ std::vector<std::string> declared_entities(const std::vector<ir::IndexEntry>& in
 
 // --- code ---------------------------------------------------------------------
 
+// One of the draft's line-break hints at `pos` (a backslash): `\-`, or `\brk`,
+// `\linebreak` or `\newline` with or without the empty group the draft mostly
+// writes after it. TeX discards the spaces after a control word, so `next` is
+// past them: they are not part of the code.
+struct HintAt {
+    ir::LayoutHintKind kind;
+    bool               braced = false;
+    std::size_t        next   = 0;
+};
+
+std::optional<HintAt> layout_hint_at(std::string_view s, std::size_t pos) {
+    if (s.substr(pos).starts_with("\\-"))
+        return HintAt{ir::LayoutHintKind::Hyphen, false, pos + 2};
+    constexpr std::pair<std::string_view, ir::LayoutHintKind> words[]{{"\\brk", ir::LayoutHintKind::Break},
+                                                                      {"\\linebreak", ir::LayoutHintKind::LineBreak},
+                                                                      {"\\newline", ir::LayoutHintKind::NewLine}};
+    const auto                                                it = std::ranges::find_if(words, [&](const auto& w) {
+        const std::string_view rest = s.substr(pos);
+        return rest.starts_with(w.first) && (rest.size() == w.first.size() || !is_letter(rest[w.first.size()]));
+    });
+    if (it == std::end(words))
+        return std::nullopt;
+    std::size_t next = pos + it->first.size();
+    if (s.substr(next).starts_with("{}"))
+        return HintAt{it->second, true, next + 2};
+    // `\linebreak[2]` asks for a break with a given urgency; there is no kind for that.
+    if (s.substr(next).starts_with("["))
+        return std::nullopt;
+    // substrate generic algorithm: a cursor scan over the spaces a control word swallows.
+    while (next < s.size() && s[next] == ' ')
+        ++next;
+    return HintAt{it->second, false, next};
+}
+
+// A name as the draft writes it in a macro's argument, with its line-break
+// hints taken out: `bound-en\-tity` is the name `bound-entity` and one hint.
+// The hints' offsets are into the name.
+struct HintedName {
+    std::string                 name;
+    std::vector<ir::LayoutHint> hints;
+};
+
+HintedName read_hinted_name(std::string_view raw) {
+    HintedName  out;
+    std::size_t i = 0;
+    // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+    while (i < raw.size()) {
+        if (raw[i] == '\\') {
+            if (const auto hint = layout_hint_at(raw, i)) {
+                out.hints.push_back({out.name.size(), hint->kind, hint->braced});
+                i = hint->next;
+                continue;
+            }
+        }
+        out.name += raw[i++];
+    }
+    return out;
+}
+
 struct CodeBuilder {
     ir::CodeText code;
 
     void text(std::string_view s) { code.text += s; }
-    void span(ir::SpanKind kind, std::string payload, std::string_view spelling) {
+    void hint(ir::LayoutHintKind kind, bool braced) { code.hints.push_back({code.text.size(), kind, braced}); }
+    // A span whose text is a name the draft may have hinted: the name goes in
+    // clean, as the payload and as the text, and its hints beside it.
+    void named_span(ir::SpanKind kind, std::string_view raw, std::optional<bool> no_correction = std::nullopt) {
+        HintedName        name  = read_hinted_name(raw);
+        const std::size_t begin = code.text.size();
+        // substrate generic algorithm: rebases each hint from the name onto the text.
+        for (ir::LayoutHint& h : name.hints) {
+            h.at += begin;
+            code.hints.push_back(h);
+        }
+        code.text += name.name;
+        code.spans.push_back({begin, code.text.size(), kind, std::move(name.name), no_correction});
+    }
+    // Another builder's code appended whole, its spans and hints moved along.
+    void append(const ir::CodeText& other) {
+        const std::size_t shift = code.text.size();
+        code.text += other.text;
+        // substrate generic algorithm: rebases each span onto the joined text.
+        for (ir::Span span : other.spans) {
+            span.begin += shift;
+            span.end += shift;
+            code.spans.push_back(std::move(span));
+        }
+        // substrate generic algorithm: rebases each hint onto the joined text.
+        for (ir::LayoutHint h : other.hints) {
+            h.at += shift;
+            code.hints.push_back(h);
+        }
+    }
+    void span(ir::SpanKind        kind,
+              std::string         payload,
+              std::string_view    spelling,
+              std::optional<bool> no_correction = std::nullopt) {
         const std::size_t begin = code.text.size();
         code.text += spelling;
-        code.spans.push_back({begin, code.text.size(), kind, std::move(payload)});
+        code.spans.push_back({begin, code.text.size(), kind, std::move(payload), no_correction});
     }
 };
 
+std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos, std::size_t& next);
+
+// The code a macro's argument holds, when it holds nothing but code: text with
+// the text-mode escapes resolved (`\&` is `&`). An argument with a macro of
+// its own in it is not one, because a span cannot hold another span.
+std::optional<std::string> plain_code_argument(std::string_view arg) {
+    std::string out;
+    std::size_t i = 0;
+    // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+    while (i < arg.size()) {
+        if (arg[i] != '\\') {
+            out += arg[i++];
+            continue;
+        }
+        std::size_t next    = 0;
+        const auto  escaped = text_escape(arg, i, next);
+        if (!escaped)
+            return std::nullopt;
+        out += *escaped;
+        i = next;
+    }
+    return out;
+}
+
 // One draft macro with a code meaning, at `pos` (a backslash). Appends its
 // span to `out` and returns where it ended, or nullopt when it is not one.
-std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out) {
+// `listing` says whether the macro sits in a listing's `@...@` or in a
+// `\tcode`, which decides what an italic macro's plain form and its
+// no-correction twin record: the span says which was written only where that
+// is not what the context takes anyway.
+std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out, bool listing) {
     std::size_t end = pos + 1;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     while (end < s.size() && is_letter(s[end]))
         ++end;
     const std::string_view name = s.substr(pos + 1, end - pos - 1);
 
-    const auto one_arg = [&](ir::SpanKind kind, bool spelled_as_payload) -> std::optional<std::size_t> {
+    const auto written = [&](ir::SpanKind kind, bool no_correction) -> std::optional<bool> {
+        return no_correction == ir::default_no_correction(kind, listing) ? std::nullopt
+                                                                         : std::optional<bool>{no_correction};
+    };
+    // A macro whose argument is a name, which is the span's text and payload.
+    const auto named = [&](ir::SpanKind        kind,
+                           std::optional<bool> no_correction = std::nullopt) -> std::optional<std::size_t> {
         const auto arg = read_braced(s, end);
         if (!arg)
             return std::nullopt;
-        out.span(kind, arg->inner, spelled_as_payload ? arg->inner : "[" + arg->inner + "]");
+        out.named_span(kind, arg->inner, no_correction);
         return arg->next;
     };
 
     if (name == "exposid" || name == "exposidnc")
-        return one_arg(ir::SpanKind::ExposId, true);
+        return named(ir::SpanKind::ExposId, written(ir::SpanKind::ExposId, name == "exposidnc"));
     if (name == "placeholder" || name == "placeholdernc")
-        return one_arg(ir::SpanKind::Placeholder, true);
-    if (name == "ref")
-        return one_arg(ir::SpanKind::Ref, false);
+        return named(ir::SpanKind::Placeholder, written(ir::SpanKind::Placeholder, name == "placeholdernc"));
+    if (name == "cvqual")
+        return named(ir::SpanKind::CvQualifier);
+    if (name == "opt") {
+        const auto arg  = read_braced(s, end);
+        const auto code = arg ? plain_code_argument(arg->inner) : std::nullopt;
+        if (!code || code->empty())
+            return std::nullopt;
+        out.span(ir::SpanKind::Optional, "", *code);
+        return arg->next;
+    }
+    if (name == "ref") {
+        const auto arg = read_braced(s, end);
+        if (!arg)
+            return std::nullopt;
+        out.span(ir::SpanKind::Ref, arg->inner, "[" + arg->inner + "]");
+        return arg->next;
+    }
     if (name == "cv") {
         out.span(ir::SpanKind::Placeholder, "cv", "cv");
         const auto empty = read_braced(s, end);
         return empty ? empty->next : end;
     }
-    if (name == "seebelow") {
-        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW");
+    if (name == "seebelow" || name == "seebelownc") {
+        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(ir::SpanKind::SeeBelow, name == "seebelownc"));
         return end;
     }
-    if (name == "impdef") {
-        out.span(ir::SpanKind::ImplDefined, "", "implementation-defined");
+    if (name == "impdef" || name == "impdefnc") {
+        out.span(ir::SpanKind::ImplDefined,
+                 "",
+                 "implementation-defined",
+                 written(ir::SpanKind::ImplDefined, name == "impdefnc"));
         return end;
     }
     if (name == "libglobal") {
@@ -309,7 +453,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                     ok = false;
                     break;
                 }
-                const auto next = code_macro(inner, j, trial);
+                const auto next = code_macro(inner, j, trial, true);
                 if (!next) {
                     ok = false;
                     break;
@@ -317,15 +461,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 j = *next;
             }
             if (ok) {
-                const std::size_t shift = out.code.text.size();
-                out.code.text += trial.code.text;
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
-                // state.
-                for (ir::Span span : trial.code.spans) {
-                    span.begin += shift;
-                    span.end += shift;
-                    out.code.spans.push_back(std::move(span));
-                }
+                out.append(trial.code);
             } else {
                 out.text(raw.substr(i, close - i + 1));
             }
@@ -336,7 +472,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             if (listing) {
                 // Inside a listing only the comment macros are TeX (texcl).
                 if (raw.substr(i).starts_with("\\ref{")) {
-                    if (const auto next = code_macro(raw, i, out)) {
+                    if (const auto next = code_macro(raw, i, out, true)) {
                         i = *next;
                         continue;
                     }
@@ -351,14 +487,15 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 i = next;
                 continue;
             }
-            if (const auto after = code_macro(raw, i, out)) {
+            if (const auto after = code_macro(raw, i, out, false)) {
                 i = *after;
                 continue;
             }
-            if (raw.substr(i).starts_with("\\brk") || raw.substr(i).starts_with("\\-")) {
-                i += raw.substr(i).starts_with("\\-") ? 2 : 4;
-                if (raw.substr(i).starts_with("{}"))
-                    i += 2;
+            // A line-break hint is not code, and not dropped either: it is kept
+            // beside the text, at the place it sits (issue #306).
+            if (const auto hint = layout_hint_at(raw, i)) {
+                out.hint(hint->kind, hint->braced);
+                i = hint->next;
                 continue;
             }
             if (raw.substr(i).starts_with("\\ ") || raw.substr(i).starts_with("\\,")) {
@@ -367,7 +504,12 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
                 continue;
             }
             met_unknown_macro = true;
-            report(Severity::Warning, "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 12)));
+            // Named as the prose warning names one: the control word, or the one
+            // character of a control symbol, and not a cut of the text after it.
+            const auto word_end = std::ranges::find_if_not(raw.substr(i + 1), is_letter);
+            const auto name_len = std::max<std::size_t>(1, static_cast<std::size_t>(word_end - (raw.begin() + i + 1)));
+            report(Severity::Warning,
+                   "a macro in \\tcode is kept as raw LaTeX: " + std::string(raw.substr(i, 1 + name_len)));
         }
         out.text(raw.substr(i, 1));
         ++i;
@@ -377,10 +519,21 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
 
 // --- prose --------------------------------------------------------------------
 
-ir::CodeText whole_span(ir::SpanKind kind, std::string payload, std::string spelling) {
+// A code inline that is one span whole, as `\exposid{x}` in prose is. A
+// no-correction twin says so; the plain form is what prose takes anyway.
+ir::CodeText whole_span(ir::SpanKind kind, std::string payload, std::string spelling, bool no_correction = false) {
     ir::CodeText code{std::move(spelling), {}};
-    code.spans.push_back({0, code.text.size(), kind, std::move(payload)});
+    code.spans.push_back(
+        {0, code.text.size(), kind, std::move(payload), no_correction ? std::optional<bool>{true} : std::nullopt});
     return code;
+}
+
+// The same for a span whose text is a name, with the name's line-break hints
+// kept beside it.
+ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_correction) {
+    CodeBuilder out;
+    out.named_span(kind, raw, no_correction ? std::optional<bool>{true} : std::nullopt);
+    return std::move(out.code);
 }
 
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
@@ -451,17 +604,24 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             i = arg->next;
         } else if ((name == "exposid" || name == "exposidnc") && arg) {
             flush();
-            out.push_back(code_inline_of(whole_span(ir::SpanKind::ExposId, arg->inner, arg->inner)));
+            out.push_back(code_inline_of(whole_named_span(ir::SpanKind::ExposId, arg->inner, name == "exposidnc")));
             i = arg->next;
-        } else if (name == "seebelow" || name == "impdef") {
+        } else if (name == "seebelow" || name == "seebelownc") {
             flush();
-            out.push_back(code_inline_of(name == "seebelow"
-                                             ? whole_span(ir::SpanKind::SeeBelow, "", "SEEBELOW")
-                                             : whole_span(ir::SpanKind::ImplDefined, "", "implementation-defined")));
+            out.push_back(code_inline_of(whole_span(ir::SpanKind::SeeBelow, "", "SEEBELOW", name == "seebelownc")));
+            i = end;
+        } else if (name == "impdef" || name == "impdefnc") {
+            flush();
+            out.push_back(code_inline_of(
+                whole_span(ir::SpanKind::ImplDefined, "", "implementation-defined", name == "impdefnc")));
             i = end;
         } else if ((name == "placeholder" || name == "placeholdernc") && arg) {
             flush();
-            out.push_back(ir::PlaceholderInline{arg->inner});
+            out.push_back(ir::PlaceholderInline{.text = arg->inner, .no_correction = name == "placeholdernc"});
+            i = arg->next;
+        } else if (name == "cvqual" && arg) {
+            flush();
+            out.push_back(ir::PlaceholderInline{.text = arg->inner, .cv_qualifier = true});
             i = arg->next;
         } else if (name == "cv") {
             flush();
@@ -471,17 +631,18 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::OldConceptRef{arg->inner});
             i = arg->next;
-        } else if (name == "libconcept" && arg) {
+        } else if ((name == "libconcept" || name == "exposconcept" || name == "exposconceptnc") && arg) {
             flush();
-            out.push_back(ir::ConceptRef{arg->inner});
+            out.push_back(ir::ConceptRef{
+                .name = arg->inner, .exposition = name != "libconcept", .no_correction = name == "exposconceptnc"});
             i = arg->next;
         } else if (name == "tref" && arg) {
             flush();
             out.push_back(ir::TableRef{arg->inner});
             i = arg->next;
-        } else if (name == "iref" && arg) {
+        } else if ((name == "iref" || name == "ref") && arg) {
             flush();
-            out.push_back(ir::RefInline{arg->inner});
+            out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
         } else if (name == "brk" || name == "br" || name == "linebreak" || name == "newline" ||
                    name == "nolinebreak") {

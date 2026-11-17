@@ -138,6 +138,99 @@ TEST_CASE("latex - implementation-defined spans use impdef") {
     CHECK(latex::render_to_string(item).find("using iterator = @\\impdef@;") != std::string::npos);
 }
 
+// The two span kinds the draft importer needs for [func.wrap.ref] (issue #307):
+// a placeholder for cv-qualifiers and a piece of code that may be absent. Each is
+// the draft's macro, in an `@...@` inside a listing and bare in a \tcode. The
+// argument of \opt is text mode in both places, so its `&` is escaped in both.
+TEST_CASE("latex - a cv-qualifier span is \\cvqual and an optional span is \\opt around its code") {
+    const beman::specgen::ir::CodeText code{
+        "R(G::*)(A...) cv2 & noexcept(E)", {{14, 17, SpanKind::CvQualifier, "cv2"}, {18, 19, SpanKind::Optional, ""}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Of the form "},
+                                      CodeInline{code},
+                                      TextInline{", "},
+                                      CodeInline{{"cv2", {{0, 3, SpanKind::CvQualifier, "cv2"}}}},
+                                      TextInline{" and "},
+                                      CodeInline{{"&", {{0, 1, SpanKind::Optional, ""}}}},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("R(G::*)(A...) @\\cvqual{cv2}@ @\\opt{\\&}@ noexcept(E)\n"));
+    CHECK(out.contains("Of the form \\tcode{R(G::*)(A...) \\cvqual{cv2} \\opt{\\&} noexcept(E)}, "));
+    // Neither macro sets the code font, so a code inline that is one of them
+    // whole keeps its \tcode, as a placeholder does.
+    CHECK(out.contains(", \\tcode{\\cvqual{cv2}} and \\tcode{\\opt{\\&}}."));
+}
+
+// The draft has a no-italic-correction twin of each italic macro. A span that
+// does not say takes the context's form -- \exposidnc in a listing, the plain
+// macro elsewhere -- and one the draft importer read says which the draft wrote
+// (issue #306).
+TEST_CASE("latex - a span that says which form of its macro to write gets that form, in a listing and in prose") {
+    const beman::specgen::ir::CodeText code{"A B C D E",
+                                            {{0, 1, SpanKind::ExposId, "a"},
+                                             {2, 3, SpanKind::ExposId, "b", false},
+                                             {4, 5, SpanKind::Placeholder, "c", true},
+                                             {6, 7, SpanKind::SeeBelow, "", true},
+                                             {8, 9, SpanKind::ImplDefined, "", true}}};
+    SpecItem                           item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{CodeInline{code},
+                                      TextInline{", "},
+                                      CodeInline{{"B", {{0, 1, SpanKind::ExposId, "b", true}}}},
+                                      TextInline{", "},
+                                      PlaceholderInline{.text = "p", .no_correction = true},
+                                      TextInline{" and "},
+                                      ConceptRef{.name = "k", .exposition = true, .no_correction = true},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("@\\exposidnc{a}@ @\\exposid{b}@ @\\placeholdernc{c}@ @\\seebelownc@ @\\impdefnc@\n"));
+    CHECK(out.contains("\\tcode{\\exposid{a} \\exposid{b} \\placeholdernc{c} \\seebelownc \\impdefnc}, "
+                       "\\exposidnc{b}, \\placeholdernc{p} and \\exposconceptnc{k}."));
+}
+
+// The draft's line-break hints (issue #306): kept beside the code, and written
+// back as the draft's macros. In a \tcode a hint goes where it sits, between
+// the pieces of escaped text. In a listing only a hint inside a span's name is
+// written, inside that span's escape.
+TEST_CASE("latex - a line-break hint is the draft's macro, in a tcode and inside a span's name") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem item;
+    item.decl.signatures.push_back(
+        beman::specgen::ir::CodeText{"R (*thunk-ptr)(int);",
+                                     {{4, 13, SpanKind::ExposId, "thunk-ptr", false}},
+                                     {},
+                                     {{0, LayoutHintKind::Break, true}, {10, LayoutHintKind::Break, true}}});
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        CodeInline{{"std::forward<Args>(args)...", {}, {}, {{18, LayoutHintKind::Break, true}}}},
+        TextInline{", "},
+        CodeInline{{"A&&::value", {}, {}, {{5, LayoutHintKind::NewLine}, {10, LayoutHintKind::LineBreak}}}},
+        TextInline{", "},
+        CodeInline{{"bound-entity", {{0, 12, SpanKind::ExposId, "bound-entity"}}, {}, {{8, LayoutHintKind::Hyphen}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    // The hint in the listing's own text, at byte 0, is not written.
+    CHECK(out.contains("\nR (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
+    CHECK(out.contains("\\tcode{std::forward<Args>\\brk{}(args)...}, "));
+    // A control word with no group takes a space before a letter, and none at the end.
+    CHECK(out.contains("\\tcode{A\\&\\&::\\newline value\\linebreak}, "));
+    CHECK(out.contains(", \\exposid{bound-en\\-tity}."));
+}
+
 // The Ref *span* and the RefInline are two different cross-references
 // and must not share one mapping.
 // A span sits in a code comment, where the draft writes

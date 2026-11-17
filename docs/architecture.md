@@ -1023,8 +1023,8 @@ have no independent item description.
 - Node vocabulary = wording ontology: Section (stable name, title, depth),
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
-  ref(stable-name), library-index(optional enclosing class), note,
-  example.
+  ref(stable-name), library-index(optional enclosing class), cvqual, opt,
+  note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1105,6 +1105,27 @@ have no independent item description.
   and not shown, on one `FreeParagraph` standing in for a run of unchanged children, which
   every backend renders as its unnumbered ellipsis line. Under `decls`, an elided
   `BodyParagraph` similarly replaces an unchanged item description without a label or number.
+- **Typesetting the draft's source carries** is in the IR, off to the side of the wording. The
+  draft has a no-italic-correction twin of each italic macro (`\exposidnc`, `\placeholdernc`,
+  `\seebelownc`, `\impdefnc`, `\exposconceptnc`) and its source chooses between the two by
+  hand, so a paper that inherits a paragraph with `\asdraft` can only print the draft's text if
+  the choice survives the import. `Span::no_correction` is three-state: unset is the form the
+  context takes (`default_no_correction`: the twin for an exposition-only name in a listing, the
+  plain macro everywhere else), which is what every generated span has, and the importer sets
+  it only where the draft wrote the other form. `PlaceholderInline` and `ConceptRef` carry a
+  plain flag, since prose takes the plain macro. The draft's line-break hints inside code
+  (`\brk`, `\-`, `\linebreak`, `\newline`) are the other half: `CodeText::hints`, a third
+  table beside `spans` and `changes`, each `LayoutHint` an offset into the text, a kind, and
+  whether the draft wrote the empty group after the macro. A table, and not zero-width spans
+  or the macro left in the text, because a hint can sit inside a span's name
+  (`\exposid{bound-en\-tity}`) and spans do not nest, and because code text and span payloads
+  that stay clean are what let the differ, the validator and the other two backends read the
+  name and not the LaTeX. Only a backend writing draft LaTeX reads any of this: the shared
+  span walk (`backend/code_spans.hpp`) takes a hint writer that defaults to writing nothing,
+  and writes a hint between the pieces of escaped text or into a span's payload.
+  `without_typesetting` strips all of it, and the wording diff compares through it: two
+  pieces that differ only there are the same wording, and the current revision's is kept.
+  Code the diff does change is rebuilt from tokens and comes out with no hints.
 - **The wording diff** (`diff.hpp`, [plans/wording-diff.md](plans/wording-diff.md)):
   `diff::compare(baseline, current, options)` is the current document marked with what the
   revision added and removed. Structural where the IR has structure: among siblings a
@@ -1177,9 +1198,11 @@ number of a section the diff leaves out is simply not written.
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
-  description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose);
-  `\ref`/`\iref`; `\tcode`, `\libconcept`, `\placeholder` (`\cv{}` for `cv`) and `\oldconcept`
-  inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
+  description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose), unless the
+  span says which of the two the draft wrote (`Span::no_correction`, §7);
+  `\ref`/`\iref`; `\tcode`, `\libconcept` (`\exposconcept` for an exposition-only concept),
+  `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
+  cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
   `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
@@ -1207,6 +1230,18 @@ There are exactly three backends, and **adding wording to one means adding it to
   draft prints, in the target's own emphasis: `*x*` and `*Cpp17X*` in mpark, a LaTeX/HTML export
   snippet in org, because org's `/x/` fails beside the punctuation these names sit against. Those
   targets are not semantic markup the way the draft's macros are; the look is the contract.
+  The two span kinds the draft's own listings need follow the same rule. `CvQualifier` (the
+  draft's `\cvqual{x}`) is italic as a `Placeholder` is, and LaTeX writes the macro the draft
+  uses. `Optional` (`\opt{x}`) covers code that may be absent and prints it with an italic
+  subscript "opt": `\opt{x}` in LaTeX, with the argument escaped as text because a macro argument
+  is text mode in a listing's escape too; `x@~_opt_~@` in mpark, the framework manual's own
+  spelling; `x<sub><var>opt</var></sub>` in org's HTML. Neither macro sets the code font, so a
+  code inline that is one of them whole keeps its `\tcode`, as a placeholder does.
+  The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
+  that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
+  exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A
+  `PlaceholderInline` that is a `cv_qualifier` (`\cvqual`) looks like any placeholder. A
+  `RefInline` that is `bare` (`\ref` in prose) is the reference without its parentheses.
 - **org** (`backend/org.cpp`): org for the `wg21org` exporter. `** Title [stable.name]`
   headings, `/Effects/:` element labels, `~code~` inlines, and code in
   `#+begin_codeblock` / `#+begin_itemdecl` **special** blocks, which the exporter passes to
@@ -1247,7 +1282,9 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   `mpark.test.cpp` asserts the opposite of its `latex.test.cpp` twin on purpose.
 - `SpanKind::Ref` is a cross-reference **inside a code comment** and `ir::RefInline` is the
   prose one: they render `\ref{x}` / `@[x]{- .sref}@` and `\iref{x}` / `([x]{- .sref})`
-  respectively, and the parentheses belong to the prose form only. A Ref span is also the one
+  respectively, and the parentheses belong to the prose form only. The draft also writes `\ref`
+  in prose, for the number a sentence reads as a noun ("Within subclause~`\ref{x}`, ..."): that
+  is a `RefInline` with `bare` set, `\ref{x}` / `[x]{- .sref}`, and still not a span. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters

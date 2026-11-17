@@ -1494,8 +1494,52 @@ wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
 `itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
 at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
 macros the IR has a kind for. The exceptions are layout only: line breaks inside
-a paragraph, `\brk`, `\-` and their relatives, and `\index...` entries other
-than `\indexlibrary...` are dropped.
+a paragraph, the line-break hints (`\brk`, `\-` and their relatives) that sit in
+running text, and `\index...` entries other than `\indexlibrary...` are
+dropped. A line-break hint inside code is kept; see below.
+
+The draft's own vocabulary is read too, where the IR has a kind for it. In
+prose:
+
+| The draft writes | It is read as | mpark | org |
+| --- | --- | --- | --- |
+| `\iref{x}` | a reference in parentheses | `([x]{- .sref})` | a link in parentheses |
+| `\ref{x}` | the same reference, bare | `[x]{- .sref}` | the link alone |
+| `\libconcept{c}` | a library concept | `` `c` `` | `~c~` |
+| `\exposconcept{c}` | an exposition-only concept | `` `$c$` `` | italic code |
+| `\placeholder{p}`, `\cv{}` | a placeholder | `*p*` | italic |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers | `*cv2*` | italic |
+| `\oldconcept{X}` | a C++17 named requirement | `*Cpp17X*` | italic |
+| `\tref{t}` | a reference to a table | a link to its caption | a link |
+
+And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
+
+| The draft writes | It is read as | mpark | org (HTML) |
+| --- | --- | --- | --- |
+| `\exposid{x}` | an exposition-only name | `$x$` | `<var>x</var>` |
+| `\placeholder{p}`, `\cv{}` | a placeholder | `$p$` | `<var>p</var>` |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers | `$cv2$` | `<var>cv2</var>` |
+| `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
+| `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
+| `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+
+The argument of `\opt` has to be code and nothing else: an `\opt` around
+another macro, as the format grammar writes, is not read.
+
+The LaTeX backend writes each back as the macro it was read from. That
+includes the choice between a macro and its no-italic-correction twin
+(`\exposidnc`, `\placeholdernc`, `\seebelownc`, `\impdefnc`,
+`\exposconceptnc`), which the draft makes by hand: the import records which
+one was written, so wording inherited with `\asdraft` prints as the draft
+spells it. The choice is typesetting, so the wording diff does not report it,
+and the mpark and org backends ignore it.
+
+The same holds for the draft's line-break hints inside code: `\brk`, `\-`,
+`\linebreak` and `\newline`, in a `\tcode` or inside a name
+(`\exposid{bound-en\-tity}`). The code and the name are read without them, so
+`std::for\-ward<Args>` is `std::forward<Args>` to the wording diff and to the
+mpark and org backends, and the LaTeX backend writes each hint back where it
+was.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
@@ -1544,7 +1588,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.41.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.42.3 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

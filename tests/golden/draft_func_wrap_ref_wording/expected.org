@@ -1,0 +1,318 @@
+** Non-owning wrapper [func.wrap.ref]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+*** General [func.wrap.ref.general]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref.general
+:UNNUMBERED: t
+:END:
+
+#+begin_pnum
+The header provides partial specializations of ~function_ref~ for each combination of the possible replacements of the placeholders @@latex:\cv{}@@@@html:<i>cv</i>@@ and @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ where:
+
+- @@latex:\cv{}@@@@html:<i>cv</i>@@ is either const or empty, and
+- @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is either ~true~ or ~false~.
+#+end_pnum
+
+*** Class template ~function_ref~ [func.wrap.ref.class]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref.class
+:UNNUMBERED: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class R, class... ArgTypes>
+  class function_ref<R(ArgTypes...) @\cv{}@ noexcept(@\placeholder{noex}@)> {
+  public:
+    // \ref{func.wrap.ref.ctor}, constructors and assignment operators
+    template<class F> function_ref(F*) noexcept;
+    template<class F> constexpr function_ref(F&&) noexcept;
+    template<auto c, class F> constexpr function_ref(constant_wrapper<c, F>) noexcept;
+    template<auto c, class F, class U>
+      constexpr function_ref(constant_wrapper<c, F>, U&&) noexcept;
+    template<auto c, class F, class T>
+      constexpr function_ref(constant_wrapper<c, F>, @\cv{}@ T*) noexcept;
+
+    constexpr function_ref(const function_ref&) noexcept = default;
+    constexpr function_ref& operator=(const function_ref&) noexcept = default;
+    template<class T> function_ref& operator=(T) = delete;
+
+    // \ref{func.wrap.ref.inv}, invocation
+    R operator()(ArgTypes...) const noexcept(@\placeholder{noex}@);
+
+  private:
+    template<class... T>
+      static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelownc@;             // \expos
+
+    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholdernc{noex}@);      // \expos
+    @\exposidnc{BoundEntityType}@ @\exposidnc{bound-entity}@;                                       // \expos
+  };
+
+  // \ref{func.wrap.ref.deduct}, deduction guides
+  template<class F>
+    function_ref(F*) -> function_ref<F>;
+  template<auto c, class F0>
+    function_ref(constant_wrapper<c, F0>) -> function_ref<@\seebelow@>;
+  template<auto c, class F, class T>
+    function_ref(constant_wrapper<c, F>, T&&) -> function_ref<@\seebelow@>;
+}
+#+end_codeblock
+
+#+begin_pnum
+An object of class @@latex:\tcode{function_ref<R(Args...) \cv{} noexcept(\placeholder{noex})>}@@@@html:<code>function_ref&lt;R(Args...) <var>cv</var> noexcept(<var>noex</var>)&gt;</code>@@ stores a pointer to function @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ and an object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@. The object @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ has an unspecified trivially copyable type @@latex:\exposid{BoundEntityType}@@@@html:<code><var>BoundEntityType</var></code>@@, that models ~copyable~ and is capable of storing a pointer to object value or a pointer to function value. The type of @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ is @@latex:\tcode{R(*)(\exposidnc{BoundEntityType}, Args\&\&...) noexcept(\placeholder{noex})}@@@@html:<code>R(*)(<var>BoundEntityType</var>, Args&amp;&amp;...) noexcept(<var>noex</var>)</code>@@.
+#+end_pnum
+
+#+begin_pnum
+Each specialization of ~function_ref~ is a trivially copyable type([[https://eel.is/c++draft/term.trivially.copyable.type][@@html:[term.trivially.copyable.type]@@@@latex:{[}term.trivially.copyable.type{]}@@]]) that models ~copyable~.
+#+end_pnum
+
+#+begin_pnum
+Within subclause~[[https://eel.is/c++draft/func.wrap.ref][@@html:[func.wrap.ref]@@@@latex:{[}func.wrap.ref{]}@@]], @@latex:\tcode{\placeholder{call-args}}@@@@html:<code><var>call-args</var></code>@@ is an argument pack with elements such that
+
+#+begin_codeblock
+decltype((@\placeholder{call-args}@))...
+#+end_codeblock
+
+denote ~ArgTypes&&...~ respectively.
+#+end_pnum
+
+*** Constructors and assignment operators [func.wrap.ref.ctor]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref.ctor
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<class... T>
+  static constexpr bool @\exposid{is-invocable-using}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+If @@latex:\placeholder{noex}@@@@html:<i>noex</i>@@ is ~true~, @@latex:\tcode{\exposid{is-invocable-using}<T...>}@@@@html:<code><var>is-invocable-using</var>&lt;T...&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_nothrow_invocable_r_v<R, T..., ArgTypes...>
+#+end_codeblock
+
+Otherwise, @@latex:\tcode{\exposid{is-invocable-using}<T...>}@@@@html:<code><var>is-invocable-using</var>&lt;T...&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_invocable_r_v<R, T..., ArgTypes...>
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  static constexpr bool @\exposid{is-convertible-from-specialization}@ = @\seebelow@;
+#+end_itemdecl
+
+#+begin_pnum
+If ~F~ denotes a specialization @@latex:\tcode{function_ref<R(Args...) \cvqual{cv2} noexcept(\placeholder{noex2})>}@@@@html:<code>function_ref&lt;R(Args...) <var>cv2</var> noexcept(<var>noex2</var>)&gt;</code>@@ for some placeholders @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@ and @@latex:\placeholder{noex2}@@@@html:<i>noex2</i>@@, @@latex:\tcode{\exposid{is-convertible-from-specialization}<F>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;F&gt;</code>@@ is equal to:
+
+#+begin_codeblock
+is_convertible_v<R(&)(Args...) noexcept(@\placeholder{noex2}@), R(&)(Args...) noexcept(@\placeholder{noex}@)> &&
+is_convertible_v<int @\cv{}@&, int @\cvqual{cv2}@&>.
+#+end_codeblock
+
+Otherwise, @@latex:\tcode{\exposid{is-convertible-from-specialization}<F>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;F&gt;</code>@@ is ~false~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> function_ref(F* f) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_function_v<F>~ is ~true~, and
+- @@latex:\tcode{\exposid{is-invocable-using}<F>}@@@@html:<code><var>is-invocable-using</var>&lt;F&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Preconditions/: ~f~ is not a null pointer.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Initializes @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with ~f~, and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the address of a function @@latex:\tcode{\placeholder{thunk}}@@@@html:<code><var>thunk</var></code>@@ such that @@latex:\tcode{\placeholder{thunk}(\exposid{bound-entity}, \placeholder{call-args}...)}@@@@html:<code><var>thunk</var>(<var>bound-entity</var>, <var>call-args</var>...)</code>@@ is expression-equivalent([[https://eel.is/c++draft/defns.expression.equivalent][@@html:[defns.expression.equivalent]@@@@latex:{[}defns.expression.equivalent{]}@@]]) to @@latex:\tcode{invoke_r<R>(f, \placeholder{call-args}...)}@@@@html:<code>invoke_r&lt;R&gt;(f, <var>call-args</var>...)</code>@@.
+#+end_pnum
+
+#+begin_itemdecl
+template<class F> constexpr function_ref(F&& f) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~T~ be ~remove_reference_t<F>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~remove_cvref_t<F>~ is not the same type as ~function_ref~,
+- ~is_member_pointer_v<T>~ is ~false~, and
+- @@latex:\tcode{\exposid{is-invocable-using}<\cv{} T\&>}@@@@html:<code><var>is-invocable-using</var>&lt;<var>cv</var> T&amp;&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: If @@latex:\tcode{\exposid{is-convertible-from-specialization}<remove_cv_t<T>>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;remove_cv_t&lt;T&gt;&gt;</code>@@ is ~false~, initializes @@latex:\exposid{bound-en\-tity}@@@@html:<code><var>bound-entity</var></code>@@ with ~addressof(f)~, and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the address of a function @@latex:\tcode{\placeholder{thunk}}@@@@html:<code><var>thunk</var></code>@@ such that @@latex:\tcode{\placeholder{thunk}(\exposid{bound-\brk{}entity}, \placeholder{call-args}...)}@@@@html:<code><var>thunk</var>(<var>bound-entity</var>, <var>call-args</var>...)</code>@@ is expression-equivalent([[https://eel.is/c++draft/defns.expression.equivalent][@@html:[defns.expression.equivalent]@@@@latex:{[}defns.expression.equivalent{]}@@]]) to @@latex:\tcode{invoke_r<R>(static_cast<\cv{} T\&>(f), \placeholder{call-args}...)}@@@@html:<code>invoke_r&lt;R&gt;(static_cast&lt;<var>cv</var> T&amp;&gt;(f), <var>call-args</var>...)</code>@@. Otherwise, initializes @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with the value of @@latex:\tcode{f.\exposid{bound-entity}}@@@@html:<code>f.<var>bound-entity</var></code>@@ and @@latex:\exposid{thunk-\brk{}ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the value of @@latex:\tcode{f.\exposid{thunk-ptr}}@@@@html:<code>f.<var>thunk-ptr</var></code>@@.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: If ~remove_cvref_t<F>~ is a specialization of ~function_ref~, an implementation may initialize @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with the value of @@latex:\tcode{f.\exposid{bound-entity}}@@@@html:<code>f.<var>bound-entity</var></code>@@ and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the value of @@latex:\tcode{f.\exposid{thunk-ptr}}@@@@html:<code>f.<var>thunk-ptr</var></code>@@.
+
+#+begin_wgexample
+#+begin_codeblock
+void f1(std::string);
+void f2(std::string);
+
+function_ref<void(std::string)> r1(&f1);
+function_ref<void(std::string&&)> r2(r1);
+r2("");                 // \tcode{f1} is invoked
+r1 = &f2;
+r2("");                 // it is unspecified if \tcode{f1} or \tcode{f2} is invoked
+#+end_codeblock
+#+end_wgexample
+#+end_pnum
+
+#+begin_itemdecl
+template<auto c, class F> constexpr function_ref(constant_wrapper<c, F> f) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: @@latex:\tcode{\exposid{is-invocable-using}<const F\&>}@@@@html:<code><var>is-invocable-using</var>&lt;const F&amp;&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/:
+
+- If ~is_pointer_v<F> || is_member_pointer_v<F>~ is ~true~, then ~f.value != nullptr~ is ~true~, and
+- if ~ArgTypes~ is not an empty pack and all types in ~remove_cvref_t<ArgTypes>...~ satisfy @@latex:\exposconcept{constexpr-param}@@@@html:<code><var>constexpr-param</var></code>@@ then @@latex:\tcode{constant_wrapper<\placeholdernc{INVOKE}(f.value, remove_cvref_t<ArgTypes>::\newline value...)>}@@@@html:<code>constant_wrapper&lt;<var>INVOKE</var>(f.value, remove_cvref_t&lt;ArgTypes&gt;::value...)&gt;</code>@@ is not a valid type.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Initializes @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with a pointer to an unspecified object or null pointer value, and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the address of a function @@latex:\tcode{\placeholder{thunk}}@@@@html:<code><var>thunk</var></code>@@ such that @@latex:\tcode{\placeholder{thunk}(\exposid{bound-entity}, \placeholder{call-args}...)}@@@@html:<code><var>thunk</var>(<var>bound-entity</var>, <var>call-args</var>...)</code>@@ is expression-equivalent([[https://eel.is/c++draft/defns.expression.equivalent][@@html:[defns.expression.equivalent]@@@@latex:{[}defns.expression.equivalent{]}@@]]) to @@latex:\tcode{invoke_r<R>(f.value, \placeholder{call-args}...)}@@@@html:<code>invoke_r&lt;R&gt;(f.value, <var>call-args</var>...)</code>@@.
+#+end_pnum
+
+#+begin_itemdecl
+template<auto c, class F, class U>
+  constexpr function_ref(constant_wrapper<c, F> f, U&& obj) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~T~ be ~remove_reference_t<U>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_rvalue_reference_v<U&&>~ is ~false~, and
+- @@latex:\tcode{\exposid{is-invocable-using}<const F\&, \cv{} T\&>}@@@@html:<code><var>is-invocable-using</var>&lt;const F&amp;, <var>cv</var> T&amp;&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: If ~is_pointer_v<F> || is_member_pointer_v<F>~ is ~true~, then ~f.value != nullptr~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Initializes @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with ~addressof(obj)~, and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the address of a function @@latex:\tcode{\placeholder{thunk}}@@@@html:<code><var>thunk</var></code>@@ such that @@latex:\tcode{\placeholder{thunk}(\exposid{bound-entity}, \placeholder{call-args}...)}@@@@html:<code><var>thunk</var>(<var>bound-entity</var>, <var>call-args</var>...)</code>@@ is expression-equivalent([[https://eel.is/c++draft/defns.expression.equivalent][@@html:[defns.expression.equivalent]@@@@latex:{[}defns.expression.equivalent{]}@@]]) to @@latex:\tcode{invoke_r<R>(f.value, static_cast<\cv{} T\&>(obj), \placeholder{call-args}...)}@@@@html:<code>invoke_r&lt;R&gt;(f.value, static_cast&lt;<var>cv</var> T&amp;&gt;(obj), <var>call-args</var>...)</code>@@.
+#+end_pnum
+
+#+begin_itemdecl
+template<auto c, class F, class T>
+  constexpr function_ref(constant_wrapper<c, F> f, @\cv{}@ T* obj) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: @@latex:\tcode{\exposid{is-invocable-using}<const F\&, \cv{} T*>}@@@@html:<code><var>is-invocable-using</var>&lt;const F&amp;, <var>cv</var> T*&gt;</code>@@ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: If ~is_pointer_v<F> || is_member_pointer_v<F>~ is ~true~, then ~f.value != nullptr~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Preconditions/: If ~is_member_pointer_v<F>~ is ~true~, ~obj~ is not a null pointer.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Initializes @@latex:\exposid{bound-entity}@@@@html:<code><var>bound-entity</var></code>@@ with ~obj~, and @@latex:\exposid{thunk-ptr}@@@@html:<code><var>thunk-ptr</var></code>@@ with the address of a function @@latex:\tcode{\placeholder{thunk}}@@@@html:<code><var>thunk</var></code>@@ such that @@latex:\tcode{\placeholder{thunk}(\exposid{bound-entity}, \placeholder{call-args}...)}@@@@html:<code><var>thunk</var>(<var>bound-entity</var>, <var>call-args</var>...)</code>@@ is expression-equivalent([[https://eel.is/c++draft/defns.expression.equivalent][@@html:[defns.expression.equivalent]@@@@latex:{[}defns.expression.equivalent{]}@@]]) to @@latex:\tcode{invoke_r<R>(f.value, obj, \placeholder{call-args}...)}@@@@html:<code>invoke_r&lt;R&gt;(f.value, obj, <var>call-args</var>...)</code>@@.
+#+end_pnum
+
+#+begin_itemdecl
+template<class T> function_ref& operator=(T) = delete;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- @@latex:\tcode{\exposid{is-convertible-from-specialization}<T>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;T&gt;</code>@@ is ~false~,
+- ~is_pointer_v<T>~ is ~false~, and
+- ~T~ is not a specialization of ~constant_wrapper~.
+#+end_pnum
+
+*** Invocation [func.wrap.ref.inv]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref.inv
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+R operator()(ArgTypes... args) const noexcept(@\placeholder{noex}@);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Equivalent to: @@latex:\tcode{return \exposid{thunk-ptr}(\exposid{bound-entity}, std::forward<ArgTypes>(args)...);}@@@@html:<code>return <var>thunk-ptr</var>(<var>bound-entity</var>, std::forward&lt;ArgTypes&gt;(args)...);</code>@@
+#+end_pnum
+
+*** Deduction guides [func.wrap.ref.deduct]
+:PROPERTIES:
+:CUSTOM_ID: func.wrap.ref.deduct
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+template<class F>
+  function_ref(F*) -> function_ref<F>;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_function_v<F>~ is ~true~.
+#+end_pnum
+
+#+begin_itemdecl
+template<auto c, class F0>
+  function_ref(constant_wrapper<c, F0>) -> function_ref<@\seebelow@>;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~F~ be ~remove_pointer_t<F0>~.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/: ~is_function_v<F>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The deduced type is ~function_ref<F>~.
+#+end_pnum
+
+#+begin_itemdecl
+template<auto c, class F, class T>
+  function_ref(constant_wrapper<c, F>, T&&) -> function_ref<@\seebelow@>;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~F~ is of the form @@latex:\tcode{R(G::*)(A...) \cv{} \opt{\&} noexcept(E)}@@@@html:<code>R(G::*)(A...) <var>cv</var> &amp;<sub><var>opt</var></sub> noexcept(E)</code>@@ for a type ~G~, or
+- ~F~ is of the form ~M G::*~ for a type ~G~ and an object type ~M~, in which case let ~R~ be ~invoke_result_t<F, T&>~, ~A...~ be an empty pack, and ~E~ be ~true~, or
+- ~F~ is of the form ~R(*)(G, A...) noexcept(E)~ for a type ~G~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The deduced type is ~function_ref<R(A...) noexcept(E)>~.
+#+end_pnum

@@ -31,6 +31,8 @@ enum class SpanKind {
     Placeholder,  // payload = placeholder text
     Ref,          // payload = stable name (cross-reference inside a comment)
     LibraryIndex, // payload = enclosing class, or empty for a global name
+    CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
+    Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
 };
 
 } // namespace beman::specgen::ir
@@ -43,6 +45,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::Placeholder,
     beman::specgen::ir::SpanKind::Ref,
     beman::specgen::ir::SpanKind::LibraryIndex,
+    beman::specgen::ir::SpanKind::CvQualifier,
+    beman::specgen::ir::SpanKind::Optional,
 };
 
 namespace beman::specgen::ir {
@@ -91,9 +95,24 @@ struct Span {
     std::size_t end   = 0;
     SpanKind    kind  = SpanKind::ExposId;
     std::string payload;
+    // Typesetting, not wording: which of the draft's two forms of this span's
+    // macro is written. Each italic macro has a twin that leaves out the
+    // italic correction (\exposidnc, \placeholdernc, \seebelownc,
+    // \impdefnc), and the draft's source picks one by hand, by what follows
+    // the name. Unset is the form the context takes (`default_no_correction`),
+    // which is what every generated span has. The draft importer sets it
+    // where the draft wrote the other form, so that inherited wording comes
+    // back out as the draft spells it. Only a backend that writes draft LaTeX
+    // reads it, and the wording diff compares without it.
+    std::optional<bool> no_correction = {};
 
     friend bool operator==(const Span&, const Span&) = default;
 };
+
+// The form a span's macro takes when nothing says otherwise: the
+// no-correction form for an exposition-only name in a listing, which is what
+// this tool has always written there, and the plain form for everything else.
+constexpr bool default_no_correction(SpanKind kind, bool listing) { return listing && kind == SpanKind::ExposId; }
 
 // A run of changed bytes in a CodeText: a second table beside `spans` rather
 // than two more `SpanKind`s, because a change run *contains* semantic spans
@@ -108,10 +127,56 @@ struct ChangeRun {
     friend bool operator==(const ChangeRun&, const ChangeRun&) = default;
 };
 
+// A line-break hint in the draft's source: a place inside code where LaTeX may
+// break the line, or must. The draft writes them by hand where a long name
+// would overfill a line, and like `Span::no_correction` they are typesetting
+// that inherited wording has to carry to come back out as the draft spells it.
+enum class LayoutHintKind {
+    Break,     // \brk: the line may break here, with no hyphen
+    Hyphen,    // \-: the line may break here, with a hyphen
+    LineBreak, // \linebreak: break here if it helps
+    NewLine,   // \newline: break here
+};
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::LayoutHintKind> = std::array{
+    beman::specgen::ir::LayoutHintKind::Break,
+    beman::specgen::ir::LayoutHintKind::Hyphen,
+    beman::specgen::ir::LayoutHintKind::LineBreak,
+    beman::specgen::ir::LayoutHintKind::NewLine,
+};
+
+namespace beman::specgen::ir {
+
+std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
+std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
+
+// One hint, between two bytes of a CodeText's text: `at` is the offset of the
+// byte it precedes, or the text's size for one at the end. `braced` says the
+// draft wrote the empty group after the macro (`\brk{}`), which it mostly
+// does and which is the only other thing there is to its spelling.
+//
+// A third table beside `spans` and `changes`, for the reason `changes` is a
+// second one: a hint can sit inside a span (`\exposid{bound-en\-tity}`), and
+// spans do not nest. Keeping the hints out of `text` and out of a span's
+// payload is what lets everything that reads code -- the differ, the
+// validator, the other two backends -- go on reading the name and not the
+// LaTeX. Sorted by `at`. Only a backend that writes draft LaTeX reads them.
+struct LayoutHint {
+    std::size_t    at     = 0;
+    LayoutHintKind kind   = LayoutHintKind::Break;
+    bool           braced = false;
+
+    friend bool operator==(const LayoutHint&, const LayoutHint&) = default;
+};
+
 struct CodeText {
-    std::string            text;
-    std::vector<Span>      spans;        // sorted by begin, non-overlapping
-    std::vector<ChangeRun> changes = {}; // the wording diff's marks, usually none
+    std::string             text;
+    std::vector<Span>       spans;        // sorted by begin, non-overlapping
+    std::vector<ChangeRun>  changes = {}; // the wording diff's marks, usually none
+    std::vector<LayoutHint> hints   = {}; // the draft's line-break hints, usually none
 
     friend bool operator==(const CodeText&, const CodeText&) = default;
 };
@@ -127,24 +192,45 @@ struct CodeInline {
 
     friend bool operator==(const CodeInline&, const CodeInline&) = default;
 }; // \tcode; spans allow exposid etc.
+// A cross-reference to a stable name. The draft has two forms, and which one
+// is written is part of the wording: \iref{x} is the parenthesized reference
+// that annotates what precedes it ("the requirements (22.10.17)"), and
+// \ref{x} is the number alone, which the sentence around it reads as a noun
+// ("Within subclause 22.10.17, ..."). `bare` is the second.
 struct RefInline {
     std::string stable_name;
+    bool        bare = false;
 
     friend bool operator==(const RefInline&, const RefInline&) = default;
 };
 // A library concept name, rendered with the draft's \libconcept macro (not
 // \tcode). Constraints prose uses the "`X` models `C`" form, where `C` is a
 // ConceptRef; see the Constraints derivation (design §5.1).
+//
+// `exposition` marks an exposition-only concept, the draft's \exposconcept{x}:
+// a name the wording defines for its own use, set in italics as an
+// exposition-only identifier is and indexed apart from the library's concepts.
 struct ConceptRef {
     std::string name;
+    bool        exposition = false;
+    // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
+    bool no_correction = false;
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
 // An italic placeholder name: the draft's \placeholder{x}, and \cv{} (text
 // "cv"), which sets the same italic in text and in math. Not code: the name
 // stands for whatever the surrounding wording replaces it with.
+//
+// `cv_qualifier` marks a placeholder that stands for cv-qualifiers, the
+// draft's \cvqual{x} (`cv2`, say). It prints as any placeholder does, and the
+// LaTeX backend writes the macro the draft uses. \cv{} is \cvqual{cv}; it
+// stays the text "cv" with this unset, as it was before the flag existed.
 struct PlaceholderInline {
     std::string text;
+    bool        cv_qualifier = false;
+    // The draft wrote \placeholdernc: typesetting, as `Span::no_correction` is.
+    bool no_correction = false;
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };
@@ -199,6 +285,13 @@ using Inline    = std::variant<TextInline,
                                RawInline,
                                ChangedInline>;
 using Paragraph = std::vector<Inline>;
+
+// A piece of wording with the draft's typesetting taken off: the choice
+// between a macro and its no-italic-correction twin, and the line-break
+// hints. Two pieces that differ only there say the same thing, which is how
+// the wording diff compares them.
+CodeText    without_typesetting(CodeText code);
+PlainInline without_typesetting(PlainInline piece);
 
 // --- description elements --------------------------------------------------
 // Declaration order IS canonical [structure.specifications] order.

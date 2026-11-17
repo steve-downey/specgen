@@ -69,6 +69,9 @@ using beman::specgen::ir::Inline;
 using beman::specgen::ir::ItemDecl;
 using beman::specgen::ir::ItemDescr;
 using beman::specgen::ir::Itemize;
+using beman::specgen::ir::layout_hint_from_name;
+using beman::specgen::ir::layout_hint_name;
+using beman::specgen::ir::LayoutHint;
 using beman::specgen::ir::member_kind_from_name;
 using beman::specgen::ir::member_kind_name;
 using beman::specgen::ir::MemberKind;
@@ -99,6 +102,8 @@ struct json_descriptor<Span> {
         field("end", &Span::end),
         enum_field("kind", &Span::kind, span_kind_name, span_kind_from_name, "span kind"),
         field("payload", &Span::payload),
+        // Absent when the span does not say, which every generated span does not.
+        optional_field("nc", &Span::no_correction),
     };
 };
 
@@ -111,15 +116,26 @@ struct json_descriptor<ChangeRun> {
     };
 };
 
+template <>
+struct json_descriptor<LayoutHint> {
+    static constexpr auto members = std::tuple{
+        field("at", &LayoutHint::at),
+        enum_field("kind", &LayoutHint::kind, layout_hint_name, layout_hint_from_name, "layout hint"),
+        defaulted_field("braced", &LayoutHint::braced),
+    };
+};
+
 // `changes` is omitted when empty (docs/plans/wording-diff.md): the marks
 // are the one field added to this frozen schema after the fact, and an
 // unmarked document has to serialize exactly as it did before they existed.
-// The same holds for every `change` key below.
+// The same holds for every `change` key below, and for `hints`, which only
+// code read from the draft has.
 template <>
 struct json_descriptor<CodeText> {
     static constexpr auto members = std::tuple{field("text", &CodeText::text),
                                                field("spans", &CodeText::spans),
-                                               defaulted_field("changes", &CodeText::changes)};
+                                               defaulted_field("changes", &CodeText::changes),
+                                               defaulted_field("hints", &CodeText::hints)};
 };
 
 template <>
@@ -342,6 +358,9 @@ struct json_descriptor<ItemDescr> {
         std::tuple{field("elements", &ItemDescr::elements), field("leading", &ItemDescr::leading)};
 };
 
+// `bare`, `expos`, `cvqual` and `nc` are omitted when unset, as `changes` is: each
+// was added to an inline that already had a tag, and a document that uses none
+// of them serializes as it did before.
 template <>
 struct json_descriptor<TextInline> {
     static constexpr auto members = std::tuple{field("text", &TextInline::text)};
@@ -354,17 +373,22 @@ struct json_descriptor<CodeInline> {
 
 template <>
 struct json_descriptor<RefInline> {
-    static constexpr auto members = std::tuple{field("stable", &RefInline::stable_name)};
+    static constexpr auto members =
+        std::tuple{field("stable", &RefInline::stable_name), defaulted_field("bare", &RefInline::bare)};
 };
 
 template <>
 struct json_descriptor<ConceptRef> {
-    static constexpr auto members = std::tuple{field("name", &ConceptRef::name)};
+    static constexpr auto members = std::tuple{field("name", &ConceptRef::name),
+                                               defaulted_field("expos", &ConceptRef::exposition),
+                                               defaulted_field("nc", &ConceptRef::no_correction)};
 };
 
 template <>
 struct json_descriptor<PlaceholderInline> {
-    static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text)};
+    static constexpr auto members = std::tuple{field("text", &PlaceholderInline::text),
+                                               defaulted_field("cvqual", &PlaceholderInline::cv_qualifier),
+                                               defaulted_field("nc", &PlaceholderInline::no_correction)};
 };
 
 template <>

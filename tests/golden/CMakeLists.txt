@@ -190,7 +190,11 @@ function(specgen_add_golden case)
     elseif(ARG_MODE STREQUAL "generate" OR ARG_MODE STREQUAL "import")
         set(expected "${expected_dir}/expected.json")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.json")
-    elseif(ARG_MODE STREQUAL "diagnose" OR ARG_MODE STREQUAL "validate")
+    elseif(
+        ARG_MODE STREQUAL "diagnose"
+        OR ARG_MODE STREQUAL "validate"
+        OR ARG_MODE STREQUAL "import-diagnose"
+    )
         set(expected "${case_dir}/expected.diag")
         set(actual "${CMAKE_CURRENT_BINARY_DIR}/${stem}.diag")
     elseif(ARG_MODE STREQUAL "depfile")
@@ -798,6 +802,38 @@ specgen_add_golden(
     draft_func_wrap_move_wording
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_move/expected.json"
+)
+
+# [func.wrap.ref] is the subclause that uses the draft's vocabulary most widely
+# of the three wrappers: a bare `\ref`, `\cvqual`, `\exposconcept`, `\opt`,
+# a `\newline` inside `\tcode`, and the no-italic-correction forms (issues
+# #306 and #307). The `_findings` case pins what the importer reports for it,
+# which is what a paper's build sees on every run.
+specgen_add_golden(
+    draft_func_wrap_ref
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.ref.slice"
+    SECTION func.wrap.ref
+)
+specgen_add_golden(
+    draft_func_wrap_ref_findings
+    MODE import-diagnose
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.ref.slice"
+    SECTION func.wrap.ref
+)
+specgen_add_golden(
+    draft_func_wrap_ref_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_ref/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_ref_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_ref/expected.json"
+)
+specgen_add_golden(
+    draft_func_wrap_ref_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_ref/expected.json"
 )
 
 # A subclause with library tables and references to them, which the importer

@@ -562,6 +562,9 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
         span.begin = moved(span.begin);
         span.end   = moved(span.end);
     }
+    // substrate generic algorithm: the same move for the line-break hints, which are offsets into the text too.
+    for (ir::LayoutHint& hint : out.code.hints)
+        hint.at = moved(hint.at);
     return out;
 }
 

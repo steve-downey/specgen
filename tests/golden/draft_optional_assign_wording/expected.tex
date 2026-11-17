@@ -207,8 +207,8 @@ See \tref{optional.assign.move.templ}. The result of the expression \tcode{rhs.h
 {\tcode{*this} does not contain a value}
 
 \rowhdr{\tcode{rhs} contains a value} &
-assigns \tcode{std::move(rhs).operator*()} to \exposid{val} &
-direct-non-list-initializes \exposid{val} with \tcode{std::move(rhs).operator*()} \\
+assigns \tcode{std::move(rhs).op\-erator*()} to \exposid{val} &
+direct-non-list-initializes \exposid{val} with \tcode{std::move(rhs).opera\-tor*()} \\
 \rowsep
 
 \rowhdr{\tcode{rhs} does not contain a value} &
@@ -241,7 +241,7 @@ template<class... Args> constexpr T& emplace(Args&&... args);
 
 \pnum
 \effects
-Calls \tcode{*this = nullopt}. Then direct-non-list-initializes \exposid{val} with \tcode{std::forward<Args>(args)...}.
+Calls \tcode{*this = nullopt}. Then direct-non-list-initializes \exposid{val} with \tcode{std::forward<Args>(args\brk{})...}.
 
 \pnum
 \ensures
@@ -272,7 +272,7 @@ template<class U, class... Args> constexpr T& emplace(initializer_list<U> il, Ar
 
 \pnum
 \effects
-Calls \tcode{*this = nullopt}. Then direct-non-list-initializes \exposid{val} with \tcode{il, std::forward<Args>(args)...}.
+Calls \tcode{*this = nullopt}. Then direct-non-list-initializes \exposid{val} with \tcode{il, std::forward<Args>(\brk{}args)...}.
 
 \pnum
 \ensures

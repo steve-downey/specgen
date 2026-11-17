@@ -52,13 +52,9 @@ std::string trim_copy(std::string_view s) {
     return std::string(s);
 }
 
-// The layout hints the importer drops: `\brk{}`, `\brk`, `\-`.
-std::string drop_hints(std::string text) {
-    for (const std::string_view hint : {"\\brk{}", "\\brk", "\\-"})
-        for (std::string::size_type at = 0; (at = text.find(hint, at)) != std::string::npos;)
-            text.erase(at, hint.size());
-    // `\~` is the accent macro the draft writes for a tilde in code; the
-    // backend writes the same character as `\textasciitilde{}`.
+// `\~` is the accent macro the draft writes for a tilde in code; the backend
+// writes the same character as `\textasciitilde{}`.
+std::string one_tilde_spelling(std::string text) {
     for (std::string::size_type at = 0; (at = text.find("\\~", at)) != std::string::npos;)
         text.replace(at, 2, "\\textasciitilde{}");
     return text;
@@ -66,9 +62,10 @@ std::string drop_hints(std::string text) {
 
 // What the importer is allowed to change in a round trip: line breaks inside a
 // paragraph, blank lines, `%` line joiners, comment lines, index entries
-// that are not library index entries, and `\exposid` against its
-// no-italic-correction form inside a listing. Everything else has to come
-// back as it went in.
+// that are not library index entries, and the spelling of a tilde in code.
+// Everything else has to come back as it went in, the line-break hints inside
+// code and the choice between a macro and its no-italic-correction twin
+// included.
 std::vector<std::string> normalize(std::string_view tex) {
     std::vector<std::string> out;
     bool                     verbatim = false;
@@ -83,15 +80,11 @@ std::vector<std::string> normalize(std::string_view tex) {
         if (!verbatim && line.ends_with('%'))
             line.pop_back();
         if (!verbatim)
-            line = drop_hints(line);
+            line = one_tilde_spelling(line);
         const bool opens =
             !verbatim && (line.starts_with("\\begin{codeblock}") || line.starts_with("\\begin{itemdecl}"));
         const bool closes = verbatim && (line.starts_with("\\end{codeblock}") || line.starts_with("\\end{itemdecl}"));
         if (verbatim || opens || closes) {
-            for (std::string::size_type at = 0; (at = raw.find("\\exposid{", at)) != std::string::npos;)
-                raw.replace(at, 9, "\\exposidnc{");
-            line = drop_hints(line);
-            raw  = drop_hints(raw);
             out.push_back(verbatim && !closes ? raw.substr(0, raw.find_last_not_of(" \t") + 1) : line);
             verbatim = !closes && (verbatim || opens);
             joining  = false;
@@ -186,8 +179,8 @@ Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \
     const auto& amp = std::get<ir::CodeInline>(para[4]).code;
     CHECK(amp.text == "&");
     CHECK(std::get<ir::PlaceholderInline>(para[6]).text == "ref");
-    CHECK(std::get<ir::RefInline>(para[8]).stable_name == "y");
-    CHECK(std::get<ir::ConceptRef>(para[10]).name == "c");
+    CHECK(std::get<ir::RefInline>(para[8]) == ir::RefInline{"y"});
+    CHECK(std::get<ir::ConceptRef>(para[10]) == ir::ConceptRef{"c"});
     const auto& expos = std::get<ir::CodeInline>(para[12]).code;
     CHECK(expos.text == "is-callable-from<VT>");
     REQUIRE(expos.spans.size() == 1);
@@ -197,6 +190,27 @@ Meets \oldconcept{Destructible} for \cv{}\tcode{\&} and \placeholder{ref}, see \
     CHECK(bare.spans.size() == 1);
     CHECK(bare.spans[0].kind == ir::SpanKind::ExposId);
     CHECK(std::get<ir::CodeInline>(para[16]).code.spans[0].kind == ir::SpanKind::SeeBelow);
+}
+
+TEST_CASE("draft_import - a bare \\ref, an exposition-only concept and a cv-qualifier placeholder are kinds") {
+    // Each is the kind its nearest relative already imports to, with the one thing
+    // that tells them apart: `\ref` is `\iref` without the parentheses, `\exposconcept`
+    // a concept that is exposition-only, `\cvqual` a placeholder for cv-qualifiers.
+    // None is reported, and the LaTeX backend writes each macro back as it was read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Within subclause~\ref{y}, a type that satisfies \exposconcept{constexpr-param} for some \cvqual{cv2}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    REQUIRE(para.size() == 7);
+    CHECK(std::get<ir::RefInline>(para[1]) == ir::RefInline{.stable_name = "y", .bare = true});
+    CHECK(std::get<ir::ConceptRef>(para[3]) == ir::ConceptRef{.name = "constexpr-param", .exposition = true});
+    CHECK(std::get<ir::PlaceholderInline>(para[5]) == ir::PlaceholderInline{.text = "cv2", .cv_qualifier = true});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "Within subclause~\\ref{y}, a type that satisfies \\exposconcept{constexpr-param} for some \\cvqual{cv2}."));
 }
 
 TEST_CASE("draft_import - escapes in a listing become spans, and an unknown escape stays the author's") {
@@ -304,6 +318,7 @@ foo
 
 TEST_CASE("draft_import - the corpus slices round-trip through the LaTeX backend") {
     for (const auto& [file, section] : {std::pair{"func.wrap.move.slice", "func.wrap.move"},
+                                        std::pair{"func.wrap.ref.slice", "func.wrap.ref"},
                                         std::pair{"optional.ctor.slice", "optional.ctor"},
                                         std::pair{"optional.assign.slice", "optional.assign"}}) {
         CAPTURE(file);
@@ -387,20 +402,150 @@ Within, \tcode{\placeholder{call-args}} is a pack and \exposid{z} is not.
     CHECK(rendered.contains("\\tcode{\\placeholder{call-args}} is a pack and \\exposid{z} is not"));
 }
 
-TEST_CASE("draft_import - a \\tcode holding a macro the IR has no kind for is kept whole as raw LaTeX") {
-    // Kept as the text `\cvqual{cv2}`, the LaTeX backend would escape the backslash and the
-    // braces and the wording would print the macro; kept as LaTeX it writes back as it was.
+TEST_CASE("draft_import - \\cvqual and \\opt in code are spans, in a \\tcode and in a listing") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-For \tcode{R(Args...) \cvqual{cv2} noexcept}, and \tcode{plain}.
+Of the form \tcode{R(G::*)(A...) \cvqual{cv2} \opt{\&} noexcept(E)}, as in:
+\begin{codeblock}
+is_convertible_v<int @\cv{}@&, int @\cvqual{cv2}@&> @\opt{noexcept}@
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& code    = std::get<ir::CodeInline>(std::get<ir::BodyParagraph>(leading.at(0)).text.at(1)).code;
+    CHECK(code.text == "R(G::*)(A...) cv2 & noexcept(E)");
+    REQUIRE(code.spans.size() == 2);
+    CHECK(code.spans[0] == ir::Span{14, 17, ir::SpanKind::CvQualifier, "cv2"});
+    // The span covers the code that may be absent, with its escape resolved.
+    CHECK(code.spans[1] == ir::Span{18, 19, ir::SpanKind::Optional, ""});
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "is_convertible_v<int cv&, int cv2&> noexcept");
+    REQUIRE(listing.spans.size() == 3);
+    CHECK(listing.spans[1] == ir::Span{30, 33, ir::SpanKind::CvQualifier, "cv2"});
+    CHECK(listing.spans[2] == ir::Span{36, 44, ir::SpanKind::Optional, ""});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("Of the form \\tcode{R(G::*)(A...) \\cvqual{cv2} \\opt{\\&} noexcept(E)}, as in:"));
+    CHECK(rendered.contains("is_convertible_v<int @\\cv{}@&, int @\\cvqual{cv2}@&> @\\opt{noexcept}@\n"));
+}
+
+TEST_CASE("draft_import - a span says which form of its macro the draft wrote, where the context would not") {
+    // The draft has a no-italic-correction twin of each italic macro and chooses by
+    // hand. In a \tcode the plain form is what this tool writes, so the twin is
+    // recorded; in a listing an exposition-only name is written as the twin, so there
+    // it is the plain form that is recorded. Either way the wording comes back out as
+    // the draft spells it (issue #306).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The type \tcode{R(*)(\exposidnc{B}, \exposid{c}) noexcept(\placeholdernc{noex})}, and \exposidnc{z}, \placeholdernc{p}, \exposconceptnc{k} and \seebelownc.
+\begin{codeblock}
+bool @\exposid{a}@ = @\exposidnc{b}@(@\placeholdernc{noex}@, @\placeholder{q}@) @\seebelownc@;
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    const auto& code    = std::get<ir::CodeInline>(para.at(1)).code;
+    REQUIRE(code.spans.size() == 3);
+    CHECK(code.spans[0].no_correction == std::optional<bool>{true});
+    CHECK(code.spans[1].no_correction == std::nullopt);
+    CHECK(code.spans[2].no_correction == std::optional<bool>{true});
+    CHECK(std::get<ir::CodeInline>(para.at(3)).code.spans.at(0).no_correction == std::optional<bool>{true});
+    CHECK(std::get<ir::PlaceholderInline>(para.at(5)).no_correction);
+    CHECK(std::get<ir::ConceptRef>(para.at(7)) ==
+          ir::ConceptRef{.name = "k", .exposition = true, .no_correction = true});
+    CHECK(std::get<ir::CodeInline>(para.at(9)).code.spans.at(0).no_correction == std::optional<bool>{true});
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    REQUIRE(listing.spans.size() == 5);
+    CHECK(listing.spans[0].no_correction == std::optional<bool>{false});
+    CHECK(listing.spans[1].no_correction == std::nullopt);
+    CHECK(listing.spans[2].no_correction == std::optional<bool>{true});
+    CHECK(listing.spans[3].no_correction == std::nullopt);
+    CHECK(listing.spans[4].no_correction == std::optional<bool>{true});
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(
+        rendered.contains("The type \\tcode{R(*)(\\exposidnc{B}, \\exposid{c}) noexcept(\\placeholdernc{noex})}, and "
+                          "\\exposidnc{z}, \\placeholdernc{p}, \\exposconceptnc{k} and \\seebelownc."));
+    CHECK(rendered.contains("bool @\\exposid{a}@ = @\\exposidnc{b}@(@\\placeholdernc{noex}@, @\\placeholder{q}@) "
+                            "@\\seebelownc@;\n"));
+}
+
+TEST_CASE("draft_import - a line-break hint in code is kept beside the text, and written back where it was") {
+    // The hint is not code, so the text and a span's name are clean; and it is not
+    // dropped, so the LaTeX comes back as the draft has it (issue #306). The spaces
+    // after `\newline` are TeX's to discard and are not code either.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+With \tcode{std::forward<Args>\brk{}(args)...}, \tcode{ilist, std::for\-ward<Args>(args)...},
+\tcode{remove_cvref_t<ArgTypes>::\newline
+value...}, \exposid{bound-en\-tity}, \exposid{bound-\brk{}entity} and \tcode{x.\exposid{thunk-\brk ptr}}.
+\begin{codeblock}
+R (*@\exposid{thunk-\brk{}ptr}@)(int);
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    const auto  code_at = [&](std::size_t i) -> const ir::CodeText& {
+        return std::get<ir::CodeInline>(para.at(i)).code;
+    };
+    using Hints = std::vector<ir::LayoutHint>;
+    CHECK(code_at(1).text == "std::forward<Args>(args)...");
+    CHECK(code_at(1).hints == Hints{{18, ir::LayoutHintKind::Break, true}});
+    CHECK(code_at(3).text == "ilist, std::forward<Args>(args)...");
+    CHECK(code_at(3).hints == Hints{{15, ir::LayoutHintKind::Hyphen}});
+    CHECK(code_at(5).text == "remove_cvref_t<ArgTypes>::value...");
+    CHECK(code_at(5).hints == Hints{{26, ir::LayoutHintKind::NewLine}});
+    CHECK(code_at(7).text == "bound-entity");
+    CHECK(code_at(7).spans.at(0).payload == "bound-entity");
+    CHECK(code_at(7).hints == Hints{{8, ir::LayoutHintKind::Hyphen}});
+    CHECK(code_at(9).hints == Hints{{6, ir::LayoutHintKind::Break, true}});
+    CHECK(code_at(11).text == "x.thunk-ptr");
+    CHECK(code_at(11).spans.at(0) == ir::Span{2, 11, ir::SpanKind::ExposId, "thunk-ptr"});
+    CHECK(code_at(11).hints == Hints{{8, ir::LayoutHintKind::Break}});
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "R (*thunk-ptr)(int);");
+    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr", false});
+    CHECK(listing.hints == Hints{{10, ir::LayoutHintKind::Break, true}});
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "With \\tcode{std::forward<Args>\\brk{}(args)...}, \\tcode{ilist, std::for\\-ward<Args>(args)...}, "
+        "\\tcode{remove_cvref_t<ArgTypes>::\\newline value...}, \\exposid{bound-en\\-tity}, "
+        "\\exposid{bound-\\brk{}entity} and \\tcode{x.\\exposid{thunk-\\brk ptr}}."));
+    CHECK(rendered.contains("R (*@\\exposid{thunk-\\brk{}ptr}@)(int);\n"));
+}
+
+TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
+    // A span cannot hold another span, so the format grammar's
+    // `\opt{\fmtgrammarterm{arg-id}}` stays what it was: unread, and reported.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+If \tcode{\{ \opt{\fmtgrammarterm{arg-id}} \}} is used.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(has_diag(r, Severity::Warning, "kept as raw LaTeX: \\opt"));
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    CHECK(std::holds_alternative<ir::RawInline>(para[1]));
+}
+
+TEST_CASE("draft_import - a \\tcode holding a macro the IR has no kind for is kept whole as raw LaTeX") {
+    // Kept as the text `\grammarterm{id}`, the LaTeX backend would escape the backslash and
+    // the braces and the wording would print the macro; kept as LaTeX it writes back as it was.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+For \tcode{R(Args...) \grammarterm{id} noexcept}, and \tcode{plain}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
-    CHECK(r.diagnostics.front().message.contains("\\cvqual"));
+    CHECK(r.diagnostics.front().message.ends_with("kept as raw LaTeX: \\grammarterm"));
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     REQUIRE(std::holds_alternative<ir::RawInline>(para[1]));
-    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\tcode{R(Args...) \\cvqual{cv2} noexcept}");
+    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\tcode{R(Args...) \\grammarterm{id} noexcept}");
     CHECK(std::holds_alternative<ir::CodeInline>(para[3]));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains("For \\tcode{R(Args...) \\cvqual{cv2} noexcept}, and \\tcode{plain}."));
+    CHECK(rendered.contains("For \\tcode{R(Args...) \\grammarterm{id} noexcept}, and \\tcode{plain}."));
 }

@@ -24,3 +24,11 @@ A revision [[delete:][requires @@latex:\oldconcept{CopyConstructible}@@@@html:<i
 #+begin_pnum
 See [[gadget.table][Table @@html:[gadget.table]@@@@latex:{[}gadget.table{]}@@]] lists them, and @@latex:\term{unknown}@@ stays as written.
 #+end_pnum
+
+#+begin_pnum
+Within subclause [[https://eel.is/c++draft/gadget.placeholders][@@html:[gadget.placeholders]@@@@latex:{[}gadget.placeholders{]}@@]], a type that satisfies @@latex:\exposconcept{gadget-like}@@@@html:<code><var>gadget-like</var></code>@@ models ~copyable~ for some @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@ ([[https://eel.is/c++draft/gadget.table][@@html:[gadget.table]@@@@latex:{[}gadget.table{]}@@]]).
+#+end_pnum
+
+#+begin_pnum
+A revision [[delete:][cites {{{sref(gadget.table)}}}]][[insert:][cites subclause {{{sref(gadget.table)}}} for @@latex:\exposconcept{gadget-like}@@@@html:<code><var>gadget-like</var></code>@@ and @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@]].
+#+end_pnum

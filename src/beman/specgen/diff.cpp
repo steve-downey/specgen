@@ -101,7 +101,10 @@ bool same_prose(const ProseToken& a, const ProseToken& b) {
     const auto* tb = std::get_if<ir::TextInline>(&b);
     if (ta != nullptr && tb != nullptr)
         return rstripped(ta->text) == rstripped(tb->text);
-    return a == b;
+    // Which of a macro's two forms the draft's source wrote is typesetting, so
+    // two tokens that differ only there are the same token, and the kept one
+    // is the current revision's.
+    return a == b || ir::without_typesetting(a) == ir::without_typesetting(b);
 }
 
 // `prose_tokens`' dispatch over the plain inline kinds; the last, a
@@ -317,12 +320,21 @@ diff_paragraph_list(const std::vector<ir::Paragraph>& a, const std::vector<ir::P
 
 // --- code tokens --------------------------------------------------------------
 
+// Two spans that say the same thing: the same range, kind and payload. Which
+// form of its macro a span takes (`Span::no_correction`) is typesetting, and
+// the diff compares wording.
+bool same_span(const ir::Span& a, const ir::Span& b) {
+    return a.begin == b.begin && a.end == b.end && a.kind == b.kind && a.payload == b.payload;
+}
+
 // One line of a CodeText, its spans' offsets relative to the line.
 struct Line {
     std::string           text;
     std::vector<ir::Span> spans;
 
-    friend bool operator==(const Line&, const Line&) = default;
+    friend bool operator==(const Line& a, const Line& b) {
+        return a.text == b.text && std::ranges::equal(a.spans, b.spans, same_span);
+    }
 };
 
 std::vector<Line> lines_of(const ir::CodeText& code) {
@@ -364,7 +376,8 @@ struct CodeToken {
 // Two tokens are the same token whatever whitespace follows them, as two
 // words are; the kept one takes the current revision's spacing.
 bool same_code_token(const CodeToken& a, const CodeToken& b) {
-    return rstripped(a.text) == rstripped(b.text) && a.span == b.span;
+    return rstripped(a.text) == rstripped(b.text) && a.span.has_value() == b.span.has_value() &&
+           (!a.span || same_span(*a.span, *b.span));
 }
 
 std::vector<CodeToken> code_tokens(const Line& line) {
@@ -382,8 +395,10 @@ std::vector<CodeToken> code_tokens(const Line& line) {
     // the lexer itself.
     while (pos < line.text.size()) {
         if (span != line.spans.end() && span->begin == pos) {
-            const std::size_t end = take_space(span->end);
-            ir::Span          relative{0, span->end - pos, span->kind, span->payload};
+            const std::size_t end      = take_space(span->end);
+            ir::Span          relative = *span;
+            relative.begin             = 0;
+            relative.end               = span->end - pos;
             out.push_back(CodeToken{line.text.substr(pos, end - pos), relative});
             ++span;
             pos = end;
@@ -542,7 +557,12 @@ void append_merged_group(BuiltCode&                      out,
 }
 
 ir::CodeText diff_code(const ir::CodeText& a, const ir::CodeText& b, const Options& options) {
-    if (a == b)
+    // The same wording is the current revision's code as it stands, with its
+    // typesetting. Code that did change is rebuilt below from tokens, and a
+    // token carries no line-break hint: the rebuilt code has none, which costs
+    // a listing nothing, since the draft's listings have them only inside a
+    // name and break their lines in their own text.
+    if (a == b || ir::without_typesetting(a) == ir::without_typesetting(b))
         return b;
     const std::vector<Line> la     = lines_of(a);
     const std::vector<Line> lb     = lines_of(b);

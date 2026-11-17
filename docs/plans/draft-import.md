@@ -370,3 +370,39 @@ inherited.
 each as raw LaTeX and warns, and keeps a whole `\tcode` holding one as raw LaTeX, since the macro as
 text would be escaped. They occur only in [func.wrap.ref], where the headers author the wording, so
 `beman.constexpr_callables` lets exactly those warnings through. Open: the kinds.
+
+Log:
+
+- 2026-11-16: `\ref`, `\exposconcept` and `\cvqual` in prose are read (issue #307). None needed
+  an inline kind of its own: each is a flag on the kind its nearest relative imports to
+  (`RefInline::bare`, `ConceptRef::exposition`, `PlaceholderInline::cv_qualifier`), so every
+  consumer that dispatches on the inline's kind is untouched and the differ still sees one
+  token. [func.wrap.ref] is now a corpus slice, with a golden for what its import reports.
+- 2026-11-16: `\cvqual` and `\opt` inside code are read (issue #307), as two span kinds,
+  `CvQualifier` and `Optional`. A flag would not do here: a `Span` has a kind and a payload and
+  nothing else, and the kind is what a backend dispatches on. `Optional` covers the code that
+  may be absent, so its argument has to be code alone; an `\opt` around another macro is still
+  kept raw, because spans do not nest.
+- 2026-11-16: the no-italic-correction forms survive the import (issue #306). The plan had them
+  dropped, with the layout hints, and the round-trip test normalized them away; the consumer's
+  claim is that unchanged wording is the draft's text, so they are kept. They are typesetting,
+  so they sit beside the wording and not in it: `Span::no_correction`, three-state, and a flag
+  on the two prose inlines. Unset means "what the context takes", and the importer sets it only
+  where the draft wrote the other form, so a generated span and an imported span that the
+  generator would have written the same way are the same IR. The differ compares through
+  `without_typesetting`. Measured on the draft's library clauses: `@\exposid{...}@` in a
+  listing 6,351 times against `@\exposidnc{...}@` 475, so the listing default this tool has
+  always written is the draft's minority form; that default is not changed here.
+- 2026-11-16: the line-break hints inside code survive too (issue #306), which also reads the
+  last of the five macros, the `\newline` in a `\tcode` (issue #307): [func.wrap.ref] imports
+  with no warning. They are `CodeText::hints`, a table of offsets beside the span table. Three
+  other shapes were weighed. Leaving the macro in a span's payload is what happened before for
+  `\exposid{bound-en\-tity}`, and it put LaTeX in the mpark and org output and made the name
+  differ from the same name written plainly. Zero-width spans cannot sit inside another span.
+  U+00AD and U+200B in the text are the right characters for `\-` and `\brk`, and would have
+  covered prose as well, but they are invisible in a golden and every comparison of code text
+  would have had to remember to strip them. Measured on the library clauses: about 560 hints
+  inside a `\tcode` and 17 inside an `\exposid`. Open: the hints in running text (`\br` 180,
+  `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
+  in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
+  left in the name.

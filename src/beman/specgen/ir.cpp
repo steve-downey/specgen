@@ -68,7 +68,15 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::ImplDefined>("impl-defined"sv),
                                 foundation::is<SpanKind::Placeholder>("placeholder"sv),
                                 foundation::is<SpanKind::Ref>("ref"sv),
-                                foundation::is<SpanKind::LibraryIndex>("library-index"sv));
+                                foundation::is<SpanKind::LibraryIndex>("library-index"sv),
+                                foundation::is<SpanKind::CvQualifier>("cvqual"sv),
+                                foundation::is<SpanKind::Optional>("opt"sv));
+
+inline constexpr auto kLayoutHintNames =
+    foundation::table<LayoutHintKind>(foundation::is<LayoutHintKind::Break>("brk"sv),
+                                      foundation::is<LayoutHintKind::Hyphen>("hyphen"sv),
+                                      foundation::is<LayoutHintKind::LineBreak>("linebreak"sv),
+                                      foundation::is<LayoutHintKind::NewLine>("newline"sv));
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
@@ -107,6 +115,11 @@ std::optional<Disposition> disposition_from_name(std::string_view s) { return en
 
 std::string_view          member_kind_name(MemberKind k) { return kMemberKindNames[k]; }
 std::optional<MemberKind> member_kind_from_name(std::string_view s) { return enumerator_named(kMemberKindNames, s); }
+
+std::string_view              layout_hint_name(LayoutHintKind k) { return kLayoutHintNames[k]; }
+std::optional<LayoutHintKind> layout_hint_from_name(std::string_view s) {
+    return enumerator_named(kLayoutHintNames, s);
+}
 
 std::string_view      change_name(Change c) { return kChangeNames[c]; }
 std::optional<Change> change_from_name(std::string_view s) { return enumerator_named(kChangeNames, s); }
@@ -297,6 +310,37 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
             return out;
         });
 }
+
+CodeText without_typesetting(CodeText code) {
+    std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
+    code.hints.clear();
+    return code;
+}
+
+namespace {
+
+// `without_typesetting`'s dispatch over the plain inline kinds: the three that
+// carry typesetting lose it, and the rest are returned as they came.
+struct TypesettingRemover {
+    PlainInline operator()(TextInline v) const { return v; }
+    PlainInline operator()(CodeInline v) const { return CodeInline{without_typesetting(std::move(v.code))}; }
+    PlainInline operator()(RefInline v) const { return v; }
+    PlainInline operator()(ConceptRef v) const {
+        v.no_correction = false;
+        return v;
+    }
+    PlainInline operator()(PlaceholderInline v) const {
+        v.no_correction = false;
+        return v;
+    }
+    PlainInline operator()(OldConceptRef v) const { return v; }
+    PlainInline operator()(TableRef v) const { return v; }
+    PlainInline operator()(RawInline v) const { return v; }
+};
+
+} // namespace
+
+PlainInline without_typesetting(PlainInline piece) { return std::visit(TypesettingRemover{}, std::move(piece)); }
 
 bool has_description(const ItemDescr& d) { return !d.leading.empty() || !d.elements.empty(); }
 

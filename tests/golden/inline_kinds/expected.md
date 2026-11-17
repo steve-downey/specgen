@@ -12,4 +12,8 @@
 
 [#]{.pnum} See [Table \[gadget.table\]](#gadget.table) lists them, and `\term{unknown}`{=latex} stays as written.
 
+[#]{.pnum} Within subclause [gadget.placeholders]{- .sref}, a type that satisfies `$gadget-like$` models `copyable` for some *cv2* ([gadget.table]{- .sref}).
+
+[#]{.pnum} A revision [cites ([gadget.table]{- .sref})]{.rm}[cites subclause [gadget.table]{- .sref} for `$gadget-like$` and *cv2*]{.add}.
+
 :::

@@ -58,6 +58,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -95,7 +96,14 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
 }
 
 std::string render_code(const ir::CodeText& code) {
-    return backend::render_code_spans(code, escape_span, escape_span_in_run, backend::draft_change_codeblock);
+    // The block's bytes are the draft's, so a line-break hint inside a span is
+    // written as the LaTeX backend writes it.
+    return backend::render_code_spans(code,
+                                      escape_span,
+                                      escape_span_in_run,
+                                      backend::draft_change_codeblock,
+                                      std::identity{},
+                                      backend::draft_layout_hint_listing);
 }
 
 // One special block. `env` is the draft environment name org will export to,
@@ -205,7 +213,9 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::ImplDefined>([&] { return "<var>implementation-defined</var>"; }),
         foundation::when<ir::SpanKind::Placeholder>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + html_escape(span.payload) + "]"; }),
-        foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }));
+        foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }),
+        foundation::when<ir::SpanKind::CvQualifier>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
@@ -263,16 +273,28 @@ struct PieceRenderer {
 
     // A cross-reference to another stable name.  Build the link here, while
     // the IR still distinguishes it from authored prose and C++ punctuation.
+    // A bare reference, the draft's `\ref{x}`, is the same link without the
+    // parentheses around it.
     std::string operator()(const ir::RefInline& v) const {
         const std::string target =
             (under_new_root(v.stable_name, new_roots) ? "#" : "https://eel.is/c++draft/") + v.stable_name;
-        return "([[" + target + "][@@html:[" + v.stable_name + "]@@@@latex:{[}" + v.stable_name + "{]}@@]])";
+        const std::string link =
+            "[[" + target + "][@@html:[" + v.stable_name + "]@@@@latex:{[}" + v.stable_name + "{]}@@]]";
+        return v.bare ? link : '(' + link + ')';
     }
 
     // A library concept name. The draft's \libconcept sets the code font and
     // links; org has only the code font to offer, which is what `~...~` gives
-    // -- the same trade the mpark backend makes with backticks.
-    std::string operator()(const ir::ConceptRef& v) const { return '~' + v.name + '~'; }
+    // -- the same trade the mpark backend makes with backticks. An
+    // exposition-only concept is italic in the code font, which org's
+    // verbatim `~...~` cannot say, so it is an export snippet the way a code
+    // inline holding an exposition-only identifier is.
+    std::string operator()(const ir::ConceptRef& v) const {
+        if (v.exposition)
+            return "@@latex:" + backend::draft_concept(v) + "@@@@html:<code><var>" + html_escape(v.name) +
+                   "</var></code>@@";
+        return '~' + v.name + '~';
+    }
 
     // A placeholder name and a C++17 named requirement, italic in the draft.
     // Org's `/x/` is italic too, but only between whitespace or punctuation,
@@ -280,8 +302,7 @@ struct PieceRenderer {
     // would show as text. An export snippet has no such limit, and is the
     // form the exposition-only names in prose already use.
     std::string operator()(const ir::PlaceholderInline& v) const {
-        const std::string latex = v.text == "cv" ? std::string{"\\cv{}"} : "\\placeholder{" + v.text + '}';
-        return "@@latex:" + latex + "@@@@html:<i>" + v.text + "</i>@@";
+        return "@@latex:" + backend::draft_placeholder(v) + "@@@@html:<i>" + v.text + "</i>@@";
     }
     std::string operator()(const ir::OldConceptRef& v) const {
         return "@@latex:\\oldconcept{" + v.name + "}@@@@html:<i>Cpp17" + v.name + "</i>@@";
