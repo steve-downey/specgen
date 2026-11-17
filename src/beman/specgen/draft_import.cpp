@@ -1049,55 +1049,74 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
     bool                 new_para = false;
     bool                 fresh    = false; // a \pnum, and its tag if any, was the last thing read
 
+    // A list, a code block or a table that is the first thing in a body opens
+    // that body's numbered paragraph, as a backend writes it, so the prose
+    // after it continues the paragraph and does not take a number of its own
+    // (issue #315). One that is not first sits in the paragraph before it and
+    // leaves a pending number for the prose that follows.
+    const auto opens_paragraph = [&] {
+        if (target->empty())
+            new_para = false;
+    };
+
     std::size_t k = 0;
     // substrate generic algorithm: "Equivalent to:" looks one event ahead and
     // consumes it, so the index is the loop's state.
     while (k < events.size()) {
         const Event& event     = events[k++];
         const bool   was_fresh = std::exchange(fresh, false);
-        std::visit(
-            overloaded{[&](const EvPnum& e) {
-                           new_para = true;
-                           fresh    = true;
-                           if (e.tag) {
-                               descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
-                               target = &descr.elements.back().body;
-                           }
-                       },
-                       [&](const EvProse& e) {
-                           if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
-                               std::holds_alternative<EvCode>(events[k])) {
-                               target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
-                               ++k;
-                               new_para = false;
-                               return;
-                           }
-                           target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
-                           new_para = false;
-                       },
-                       [&](const EvItemize& e) {
-                           ir::Itemize list;
-                           // substrate generic algorithm: a cursor scan over variable-width input; the position is the
-                           // loop's state.
-                           for (const std::string& item : e.items)
-                               list.items.push_back(parse_prose(item));
-                           target->push_back(std::move(list));
-                       },
-                       [&](const EvCode& e) { target->push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
-                       [&](const EvNote& e) {
-                           if (e.example)
-                               target->push_back(ir::Example{parse_informative(e.inner)});
-                           else
-                               target->push_back(ir::Note{parse_informative(e.inner)});
-                       },
-                       [&](const EvTable& e) {
-                           if (e.flat)
-                               target->push_back(make_table1d(e));
-                           else
-                               target->push_back(make_table2d(e));
-                       },
-                       [&](const EvRaw& e) { target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true}); }},
-            event);
+        std::visit(overloaded{[&](const EvPnum& e) {
+                                  new_para = true;
+                                  fresh    = true;
+                                  if (e.tag) {
+                                      descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
+                                      target = &descr.elements.back().body;
+                                  }
+                              },
+                              [&](const EvProse& e) {
+                                  if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
+                                      std::holds_alternative<EvCode>(events[k])) {
+                                      target->push_back(
+                                          ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
+                                      ++k;
+                                      new_para = false;
+                                      return;
+                                  }
+                                  target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
+                                  new_para = false;
+                              },
+                              [&](const EvItemize& e) {
+                                  ir::Itemize list;
+                                  // substrate generic algorithm: a cursor scan over variable-width input; the position
+                                  // is the loop's state.
+                                  for (const std::string& item : e.items)
+                                      list.items.push_back(parse_prose(item));
+                                  opens_paragraph();
+                                  target->push_back(std::move(list));
+                              },
+                              [&](const EvCode& e) {
+                                  opens_paragraph();
+                                  target->push_back(ir::AuthoredCode{parse_code(e.code, true)});
+                              },
+                              [&](const EvNote& e) {
+                                  opens_paragraph();
+                                  if (e.example)
+                                      target->push_back(ir::Example{parse_informative(e.inner)});
+                                  else
+                                      target->push_back(ir::Note{parse_informative(e.inner)});
+                              },
+                              [&](const EvTable& e) {
+                                  opens_paragraph();
+                                  if (e.flat)
+                                      target->push_back(make_table1d(e));
+                                  else
+                                      target->push_back(make_table2d(e));
+                              },
+                              [&](const EvRaw& e) {
+                                  opens_paragraph();
+                                  target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, true});
+                              }},
+                   event);
     }
     return descr;
 }

@@ -571,3 +571,55 @@ four.
     CHECK(rendered.find("The value is \\tcode{true}, the name is \\tcode{a}\\tcode{b}, one two, threefour.") !=
           std::string::npos);
 }
+
+TEST_CASE("draft_import - prose after a block that opens an element continues the element's paragraph") {
+    // The block is the first thing after the tag, so it opens the numbered
+    // paragraph, and what follows it is the rest of that paragraph (issue #315).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\begin{itemdecl}
+void swap(optional& x);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{codeblock}
+is_reference_v<T> || is_swappable_v<T>
+\end{codeblock}
+is \tcode{true}.
+
+\pnum
+\effects
+\begin{itemize}
+\item
+If a, nothing.
+\item
+Otherwise, b.
+\end{itemize}
+Then the result is \tcode{x}.
+
+\pnum
+Finally, a paragraph with no tag.
+\end{itemdescr}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& descr = item_at(only_section(r), 0).descr;
+    REQUIRE(descr.elements.size() == 2);
+
+    const auto& constraints = descr.elements[0].body;
+    REQUIRE(constraints.size() == 2);
+    CHECK(std::holds_alternative<ir::AuthoredCode>(constraints[0]));
+    CHECK(std::get<ir::BodyParagraph>(constraints[1]).continuation);
+
+    const auto& effects = descr.elements[1].body;
+    REQUIRE(effects.size() == 3);
+    CHECK(std::holds_alternative<ir::Itemize>(effects[0]));
+    CHECK(std::get<ir::BodyParagraph>(effects[1]).continuation);
+    // The untagged paragraph has a \pnum of its own, and keeps it.
+    CHECK_FALSE(std::get<ir::BodyParagraph>(effects[2]).continuation);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(std::ranges::distance(std::views::split(rendered, std::string_view{"\\pnum"})) == 4);
+}

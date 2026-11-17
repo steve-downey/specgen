@@ -415,3 +415,17 @@ which is right for `text%` and wrong for `text % note`, where the space before t
 space: [tuple.cnstr] has `is\linebreak{} % Overfull` before a `\tcode`, and the two ran together
 (issue #313). The space before the comment now decides. A line that is only a comment says
 nothing either way, where before it joined the lines around it.
+
+### paragraph-after-a-block
+
+Which paragraph the prose after a list, a code block or a table belongs to. A backend numbers
+the first block of a body, whatever it is, and a `BodyParagraph` says whether it continues the
+paragraph before it. The importer set that from whether prose had been read since the last
+`\pnum`, so when the block came first, directly after the element's tag, the prose after it was
+read as a new numbered paragraph: [optional.specalg]'s *Constraints* for `swap` is a code block
+and then "is `true`.", and it came back with two numbers (issue #315). The first block of a body
+now takes the pending number, whatever kind it is. A block that is not first in its body leaves
+the number pending, because the IR has no way to say that a block which is not prose opens a
+numbered paragraph in the middle of a body. Open: that. The draft numbers a note or an example
+by itself often (502 times in the library clauses, 255 of them inside an `itemdescr`), and such
+a note loses its number unless it is first in its body (issue #321).
