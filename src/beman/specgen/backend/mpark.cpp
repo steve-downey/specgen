@@ -71,24 +71,31 @@ using beman::specgen::foundation::overloaded;
 // \textit{\texttt{...}}. Only a cross-reference needs the general form, since
 // its payload is a span with attributes rather than a run of text.
 std::string escape_span(const ir::Span& span, std::string_view spelling) {
-    return foundation::match(span.kind,
-                             foundation::when<ir::SpanKind::ExposId>([&] { return '$' + span.payload + '$'; }),
-                             foundation::when<ir::SpanKind::SeeBelow>([&] { return "$see below$"; }),
-                             foundation::when<ir::SpanKind::ImplDefined>([&] { return "$implementation-defined$"; }),
-                             foundation::when<ir::SpanKind::Placeholder>([&] { return '$' + span.payload + '$'; }),
-                             // No parentheses: a Ref span is the *bare* cross-reference the
-                             // draft's `\ref` sets inside a comment, and the author writes the
-                             // punctuation around it (`// \ref{optional.ctor}, constructors`).
-                             // `ir::RefInline` is the parenthesized prose form and keeps its
-                             // parens, matching `\iref` -- see PieceRenderer below.
-                             //
-                             // Wrapped in `@...@`, where the LaTeX backend deliberately leaves this
-                             // one kind unwrapped: that exception is a property of the *draft's*
-                             // listings setup (`texcl=true` puts comments in TeX mode already), and
-                             // mpark has no comment exception at all -- its scanner is purely
-                             // delimiter-driven and does not know a comment from any other text.
-                             foundation::when<ir::SpanKind::Ref>([&] { return "@[" + span.payload + "]{- .sref}@"; }),
-                             foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }));
+    return foundation::match(
+        span.kind,
+        foundation::when<ir::SpanKind::ExposId>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::SeeBelow>([&] { return "$see below$"; }),
+        foundation::when<ir::SpanKind::ImplDefined>([&] { return "$implementation-defined$"; }),
+        foundation::when<ir::SpanKind::Placeholder>([&] { return '$' + span.payload + '$'; }),
+        // No parentheses: a Ref span is the *bare* cross-reference the
+        // draft's `\ref` sets inside a comment, and the author writes the
+        // punctuation around it (`// \ref{optional.ctor}, constructors`).
+        // `ir::RefInline` is the parenthesized prose form and keeps its
+        // parens, matching `\iref` -- see PieceRenderer below.
+        //
+        // Wrapped in `@...@`, where the LaTeX backend deliberately leaves this
+        // one kind unwrapped: that exception is a property of the *draft's*
+        // listings setup (`texcl=true` puts comments in TeX mode already), and
+        // mpark has no comment exception at all -- its scanner is purely
+        // delimiter-driven and does not know a comment from any other text.
+        foundation::when<ir::SpanKind::Ref>([&] { return "@[" + span.payload + "]{- .sref}@"; }),
+        foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
+        // \cvqual{x} is \textit{x}, as \placeholder{x} is.
+        foundation::when<ir::SpanKind::CvQualifier>([&] { return '$' + span.payload + '$'; }),
+        // The draft's \opt prints its argument and an italic subscript
+        // "opt". The framework's manual writes the same thing after code as
+        // `~_opt_~`, which is Markdown and so sits in an `@...@`.
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "@~_opt_~@"; }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -108,13 +115,16 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
 // `@*x*@` -- gives way to the `*x*` it abbreviates, and a cross-reference to
 // its bare bracketed form.
 std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) {
-    return foundation::match(span.kind,
-                             foundation::when<ir::SpanKind::ExposId>([&] { return '*' + span.payload + '*'; }),
-                             foundation::when<ir::SpanKind::SeeBelow>([&] { return "*see below*"; }),
-                             foundation::when<ir::SpanKind::ImplDefined>([&] { return "*implementation-defined*"; }),
-                             foundation::when<ir::SpanKind::Placeholder>([&] { return '*' + span.payload + '*'; }),
-                             foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
-                             foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }));
+    return foundation::match(
+        span.kind,
+        foundation::when<ir::SpanKind::ExposId>([&] { return '*' + span.payload + '*'; }),
+        foundation::when<ir::SpanKind::SeeBelow>([&] { return "*see below*"; }),
+        foundation::when<ir::SpanKind::ImplDefined>([&] { return "*implementation-defined*"; }),
+        foundation::when<ir::SpanKind::Placeholder>([&] { return '*' + span.payload + '*'; }),
+        foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
+        foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
+        foundation::when<ir::SpanKind::CvQualifier>([&] { return '*' + span.payload + '*'; }),
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:

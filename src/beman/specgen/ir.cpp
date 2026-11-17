@@ -68,7 +68,9 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::ImplDefined>("impl-defined"sv),
                                 foundation::is<SpanKind::Placeholder>("placeholder"sv),
                                 foundation::is<SpanKind::Ref>("ref"sv),
-                                foundation::is<SpanKind::LibraryIndex>("library-index"sv));
+                                foundation::is<SpanKind::LibraryIndex>("library-index"sv),
+                                foundation::is<SpanKind::CvQualifier>("cvqual"sv),
+                                foundation::is<SpanKind::Optional>("opt"sv));
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),

@@ -408,20 +408,60 @@ Within, \tcode{\placeholder{call-args}} is a pack and \exposid{z} is not.
     CHECK(rendered.contains("\\tcode{\\placeholder{call-args}} is a pack and \\exposid{z} is not"));
 }
 
-TEST_CASE("draft_import - a \\tcode holding a macro the IR has no kind for is kept whole as raw LaTeX") {
-    // Kept as the text `\cvqual{cv2}`, the LaTeX backend would escape the backslash and the
-    // braces and the wording would print the macro; kept as LaTeX it writes back as it was.
+TEST_CASE("draft_import - \\cvqual and \\opt in code are spans, in a \\tcode and in a listing") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-For \tcode{R(Args...) \cvqual{cv2} noexcept}, and \tcode{plain}.
+Of the form \tcode{R(G::*)(A...) \cvqual{cv2} \opt{\&} noexcept(E)}, as in:
+\begin{codeblock}
+is_convertible_v<int @\cv{}@&, int @\cvqual{cv2}@&> @\opt{noexcept}@
+\end{codeblock}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& code    = std::get<ir::CodeInline>(std::get<ir::BodyParagraph>(leading.at(0)).text.at(1)).code;
+    CHECK(code.text == "R(G::*)(A...) cv2 & noexcept(E)");
+    REQUIRE(code.spans.size() == 2);
+    CHECK(code.spans[0] == ir::Span{14, 17, ir::SpanKind::CvQualifier, "cv2"});
+    // The span covers the code that may be absent, with its escape resolved.
+    CHECK(code.spans[1] == ir::Span{18, 19, ir::SpanKind::Optional, ""});
+    const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
+    CHECK(listing.text == "is_convertible_v<int cv&, int cv2&> noexcept");
+    REQUIRE(listing.spans.size() == 3);
+    CHECK(listing.spans[1] == ir::Span{30, 33, ir::SpanKind::CvQualifier, "cv2"});
+    CHECK(listing.spans[2] == ir::Span{36, 44, ir::SpanKind::Optional, ""});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("Of the form \\tcode{R(G::*)(A...) \\cvqual{cv2} \\opt{\\&} noexcept(E)}, as in:"));
+    CHECK(rendered.contains("is_convertible_v<int @\\cv{}@&, int @\\cvqual{cv2}@&> @\\opt{noexcept}@\n"));
+}
+
+TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
+    // A span cannot hold another span, so the format grammar's
+    // `\opt{\fmtgrammarterm{arg-id}}` stays what it was: unread, and reported.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+If \tcode{\{ \opt{\fmtgrammarterm{arg-id}} \}} is used.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(has_diag(r, Severity::Warning, "kept as raw LaTeX: \\opt"));
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    CHECK(std::holds_alternative<ir::RawInline>(para[1]));
+}
+
+TEST_CASE("draft_import - a \\tcode holding a macro the IR has no kind for is kept whole as raw LaTeX") {
+    // Kept as the text `\grammarterm{id}`, the LaTeX backend would escape the backslash and
+    // the braces and the wording would print the macro; kept as LaTeX it writes back as it was.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+For \tcode{R(Args...) \grammarterm{id} noexcept}, and \tcode{plain}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
-    CHECK(r.diagnostics.front().message.contains("\\cvqual"));
+    CHECK(r.diagnostics.front().message.ends_with("kept as raw LaTeX: \\grammarterm"));
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     REQUIRE(std::holds_alternative<ir::RawInline>(para[1]));
-    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\tcode{R(Args...) \\cvqual{cv2} noexcept}");
+    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\tcode{R(Args...) \\grammarterm{id} noexcept}");
     CHECK(std::holds_alternative<ir::CodeInline>(para[3]));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains("For \\tcode{R(Args...) \\cvqual{cv2} noexcept}, and \\tcode{plain}."));
+    CHECK(rendered.contains("For \\tcode{R(Args...) \\grammarterm{id} noexcept}, and \\tcode{plain}."));
 }

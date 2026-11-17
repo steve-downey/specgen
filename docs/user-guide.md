@@ -1511,6 +1511,20 @@ prose:
 | `\oldconcept{X}` | a C++17 named requirement | `*Cpp17X*` | italic |
 | `\tref{t}` | a reference to a table | a link to its caption | a link |
 
+And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
+
+| The draft writes | It is read as | mpark | org (HTML) |
+| --- | --- | --- | --- |
+| `\exposid{x}` | an exposition-only name | `$x$` | `<var>x</var>` |
+| `\placeholder{p}`, `\cv{}` | a placeholder | `$p$` | `<var>p</var>` |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers | `$cv2$` | `<var>cv2</var>` |
+| `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
+| `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
+| `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+
+The argument of `\opt` has to be code and nothing else: an `\opt` around
+another macro, as the format grammar writes, is not read.
+
 The LaTeX backend writes each back as the macro it was read from.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the

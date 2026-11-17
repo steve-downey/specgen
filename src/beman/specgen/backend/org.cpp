@@ -205,7 +205,9 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::ImplDefined>([&] { return "<var>implementation-defined</var>"; }),
         foundation::when<ir::SpanKind::Placeholder>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + html_escape(span.payload) + "]"; }),
-        foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }));
+        foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }),
+        foundation::when<ir::SpanKind::CvQualifier>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {

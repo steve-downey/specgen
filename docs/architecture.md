@@ -1023,8 +1023,8 @@ have no independent item description.
 - Node vocabulary = wording ontology: Section (stable name, title, depth),
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
-  ref(stable-name), library-index(optional enclosing class), note,
-  example.
+  ref(stable-name), library-index(optional enclosing class), cvqual, opt,
+  note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1208,6 +1208,13 @@ There are exactly three backends, and **adding wording to one means adding it to
   draft prints, in the target's own emphasis: `*x*` and `*Cpp17X*` in mpark, a LaTeX/HTML export
   snippet in org, because org's `/x/` fails beside the punctuation these names sit against. Those
   targets are not semantic markup the way the draft's macros are; the look is the contract.
+  The two span kinds the draft's own listings need follow the same rule. `CvQualifier` (the
+  draft's `\cvqual{x}`) is italic as a `Placeholder` is, and LaTeX writes the macro the draft
+  uses. `Optional` (`\opt{x}`) covers code that may be absent and prints it with an italic
+  subscript "opt": `\opt{x}` in LaTeX, with the argument escaped as text because a macro argument
+  is text mode in a listing's escape too; `x@~_opt_~@` in mpark, the framework manual's own
+  spelling; `x<sub><var>opt</var></sub>` in org's HTML. Neither macro sets the code font, so a
+  code inline that is one of them whole keeps its `\tcode`, as a placeholder does.
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

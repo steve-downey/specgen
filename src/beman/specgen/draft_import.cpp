@@ -209,6 +209,30 @@ struct CodeBuilder {
     }
 };
 
+std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos, std::size_t& next);
+
+// The code a macro's argument holds, when it holds nothing but code: text with
+// the text-mode escapes resolved (`\&` is `&`). An argument with a macro of
+// its own in it is not one, because a span cannot hold another span.
+std::optional<std::string> plain_code_argument(std::string_view arg) {
+    std::string out;
+    std::size_t i = 0;
+    // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
+    while (i < arg.size()) {
+        if (arg[i] != '\\') {
+            out += arg[i++];
+            continue;
+        }
+        std::size_t next    = 0;
+        const auto  escaped = text_escape(arg, i, next);
+        if (!escaped)
+            return std::nullopt;
+        out += *escaped;
+        i = next;
+    }
+    return out;
+}
+
 // One draft macro with a code meaning, at `pos` (a backslash). Appends its
 // span to `out` and returns where it ended, or nullopt when it is not one.
 std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out) {
@@ -230,6 +254,16 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
         return one_arg(ir::SpanKind::ExposId, true);
     if (name == "placeholder" || name == "placeholdernc")
         return one_arg(ir::SpanKind::Placeholder, true);
+    if (name == "cvqual")
+        return one_arg(ir::SpanKind::CvQualifier, true);
+    if (name == "opt") {
+        const auto arg  = read_braced(s, end);
+        const auto code = arg ? plain_code_argument(arg->inner) : std::nullopt;
+        if (!code || code->empty())
+            return std::nullopt;
+        out.span(ir::SpanKind::Optional, "", *code);
+        return arg->next;
+    }
     if (name == "ref")
         return one_arg(ir::SpanKind::Ref, false);
     if (name == "cv") {

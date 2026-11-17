@@ -144,6 +144,31 @@ TEST_CASE("mpark - a placeholder span") {
     CHECK(mpark::render_to_string(item).find("void f($unspecified$);") != std::string::npos);
 }
 
+// A placeholder for cv-qualifiers is italic, as any placeholder is. The draft's
+// \opt prints its argument and an italic subscript "opt"; the framework's manual
+// writes that after code as `~_opt_~`, which is Markdown and so needs the `@...@`
+// that a changed run has already opened.
+TEST_CASE("mpark - a cv-qualifier span is italic and an optional span takes a subscript opt") {
+    beman::specgen::ir::CodeText code{"R(G::*)(A...) cv2 & noexcept(E)",
+                                      {{14, 17, SpanKind::CvQualifier, "cv2"}, {18, 19, SpanKind::Optional, ""}}};
+    SpecItem                     item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Of the form "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.contains("\nR(G::*)(A...) $cv2$ &@~_opt_~@ noexcept(E)\n"));
+    CHECK(out.contains("Of the form `R(G::*)(A...) $cv2$ &@~_opt_~@ noexcept(E)`."));
+
+    code.changes.push_back({0, code.text.size(), beman::specgen::ir::Change::Added});
+    SpecItem changed;
+    changed.decl.signatures.push_back(code);
+    CHECK(mpark::render_to_string(changed).contains("@[R(G::*)(A...) *cv2* &~_opt_~ noexcept(E)]{.add}@"));
+}
+
 // A Ref span is a cross-reference in a synopsis group comment, where
 // the draft's `\ref` sets a bare "[optional.ctor]" -- so no parentheses, unlike
 // the RefInline case above, which is `\iref`'s parenthesized prose form. The

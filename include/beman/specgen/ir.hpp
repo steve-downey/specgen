@@ -31,6 +31,8 @@ enum class SpanKind {
     Placeholder,  // payload = placeholder text
     Ref,          // payload = stable name (cross-reference inside a comment)
     LibraryIndex, // payload = enclosing class, or empty for a global name
+    CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
+    Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
 };
 
 } // namespace beman::specgen::ir
@@ -43,6 +45,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::Placeholder,
     beman::specgen::ir::SpanKind::Ref,
     beman::specgen::ir::SpanKind::LibraryIndex,
+    beman::specgen::ir::SpanKind::CvQualifier,
+    beman::specgen::ir::SpanKind::Optional,
 };
 
 namespace beman::specgen::ir {

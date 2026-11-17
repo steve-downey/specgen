@@ -378,3 +378,8 @@ Log:
   (`RefInline::bare`, `ConceptRef::exposition`, `PlaceholderInline::cv_qualifier`), so every
   consumer that dispatches on the inline's kind is untouched and the differ still sees one
   token. [func.wrap.ref] is now a corpus slice, with a golden for what its import reports.
+- 2026-11-16: `\cvqual` and `\opt` inside code are read (issue #307), as two span kinds,
+  `CvQualifier` and `Optional`. A flag would not do here: a `Span` has a kind and a payload and
+  nothing else, and the kind is what a backend dispatches on. `Optional` covers the code that
+  may be absent, so its argument has to be code alone; an `\opt` around another macro is still
+  kept raw, because spans do not nest.

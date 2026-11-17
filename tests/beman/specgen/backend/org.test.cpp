@@ -123,6 +123,27 @@ TEST_CASE("org - a placeholder span in a code block") {
     CHECK(org::render_to_string(item).find("void f(@\\placeholder{unspecified}@);") != std::string::npos);
 }
 
+// In a code block the bytes are the draft's, so these are the LaTeX backend's
+// own escapes; in prose the export snippet carries the draft's macros to LaTeX
+// and their look to HTML.
+TEST_CASE("org - a cv-qualifier span and an optional span, in a code block and in prose") {
+    const beman::specgen::ir::CodeText code{
+        "R(G::*)(A...) cv2 & noexcept(E)", {{14, 17, SpanKind::CvQualifier, "cv2"}, {18, 19, SpanKind::Optional, ""}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Of the form "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("R(G::*)(A...) @\\cvqual{cv2}@ @\\opt{\\&}@ noexcept(E)\n"));
+    CHECK(out.contains(
+        "Of the form @@latex:\\tcode{R(G::*)(A...) \\cvqual{cv2} \\opt{\\&} noexcept(E)}@@"
+        "@@html:<code>R(G::*)(A...) <var>cv2</var> &amp;<sub><var>opt</var></sub> noexcept(E)</code>@@."));
+}
+
 // The LaTeX backend's Ref exception, inherited rather than re-decided:
 // `texcl=true` is set in
 // the shared `\lstset`, so it holds inside `codeblock` and `itemdecl` alike and

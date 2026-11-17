@@ -42,6 +42,38 @@ namespace beman::specgen::backend {
 // name now has to say *whose* convention it is rather than what it does to a
 // string.
 
+// Literal code inside a text-mode macro argument (issue #248). The span
+// walker applies this only to source slices, before inserting draft macros.
+// Listings payloads and author-supplied @...@ escapes use the identity hook.
+// The draft loads the underscore package: `_` stays literal (issue #252).
+inline std::string draft_escape_code_text(std::string_view text) {
+    return text | std::views::transform([](char ch) -> std::string {
+               switch (ch) {
+               case '&':
+                   return "\\&";
+               case '#':
+                   return "\\#";
+               case '%':
+                   return "\\%";
+               case '{':
+                   return "\\{";
+               case '}':
+                   return "\\}";
+               case '$':
+                   return "\\$";
+               case '~':
+                   return "\\textasciitilde{}";
+               case '^':
+                   return "\\textasciicircum{}";
+               case '\\':
+                   return "\\textbackslash{}";
+               default:
+                   return std::string(1, ch);
+               }
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
 // Outside a codeblock we are already in LaTeX, so the macro is written
 // directly.
 inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
@@ -66,7 +98,12 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
             if (span.payload.empty())
                 return std::format("\\libglobal{{{}}}", spelling);
             return std::format("\\libmember{{{}}}{{{}}}", spelling, span.payload);
-        }));
+        }),
+        foundation::when<ir::SpanKind::CvQualifier>([&] { return "\\cvqual{" + span.payload + '}'; }),
+        // The argument is the covered code, and a macro argument is text mode
+        // wherever the macro sits -- in a \tcode and inside a listing's
+        // `@...@` alike -- so it takes the text-mode escapes either way.
+        foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }));
 }
 
 // Inside a codeblock the draft escapes back into LaTeX with @...@. Exposition
@@ -133,38 +170,6 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
         foundation::when<ir::Change::Elided>([] { return std::optional<std::string_view>{}; }));
 }
 
-// Literal code inside a text-mode macro argument (issue #248). The span
-// walker applies this only to source slices, before inserting draft macros.
-// Listings payloads and author-supplied @...@ escapes use the identity hook.
-// The draft loads the underscore package: `_` stays literal (issue #252).
-inline std::string draft_escape_code_text(std::string_view text) {
-    return text | std::views::transform([](char ch) -> std::string {
-               switch (ch) {
-               case '&':
-                   return "\\&";
-               case '#':
-                   return "\\#";
-               case '%':
-                   return "\\%";
-               case '{':
-                   return "\\{";
-               case '}':
-                   return "\\}";
-               case '$':
-                   return "\\$";
-               case '~':
-                   return "\\textasciitilde{}";
-               case '^':
-                   return "\\textasciicircum{}";
-               case '\\':
-                   return "\\textbackslash{}";
-               default:
-                   return std::string(1, ch);
-               }
-           }) |
-           std::views::join | std::ranges::to<std::string>();
-}
-
 // A placeholder name in prose, as the draft writes one: \cv{} for the one
 // placeholder the draft gives its own macro (which also sets right in math),
 // \cvqual for any other that stands for cv-qualifiers, \placeholder for the
@@ -193,10 +198,16 @@ inline std::string draft_concept(const ir::ConceptRef& v) {
 // (`x.\exposid{val}`).
 inline std::string draft_code_inline(const ir::CodeInline& v) {
     // A placeholder is the exception: `\placeholder` sets italic, not the code
-    // font, and the draft writes `\tcode{\placeholder{x}}` for it.
+    // font, and the draft writes `\tcode{\placeholder{x}}` for it. `\cvqual`
+    // is the same italic, and `\opt` sets its argument in whatever font
+    // surrounds it, so those two keep the wrapper as well.
+    const auto sets_code_font = [](ir::SpanKind kind) {
+        return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
+               kind != ir::SpanKind::Optional;
+    };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
-                            v.code.spans.front().kind != ir::SpanKind::Placeholder;
+                            sets_code_font(v.code.spans.front().kind);
     if (whole_span)
         return draft_span_prose(v.code.spans.front(), v.code.text);
     return "\\tcode{" + render_code_spans(v.code, draft_span_prose, draft_escape_code_text) + '}';

@@ -138,6 +138,35 @@ TEST_CASE("latex - implementation-defined spans use impdef") {
     CHECK(latex::render_to_string(item).find("using iterator = @\\impdef@;") != std::string::npos);
 }
 
+// The two span kinds the draft importer needs for [func.wrap.ref] (issue #307):
+// a placeholder for cv-qualifiers and a piece of code that may be absent. Each is
+// the draft's macro, in an `@...@` inside a listing and bare in a \tcode. The
+// argument of \opt is text mode in both places, so its `&` is escaped in both.
+TEST_CASE("latex - a cv-qualifier span is \\cvqual and an optional span is \\opt around its code") {
+    const beman::specgen::ir::CodeText code{
+        "R(G::*)(A...) cv2 & noexcept(E)", {{14, 17, SpanKind::CvQualifier, "cv2"}, {18, 19, SpanKind::Optional, ""}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"Of the form "},
+                                      CodeInline{code},
+                                      TextInline{", "},
+                                      CodeInline{{"cv2", {{0, 3, SpanKind::CvQualifier, "cv2"}}}},
+                                      TextInline{" and "},
+                                      CodeInline{{"&", {{0, 1, SpanKind::Optional, ""}}}},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("R(G::*)(A...) @\\cvqual{cv2}@ @\\opt{\\&}@ noexcept(E)\n"));
+    CHECK(out.contains("Of the form \\tcode{R(G::*)(A...) \\cvqual{cv2} \\opt{\\&} noexcept(E)}, "));
+    // Neither macro sets the code font, so a code inline that is one of them
+    // whole keeps its \tcode, as a placeholder does.
+    CHECK(out.contains(", \\tcode{\\cvqual{cv2}} and \\tcode{\\opt{\\&}}."));
+}
+
 // The Ref *span* and the RefInline are two different cross-references
 // and must not share one mapping.
 // A span sits in a code comment, where the draft writes

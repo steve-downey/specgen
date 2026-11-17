@@ -30,6 +30,10 @@ std::string bracket_escape(const Span& span, std::string_view spelling) {
         return "[ref:" + span.payload + ']';
     case SpanKind::LibraryIndex:
         return "[index:" + std::string(spelling) + ':' + span.payload + ']';
+    case SpanKind::CvQualifier:
+        return "[cvqual:" + span.payload + ']';
+    case SpanKind::Optional:
+        return "[opt:" + std::string(spelling) + ']';
     }
     return {};
 }

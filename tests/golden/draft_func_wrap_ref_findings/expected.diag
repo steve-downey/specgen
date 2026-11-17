@@ -1,3 +1,1 @@
-specgen: warning: func.wrap.ref.ctor: a macro in \tcode is kept as raw LaTeX: \cvqual
 specgen: warning: func.wrap.ref.ctor: a macro in \tcode is kept as raw LaTeX: \newline
-specgen: warning: func.wrap.ref.deduct: a macro in \tcode is kept as raw LaTeX: \opt

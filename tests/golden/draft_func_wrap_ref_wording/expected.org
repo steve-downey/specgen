@@ -112,7 +112,7 @@ template<class F>
 #+end_itemdecl
 
 #+begin_pnum
-If ~F~ denotes a specialization @@latex:\tcode{function_ref<R(Args...) \cvqual{cv2} noexcept(\placeholder{noex2})>}@@ for some placeholders @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@ and @@latex:\placeholder{noex2}@@@@html:<i>noex2</i>@@, @@latex:\tcode{\exposid{is-convertible-from-specialization}<F>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;F&gt;</code>@@ is equal to:
+If ~F~ denotes a specialization @@latex:\tcode{function_ref<R(Args...) \cvqual{cv2} noexcept(\placeholder{noex2})>}@@@@html:<code>function_ref&lt;R(Args...) <var>cv2</var> noexcept(<var>noex2</var>)&gt;</code>@@ for some placeholders @@latex:\cvqual{cv2}@@@@html:<i>cv2</i>@@ and @@latex:\placeholder{noex2}@@@@html:<i>noex2</i>@@, @@latex:\tcode{\exposid{is-convertible-from-specialization}<F>}@@@@html:<code><var>is-convertible-from-specialization</var>&lt;F&gt;</code>@@ is equal to:
 
 #+begin_codeblock
 is_convertible_v<R(&)(Args...) noexcept(@\placeholder{noex2}@), R(&)(Args...) noexcept(@\placeholder{noex}@)> &&
@@ -308,7 +308,7 @@ template<auto c, class F, class T>
 #+begin_pnum
 /Constraints/:
 
-- ~F~ is of the form @@latex:\tcode{R(G::*)(A...) \cv{} \opt{\&} noexcept(E)}@@ for a type ~G~, or
+- ~F~ is of the form @@latex:\tcode{R(G::*)(A...) \cv{} \opt{\&} noexcept(E)}@@@@html:<code>R(G::*)(A...) <var>cv</var> &amp;<sub><var>opt</var></sub> noexcept(E)</code>@@ for a type ~G~, or
 - ~F~ is of the form ~M G::*~ for a type ~G~ and an object type ~M~, in which case let ~R~ be ~invoke_result_t<F, T&>~, ~A...~ be an empty pack, and ~E~ be ~true~, or
 - ~F~ is of the form ~R(*)(G, A...) noexcept(E)~ for a type ~G~.
 #+end_pnum

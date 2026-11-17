@@ -86,11 +86,11 @@ template<class F>
   static constexpr bool $is-convertible-from-specialization$ = $see below$;
 ```
 
-[#]{.pnum} If `F` denotes a specialization `\tcode{function_ref<R(Args...) \cvqual{cv2} noexcept(\placeholder{noex2})>}`{=latex} for some placeholders *cv2* and *noex2*, `$is-convertible-from-specialization$<F>` is equal to:
+[#]{.pnum} If `F` denotes a specialization `function_ref<R(Args...) $cv2$ noexcept($noex2$)>` for some placeholders *cv2* and *noex2*, `$is-convertible-from-specialization$<F>` is equal to:
 
 ```cpp
 is_convertible_v<R(&)(Args...) noexcept($noex2$), R(&)(Args...) noexcept($noex$)> &&
-is_convertible_v<int $cv$&, int @\cvqual{cv2}@&>.
+is_convertible_v<int $cv$&, int $cv2$&>.
 ```
 
 Otherwise, `$is-convertible-from-specialization$<F>` is `false`.
@@ -226,7 +226,7 @@ template<auto c, class F, class T>
 
 [#]{.pnum} *Constraints*:
 
-- [#.#]{.pnum} `F` is of the form `\tcode{R(G::*)(A...) \cv{} \opt{\&} noexcept(E)}`{=latex} for a type `G`, or
+- [#.#]{.pnum} `F` is of the form `R(G::*)(A...) $cv$ &@~_opt_~@ noexcept(E)` for a type `G`, or
 - [#.#]{.pnum} `F` is of the form `M G::*` for a type `G` and an object type `M`, in which case let `R` be `invoke_result_t<F, T&>`, `A...` be an empty pack, and `E` be `true`, or
 - [#.#]{.pnum} `F` is of the form `R(*)(G, A...) noexcept(E)` for a type `G`.
 
