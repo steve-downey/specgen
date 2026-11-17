@@ -69,28 +69,7 @@ namespace std {
 
 ### Constructors, assignments, and destructor [func.wrap.move.ctor]{- .sref} {-}
 
-::: rm
-
-```cpp
-template<class VT>
-  static constexpr bool $is-callable-from$ = $see below$;
-```
-
-[#]{.pnum} If *noex* is `true`, `$is-callable-from$<VT>` is equal to:
-
-```cpp
-is_nothrow_invocable_r_v<R, VT $cv$ $ref$, ArgTypes...> &&
-is_nothrow_invocable_r_v<R, VT $inv-quals$, ArgTypes...>
-```
-
-Otherwise, `$is-callable-from$<VT>` is equal to:
-
-```cpp
-is_invocable_r_v<R, VT $cv$ $ref$, ArgTypes...> &&
-is_invocable_r_v<R, VT $inv-quals$, ArgTypes...>
-```
-
-:::
+[…]
 
 ```cpp
 @[constexpr]{.add}@ move_only_function() noexcept;

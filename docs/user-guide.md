@@ -1096,6 +1096,22 @@ baselines; with none the run is an error, since there is nothing to inherit
 from. An item with no pair is an error naming its signature and the section. An
 `\asdraft` item cannot be `\omit`, `\merge` or `\elsewhere`.
 
+The draft's index does not name an exposition-only member, so its item there has
+no names to pair by. An item that finds no baseline item of its names pairs with
+one that has none, if their declarations read alike. That is how an
+exposition-only member variable inherits:
+
+```cpp
+//! \asdraft
+//! \expos
+//! \seebelow
+template <class VT>
+static constexpr bool is_callable_from = /* ... */;
+```
+
+An exposition-only declaration at namespace scope, and an exposition-only alias
+in a class, have no item, and `\asdraft` on one is an error.
+
 Elements the docblock authors replace the inherited element of the same kind,
 which is how a paper changes one paragraph of an item and leaves the rest:
 

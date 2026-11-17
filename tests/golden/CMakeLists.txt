@@ -1799,6 +1799,15 @@ specgen_add_golden(
         "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
 )
 
+# `\asdraft` on an exposition-only declaration that is no item: a concept and
+# a variable at namespace scope, and an alias in a class. Each is an Error.
+specgen_add_golden(
+    asdraft_expos_diagnostics
+    MODE diagnose
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_asdraft_expos_diagnostics.hpp"
+)
+
 # A `\merge`d twin and its survivor are one specification entity, so the
 # survivor's constraint is what the pair shares: the conjunct that only tells
 # them apart is cut from the synopsis, from an itemdecl that keeps the clause,

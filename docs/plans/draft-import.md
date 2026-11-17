@@ -345,6 +345,19 @@ exposition-only variable. Such an item pairs with the other side's item that rea
 if it reads alike at all, both for `\asdraft` and in the differ. A name known on both sides that
 differs is still a rename, an item removed and an item added.
 
+Log:
+
+- 2026-11-17: for `\asdraft` that held in one direction only (issue #328). An item with no
+  names paired by reading; an item with names, against a baseline item with none, did not, and
+  an exposition-only member variable never got that far, because the front end counted it as
+  having no description and dropped it before `\asdraft` was resolved. So `\asdraft` on
+  `is_callable_from` produced no item and no finding, and the diff showed the draft's item as
+  removed. The member is now kept, and pairs as the differ pairs it: by name first, and failing
+  that with a baseline item that has no names and reads alike. An exposition-only declaration at
+  namespace scope, and an exposition-only alias in a class, are not items, so `\asdraft` on one
+  is an Error. Open: inheriting the description of an exposition-only concept or variable at
+  namespace scope (issue #332).
+
 ### same-wording-same-ir
 
 Authored text and imported text of the same wording had different IR, so the differ showed

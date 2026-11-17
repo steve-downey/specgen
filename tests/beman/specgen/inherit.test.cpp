@@ -215,3 +215,42 @@ TEST_CASE("inherit - an item that names no entity and reads like nothing is unpa
     REQUIRE(findings.size() == 1);
     CHECK(findings.front().severity == beman::specgen::Severity::Error);
 }
+
+TEST_CASE("inherit - an item pairs by how it reads with a baseline item that names no entity") {
+    // The draft's index says nothing of an exposition-only member, so its item
+    // has no names where the header's has the member's.
+    const Document baseline =
+        in_section("s",
+                   {item("template<class VT>\n  static constexpr bool is-callable-from = see below;",
+                         {},
+                         {element(ElementKind::Remarks, "Equal to something.")}),
+                    item("void f(int);", {"f"}, {element(ElementKind::Effects, "Int.")})});
+    Document current = in_section(
+        "s",
+        {marked("void f(int);", {"f"}),
+         marked("template<class VT>\n  static constexpr bool is-callable-from = see below;", {"is_callable_from"})});
+
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    CHECK(element_of(item_at(current, 0), ElementKind::Effects) != nullptr);
+    CHECK(element_of(item_at(current, 1), ElementKind::Remarks)->body ==
+          element(ElementKind::Remarks, "Equal to something.").body);
+}
+
+TEST_CASE("inherit - a named baseline item is not taken by an item of another name, however alike") {
+    const Document baseline = in_section("s", {item("void f(int);", {"f"}, {element(ElementKind::Effects, "Int.")})});
+    Document       current  = in_section("s", {marked("void g(int);", {"g"})});
+
+    const auto findings = inherit::resolve(current, baseline);
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == beman::specgen::Severity::Error);
+}
+
+TEST_CASE("inherit - an item of some name that reads like no unnamed baseline item is unpaired") {
+    const Document baseline =
+        in_section("s", {item("template<class T> struct widget_traits;", {}, {element(ElementKind::Remarks, "R.")})});
+    Document current = in_section("s", {marked("void g(int);", {"g"})});
+
+    const auto findings = inherit::resolve(current, baseline);
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == beman::specgen::Severity::Error);
+}

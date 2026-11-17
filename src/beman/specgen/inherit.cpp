@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -70,36 +71,55 @@ const ir::Section* find_section(const std::vector<ir::Node>& nodes, const std::s
     return found == nodes.end() ? nullptr : std::get_if<ir::Section>(&*found);
 }
 
-// How alike a nameless item's declaration must read a baseline item's to take
-// its description: the differ's own measure and threshold for a pair.
-constexpr double kNamelessThreshold = 0.5;
+// How alike two declarations must read to pair when one side gives no names
+// to pair by: the differ's own measure and threshold for a pair.
+constexpr double kReadingThreshold = 0.5;
+
+// The unclaimed baseline item among the eligible ones whose signature reads
+// most like `item`'s, the first of equals, reading at least `minimum` alike.
+template <class Eligible>
+std::optional<std::size_t> best_reading(const ir::SpecItem&          item,
+                                        const std::vector<ir::Node>& baseline,
+                                        const std::vector<bool>&     claimed,
+                                        double                       minimum,
+                                        Eligible                     eligible) {
+    const auto scored = std::views::iota(std::size_t{0}, baseline.size()) | std::views::filter([&](std::size_t i) {
+                            const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
+                            return candidate != nullptr && !claimed[i] && eligible(*candidate);
+                        }) |
+                        std::views::transform([&](std::size_t i) {
+                            return std::pair{i, declared_alike(item, std::get<ir::SpecItem>(baseline[i]))};
+                        }) |
+                        std::views::filter([&](const auto& entry) { return entry.second >= minimum; }) |
+                        std::ranges::to<std::vector>();
+    const auto best =
+        std::ranges::max_element(scored, std::ranges::less{}, [](const auto& entry) { return entry.second; });
+    return best == scored.end() || best->second <= 0.0 ? std::nullopt : std::optional(best->first);
+}
 
 // The baseline item `item` takes its description from: among the unclaimed
 // items declaring the same names, the one whose signature reads most like its
 // own. Nothing reading alike at all is no pair.
+//
+// Failing that, the pair is made by how the declarations read, as the differ
+// makes it, when one side gives no names to pair by. An item typed as a
+// `\verbatim-itemdecl` names nothing the front end knows of. And the draft's
+// index says nothing of an exposition-only member, so its item for
+// `is-callable-from` has no names where the header's has `is_callable_from`
+// (issue #328).
 const ir::SpecItem*
 pair_item(const ir::SpecItem& item, const std::vector<ir::Node>& baseline, std::vector<bool>& claimed) {
-    const std::vector<std::string> names = sorted_entities(item);
+    const std::vector<std::string> names    = sorted_entities(item);
+    const bool                     declares = !item.decl.signatures.empty();
     std::optional<std::size_t>     best;
-    double                         best_score = 0.0;
-    // substrate generic algorithm: an argmax over the baseline's items, taking
-    // the first of equals, which writes the claim table.
-    for (std::size_t i = 0; i < baseline.size(); ++i) {
-        const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
-        // An item typed as a `\verbatim-itemdecl` names nothing the front end
-        // knows of, so it is matched by how its declaration reads against every
-        // baseline item, and only when it reads alike.
-        const bool nameless = names.empty() && !item.decl.signatures.empty();
-        if (candidate == nullptr || claimed[i] || (!nameless && sorted_entities(*candidate) != names))
-            continue;
-        const double score = declared_alike(item, *candidate);
-        if (nameless && score < kNamelessThreshold)
-            continue;
-        if (score > best_score) {
-            best       = i;
-            best_score = score;
-        }
-    }
+    if (!names.empty() || !declares)
+        best = best_reading(item, baseline, claimed, 0.0, [&](const ir::SpecItem& candidate) {
+            return sorted_entities(candidate) == names;
+        });
+    if (!best && declares)
+        best = best_reading(item, baseline, claimed, kReadingThreshold, [&](const ir::SpecItem& candidate) {
+            return !candidate.decl.signatures.empty() && (names.empty() || candidate.decl.entities.empty());
+        });
     if (!best)
         return nullptr;
     claimed[*best] = true;

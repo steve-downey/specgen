@@ -34,7 +34,10 @@ bool has_unresolved(const ir::Document&);
 // Resolves each `as_draft` item of `current` against `baseline`. Sections pair
 // by stable name; an item pairs with the baseline item of its section that
 // declares the same names and whose signature reads most like its own, each
-// baseline item taken once. An item with no pair, or a `\covers` for an element
+// baseline item taken once. When one side gives no names to pair by -- a
+// `\verbatim-itemdecl`, or the draft's item for an exposition-only member,
+// which its index does not name -- the pair is made by how the declarations
+// read, if they read alike. An item with no pair, or a `\covers` for an element
 // the resolved description lacks, is an Error and the item is left as it was.
 //
 // A synopsis marked `\asdraft-synopsis` takes the baseline synopsis of the same
