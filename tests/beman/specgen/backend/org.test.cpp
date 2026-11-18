@@ -165,6 +165,15 @@ TEST_CASE("org - a cv-qualifier span and an optional span, in a code block and i
 // Mathematics inside code (issue #311): the draft's own bytes in a block and in
 // the LaTeX snippet; in HTML a variable is italic and a subscript is a
 // subscript, a name in italics and a number upright.
+TEST_CASE("org - code as a subscript is the draft's mathematics, and upright in HTML") {
+    SpecItem item;
+    item.descr.leading    = {BodyParagraph{
+        {CodeInline{{"i_x", {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::CodeSubscript, "x"}}}}}}};
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("@@latex:\\tcode{$i_\\tcode{x}$}@@"));
+    CHECK(out.contains("<var>i</var><sub>x</sub>"));
+}
+
 TEST_CASE("org - a math variable and a subscript in code") {
     const beman::specgen::ir::CodeText code{
         "get<i>(T_i, T_1)",

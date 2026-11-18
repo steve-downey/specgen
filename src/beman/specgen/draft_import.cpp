@@ -488,13 +488,23 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
         return at == 0 ? std::nullopt : std::optional(out.code);
     if (inner[at] != '_')
         return std::nullopt;
-    std::string_view sub     = inner.substr(at + 1);
-    const bool       grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
+    std::string_view sub = inner.substr(at + 1);
+    // Code as the subscript of a variable, `$i_\tcode{x}$` (issue #339).
+    if (sub.starts_with("\\tcode{") && sub.ends_with('}') && at > 0 && out.code.hints.empty()) {
+        const std::optional<std::string> code = plain_code_argument(sub.substr(7, sub.size() - 8));
+        if (!code || code->empty())
+            return std::nullopt;
+        out.span(ir::SpanKind::CodeSubscript, *code, '_' + *code);
+        return out.code;
+    }
+    const bool grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
     if (grouped)
         sub = sub.substr(1, sub.size() - 2);
     else if (sub.size() != 1)
         return std::nullopt;
-    if (sub.empty() || !std::ranges::all_of(sub, alnum))
+    // A grouped subscript may be an expression, `$p_{i-1}$` (issue #339).
+    const auto in_subscript = [&](char c) { return alnum(c) || (grouped && (c == '+' || c == '-')); };
+    if (sub.empty() || !std::ranges::all_of(sub, in_subscript))
         return std::nullopt;
     // A group around one character is spelling too, and the draft writes it
     // only after code (`$\tcode{B}_{1}$`), so the hint that is there carries it.

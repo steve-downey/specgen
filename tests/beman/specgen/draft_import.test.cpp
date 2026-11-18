@@ -588,7 +588,7 @@ TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole
     // reported once, and the macros inside the mathematics are not read as code.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-The range \tcode{a[$i - 1$]} through \tcode{a[$i_\tcode{x}$]}, and \tcode{b[$j$]}.
+The range \tcode{a[$i - 1$]} through \tcode{a[$\rho$]}, and \tcode{b[$j$]}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
@@ -599,7 +599,7 @@ The range \tcode{a[$i - 1$]} through \tcode{a[$i_\tcode{x}$]}, and \tcode{b[$j$]
     CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
     CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$i_\\tcode{x}$]}, and \\tcode{b[$j$]}."));
+    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\rho$]}, and \\tcode{b[$j$]}."));
 }
 
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
@@ -905,7 +905,7 @@ and the value \tcode{$r_K$}.
 TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes read stays raw") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i-1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
+\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i*1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     // One report for the subclause, however many there are.
@@ -914,6 +914,30 @@ TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     CHECK(std::ranges::count_if(para, [](const ir::Inline& i) { return std::holds_alternative<ir::RawInline>(i); }) ==
           6);
+}
+
+TEST_CASE("draft_import - code and an expression as a subscript in a \\tcode are spans") {
+    // Issue #339: [range.zip.transform.iterator]'s `$i_\tcode{x}$`, and
+    // [inplace.vector]'s `$p_{i-1}$`. Code as the subscript of code is not read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and \tcode{$\tcode{Ds}_{\tcode{T}}$}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& sub  = std::get<ir::CodeInline>(para.at(0)).code;
+    CHECK(sub.text == "i_x + 1");
+    REQUIRE(sub.spans.size() == 2);
+    CHECK(sub.spans[1] == ir::Span{1, 3, ir::SpanKind::CodeSubscript, "x"});
+    const auto& expr = std::get<ir::CodeInline>(para.at(2)).code;
+    CHECK(expr.text == "a[p_i-1]");
+    CHECK(expr.spans.at(1) == ir::Span{3, 7, ir::SpanKind::Subscript, "i-1"});
+    CHECK(std::get<ir::CodeInline>(para.at(4)).code.spans.at(1).payload == "n+1");
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(6)));
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(R"(\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and)"));
 }
 
 TEST_CASE("draft_import - a listing records where each of its bytes was read from") {

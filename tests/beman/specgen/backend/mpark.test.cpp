@@ -186,6 +186,13 @@ TEST_CASE("mpark - a cv-qualifier span is italic and an optional span takes a su
 // Mathematics inside code (issue #311). A variable is italic, which is the
 // `$x$` shorthand. A subscript is Markdown's `~x~`, in an `@...@` unless a
 // changed run has opened one; a name in it is italic and a number upright.
+TEST_CASE("mpark - code as a subscript is upright") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{
+        {CodeInline{{"i_x", {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::CodeSubscript, "x"}}}}}}};
+    CHECK(mpark::render_to_string(item).contains("`$i$@~x~@`"));
+}
+
 TEST_CASE("mpark - a math variable is italic and a subscript is a subscript") {
     beman::specgen::ir::CodeText code{
         "get<i>(T_i, T_1)",

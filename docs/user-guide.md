@@ -1699,13 +1699,16 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `$r_K$` in a `\tcode` | a variable and its subscript | `$r$@~_K_~@` | `<var>r</var><sub><var>K</var></sub>` |
 | `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
 | `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
+| `$i_\tcode{x}$` in a `\tcode` | a variable and code as its subscript | `$i$@~x~@` | `<var>i</var><sub>x</sub>` |
+| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i-1_~@` | `<var>p</var><sub><var>i-1</var></sub>` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
 Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
-subscript (one letter or digit, or a group of them), a subscript on a variable
-or on code, or `\dotsc`. The code's text has the variable as its name, the
+subscript (one letter or digit, or a group of them, which may hold `+` and
+`-`), a subscript on a variable or on code, code as the subscript of a
+variable, or `\dotsc`. The code's text has the variable as its name, the
 subscript after an underscore and the ellipsis as three dots, so
 `\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
 and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
@@ -1718,9 +1721,10 @@ is the group the draft sometimes puts around a subscript of one character there
 (`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
 back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
 
-Any other mathematics there has no kind: an expression (`$i - 1$`), a subscript
-that is one or that is code (`$p_{i-1}$`, `$i_\tcode{x}$`), a Greek letter. The
-whole `\tcode` is kept as raw LaTeX and the command warns.
+Any other mathematics there has no kind: an expression (`$i - 1$`), code as
+the subscript of code (`$\tcode{Ds}_{\tcode{T}}$`), a placeholder with a
+subscript, a Greek letter. The whole `\tcode` is kept as raw LaTeX and the
+command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin

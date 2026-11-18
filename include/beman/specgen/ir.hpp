@@ -26,17 +26,19 @@ namespace beman::specgen::ir {
 // Rendered code is never a flat string: byte-ranged spans carry semantics
 // that each backend serializes with its own escape convention.
 enum class SpanKind {
-    ExposId,      // payload = kebab-case exposition-only name
-    SeeBelow,     // "see below" substitution
-    ImplDefined,  // "implementation-defined" substitution
-    Placeholder,  // payload = placeholder text
-    Ref,          // payload = stable name (cross-reference inside a comment)
-    LibraryIndex, // payload = enclosing class, or empty for a global name
-    CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
-    Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
-    MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
-    Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
-    Ellipsis,     // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
+    ExposId,       // payload = kebab-case exposition-only name
+    SeeBelow,      // "see below" substitution
+    ImplDefined,   // "implementation-defined" substitution
+    Placeholder,   // payload = placeholder text
+    Ref,           // payload = stable name (cross-reference inside a comment)
+    LibraryIndex,  // payload = enclosing class, or empty for a global name
+    CvQualifier,   // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
+    Optional,      // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
+    MathVariable,  // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
+    Subscript,     // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
+    Ellipsis,      // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
+    CodeSubscript, // payload = code subscripting the variable before it (the draft's $i_\tcode{x}$); the text is "_" +
+                   // payload
 };
 
 } // namespace beman::specgen::ir
@@ -54,6 +56,7 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::MathVariable,
     beman::specgen::ir::SpanKind::Subscript,
     beman::specgen::ir::SpanKind::Ellipsis,
+    beman::specgen::ir::SpanKind::CodeSubscript,
 };
 
 namespace beman::specgen::ir {

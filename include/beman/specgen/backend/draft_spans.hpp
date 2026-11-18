@@ -121,7 +121,11 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
         foundation::when<ir::SpanKind::Subscript>(
             [&] { return span.payload.size() == 1 ? "$_" + span.payload + '$' : "$_{" + span.payload + "}$"; }),
         // The elements left out of a sequence: `T$_0$, $\dotsc$, T$_n$`.
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string{"$\\dotsc$"}; }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string{"$\\dotsc$"}; }),
+        // Code as a subscript, in the code font inside the mathematics:
+        // `$i_\tcode{x}$` (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>(
+            [&] { return "$_\\tcode{" + draft_escape_code_text(span.payload) + "}$"; }));
 }
 
 // Outside a codeblock we are already in LaTeX, so the macro is written
@@ -346,7 +350,8 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     const auto sets_code_font = [](ir::SpanKind kind) {
         return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
                kind != ir::SpanKind::Optional && kind != ir::SpanKind::MathVariable &&
-               kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis;
+               kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis &&
+               kind != ir::SpanKind::CodeSubscript;
     };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
@@ -361,12 +366,14 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     bool       grouped             = false; // the draft wrote a one-character subscript in a group
     const auto subscript_begins_at = [&](std::size_t at) {
         return std::ranges::any_of(v.code.spans, [&](const ir::Span& span) {
-            return span.begin == at && span.kind == ir::SpanKind::Subscript;
+            return span.begin == at &&
+                   (span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript);
         });
     };
     const auto write_span = [&](const ir::Span& span, std::string_view spelling) {
         std::string macro = draft_span_prose(span, spelling);
-        if (span.kind == ir::SpanKind::Subscript && open != Open::Nothing) {
+        if ((span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript) &&
+            open != Open::Nothing) {
             // The mathematics is open: no `$` of its own, and the code's group closes first.
             macro = open == Open::Code && grouped && span.payload.size() == 1
                         ? "}_{" + span.payload + "}$"

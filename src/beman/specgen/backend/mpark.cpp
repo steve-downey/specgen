@@ -110,7 +110,9 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
         foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }),
         // The dots of a sequence with elements left out are the dots.
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
+        // Code as a subscript is upright, as code is (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("@~{}~@", span.payload); }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -142,7 +144,8 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
         foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
         foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }),
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("~{}~", span.payload); }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:

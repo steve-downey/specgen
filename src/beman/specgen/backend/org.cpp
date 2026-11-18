@@ -224,7 +224,9 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
             return number ? "<sub>" + html_escape(span.payload) + "</sub>"
                           : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
         }),
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }),
+        // Code as a subscript is upright, as code is (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return "<sub>" + html_escape(span.payload) + "</sub>"; }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
