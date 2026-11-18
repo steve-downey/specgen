@@ -463,15 +463,15 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
                                   return "- " + render_paragraph(p, new_roots) + '\n';
                               }) |
                               std::views::join | std::ranges::to<std::string>();
-    return {items, false, false};
+    return {items, list.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const {
-    return {render_table(t, new_roots), false, false};
+    return {render_table(t, new_roots), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
-    return {render_flat_table(t, new_roots), false, false};
+    return {render_flat_table(t, new_roots), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
@@ -479,7 +479,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const 
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) const {
-    return {render_block("codeblock", code.code), false, false};
+    return {render_block("codeblock", code.code), code.opens_paragraph, false};
 }
 
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
@@ -498,12 +498,14 @@ struct BodyRenderer : LeafBodyRenderer {
 };
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("#+begin_note\n{}#+end_note\n", render_informative_body(note.body, new_roots)), false, false};
+    return {std::format("#+begin_note\n{}#+end_note\n", render_informative_body(note.body, new_roots)),
+            note.opens_paragraph,
+            false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("#+begin_wgexample\n{}#+end_wgexample\n", render_informative_body(example.body, new_roots)),
-            false,
+            example.opens_paragraph,
             false};
 }
 

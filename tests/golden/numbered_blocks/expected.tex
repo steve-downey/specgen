@@ -1,0 +1,47 @@
+\rSec3[numbered.blocks]{Blocks that open a paragraph}
+
+\begin{itemdecl}
+void first();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\begin{note}
+A note that is the first thing in a description opens its paragraph, as it always has.
+\end{note}
+
+\pnum
+\returns
+A reference to the element.
+\begin{note}
+A note in the paragraph before it, which is where an authored note goes.
+\end{note}
+
+\pnum
+\begin{note}
+A note the draft numbered by itself.
+\end{note}
+Prose after that note is the rest of its paragraph.
+
+\pnum
+\begin{example}
+\begin{codeblock}
+first();
+\end{codeblock}
+\end{example}
+
+\pnum
+\begin{codeblock}
+second();
+\end{codeblock}
+
+\pnum
+\begin{itemize}
+\item One.
+\item Two.
+\end{itemize}
+
+\pnum
+\remarks
+The element after them is numbered as before.
+\end{itemdescr}

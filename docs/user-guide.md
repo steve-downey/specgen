@@ -1629,6 +1629,30 @@ write too, in running text: `&nbsp;` in mpark and `\nbsp{}` in org. Inside
 code they write the space. A tilde in a `\tcode` is the draft's `\~`, and in a
 listing the character is the code's own.
 
+A `\pnum` directly before a note, an example, a code block, a list or a table
+is that block's own number. The draft writes a note that way when it stands
+apart from the prose before it:
+
+```latex
+\pnum
+\returns
+A reference to the element.
+
+\pnum
+\begin{note}
+For the overload marked \#1, ...
+\end{note}
+```
+
+The block is read as opening a numbered paragraph (`"opens_paragraph": true` in
+the IR), and every backend numbers it: `\pnum` in LaTeX, a `pnum` block around
+it in org, and in mpark `[#]{.pnum}` on a line of its own, since a fenced div or
+a code fence cannot share a line with the number. Prose after the block is the
+rest of that paragraph. A block that is the first thing after an element's tag
+opens the element's paragraph and says nothing, as generated wording has it. A
+docblock cannot write this: an authored note is part of the paragraph before
+it.
+
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
 macro and the subclause:
@@ -1688,7 +1712,10 @@ with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
-unreadable rather than dropping the text.
+unreadable rather than dropping the text. A block's `opens_paragraph` is an
+added field, which only the draft importer sets: an older renderer skips it and
+writes the block in the paragraph before it, so the words are all there and the
+paragraph numbers after it are one lower.
 
 ### Section prose
 

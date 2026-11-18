@@ -171,6 +171,7 @@ struct json_descriptor<Table2D> {
         field("column1", &Table2D::column1),
         field("column2", &Table2D::column2),
         field("rows", &Table2D::rows),
+        defaulted_field("opens_paragraph", &Table2D::opens_paragraph),
         defaulted_enum_field("change", &Table2D::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -191,6 +192,7 @@ struct json_descriptor<Table1D> {
         field("column1", &Table1D::column1),
         field("column2", &Table1D::column2),
         field("rows", &Table1D::rows),
+        defaulted_field("opens_paragraph", &Table1D::opens_paragraph),
         defaulted_enum_field("change", &Table1D::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -210,6 +212,7 @@ template <>
 struct json_descriptor<Itemize> {
     static constexpr auto members = std::tuple{
         field("items", &Itemize::items),
+        defaulted_field("opens_paragraph", &Itemize::opens_paragraph),
         defaulted_enum_field("change", &Itemize::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -226,6 +229,7 @@ template <>
 struct json_descriptor<ir::AuthoredCode> {
     static constexpr auto members = std::tuple{
         field("code", &ir::AuthoredCode::code),
+        defaulted_field("opens_paragraph", &ir::AuthoredCode::opens_paragraph),
         defaulted_enum_field(
             "change", &ir::AuthoredCode::change, Change::Same, change_name, change_from_name, "change"),
     };
@@ -246,6 +250,7 @@ template <>
 struct json_descriptor<ir::Note> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Note::body),
+        defaulted_field("opens_paragraph", &ir::Note::opens_paragraph),
         defaulted_enum_field("change", &ir::Note::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -254,6 +259,7 @@ template <>
 struct json_descriptor<ir::Example> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Example::body),
+        defaulted_field("opens_paragraph", &ir::Example::opens_paragraph),
         defaulted_enum_field("change", &ir::Example::change, Change::Same, change_name, change_from_name, "change"),
     };
 };

@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -662,6 +663,34 @@ TEST_CASE("ir_json - block marks round-trip and are omitted at their default") {
     CHECK(block_change(body[2]) == Change::Removed);
     CHECK(block_change(std::get<Note>(body[3]).body[0]) == Change::Added);
     CHECK(block_change(back->descr.leading[0]) == Change::Removed);
+    CHECK(emit_json(*back) == json);
+}
+
+TEST_CASE("ir_json - a block that opens a paragraph round-trips and is silent at its default") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body = {
+        BodyParagraph{{TextInline{"Prose."}}},
+        Note{{BodyParagraph{{TextInline{"in the paragraph before it"}}}}},
+        Note{{BodyParagraph{{TextInline{"numbered"}}}}, Change::Same, true},
+        Example{{AuthoredCode{{"f();", {}}}}, Change::Same, true},
+        AuthoredCode{{"g();", {}}, Change::Same, true},
+        Itemize{{{TextInline{"one"}}}, Change::Same, true},
+        Table1D{.stable_name = "t", .opens_paragraph = true},
+        Table2D{.stable_name = "u", .opens_paragraph = true},
+    };
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string json = emit_json(item);
+    CHECK(json.find(R"({"block":"note","body":[{"block":"paragraph","text":[{"t":"text","text":"in the paragraph )"
+                    R"(before it"}],"continuation":false}]})") != std::string::npos);
+    CHECK(json.find(R"("text":"numbered"}],"continuation":false}],"opens_paragraph":true})") != std::string::npos);
+    CHECK(std::ranges::distance(std::views::split(json, std::string_view{R"("opens_paragraph":true)"})) == 7);
+
+    const auto back = parse_item(json);
+    REQUIRE(back.has_value());
+    CHECK(back->descr == item.descr);
     CHECK(emit_json(*back) == json);
 }
 

@@ -1,0 +1,55 @@
+** Blocks that open a paragraph [numbered.blocks]
+:PROPERTIES:
+:CUSTOM_ID: numbered.blocks
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+void first();
+#+end_itemdecl
+
+#+begin_pnum
+#+begin_note
+A note that is the first thing in a description opens its paragraph, as it always has.
+#+end_note
+#+end_pnum
+
+#+begin_pnum
+/Returns/: A reference to the element.
+
+#+begin_note
+A note in the paragraph before it, which is where an authored note goes.
+#+end_note
+#+end_pnum
+
+#+begin_pnum
+#+begin_note
+A note the draft numbered by itself.
+#+end_note
+
+Prose after that note is the rest of its paragraph.
+#+end_pnum
+
+#+begin_pnum
+#+begin_wgexample
+#+begin_codeblock
+first();
+#+end_codeblock
+#+end_wgexample
+#+end_pnum
+
+#+begin_pnum
+#+begin_codeblock
+second();
+#+end_codeblock
+#+end_pnum
+
+#+begin_pnum
+- One.
+- Two.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The element after them is numbered as before.
+#+end_pnum

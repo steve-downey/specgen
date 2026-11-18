@@ -514,3 +514,18 @@ the number pending, because the IR has no way to say that a block which is not p
 numbered paragraph in the middle of a body. Open: that. The draft numbers a note or an example
 by itself often (502 times in the library clauses, 255 of them inside an `itemdescr`), and such
 a note loses its number unless it is first in its body (issue #321).
+
+Log:
+
+- 2026-11-17: the IR can now say it (issue #321). `Itemize`, `Table2D`, `Table1D`,
+  `AuthoredCode`, `Note` and `Example` carry `opens_paragraph`, and the importer sets it on a
+  block that follows a `\pnum` and is not first in its body. The number is the block's, so the
+  prose after it continues the paragraph. A block first in its body is left unset, as before:
+  that is the shape generated wording has, and a backend numbers the first block of a body
+  whatever it is. The generator sets the flag nowhere, so no generated wording moved.
+  [tuple.elem], [tuple.creation] and [func.wrap.func.con] now round-trip with no difference.
+  The mpark backend writes the number on a line of its own before a block that is not prose and
+  has no element label ahead of it. It used to write the number and the opening fence on one
+  line when such a block came first in an unlabelled body, which pandoc reads as text and not
+  as a div. Open: a docblock has no way to say a note opens its own paragraph, so an authored
+  note still joins the paragraph before it, and the differ does not report the difference.

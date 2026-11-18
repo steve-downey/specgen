@@ -744,3 +744,78 @@ Within subclause~\ref{x}, \tcode{T}~is \tcode{R(*)(G, A...)~\opt{noexcept}} and 
                             "\\tcode{val.T::\\textasciitilde{}T()}."));
     CHECK(rendered.contains("\n~T();\n"));
 }
+
+TEST_CASE("draft_import - a note, an example, a code block or a list with its own \\pnum keeps the number") {
+    // [tuple.elem] numbers the note after *Returns* by itself; so does much of
+    // the library (issue #321).
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\begin{itemdecl}
+void f();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+A reference to the element.
+\begin{note}
+In the paragraph before it.
+\end{note}
+
+\pnum
+\begin{note}
+Numbered by itself.
+\end{note}
+And the rest of that paragraph.
+
+\pnum
+\begin{example}
+\begin{codeblock}
+f();
+\end{codeblock}
+\end{example}
+
+\pnum
+\begin{codeblock}
+g();
+\end{codeblock}
+
+\pnum
+\begin{itemize}
+\item One.
+\item Two.
+\end{itemize}
+
+\pnum
+\remarks
+\begin{note}
+First in its body.
+\end{note}
+\end{itemdescr}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& descr = item_at(only_section(r), 0).descr;
+    REQUIRE(descr.elements.size() == 2);
+
+    const auto& returns = descr.elements[0].body;
+    REQUIRE(returns.size() == 7);
+    CHECK_FALSE(std::get<ir::Note>(returns[1]).opens_paragraph);
+    CHECK(std::get<ir::Note>(returns[2]).opens_paragraph);
+    // The number is the note's, so the prose after it continues.
+    CHECK(std::get<ir::BodyParagraph>(returns[3]).continuation);
+    CHECK(std::get<ir::Example>(returns[4]).opens_paragraph);
+    CHECK(std::get<ir::AuthoredCode>(returns[5]).opens_paragraph);
+    CHECK(std::get<ir::Itemize>(returns[6]).opens_paragraph);
+
+    // The first block of a body opens its paragraph without saying so, as
+    // generated wording has it.
+    const auto& remarks = descr.elements[1].body;
+    REQUIRE(remarks.size() == 1);
+    CHECK_FALSE(std::get<ir::Note>(remarks[0]).opens_paragraph);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(std::ranges::distance(std::views::split(rendered, std::string_view{"\\pnum"})) == 7);
+    CHECK(rendered.contains("\\pnum\n\\begin{note}\nNumbered by itself.\n\\end{note}\nAnd the rest"));
+    CHECK(rendered.contains("\\end{note}\n\n\\pnum\n\\begin{note}"));
+}

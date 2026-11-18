@@ -797,6 +797,26 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
 )
 
+# A block that is not prose and opens a numbered paragraph of its own (issue
+# #321): a note, an example, a code block and a list, each after a `\pnum` in
+# the middle of a body, as the draft writes a note that stands apart from the
+# prose before it. Beside them, the two shapes that already worked: a note
+# first in a description, and a note in the paragraph before it.
+specgen_add_golden(
+    numbered_blocks
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
+)
+specgen_add_golden(
+    numbered_blocks
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
+)
+specgen_add_golden(
+    numbered_blocks
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
+)
+
 # The draft importer (docs/plans/draft-import.md): a slice of the working
 # draft's LaTeX read into IR, and that IR rendered by each backend. The slices
 # are copied into tests/corpus/standard-slices with their revision recorded, so no

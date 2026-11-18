@@ -752,3 +752,35 @@ TEST_CASE("diff - decls preserves whole added and removed sections and items") {
     CHECK(std::get<SpecItem>(changed.children.back()).change == Change::Added);
     CHECK(has_description(std::get<SpecItem>(changed.children.back()).descr));
 }
+
+TEST_CASE("diff - whether a note opens a paragraph is the current document's to say, and is not a change") {
+    const auto with_note = [](bool opens) {
+        Document doc;
+        doc.nodes.push_back(
+            Section{"s",
+                    "S",
+                    {item("void f();",
+                          {"f"},
+                          {element(ElementKind::Returns,
+                                   {BodyParagraph{text("A reference.")},
+                                    Note{{BodyParagraph{text("About it.")}}, Change::Same, opens}})})}});
+        return doc;
+    };
+    const Document drafted  = with_note(true);
+    const Document authored = with_note(false);
+    const auto     note_of  = [](const Document& doc) {
+        const auto& body =
+            std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front()).descr.elements.front().body;
+        return std::get<Note>(body[1]);
+    };
+
+    // Nothing to show: the default context keeps only what changed.
+    CHECK(diff::compare(drafted, authored).nodes.empty());
+    CHECK(diff::compare(authored, drafted).nodes.empty());
+
+    const Document forward = diff::compare(drafted, authored, {.context = diff::Context::All});
+    CHECK_FALSE(note_of(forward).opens_paragraph);
+    CHECK(note_of(forward).change == Change::Same);
+    const Document back = diff::compare(authored, drafted, {.context = diff::Context::All});
+    CHECK(note_of(back).opens_paragraph);
+}

@@ -397,6 +397,9 @@ struct EquivalentTo {
 struct Itemize {
     std::vector<Paragraph> items;
     Change                 change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Itemize&, const Itemize&) = default;
 };
@@ -419,6 +422,9 @@ struct Table2D {
     Paragraph               column2     = {};
     std::vector<Table2DRow> rows        = {};
     Change                  change      = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Table2D&, const Table2D&) = default;
 };
@@ -442,6 +448,9 @@ struct Table1D {
     Paragraph               column2     = {};
     std::vector<Table1DRow> rows        = {};
     Change                  change      = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Table1D&, const Table1D&) = default;
 };
@@ -459,6 +468,9 @@ struct BodyParagraph {
 struct AuthoredCode {
     CodeText code;
     Change   change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const AuthoredCode&, const AuthoredCode&) = default;
 };
@@ -470,12 +482,18 @@ using InformativeBody  = std::vector<InformativeBlock>;
 struct Note {
     InformativeBody body;
     Change          change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Note&, const Note&) = default;
 };
 struct Example {
     InformativeBody body;
     Change          change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Example&, const Example&) = default;
 };
@@ -486,6 +504,21 @@ using DescriptionBody = std::vector<BodyBlock>;
 // The wording diff's mark on a block of either body, whichever kind it is.
 Change block_change(const BodyBlock&);
 Change block_change(const InformativeBlock&);
+
+// Whether a block opens a numbered paragraph, apart from the first block of a
+// body, which always does. Prose says so by not being a `continuation`, and an
+// extracted *Equivalent to* always opens one. A list, a table, a code block, a
+// note or an example belongs to the paragraph before it unless its
+// `opens_paragraph` is set, which is how the draft writes a note or an example
+// that stands apart from the prose before it:
+//
+//     \pnum
+//     \begin{note}
+//
+// Nothing generated sets it; the draft importer does, where the draft numbered
+// the block itself, so inherited wording keeps the draft's paragraph numbers
+// (issue #321).
+bool opens_paragraph(const BodyBlock&);
 
 struct DescriptionElement {
     ElementKind     kind = ElementKind::Effects;

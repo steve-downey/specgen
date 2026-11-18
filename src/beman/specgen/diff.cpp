@@ -728,7 +728,8 @@ struct BlockDiffer {
         return ir::BodyParagraph{diff_paragraph(x.text, y.text, options), y.continuation};
     }
     Block operator()(const ir::Itemize& x) const {
-        return ir::Itemize{diff_paragraph_list(x.items, std::get<ir::Itemize>(other).items, options)};
+        const auto& y = std::get<ir::Itemize>(other);
+        return ir::Itemize{diff_paragraph_list(x.items, y.items, options), ir::Change::Same, y.opens_paragraph};
     }
     Block operator()(const ir::Table2D& x) const {
         const auto& y     = std::get<ir::Table2D>(other);
@@ -779,13 +780,16 @@ struct BlockDiffer {
         return ir::EquivalentTo{diff_code(x.code, std::get<ir::EquivalentTo>(other).code, options)};
     }
     Block operator()(const ir::AuthoredCode& x) const {
-        return ir::AuthoredCode{diff_code(x.code, std::get<ir::AuthoredCode>(other).code, options)};
+        const auto& y = std::get<ir::AuthoredCode>(other);
+        return ir::AuthoredCode{diff_code(x.code, y.code, options), ir::Change::Same, y.opens_paragraph};
     }
     Block operator()(const ir::Note& x) const {
-        return ir::Note{diff_blocks(x.body, std::get<ir::Note>(other).body, options)};
+        const auto& y = std::get<ir::Note>(other);
+        return ir::Note{diff_blocks(x.body, y.body, options), ir::Change::Same, y.opens_paragraph};
     }
     Block operator()(const ir::Example& x) const {
-        return ir::Example{diff_blocks(x.body, std::get<ir::Example>(other).body, options)};
+        const auto& y = std::get<ir::Example>(other);
+        return ir::Example{diff_blocks(x.body, y.body, options), ir::Change::Same, y.opens_paragraph};
     }
 };
 

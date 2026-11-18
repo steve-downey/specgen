@@ -151,6 +151,37 @@ TEST_CASE("ir - change_of, with_change and all_marked reach the mark on a node o
     CHECK(std::get<Section>(with_change(nodes[0], Change::Added)).stable_name == "s");
 }
 
+TEST_CASE("ir - opens_paragraph says which blocks take a paragraph number of their own") {
+    // Prose says it by not continuing, and an extracted body always does.
+    CHECK(opens_paragraph(BodyBlock{BodyParagraph{{TextInline{"p"}}, false}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{BodyParagraph{{TextInline{"p"}}, true}}));
+    CHECK(opens_paragraph(BodyBlock{EquivalentTo{{"x;", {}}}}));
+    // The rest belong to the paragraph before them unless they say otherwise.
+    CHECK_FALSE(opens_paragraph(BodyBlock{Note{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Example{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Itemize{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{AuthoredCode{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Table1D{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Table2D{}}));
+    CHECK(opens_paragraph(BodyBlock{Note{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Example{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Itemize{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{AuthoredCode{{"x;", {}}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Table1D{.opens_paragraph = true}}));
+    CHECK(opens_paragraph(BodyBlock{Table2D{.opens_paragraph = true}}));
+}
+
+TEST_CASE("ir - a list that opens a paragraph of its own is not joined to the list before it") {
+    const DescriptionBody joined = coalesce_itemizations({Itemize{{{TextInline{"a"}}}}, Itemize{{{TextInline{"b"}}}}});
+    REQUIRE(joined.size() == 1);
+    CHECK(std::get<Itemize>(joined[0]).items.size() == 2);
+
+    const DescriptionBody apart =
+        coalesce_itemizations({Itemize{{{TextInline{"a"}}}}, Itemize{{{TextInline{"b"}}}, Change::Same, true}});
+    REQUIRE(apart.size() == 2);
+    CHECK(std::get<Itemize>(apart[1]).opens_paragraph);
+}
+
 TEST_CASE("ir - block_change reads the mark on a block of either body") {
     CHECK(block_change(BodyBlock{BodyParagraph{{TextInline{"p"}}, false, Change::Added}}) == Change::Added);
     CHECK(block_change(BodyBlock{Itemize{{}, Change::Removed}}) == Change::Removed);

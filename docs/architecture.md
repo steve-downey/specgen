@@ -1043,7 +1043,10 @@ have no independent item description.
   extracted `EquivalentTo`, authored `AuthoredCode`, `Note`, or `Example` blocks.
   Informative bodies contain a nonrecursive sequence of prose, lists, tables,
   and authored code. A paragraph's continuation flag preserves
-  the enclosing numbered paragraph after a list or table. Validator-only
+  the enclosing numbered paragraph after a list or table. A block that is not prose belongs to
+  the paragraph before it unless its `opens_paragraph` is set, which only the draft importer
+  does, where the draft numbered a note or an example by itself; `ir::opens_paragraph` is the
+  one question the three backends ask of any block. Validator-only
   `derived`/`conjuncts` evidence remains separate from the rendered body;
   `ItemDecl`/`ItemDescr`/`SpecItem`; `IndexEntry`; `Section`/`Synopsis`/`FreeParagraph`/
   `Document`; and `canonicalize()`. Nodes share a common traversal substrate

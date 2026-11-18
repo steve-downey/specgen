@@ -185,6 +185,24 @@ struct BlockChange {
 Change block_change(const BodyBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
 Change block_change(const InformativeBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
 
+namespace {
+
+// `opens_paragraph`'s dispatch over the eight block kinds.
+struct OpensParagraph {
+    bool operator()(const BodyParagraph& b) const { return !b.continuation; }
+    bool operator()(const Itemize& b) const { return b.opens_paragraph; }
+    bool operator()(const Table2D& b) const { return b.opens_paragraph; }
+    bool operator()(const Table1D& b) const { return b.opens_paragraph; }
+    bool operator()(const EquivalentTo&) const { return true; }
+    bool operator()(const AuthoredCode& b) const { return b.opens_paragraph; }
+    bool operator()(const Note& b) const { return b.opens_paragraph; }
+    bool operator()(const Example& b) const { return b.opens_paragraph; }
+};
+
+} // namespace
+
+bool opens_paragraph(const BodyBlock& block) { return std::visit(foundation::overloaded{OpensParagraph{}}, block); }
+
 Node with_change(Node node, Change change) {
     return std::visit(foundation::overloaded{WithChange{change}}, std::move(node));
 }
@@ -307,7 +325,7 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
         std::move(body) | std::views::as_rvalue, DescriptionBody{}, [](DescriptionBody out, BodyBlock block) {
             auto* next = std::get_if<Itemize>(&block);
             auto* last = out.empty() ? nullptr : std::get_if<Itemize>(&out.back());
-            if (next != nullptr && last != nullptr)
+            if (next != nullptr && last != nullptr && !next->opens_paragraph)
                 last->items.append_range(std::move(next->items) | std::views::as_rvalue);
             else
                 out.push_back(std::move(block));
