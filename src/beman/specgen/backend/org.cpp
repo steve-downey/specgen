@@ -223,7 +223,8 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
             const bool number = std::ranges::all_of(span.payload, [](char c) { return c >= '0' && c <= '9'; });
             return number ? "<sub>" + html_escape(span.payload) + "</sub>"
                           : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
-        }));
+        }),
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {

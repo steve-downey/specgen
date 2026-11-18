@@ -35,6 +35,7 @@ enum class SpanKind {
     Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
     MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
     Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
+    Ellipsis,     // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
 };
 
 } // namespace beman::specgen::ir
@@ -51,6 +52,7 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::Optional,
     beman::specgen::ir::SpanKind::MathVariable,
     beman::specgen::ir::SpanKind::Subscript,
+    beman::specgen::ir::SpanKind::Ellipsis,
 };
 
 namespace beman::specgen::ir {
@@ -142,6 +144,7 @@ enum class LayoutHintKind {
     LineBreak, // \linebreak: break here if it helps
     NewLine,   // \newline: break here
     Tie,       // ~: the space at this offset is one the line may not break at
+    MathOpen,  // $\tcode{: the code from here to the subscript after it is inside that subscript's mathematics
 };
 
 } // namespace beman::specgen::ir
@@ -153,11 +156,12 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::LayoutHintKind::LineBreak,
     beman::specgen::ir::LayoutHintKind::NewLine,
     beman::specgen::ir::LayoutHintKind::Tie,
+    beman::specgen::ir::LayoutHintKind::MathOpen,
 };
 
 namespace beman::specgen::ir {
 
-std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline", "tie"
+std::string_view layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline", "tie", "math-open"
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 
 // One hint, between two bytes of a text -- a CodeText's, a TextInline's, or the
@@ -179,6 +183,15 @@ std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 // place of that space (`tied_space`); one that does not leaves the space. It
 // is also the one hint with a meaning outside LaTeX, and the other backends
 // write a tie in running text as their own no-break space.
+//
+// `MathOpen` is not about line breaking at all, and is here because it is
+// typesetting of the same standing: a spelling the draft chose that changes
+// nothing a reader sees. A subscript on code is written `T$_i$` or
+// `$\tcode{T}_i$`, and they print alike. Both are the text `T_i` with a
+// `Subscript` span on `_i`; the second has this hint where the `T` begins, and
+// a writer of draft LaTeX opens the mathematics there (issue #327). Its
+// `braced` is the other thing there is to that spelling: the draft wrote a
+// subscript of one character in a group, `$\tcode{B}_{1}$`.
 struct LayoutHint {
     std::size_t    at     = 0;
     LayoutHintKind kind   = LayoutHintKind::Break;

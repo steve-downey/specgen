@@ -545,7 +545,7 @@ TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole
     // reported once, and the macros inside the mathematics are not read as code.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-The range \tcode{a[$i - 1$]} through \tcode{a[$\dotsc$]}, and \tcode{b[$j$]}.
+The range \tcode{a[$i - 1$]} through \tcode{a[$i_\tcode{x}$]}, and \tcode{b[$j$]}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
@@ -556,7 +556,7 @@ The range \tcode{a[$i - 1$]} through \tcode{a[$\dotsc$]}, and \tcode{b[$j$]}.
     CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
     CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\dotsc$]}, and \\tcode{b[$j$]}."));
+    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$i_\\tcode{x}$]}, and \\tcode{b[$j$]}."));
 }
 
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
@@ -818,4 +818,57 @@ First in its body.
     CHECK(std::ranges::distance(std::views::split(rendered, std::string_view{"\\pnum"})) == 7);
     CHECK(rendered.contains("\\pnum\n\\begin{note}\nNumbered by itself.\n\\end{note}\nAnd the rest"));
     CHECK(rendered.contains("\\end{note}\n\n\\pnum\n\\begin{note}"));
+}
+
+TEST_CASE("draft_import - a subscript on code or on a variable, and an ellipsis, in a \\tcode are spans") {
+    // [tuple] is written in terms of `$\tcode{T}_i$`, which says what `T$_i$`
+    // says (issue #327). The text is the same; a hint keeps the draft's choice
+    // of where the mathematics opens, so it is written back as it was.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+For \tcode{tuple<$\tcode{T}_i$...>} and \tcode{tuple<T$_i$...>}, the types \tcode{T$_0$, $\dotsc$, $\tcode{T}_{N}$}
+and the value \tcode{$r_K$}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+
+    const auto& inside  = std::get<ir::CodeInline>(para.at(1)).code;
+    const auto& outside = std::get<ir::CodeInline>(para.at(3)).code;
+    CHECK(inside.text == "tuple<T_i...>");
+    CHECK(inside.spans == std::vector{ir::Span{7, 9, ir::SpanKind::Subscript, "i"}});
+    CHECK(inside.hints == std::vector{ir::LayoutHint{6, ir::LayoutHintKind::MathOpen, false}});
+    // The two spellings are the same wording, and differ in typesetting alone.
+    CHECK(outside.hints.empty());
+    CHECK(ir::without_typesetting(inside) == ir::without_typesetting(outside));
+
+    const auto& sequence = std::get<ir::CodeInline>(para.at(5)).code;
+    CHECK(sequence.text == "T_0, ..., T_N");
+    REQUIRE(sequence.spans.size() == 3);
+    CHECK(sequence.spans[1] == ir::Span{5, 8, ir::SpanKind::Ellipsis, ""});
+    // The group around a subscript of one character is the draft's spelling, and is kept.
+    CHECK(sequence.hints == std::vector{ir::LayoutHint{10, ir::LayoutHintKind::MathOpen, true}});
+
+    const auto& variable = std::get<ir::CodeInline>(para.at(7)).code;
+    CHECK(variable.text == "r_K");
+    CHECK(variable.spans ==
+          std::vector{ir::Span{0, 1, ir::SpanKind::MathVariable, "r"}, ir::Span{1, 3, ir::SpanKind::Subscript, "K"}});
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("For \\tcode{tuple<$\\tcode{T}_i$...>} and \\tcode{tuple<T$_i$...>}, the types "
+                            "\\tcode{T$_0$, $\\dotsc$, $\\tcode{T}_{N}$} and the value \\tcode{$r_K$}."));
+}
+
+TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes read stays raw") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i-1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    // One report for the subclause, however many there are.
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "mathematics in \\tcode is kept as raw LaTeX");
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    CHECK(std::ranges::count_if(para, [](const ir::Inline& i) { return std::holds_alternative<ir::RawInline>(i); }) ==
+          6);
 }

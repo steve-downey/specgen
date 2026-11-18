@@ -1033,7 +1033,7 @@ have no independent item description.
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
   ref(stable-name), library-index(optional enclosing class), cvqual, opt,
-  math-variable, subscript, note, example.
+  math-variable, subscript, ellipsis, note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1270,6 +1270,13 @@ There are exactly three backends, and **adding wording to one means adding it to
   `@~_i_~@` and `@~1~@` in mpark, `<sub>` in org's HTML, and in LaTeX the mathematics again, with
   a group when the subscript is longer than one character. The code's text has the subscript
   after an underscore (`T_i`), which is how a reader of the text alone would write it.
+  `Ellipsis` (`$\dotsc$`) is the elements left out of a sequence, with the text `...`, which is
+  what mpark and org write. In LaTeX a subscript and what it is on are one run of mathematics:
+  a `MathVariable` directly before a `Subscript` is written `$r_K$`, and a `MathOpen` hint, kept
+  in `CodeText::hints` with the line-break hints, says the draft opened the mathematics before
+  the code the subscript is on, `$\tcode{T}_i$`. That is the draft's other spelling of `T$_i$`
+  and prints the same, so it is typesetting and not a kind: the two are the same IR to the
+  differ and to the other backends, and only `draft_code_inline` reads the hint.
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

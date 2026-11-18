@@ -468,6 +468,23 @@ Log:
   mathematics, and 487 of them hold only these two shapes. In the other 204 the shapes are a
   subscript on code written inside the mathematics (`$\tcode{T}_i$`, 132), an ellipsis
   (`$\dotsc$`, 43), a subscripted variable (`$r_K$`, 24), and 59 others. Open: those.
+- 2026-11-17: the three shapes are read (issue #327), which is 150 of those 204 `\tcode`s;
+  637 of the 691 now read. Each was a different kind of question. `$\dotsc$` is something the
+  code says, the elements left out, so it is a span kind, `Ellipsis`, with the text `...`.
+  `$r_K$` needed nothing new: it is a `MathVariable` and a `Subscript`, and the LaTeX backend
+  now writes a subscript and the variable directly before it as one run of mathematics.
+  `$\tcode{T}_i$` says exactly what `T$_i$` says and prints the same, so the difference is the
+  draft's spelling and belongs beside the wording: a hint, `MathOpen`, in the table the
+  line-break hints are in, at the offset where the code inside the mathematics begins. A span
+  kind for "code inside mathematics" would have made the two spellings different wording to the
+  differ. The hint is written only when the code after it runs up to a subscript, so a stray one
+  cannot leave mathematics open. Counted with the importer's own rules, what stays raw is 54
+  `\tcode`s: a subscript that is code (`$i_\tcode{x}$`, 22 uses), an expression in or out of a
+  subscript (`$a + 0$`, `$p_{i-1}$`), a placeholder with a subscript (`$\placeholder{C}_i$`),
+  Greek letters, and `\ldots` twice. Open: those. The group around a subscript of one character
+  (`$\tcode{B}_{1}$`) is kept on the same hint, in its `braced`: the library clauses write a
+  group of one 30 times, every one after a `\tcode` inside the mathematics, and [meta.logical]
+  alone had 24 differences from the draft without it.
 - 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
   (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
   `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`

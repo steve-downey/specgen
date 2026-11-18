@@ -194,6 +194,30 @@ TEST_CASE("mpark - a math variable is italic and a subscript is a subscript") {
     CHECK(mpark::render_to_string(changed).contains("@[get<*i*>(T~_i_~, T~1~)]{.add}@"));
 }
 
+// The rest of the mathematics the importer reads in code (issue #327). The
+// ellipsis is the three dots. Where the draft opened the mathematics is
+// LaTeX's business, so the hint is not written and the subscript is as ever.
+TEST_CASE("mpark - an ellipsis span is its dots, and a subscript does not care where the mathematics opened") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    const beman::specgen::ir::CodeText code{"tuple<T_i...>, T_0, ..., r_K",
+                                            {{7, 9, SpanKind::Subscript, "i"},
+                                             {16, 18, SpanKind::Subscript, "0"},
+                                             {20, 23, SpanKind::Ellipsis, ""},
+                                             {25, 26, SpanKind::MathVariable, "r"},
+                                             {26, 28, SpanKind::Subscript, "K"}},
+                                            {},
+                                            {LayoutHint{6, LayoutHintKind::MathOpen, false}}};
+    SpecItem                           item;
+    DescriptionElement                 remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    CHECK(mpark::render_to_string(item).contains("See `tuple<T@~_i_~@...>, T@~0~@, ..., $r$@~_K_~@`."));
+}
+
 // The draft's tie (issue #312) is the one hint with a meaning outside LaTeX. In
 // running text it is Markdown's no-break space; inside code the backticks are
 // verbatim, so the space stays a space.

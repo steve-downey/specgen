@@ -430,28 +430,63 @@ std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos,
     return it->second;
 }
 
-// The mathematics the draft writes inside code that has a span kind: a
-// variable (`$i$`, letters and nothing else) and a subscript (`$_i$`,
-// `$_{10}$`). `inner` is what stands between the dollar signs.
-struct MathSpan {
-    ir::SpanKind kind;
-    std::string  payload;
-};
-
-std::optional<MathSpan> math_span(std::string_view inner) {
-    const auto alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
-    if (!inner.empty() && std::ranges::all_of(inner, is_letter))
-        return MathSpan{ir::SpanKind::MathVariable, std::string(inner)};
-    if (!inner.starts_with('_'))
+// The mathematics the draft writes inside code that the IR can say, read as
+// the code it stands for. `inner` is what stands between the dollar signs.
+//
+//   $i$             a variable: letters and nothing else
+//   $_i$, $_{10}$   a subscript on the code before it
+//   $r_K$           a variable and its subscript
+//   $\tcode{T}_i$   code and its subscript, which says what `T$_i$` says; the
+//                   hint keeps the draft's choice of where the mathematics opens
+//   $\dotsc$        the elements left out of a sequence
+//
+// Anything else has no kind (`$i - 1$`, `$i_\tcode{x}$`, `$\rho$`).
+std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
+    const auto  alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
+    CodeBuilder out;
+    if (inner == "\\dotsc") {
+        out.span(ir::SpanKind::Ellipsis, {}, "...");
+        return out.code;
+    }
+    // What the subscript, if there is one, is on: nothing here, a variable, or code.
+    std::size_t at = 0;
+    if (inner.starts_with("\\tcode{")) {
+        const std::size_t      close = inner.find('}');
+        const std::string_view arg = close == std::string_view::npos ? std::string_view{} : inner.substr(7, close - 7);
+        const std::optional<std::string> code = plain_code_argument(arg);
+        if (close == std::string_view::npos || !code || code->empty())
+            return std::nullopt;
+        out.hint(ir::LayoutHintKind::MathOpen, false);
+        out.text(*code);
+        at = close + 1;
+        if (at == inner.size())
+            return std::nullopt; // code alone in mathematics is not a shape the draft writes
+    } else {
+        const std::size_t end = std::min(inner.find('_'), inner.size());
+        if (!std::ranges::all_of(inner.substr(0, end), is_letter))
+            return std::nullopt;
+        if (end > 0)
+            out.span(ir::SpanKind::MathVariable, std::string(inner.substr(0, end)), inner.substr(0, end));
+        at = end;
+    }
+    if (at == inner.size())
+        return at == 0 ? std::nullopt : std::optional(out.code);
+    if (inner[at] != '_')
         return std::nullopt;
-    std::string_view sub = inner.substr(1);
-    if (sub.size() > 2 && sub.front() == '{' && sub.back() == '}')
+    std::string_view sub     = inner.substr(at + 1);
+    const bool       grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
+    if (grouped)
         sub = sub.substr(1, sub.size() - 2);
     else if (sub.size() != 1)
         return std::nullopt;
     if (sub.empty() || !std::ranges::all_of(sub, alnum))
         return std::nullopt;
-    return MathSpan{ir::SpanKind::Subscript, std::string(sub)};
+    // A group around one character is spelling too, and the draft writes it
+    // only after code (`$\tcode{B}_{1}$`), so the hint that is there carries it.
+    if (grouped && sub.size() == 1 && !out.code.hints.empty())
+        out.code.hints.back().braced = true;
+    out.span(ir::SpanKind::Subscript, std::string(sub), '_' + std::string(sub));
+    return out.code;
 }
 
 ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
@@ -504,17 +539,15 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
             continue;
         }
         if (!listing && c == '$') {
-            // Mathematics is not code (issue #311). A variable or a subscript
-            // is a span; anything else has no kind, and the caller keeps the
-            // whole run as the LaTeX it was.
+            // Mathematics is not code (issues #311, #327). What
+            // `code_mathematics` can read is spans; anything else has no kind,
+            // and the caller keeps the whole run as the LaTeX it was.
             const std::size_t close = raw.find('$', i + 1);
             const std::size_t end   = close == std::string_view::npos ? raw.size() : close + 1;
             const auto        math =
-                close == std::string_view::npos ? std::nullopt : math_span(raw.substr(i + 1, close - i - 1));
+                close == std::string_view::npos ? std::nullopt : code_mathematics(raw.substr(i + 1, close - i - 1));
             if (math) {
-                const std::string spelling =
-                    math->kind == ir::SpanKind::Subscript ? '_' + math->payload : math->payload;
-                out.span(math->kind, math->payload, spelling);
+                out.append(*math);
             } else {
                 met_unknown_macro = true;
                 report(Severity::Warning, "mathematics in \\tcode is kept as raw LaTeX");

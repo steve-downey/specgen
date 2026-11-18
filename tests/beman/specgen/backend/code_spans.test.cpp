@@ -39,6 +39,8 @@ std::string bracket_escape(const Span& span, std::string_view spelling) {
         return "[var:" + span.payload + ']';
     case SpanKind::Subscript:
         return "[sub:" + span.payload + ']';
+    case SpanKind::Ellipsis:
+        return "[ellipsis]";
     }
     return {};
 }

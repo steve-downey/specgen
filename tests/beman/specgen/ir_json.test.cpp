@@ -743,6 +743,24 @@ TEST_CASE("ir_json - a prose inline's line-break hints round-trip and are omitte
     CHECK(emit_json(*back) == json);
 }
 
+TEST_CASE("ir_json - an ellipsis span and a math-open hint round-trip by name") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{CodeInline{CodeText{
+        "T_0, ..., T_N",
+        {{1, 3, SpanKind::Subscript, "0"}, {5, 8, SpanKind::Ellipsis, ""}, {11, 13, SpanKind::Subscript, "N"}},
+        {},
+        {{10, LayoutHintKind::MathOpen}}}}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find(R"({"begin":5,"end":8,"kind":"ellipsis","payload":""})") != std::string::npos);
+    CHECK(json.find(R"("hints":[{"at":10,"kind":"math-open"}])") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
 TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
     SpecItem plain;
     plain.decl.signatures.push_back({"void f();", {}});

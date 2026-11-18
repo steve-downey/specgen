@@ -108,7 +108,9 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         // what the shorthand is. A subscript is Markdown's `~x~`, in an
         // `@...@` as `\opt`'s is.
         foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
-        foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }));
+        foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }),
+        // The dots of a sequence with elements left out are the dots.
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -139,7 +141,8 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::CvQualifier>([&] { return '*' + span.payload + '*'; }),
         foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
         foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
-        foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }));
+        foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }),
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:

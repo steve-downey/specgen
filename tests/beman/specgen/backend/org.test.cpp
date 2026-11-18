@@ -165,6 +165,31 @@ TEST_CASE("org - a math variable and a subscript in code") {
                        "@@html:<code>get&lt;<var>i</var>&gt;(T<sub><var>i</var></sub>, T<sub>1</sub>)</code>@@."));
 }
 
+// The rest of the mathematics the importer reads in code (issue #327): the
+// LaTeX snippet is the draft's own text, one run of mathematics for a subscript
+// and what it is on, and the HTML has the dots and the subscripts.
+TEST_CASE("org - an ellipsis, and a subscript on code the draft put inside the mathematics") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    const beman::specgen::ir::CodeText code{"T_i, ..., r_K",
+                                            {{1, 3, SpanKind::Subscript, "i"},
+                                             {5, 8, SpanKind::Ellipsis, ""},
+                                             {10, 11, SpanKind::MathVariable, "r"},
+                                             {11, 13, SpanKind::Subscript, "K"}},
+                                            {},
+                                            {LayoutHint{0, LayoutHintKind::MathOpen, false}}};
+    SpecItem                           item;
+    DescriptionElement                 remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    CHECK(org::render_to_string(item).contains(
+        "See @@latex:\\tcode{$\\tcode{T}_i$, $\\dotsc$, $r_K$}@@"
+        "@@html:<code>T<sub><var>i</var></sub>, ..., <var>r</var><sub><var>K</var></sub></code>@@."));
+}
+
 // The draft's tie (issue #312): org's entity for a no-break space in running
 // text, which exports to `~` and to `&nbsp;`; in a code inline's LaTeX snippet
 // the draft's own `~`, and in its HTML a space.
