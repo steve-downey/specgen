@@ -726,6 +726,13 @@ plain `//` lines, which is the shape `clang-format` produces when it wraps a
 long marker; the continuation lines are joined into one title with single
 spaces. A `{title}` that never closes is reported as a malformed marker.
 
+A title names code in backticks, as prose does, or in the draft's own
+`\tcode{...}`; each backend writes either as its code. In LaTeX a backticked
+span becomes `\tcode{...}` with its `&` escaped, and outside code `&`, `%` and
+`#` are escaped as they are in prose, so a title written
+``{Partial specialization `thing<E&>`}`` compiles. mpark and org read `\&` and the draft's other escaped
+characters in a title as the characters, inside `\tcode` and out of it.
+
 An exact Doxygen fence closes an ordinary section explicitly:
 
 ```cpp

@@ -28,6 +28,7 @@
 
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
@@ -438,7 +439,8 @@ struct SeededProjector {
     // exactly this, unlike `ir::SectionF::stable_name`, which stays the
     // frozen JSON field it must remain (see backend/render_fold.hpp).
     backend::RenderF<Seeded> operator()(const ir::Section& s) const {
-        std::string         header = std::format("\\rSec{}[{}]{{{}}}\n", ctx.depth, s.stable_name, s.title);
+        std::string header = std::format(
+            "\\rSec{}[{}]{{{}}}\n", ctx.depth, s.stable_name, backend::render_section_title_draft(s.title));
         const RenderCtx     child_ctx{ctx.depth + 1, ctx.pnum_base};
         std::vector<Seeded> children =
             s.children |
