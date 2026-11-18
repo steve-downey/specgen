@@ -1,0 +1,72 @@
+\rSec3[w.thing]{Class \tcode{thing}}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{thing}@ {
+  public:
+    inline constexpr int f() const;
+    inline int g() const;
+    inline constexpr int h() const;
+    int k() const;
+    int v(int x = DEMO_VALUE) const;
+  };
+}
+\end{codeblock}
+
+\pnum
+A thing.
+
+\indexlibrarymember{f}{thing}%
+\begin{itemdecl}
+inline constexpr int f() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+1.
+\end{itemdescr}
+
+\indexlibrarymember{g}{thing}%
+\begin{itemdecl}
+inline int g() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+2.
+\end{itemdescr}
+
+\indexlibrarymember{h}{thing}%
+\begin{itemdecl}
+inline constexpr int h() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+3.
+\end{itemdescr}
+
+\indexlibrarymember{k}{thing}%
+\begin{itemdecl}
+int k() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+4.
+\end{itemdescr}
+
+\indexlibrarymember{v}{thing}%
+\begin{itemdecl}
+int v(int x = DEMO_VALUE) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{x}.
+\end{itemdescr}

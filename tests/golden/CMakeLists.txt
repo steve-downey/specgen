@@ -2950,6 +2950,19 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+# Specifiers spelled through macros are written as they expand (issue #349).
+specgen_add_golden(
+    macro_specifiers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_macro_specifiers.hpp"
+)
+specgen_add_golden(
+    macro_specifiers
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/macro_specifiers/expected.json"
+)
+
 specgen_add_golden(
     drift_prose
     MODE generate

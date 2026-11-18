@@ -1326,6 +1326,15 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
   (`= delete("reason")`) is dropped, and so is a macro standing for the
   keyword, so a header that writes `= MY_DELETE("reason")` to compile before
   C++26 generates the same wording as one that writes `= delete`.
+- A specifier spelled through a macro reads as what the macro expands to in
+  this translation unit, in a synopsis and in an item declaration:
+  `inline DEMO_CONSTEXPR int f();` with `#define DEMO_CONSTEXPR constexpr` reads
+  `inline constexpr int f();`, and a macro that expands to nothing is dropped
+  with the space beside it. This covers an object-like macro whose expansion is
+  keywords alone, or nothing, or another such macro. A function-like macro, or
+  one whose expansion holds a number, a name that is not such a macro, or an
+  attribute, is left as written. Whether the expansion is the one the wording wants is settled with
+  a `-D` after the `--`.
 - A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in

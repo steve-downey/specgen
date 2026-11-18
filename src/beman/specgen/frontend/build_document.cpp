@@ -22,6 +22,7 @@
 #include <beman/specgen/frontend/foreign_names.hpp>
 #include <beman/specgen/frontend/header_synopsis.hpp>
 #include <beman/specgen/frontend/inclass_items.hpp>
+#include <beman/specgen/frontend/macro_spellings.hpp>
 #include <beman/specgen/frontend/parse_header.hpp>
 #include <beman/specgen/frontend/record_members.hpp>
 #include <beman/specgen/frontend/source_file.hpp>
@@ -729,6 +730,10 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
             return a.function == b.function && a.member == b.member;
         });
     built.document.unextracted_uses.erase(duplicates.begin(), duplicates.end());
+    // A specifier spelled through a macro is written as what it expands to in
+    // this translation unit, as a deleted tail is (issue #349). Whether that is
+    // the expansion the wording wants is the author's to settle with a `-D`.
+    expand_specifier_macros(built.document, specifier_macros(parsed.ast->getPreprocessor()));
     built.diagnostics.insert(built.diagnostics.begin(), source_diagnostics.begin(), source_diagnostics.end());
     built.diagnostics.insert(built.diagnostics.begin(), specified.diagnostics.begin(), specified.diagnostics.end());
     std::vector<std::string> sources = parse_sources(header_path, *parsed.ast);

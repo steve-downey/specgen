@@ -12,6 +12,7 @@ foreach(
     template
     attach
     base_members
+    macro_spellings
     markers
     aliases
     class_at
