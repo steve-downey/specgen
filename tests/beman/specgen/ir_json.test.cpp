@@ -785,10 +785,12 @@ TEST_CASE("ir_json - an inherited item round-trips and is silent at its default"
     plain.decl.signatures.push_back({"void f();", {}});
     CHECK(emit_json(plain).find("as_draft") == std::string::npos);
     CHECK(emit_json(plain).find("covers") == std::string::npos);
+    CHECK(emit_json(plain).find("describes_synopsis") == std::string::npos);
 
-    SpecItem inherited = plain;
-    inherited.as_draft = true;
-    inherited.covers   = {
+    SpecItem inherited           = plain;
+    inherited.as_draft           = true;
+    inherited.describes_synopsis = true;
+    inherited.covers             = {
         {ElementKind::Constraints, {CodeInline{{"P", {}}}, TextInline{" is "}, CodeInline{{"true", {}}}}}};
     Document doc;
     doc.nodes.push_back(inherited);
@@ -796,6 +798,7 @@ TEST_CASE("ir_json - an inherited item round-trips and is silent at its default"
     const std::string json = emit_json(doc);
     CHECK(json.find("\"as_draft\":true") != std::string::npos);
     CHECK(json.find("\"element\":\"constraints\"") != std::string::npos);
+    CHECK(json.find("\"describes_synopsis\":true") != std::string::npos);
     const auto back = parse_document(json);
     REQUIRE(back.has_value());
     CHECK(*back == doc);

@@ -1143,8 +1143,14 @@ template <class VT>
 static constexpr bool is_callable_from = /* ... */;
 ```
 
-An exposition-only declaration at namespace scope, and an exposition-only alias
-in a class, have no item, and `\asdraft` on one is an error.
+An exposition-only concept or variable at namespace scope has no item: its
+description is written beside its synopsis. `\asdraft` on one pairs by the
+synopsis's declaration instead, with the draft's declaration that reads most
+like it, whether the draft writes that as an item or as a declaration in a code
+block. It inherits that item's description, or, where the declaration has none
+of its own, as [concept.booleantestable] writes *boolean-testable-impl*, the
+paragraphs after it up to the next declaration. An exposition-only alias in a
+class is a line of the class synopsis, and `\asdraft` on one is an error.
 
 Elements the docblock authors replace the inherited element of the same kind,
 which is how a paper changes one paragraph of an item and leaves the rest:

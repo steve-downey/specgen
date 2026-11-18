@@ -353,3 +353,73 @@ TEST_CASE("inherit - an item that inherits is paired before one that only takes 
     CHECK_FALSE(item_at(current, 0).decl.signatures.front().spans.front().no_correction.has_value());
     CHECK(element_of(item_at(current, 1), ElementKind::Effects) != nullptr);
 }
+
+// Issue #332: the description beside a namespace-scope exposition-only
+// synopsis pairs by the synopsis's declaration.
+namespace {
+
+SpecItem prose(std::string words) {
+    SpecItem it;
+    it.descr.leading = {BodyParagraph{text(std::move(words))}};
+    return it;
+}
+
+Document beside_synopsis(std::string declaration) {
+    Synopsis synopsis;
+    synopsis.name      = "thing_like";
+    synopsis.code.text = "namespace std {\n  " + std::move(declaration) + "\n}";
+    SpecItem description;
+    description.as_draft           = true;
+    description.describes_synopsis = true;
+    return in_section("s", {synopsis, description});
+}
+
+std::vector<std::string> leading_words(const SpecItem& it) {
+    std::vector<std::string> out;
+    std::ranges::for_each(it.descr.leading, [&](const BodyBlock& block) {
+        out.push_back(std::get<TextInline>(std::get<BodyParagraph>(block).text.front()).text);
+    });
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("inherit - a namespace-scope expos description takes the paragraphs after the draft's declaration") {
+    SpecItem declared_only;
+    declared_only.decl.signatures.push_back({"template<class T> concept thing-like = true;", {}});
+    const Document baseline =
+        in_section("s",
+                   {prose("The section's general paragraph."),
+                    declared_only,
+                    prose("First."),
+                    FreeParagraph{text("Second.")},
+                    item("void other();", {"other"}, {element(ElementKind::Effects, "Other's.")}),
+                    prose("After other.")});
+
+    Document current = beside_synopsis("template<class T> concept thing-like = true;");
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    const SpecItem& resolved = item_at(current, 1);
+    CHECK_FALSE(resolved.as_draft);
+    CHECK_FALSE(resolved.describes_synopsis);
+    CHECK(leading_words(resolved) == std::vector<std::string>{"First.", "Second."});
+}
+
+TEST_CASE("inherit - a namespace-scope expos description takes the draft's item's own description") {
+    SpecItem drafted = item(
+        "template<class T> constexpr bool is-thing = see below;", {}, {element(ElementKind::Remarks, "Drafted.")});
+    const Document baseline = in_section("s", {prose("General."), drafted});
+
+    Document current = beside_synopsis("template<class T> constexpr bool is-thing = see below;");
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    CHECK(element_of(item_at(current, 1), ElementKind::Remarks) != nullptr);
+    CHECK(item_at(current, 1).descr.leading.empty());
+}
+
+TEST_CASE("inherit - a namespace-scope expos description with no declaration reading alike is an error") {
+    const Document baseline = in_section("s", {prose("General."), item("void other(int, long);", {"other"}, {})});
+    Document       current  = beside_synopsis("template<class T> concept thing-like = true;");
+    const auto     findings = inherit::resolve(current, baseline);
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().severity == beman::specgen::Severity::Error);
+    CHECK(findings.front().where == "thing_like");
+}

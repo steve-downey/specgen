@@ -471,6 +471,7 @@ struct json_descriptor<SpecItem> {
         defaulted_enum_field("change", &SpecItem::change, Change::Same, change_name, change_from_name, "change"),
         defaulted_field("as_draft", &SpecItem::as_draft),
         defaulted_field("covers", &SpecItem::covers),
+        defaulted_field("describes_synopsis", &SpecItem::describes_synopsis),
     };
 };
 

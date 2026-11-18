@@ -234,6 +234,10 @@ struct SynopsisDecl {
     // resolves it.
     bool                                            descr_as_draft = false;
     std::vector<beman::specgen::ir::InheritedCover> descr_covers   = {};
+    // The synopsis is a namespace-scope exposition-only concept's or
+    // variable's, whose description is no item: an inherited one pairs by
+    // the synopsis's declaration (`ir::SpecItem::describes_synopsis`).
+    bool describes_synopsis = false;
     // A standalone `\verbatim-synopsis`: the author's text is the whole
     // synopsis, namespace and all, so the front end's `namespace std`
     // enclosure leaves it as written. Every other synopsis -- extracted, a

@@ -702,6 +702,21 @@ specgen_add_golden(
     inherit_func_wrap_move_wording
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_func_wrap_move/expected.json"
 )
+
+# `\asdraft` on an exposition-only concept at namespace scope pairs by its
+# synopsis's declaration with the draft's item, which has no description of
+# its own, and inherits the paragraphs after it (issue #332).
+specgen_add_golden(
+    inherit_namespace_expos
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_asdraft_namespace_expos.hpp"
+    INHERIT_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/concept.booleantestable.slice"
+)
+specgen_add_golden(
+    inherit_namespace_expos_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_namespace_expos/expected.json"
+)
 specgen_add_golden(
     inherit_func_wrap_move_wording
     BACKEND mpark
@@ -1846,8 +1861,8 @@ specgen_add_golden(
         "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
 )
 
-# `\asdraft` on an exposition-only declaration that is no item: a concept and
-# a variable at namespace scope, and an alias in a class. Each is an Error.
+# `\asdraft` on an exposition-only alias in a class, which is no item: an
+# Error. One at namespace scope inherits (inherit_namespace_expos).
 specgen_add_golden(
     asdraft_expos_diagnostics
     MODE diagnose

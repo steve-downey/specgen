@@ -1,0 +1,173 @@
+% Slice of the C++ working draft, source/concepts.tex, lines 867-1038,
+% at cplusplus/draft commit 2594eff0. Copied unchanged; see README.md.
+\rSec2[concept.booleantestable]{Boolean testability}
+
+\pnum
+The exposition-only \exposconcept{boolean-testable} concept
+specifies the requirements on expressions
+that are convertible to \tcode{bool} and
+for which the logical operators\iref{expr.log.and,expr.log.or,expr.unary.op}
+have the conventional semantics.
+
+\begin{itemdecl}
+template<class T>
+  concept @\defexposconcept{boolean-testable-impl}@ = @\libconcept{convertible_to}@<T, bool>;  // \expos
+\end{itemdecl}
+
+\pnum
+Let \tcode{e} be an expression such that
+\tcode{decltype((e))} is \tcode{T}.
+\tcode{T} models \exposconcept{boolean-testable-impl} only if
+
+\begin{itemize}
+\item
+either \tcode{remove_cvref_t<T>} is not a class type, or
+a search for the names \tcode{operator\&\&} and \tcode{operator||}
+in the scope of \tcode{remove_cvref_t<T>}
+finds nothing; and
+
+\item
+argument-dependent lookup\iref{basic.lookup.argdep}
+for the names \tcode{operator\&\&} and \tcode{operator||}
+with \tcode{T} as the only argument type
+finds no disqualifying declaration (defined below).
+\end{itemize}
+
+\pnum
+A \defnadj{disqualifying}{parameter}
+is a function parameter whose declared type \tcode{P}
+
+\begin{itemize}
+\item
+is not dependent on a template parameter, and
+there exists an implicit conversion sequence\iref{over.best.ics}
+from \tcode{e} to \tcode{P}; or
+
+\item
+is dependent on one or more template parameters, and either
+\begin{itemize}
+\item
+\tcode{P} contains no template parameter that
+participates in template argument deduction\iref{temp.deduct.type}, or
+\item
+template argument deduction
+using the rules for deducing template arguments
+in a function call\iref{temp.deduct.call} and
+\tcode{e} as the argument succeeds.
+\end{itemize}
+\end{itemize}
+
+\pnum
+\indextext{template!function!key parameter of}%
+A \defnadj{key}{parameter} of a function template \tcode{D}
+is a function parameter of type \cv{} \tcode{X} or reference thereto,
+where \tcode{X} names a specialization of a class template that
+has the same innermost enclosing non-inline namespace as \tcode{D}, and
+\tcode{X} contains at least one template parameter that
+participates in template argument deduction.
+\begin{example}
+In
+\begin{codeblock}
+namespace Z {
+  template<class> struct C {};
+  template<class T>
+    void operator&&(C<T> x, T y);
+  template<class T>
+    void operator||(C<type_identity_t<T>> x, T y);
+}
+\end{codeblock}
+the declaration of \tcode{Z::operator\&\&}
+contains one key parameter, \tcode{C<T> x}, and
+the declaration of \tcode{Z::operator||}
+contains no key parameters.
+\end{example}
+
+\pnum
+A \defnadj{disqualifying}{declaration} is
+
+\begin{itemize}
+\item
+a (non-template) function declaration that
+contains at least one disqualifying parameter; or
+
+\item
+a function template declaration that
+contains at least one disqualifying parameter, where
+\begin{itemize}
+\item at least one disqualifying parameter is a key parameter; or
+\item the declaration contains no key parameters; or
+\item the declaration declares a function template
+to which no name is bound\iref{dcl.meaning}.
+\end{itemize}
+\end{itemize}
+
+\pnum
+\begin{note}
+The intention is to ensure that
+given two types \tcode{T1} and \tcode{T2}
+that each model \exposconcept{boolean-testable-impl},
+the \tcode{\&\&} and \tcode{||} operators within the expressions
+\tcode{declval<T1>() \&\& declval<T2>()} and
+\tcode{declval<T1>() || declval<T2>()}
+resolve to the corresponding built-in operators.
+\end{note}
+
+\begin{itemdecl}
+template<class T>
+  concept @\defexposconcept{boolean-testable}@ =                // \expos
+    @\exposconcept{boolean-testable-impl}@<T> && requires(T&& t) {
+      { !std::forward<T>(t) } -> @\exposconcept{boolean-testable-impl}@;
+    };
+\end{itemdecl}
+
+\pnum
+Let \tcode{e} be an expression such that
+\tcode{decltype((e))} is \tcode{T}.
+\tcode{T} models \exposconcept{boolean-testable} only if
+\tcode{bool(e) == !bool(!e)}.
+
+\pnum
+\begin{example}
+The types
+\tcode{bool},
+\tcode{true_type}\iref{meta.type.synop},
+\tcode{int*}, and
+\tcode{bitset<N>::reference}\iref{template.bitset}
+model \exposconcept{boolean-testable}.
+\end{example}
+
+\rSec2[concept.comparisoncommontype]{Comparison common types}
+
+\begin{itemdecl}
+template<class T, class U, class C = common_reference_t<const T&, const U&>>
+  concept @\defexposconcept{comparison-common-type-with-impl}@ =   // \expos
+    @\libconcept{same_as}@<common_reference_t<const T&, const U&>,
+            common_reference_t<const U&, const T&>> &&
+    requires {
+      requires @\libconcept{convertible_to}@<const T&, const C&> || @\libconcept{convertible_to}@<T, const C&>;
+      requires @\libconcept{convertible_to}@<const U&, const C&> || @\libconcept{convertible_to}@<U, const C&>;
+    };
+
+template<class T, class U>
+  concept @\defexposconcept{comparison-common-type-with}@ =   // \expos
+    @\exposconcept{comparison-common-type-with-impl}@<remove_cvref_t<T>, remove_cvref_t<U>>;
+\end{itemdecl}
+
+\pnum
+Let \tcode{C} be \tcode{common_reference_t<const T\&, const U\&>}.
+Let \tcode{t1} and \tcode{t2} be equality-preserving expressions
+that are lvalues of type \tcode{remove_cvref_t<T>}, and
+let \tcode{u1} and \tcode{u2} be equality-preserving expressions
+that are lvalues of type \tcode{remove_cvref_t<U>}.
+\tcode{T} and \tcode{U} model
+\tcode{\exposconcept{comparison-common-type-with}<T, U>} only if
+\begin{itemize}
+\item
+\tcode{\exposid{CONVERT_TO_LVALUE}<C>(t1)} equals
+\tcode{\exposid{CONVERT_TO_LVALUE}<C>(t2)}
+if and only if \tcode{t1} equals \tcode{t2}, and
+\item
+\tcode{\exposid{CONVERT_TO_LVALUE}<C>(u1)} equals
+\tcode{\exposid{CONVERT_TO_LVALUE}<C>(u2)}
+if and only if \tcode{u1} equals \tcode{u2}.
+\end{itemize}

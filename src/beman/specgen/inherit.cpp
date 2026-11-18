@@ -165,6 +165,75 @@ void take_declaration_form(ir::SpecItem& item, const ir::SpecItem& from) {
     });
 }
 
+// The declarations of a synopsis, without the namespace it is enclosed in:
+// `namespace std {` and its `}` are no part of what a declaration reads like.
+ir::CodeText declarations_of(const ir::CodeText& code) {
+    if (!code.text.starts_with("namespace "))
+        return code;
+    const std::size_t open  = code.text.find("{\n");
+    const std::size_t close = code.text.rfind("\n}");
+    if (open == std::string::npos || close == std::string::npos || close <= open + 2)
+        return code;
+    const std::size_t begin = open + 2;
+    ir::CodeText      out{code.text.substr(begin, close - begin), {}};
+    std::ranges::for_each(code.spans, [&](ir::Span span) {
+        if (span.begin < begin || span.end > close)
+            return;
+        span.begin -= begin;
+        span.end -= begin;
+        out.spans.push_back(std::move(span));
+    });
+    return out;
+}
+
+// What the description beside `synopsis` inherits (issue #332): the
+// description of the baseline declaration that reads most like the synopsis's.
+// The draft writes such a declaration as an item, or as a declaration in a
+// code block, and its description as the item's, or as the paragraphs after
+// the declaration, up to the next node that declares something. Each baseline
+// node it takes is claimed. Nothing reading alike is no description.
+std::optional<ir::SpecItem> describe_by_declaration(const ir::Synopsis&          synopsis,
+                                                    const std::vector<ir::Node>& baseline,
+                                                    std::vector<bool>&           claimed) {
+    const ir::CodeText ours  = as_imported(declarations_of(synopsis.code));
+    const auto         score = [&](std::size_t i) -> double {
+        if (claimed[i])
+            return 0.0;
+        if (const auto* item = std::get_if<ir::SpecItem>(&baseline[i]))
+            return std::ranges::fold_left(item->decl.signatures, 0.0, [&](double best, const ir::CodeText& sig) {
+                return std::max(best, diff::declaration_similarity(ours, as_imported(sig)));
+            });
+        if (const auto* other = std::get_if<ir::Synopsis>(&baseline[i]))
+            return diff::declaration_similarity(ours, as_imported(declarations_of(other->code)));
+        return 0.0;
+    };
+    const auto indices = std::views::iota(std::size_t{0}, baseline.size());
+    const auto best    = std::ranges::max_element(indices, std::ranges::less{}, score);
+    if (best == indices.end() || score(*best) < kReadingThreshold)
+        return std::nullopt;
+    claimed[*best] = true;
+    if (const auto* item = std::get_if<ir::SpecItem>(&baseline[*best]);
+        item != nullptr && ir::has_description(item->descr))
+        return *item;
+    ir::SpecItem from;
+    // substrate generic algorithm: a scan forward from the paired declaration
+    // that stops at the first node declaring something, gathering the
+    // paragraphs before it and claiming each.
+    for (std::size_t j = *best + 1; j < baseline.size() && !claimed[j]; ++j) {
+        if (const auto* prose = std::get_if<ir::FreeParagraph>(&baseline[j])) {
+            from.descr.leading.push_back(ir::BodyParagraph{prose->text});
+        } else if (const auto* item = std::get_if<ir::SpecItem>(&baseline[j]);
+                   item != nullptr && item->decl.signatures.empty()) {
+            from.descr.leading.append_range(item->descr.leading);
+            from.descr.elements.append_range(item->descr.elements);
+        } else {
+            break;
+        }
+        claimed[j] = true;
+    }
+    return from;
+}
+
 // The description `item` ends with, given the baseline's.
 void inherit_description(ir::SpecItem& item, const ir::SpecItem& from, std::vector<Diagnostic>& out) {
     ir::ItemDescr resolved = from.descr;
@@ -256,54 +325,74 @@ void resolve_nodes(std::vector<ir::Node>&                     current,
             return (item != nullptr && item->as_draft) || (synopsis != nullptr && synopsis->as_draft);
         }) |
         std::ranges::to<std::vector>();
+    // The synopsis just before the node being resolved, which a description
+    // beside it pairs by (`ir::SpecItem::describes_synopsis`).
+    const ir::Synopsis* beside = nullptr;
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
-        std::visit(overloaded{
-                       [&](ir::Section& section) {
-                           const ir::Section* paired = find_section(baseline, section.stable_name);
-                           if (paired != nullptr) {
-                               resolve_nodes(section.children, paired->children, section.stable_name, enclosing, out);
-                               return;
-                           }
-                           // A section the baseline lacks has nothing to inherit; an item in
-                           // it that asks to is reported by the walk with an empty baseline.
-                           resolve_nodes(section.children, {}, section.stable_name, enclosing, out);
-                       },
-                       [&](ir::SpecItem& item) {
-                           if (!item.as_draft)
-                               return;
-                           const ir::SpecItem* from = pair_item(item, baseline, claimed);
-                           if (from == nullptr) {
-                               out.push_back({Severity::Error,
-                                              first_signature(item),
-                                              std::format("\\asdraft: no item of the baseline{}{} declares this",
-                                                          where.empty() ? "" : "'s section ",
-                                                          where)});
-                               return;
-                           }
-                           take_declaration_form(item, *from);
-                           inherit_description(item, *from, out);
-                       },
-                       [&](ir::Synopsis& synopsis) {
-                           if (!synopsis.as_draft)
-                               return;
-                           const ir::Synopsis* from = pair_synopsis(synopsis, baseline, claimed);
-                           if (from == nullptr) {
-                               out.push_back(
-                                   {Severity::Error,
-                                    synopsis.name + "/synopsis",
-                                    std::format("\\asdraft-synopsis: no synopsis of `{}` in the baseline{}{}",
-                                                synopsis.name,
-                                                where.empty() ? "" : "'s section ",
-                                                where)});
-                               return;
-                           }
-                           resolve_synopsis(synopsis, *from, synopsis_check::declared_elsewhere(enclosing));
-                       },
-                       [](ir::FreeParagraph&) {},
-                   },
-                   node);
+        std::visit(
+            overloaded{
+                [&](ir::Section& section) {
+                    const ir::Section* paired = find_section(baseline, section.stable_name);
+                    if (paired != nullptr) {
+                        resolve_nodes(section.children, paired->children, section.stable_name, enclosing, out);
+                        return;
+                    }
+                    // A section the baseline lacks has nothing to inherit; an item in
+                    // it that asks to is reported by the walk with an empty baseline.
+                    resolve_nodes(section.children, {}, section.stable_name, enclosing, out);
+                },
+                [&](ir::SpecItem& item) {
+                    if (!item.as_draft)
+                        return;
+                    if (item.describes_synopsis) {
+                        const std::optional<ir::SpecItem> from =
+                            beside == nullptr ? std::nullopt : describe_by_declaration(*beside, baseline, claimed);
+                        if (!from || !ir::has_description(from->descr)) {
+                            out.push_back({Severity::Error,
+                                           beside == nullptr ? first_signature(item) : beside->name,
+                                           std::format("\\asdraft: no declaration of the baseline{}{} that "
+                                                       "reads like this one has a description",
+                                                       where.empty() ? "" : "'s section ",
+                                                       where)});
+                            return;
+                        }
+                        inherit_description(item, *from, out);
+                        item.describes_synopsis = false;
+                        return;
+                    }
+                    const ir::SpecItem* from = pair_item(item, baseline, claimed);
+                    if (from == nullptr) {
+                        out.push_back({Severity::Error,
+                                       first_signature(item),
+                                       std::format("\\asdraft: no item of the baseline{}{} declares this",
+                                                   where.empty() ? "" : "'s section ",
+                                                   where)});
+                        return;
+                    }
+                    take_declaration_form(item, *from);
+                    inherit_description(item, *from, out);
+                },
+                [&](ir::Synopsis& synopsis) {
+                    if (!synopsis.as_draft)
+                        return;
+                    const ir::Synopsis* from = pair_synopsis(synopsis, baseline, claimed);
+                    if (from == nullptr) {
+                        out.push_back({Severity::Error,
+                                       synopsis.name + "/synopsis",
+                                       std::format("\\asdraft-synopsis: no synopsis of `{}` in the baseline{}{}",
+                                                   synopsis.name,
+                                                   where.empty() ? "" : "'s section ",
+                                                   where)});
+                        return;
+                    }
+                    resolve_synopsis(synopsis, *from, synopsis_check::declared_elsewhere(enclosing));
+                },
+                [](ir::FreeParagraph&) {},
+            },
+            node);
+        beside = std::get_if<ir::Synopsis>(&node);
     }
     // What is left of the baseline's items pairs with the items that inherit
     // nothing, for the typesetting of their declarations alone. After the walk

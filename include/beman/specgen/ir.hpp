@@ -669,6 +669,13 @@ struct SpecItem {
     // validated against. Cleared when resolved.
     bool                        as_draft = false;
     std::vector<InheritedCover> covers   = {};
+    // This is the description beside the synopsis before it, of an
+    // exposition-only concept or variable at namespace scope (design §4.3),
+    // and has no declaration of its own: `\asdraft` pairs it by the
+    // synopsis's declaration, and takes the description that follows the
+    // baseline's declaration (inherit.hpp, issue #332). Set only with
+    // `as_draft`, and cleared with it when resolved.
+    bool describes_synopsis = false;
 
     friend bool operator==(const SpecItem&, const SpecItem&) = default;
 };
