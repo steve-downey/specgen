@@ -126,6 +126,8 @@ struct PlainTokenizer {
     std::vector<ProseToken> operator()(const ir::OldConceptRef& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::TableRef& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::RawInline& v) const { return {v}; }
+    std::vector<ProseToken> operator()(const ir::TermInline& v) const { return {v}; }
+    std::vector<ProseToken> operator()(const ir::PhraseInline& v) const { return {v}; }
 };
 
 struct Tokenizer : PlainTokenizer {
@@ -155,6 +157,17 @@ struct TokenKey {
     std::string operator()(const ir::OldConceptRef& v) const { return "o:" + v.name; }
     std::string operator()(const ir::TableRef& v) const { return "t:" + v.stable_name; }
     std::string operator()(const ir::RawInline& v) const { return "w:" + v.latex; }
+    std::string operator()(const ir::TermInline& v) const {
+        std::string key = "m:" + std::string(ir::term_role_name(v.role)) + ':';
+        std::ranges::for_each(v.content, [&](const ir::TermPiece& piece) {
+            if (const auto* text = std::get_if<ir::TextInline>(&piece))
+                key += text->text;
+            else
+                key += std::get<ir::CodeInline>(piece).code.text;
+        });
+        return key;
+    }
+    std::string operator()(const ir::PhraseInline& v) const { return "f:" + std::string(ir::phrase_name(v.phrase)); }
 };
 
 std::vector<std::string> token_keys(const std::vector<ProseToken>& tokens) {

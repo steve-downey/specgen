@@ -58,6 +58,21 @@ TEST_CASE("latex - prose escapes the characters LaTeX reserves, and only those")
     CHECK(latex::render_to_string(item).contains("R\\&D, 50\\% of it, item \\#1, and \\textit{x}.\n"));
 }
 
+TEST_CASE("latex - a term and a fixed phrase are the draft's macros") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{TextInline{"An "},
+                                         PhraseInline{Phrase::ImplementationDefined, "what"},
+                                         TextInline{" "},
+                                         PhraseInline{Phrase::Ntbs},
+                                         TextInline{" is a "},
+                                         TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                         TextInline{" in the "},
+                                         TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                         TextInline{"."}}}};
+    CHECK(latex::render_to_string(item).contains(
+        "An \\impldef{what} \\ntbs{} is a \\term{valid \\tcode{T}} in the \\Fundescx{Effects}.\n"));
+}
+
 TEST_CASE("latex - table cells escape code and prose ampersands once") {
     const Paragraph cell{CodeInline{{"&&", {}}},
                          TextInline{" prose_text & "},

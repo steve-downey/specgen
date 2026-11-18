@@ -36,6 +36,24 @@ TEST_CASE("org - HeaderIsIdempotent") {
 
 // The same [optional.observe]/value_or shape both sibling files open with, so
 // the three expected strings can be read side by side.
+TEST_CASE("org - a term and a fixed phrase are the draft's macros, and italic words in HTML") {
+    SpecItem item;
+    item.descr.leading    = {BodyParagraph{{TextInline{"An "},
+                                            PhraseInline{Phrase::ImplementationDefined, "what"},
+                                            TextInline{" "},
+                                            PhraseInline{Phrase::Ntbs},
+                                            TextInline{" is a "},
+                                            TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                            TextInline{" in the "},
+                                            TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                            TextInline{"."}}}};
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("An @@latex:\\impldef{what}@@@@html:implementation-defined@@ "));
+    CHECK(out.contains("@@latex:\\ntbs{}@@@@html:NTBS@@"));
+    CHECK(out.contains("@@latex:\\term{valid \\tcode{T}}@@@@html:<i>valid <code>T</code></i>@@"));
+    CHECK(out.contains("@@latex:\\Fundescx{Effects}@@@@html:<i>Effects</i>@@"));
+}
+
 TEST_CASE("org - value_or golden") {
     SpecItem item;
     // Dropped, per design §8 — asserted below by the absence of any index text.

@@ -474,7 +474,8 @@ TEST_CASE("docblock - the draft's prose macros the importer reads are inline kin
     CHECK_FALSE(std::get<InlineRef>(text.at(3)).bare);
 
     // Each needs its argument, and a macro the grammar does not read stays text.
-    for (const char* macro : {"ref", "tref", "libconcept", "exposconcept", "cvqual"}) {
+    for (const char* macro :
+         {"ref", "tref", "libconcept", "exposconcept", "cvqual", "term", "defn", "Fundescx", "impldef"}) {
         CAPTURE(macro);
         const auto empty = parse_docblock("//! \\remarks A \\" + std::string(macro) + "{} here.\n");
         REQUIRE(empty.diags.size() == 1);
@@ -483,9 +484,30 @@ TEST_CASE("docblock - the draft's prose macros the importer reads are inline kin
         REQUIRE(open.diags.size() == 1);
         CHECK(open.diags.front().message == "unterminated \\" + std::string(macro) + " macro");
     }
-    auto other = parse_docblock("//! \\remarks A \\term{thing} and \\pageref{x}.\n");
+    auto other = parse_docblock("//! \\remarks A \\textbf{thing} and \\pageref{x}.\n");
     CHECK(other.ok());
     CHECK(paragraph(other.block.elements.front()).size() == 1);
+}
+
+TEST_CASE("docblock - a term and a fixed phrase are inline kinds, as the importer reads them") {
+    // Issue #355.
+    auto r = parse_docblock("//! \\remarks A \\term{valid `T`}, \\defn{d}, the \\Fundescx{Effects}, an "
+                            "\\impldef{what} \\ntbs{} and \\ntmbs{}.\n");
+    CHECK(r.ok());
+    const ProseParagraph& para = paragraph(r.block.elements.front());
+    REQUIRE(para.size() == 13);
+    CHECK(std::get<InlineTerm>(para.at(1)).body == "valid `T`");
+    CHECK(std::get<InlineTerm>(para.at(1)).role == beman::specgen::ir::TermRole::Term);
+    CHECK(std::get<InlineTerm>(para.at(3)).role == beman::specgen::ir::TermRole::Definition);
+    CHECK(std::get<InlineTerm>(para.at(5)).role == beman::specgen::ir::TermRole::ElementName);
+    CHECK(std::get<InlinePhrase>(para.at(7)).phrase == beman::specgen::ir::Phrase::ImplementationDefined);
+    CHECK(std::get<InlinePhrase>(para.at(7)).index == "what");
+    CHECK(std::get<InlinePhrase>(para.at(9)).phrase == beman::specgen::ir::Phrase::Ntbs);
+    CHECK(std::get<InlinePhrase>(para.at(11)).phrase == beman::specgen::ir::Phrase::Ntmbs);
+
+    const auto argued = parse_docblock("//! \\remarks An \\ntbs{x}.\n");
+    REQUIRE(argued.diags.size() == 1);
+    CHECK(argued.diags.front().message == "\\ntbs takes no argument");
 }
 
 TEST_CASE("docblock - iref is prose markup outside backticks") {

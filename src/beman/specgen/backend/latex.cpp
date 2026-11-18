@@ -136,6 +136,10 @@ struct PieceRenderer {
     // Draft LaTeX the importer kept as written.
     std::string operator()(const ir::RawInline& v) const { return v.latex; }
 
+    // A term and a fixed phrase, as the draft's macros (issue #355).
+    std::string operator()(const ir::TermInline& v) const { return backend::draft_term(v); }
+    std::string operator()(const ir::PhraseInline& v) const { return backend::draft_phrase(v); }
+
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
     // rendered as it would be unmarked. Defined after `render_run` below,

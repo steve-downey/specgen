@@ -290,6 +290,16 @@ Which kinds land first and which wait for a paper that needs them. `PlaceholderI
 `OldConceptRef` shipped with step 1. `RangeInline`, `TableRef` and `RawInline` come next.
 `TermInline` and `MathInline` wait until a round-trip golden needs them.
 
+**Log:**
+
+- 2026-11-18: `TermInline` landed for [expected] (issue #355), for `\term`, `\defn` and
+  `\Fundescx`, as roles of one kind. Its words are text and code pieces, since the draft's
+  `\term{valid value type for \tcode{expected}}` holds code. `\impldef{index}`, `\ntbs` and
+  `\ntmbs` became a `PhraseInline` and not the `ImplDefined` span this plan gave them: the span
+  is `\impdef`, set in italic with no index, where `\impldef` is roman and indexes its argument,
+  so the round trip needs the argument kept. `floattable` and a list item holding a code block
+  are still raw.
+
 ### asdraft-default
 
 **Status:** decided, 2026-11-13. **Decided by:** the project owner.

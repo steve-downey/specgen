@@ -232,6 +232,18 @@ struct PieceRenderer {
     // carries it through to a LaTeX build and is ignored by any other.
     std::string operator()(const ir::RawInline& v) const { return '`' + v.latex + "`{=latex}"; }
 
+    // A term, italic as the draft sets it, its code in backticks; a fixed
+    // phrase, as the words it prints (issue #355).
+    std::string operator()(const ir::TermInline& v) const {
+        return '*' +
+               (v.content | std::views::transform([this](const ir::TermPiece& piece) {
+                    return std::visit([this](const auto& p) { return (*this)(p); }, piece);
+                }) |
+                std::views::join | std::ranges::to<std::string>()) +
+               '*';
+    }
+    std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_words(v.phrase)); }
+
     // A changed run of prose (the wording diff's mark): the framework's
     // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would
     // be unmarked. Defined after `render_run` below, which dispatches the

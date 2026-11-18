@@ -404,6 +404,36 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     return whole_span ? code : "\\tcode{" + code + '}';
 }
 
+// A term in prose (issue #355): the draft's macro for its role, around its
+// words and code as prose writes them. Shared with the org backend for the
+// reason the code inline is.
+inline std::string draft_term(const ir::TermInline& v) {
+    const std::string_view macro =
+        foundation::match(v.role,
+                          foundation::when<ir::TermRole::Term>([] { return std::string_view{"\\term{"}; }),
+                          foundation::when<ir::TermRole::Definition>([] { return std::string_view{"\\defn{"}; }),
+                          foundation::when<ir::TermRole::ElementName>([] { return std::string_view{"\\Fundescx{"}; }));
+    std::string out{macro};
+    std::ranges::for_each(v.content, [&](const ir::TermPiece& piece) {
+        if (const auto* text = std::get_if<ir::TextInline>(&piece))
+            out += draft_hinted_text(text->text, text->hints, draft_escape_prose_text);
+        else
+            out += draft_code_inline(std::get<ir::CodeInline>(piece));
+    });
+    return out + '}';
+}
+
+// A fixed phrase in prose as the draft writes it (issue #355). `\ntbs` takes
+// an empty group, the draft's own spelling before a space, unless the draft
+// wrote it bare.
+inline std::string draft_phrase(const ir::PhraseInline& v) {
+    return foundation::match(
+        v.phrase,
+        foundation::when<ir::Phrase::ImplementationDefined>([&] { return "\\impldef{" + v.index + '}'; }),
+        foundation::when<ir::Phrase::Ntbs>([&] { return std::string{v.bare ? "\\ntbs" : "\\ntbs{}"}; }),
+        foundation::when<ir::Phrase::Ntmbs>([&] { return std::string{v.bare ? "\\ntmbs" : "\\ntmbs{}"}; }));
+}
+
 } // namespace beman::specgen::backend
 
 #endif // BEMAN_SPECGEN_BACKEND_DRAFT_SPANS_HPP

@@ -680,6 +680,17 @@ ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_c
 
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
 
+// The role of a term macro, or nothing for another macro (issue #355).
+std::optional<ir::TermRole> term_role_of(std::string_view name) {
+    if (name == "term")
+        return ir::TermRole::Term;
+    if (name == "defn")
+        return ir::TermRole::Definition;
+    if (name == "Fundescx")
+        return ir::TermRole::ElementName;
+    return std::nullopt;
+}
+
 ir::Paragraph Importer::parse_prose(std::string_view text) {
     ir::Paragraph  out;
     ir::TextInline pending;
@@ -810,6 +821,39 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
             flush();
             out.push_back(ir::TableRef{arg->inner});
             i = arg->next;
+        } else if (const auto role = term_role_of(name); role && arg) {
+            // A term's words, which may hold code (issue #355). Anything else
+            // in them has no place in a term, and the whole stays raw.
+            flush();
+            std::vector<ir::TermPiece> content;
+            const ir::Paragraph        words = parse_prose(arg->inner);
+            const bool                 plain = std::ranges::all_of(words, [&](const ir::Inline& piece) {
+                if (const auto* t = std::get_if<ir::TextInline>(&piece))
+                    content.emplace_back(*t);
+                else if (const auto* c = std::get_if<ir::CodeInline>(&piece))
+                    content.emplace_back(*c);
+                else
+                    return false;
+                return true;
+            });
+            if (plain)
+                out.push_back(ir::TermInline{std::move(content), *role});
+            else
+                raw(text.substr(i, arg->next - i),
+                    "\\" + name + " holds what a term cannot, and is kept as raw LaTeX");
+            i = arg->next;
+        } else if (name == "impldef" && arg) {
+            flush();
+            out.push_back(ir::PhraseInline{ir::Phrase::ImplementationDefined, arg->inner});
+            i = arg->next;
+        } else if (name == "ntbs" || name == "ntmbs") {
+            flush();
+            // `\ntbs{}`: the empty group is the draft's spelling before a
+            // space, and a bare `\ntbs` its spelling before punctuation.
+            const bool braced = arg && arg->inner.empty();
+            out.push_back(ir::PhraseInline{
+                .phrase = name == "ntbs" ? ir::Phrase::Ntbs : ir::Phrase::Ntmbs, .index = {}, .bare = !braced});
+            i = braced ? arg->next : end;
         } else if ((name == "iref" || name == "ref") && arg) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
@@ -1109,9 +1153,11 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             } else if (*name == "itemize") {
                 std::vector<std::string> items;
                 std::vector<std::string> current;
-                bool                     open   = false;
-                bool                     nested = false;
-                const auto               close  = [&] {
+                bool                     open = false;
+                // The first environment inside an item, which the IR's list
+                // item, a paragraph, cannot hold.
+                std::optional<std::string> nested;
+                const auto                 close = [&] {
                     if (open)
                         items.push_back(join_prose(current));
                     current.clear();
@@ -1124,13 +1170,19 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                         open = true;
                         current.push_back(std::string(trim(trim(item_line).substr(5))));
                     } else {
-                        nested = nested || begin_name(item_line).has_value();
+                        if (!nested)
+                            nested = begin_name(item_line);
                         current.push_back(item_line);
                     }
                 }
                 close();
                 if (nested) {
-                    imp.report(Severity::Warning, "a nested list is kept as raw LaTeX");
+                    // Named for what the item holds (issue #355): a list item
+                    // holding a code block is no nested list.
+                    imp.report(Severity::Warning,
+                               *nested == "itemize" || *nested == "enumerate"
+                                   ? std::string("a nested list is kept as raw LaTeX")
+                                   : "a list item holding a " + *nested + " is kept as raw LaTeX");
                     events.push_back(EvRaw{lines.subspan(i, std::min(end + 1, lines.size()) - i) |
                                                std::views::join_with('\n') | std::ranges::to<std::string>(),
                                            *name});

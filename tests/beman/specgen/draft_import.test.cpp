@@ -317,20 +317,47 @@ namespace std {
 TEST_CASE("draft_import - what the IR has no kind for is kept as raw LaTeX and reported") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-A \term{thing} costs $O(n)$.
+A \textbf{thing} costs $O(n)$.
 \begin{tokens}
 foo
 \end{tokens}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    CHECK(has_diag(r, Severity::Warning, "\\term has no IR kind"));
+    CHECK(has_diag(r, Severity::Warning, "\\textbf has no IR kind"));
     CHECK(has_diag(r, Severity::Warning, "mathematics"));
     CHECK(has_diag(r, Severity::Warning, "tokens environment"));
     for (const auto& d : r.diagnostics)
         CHECK(d.section == "x");
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     CHECK(std::holds_alternative<ir::RawInline>(para[1]));
-    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\term{thing}");
+    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\textbf{thing}");
+}
+
+TEST_CASE("draft_import - a term and a fixed phrase are inline kinds, and come back as written") {
+    // Issue #355, from [expected.bad] and [expected.object.general].
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+An \impldef{return value of \tcode{what}} \ntbs{}, a \term{valid value type for \tcode{expected}}, the \Fundescx{Effects}, \defn{a term}, \ntmbs, and \term{a \placeholder{p}}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(has_diag(r, Severity::Warning, "\\term holds what a term cannot"));
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    CHECK(std::get<ir::PhraseInline>(para.at(1)) ==
+          ir::PhraseInline{ir::Phrase::ImplementationDefined, "return value of \\tcode{what}"});
+    CHECK(std::get<ir::PhraseInline>(para.at(3)).phrase == ir::Phrase::Ntbs);
+    const auto& term = std::get<ir::TermInline>(para.at(5));
+    REQUIRE(term.content.size() == 2);
+    CHECK(std::get<ir::TextInline>(term.content[0]).text == "valid value type for ");
+    CHECK(std::get<ir::CodeInline>(term.content[1]).code.text == "expected");
+    CHECK(std::get<ir::TermInline>(para.at(7)).role == ir::TermRole::ElementName);
+    CHECK(std::get<ir::TermInline>(para.at(9)).role == ir::TermRole::Definition);
+    CHECK(std::get<ir::PhraseInline>(para.at(11)).phrase == ir::Phrase::Ntmbs);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("An \\impldef{return value of \\tcode{what}} \\ntbs{}, a \\term{valid value type for "
+                            "\\tcode{expected}}, the \\Fundescx{Effects}, \\defn{a term}, \\ntmbs, and "
+                            "\\term{a \\placeholder{p}}."));
 }
 
 TEST_CASE("draft_import - the corpus slices round-trip through the LaTeX backend") {

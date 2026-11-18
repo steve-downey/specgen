@@ -21,6 +21,25 @@ namespace {
 
 using beman::specgen::foundation::overloaded;
 
+// A term's words, backticks marking the code in them, as text and code pieces.
+// The code's names are raw until the front end resolves them, as a code
+// inline's are.
+std::vector<ir::TermPiece> term_pieces(std::string_view body) {
+    std::vector<ir::TermPiece> out;
+    bool                       code = false;
+    // substrate generic algorithm: a split on backticks that alternates the
+    // kind of each piece.
+    for (const auto part : body | std::views::split('`')) {
+        const std::string piece(std::string_view(part.begin(), part.end()));
+        if (code)
+            out.emplace_back(ir::CodeInline{ir::CodeText{piece, {}}});
+        else if (!piece.empty())
+            out.emplace_back(ir::TextInline{piece});
+        code = !code;
+    }
+    return out;
+}
+
 ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
     return para | std::views::transform([](const grammar::ProseInline& piece) -> ir::Inline {
                return std::visit(
@@ -41,6 +60,12 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
                            return ir::ConceptRef{.name = c.name, .exposition = c.exposition};
                        },
                        [](const grammar::InlineTableRef& t) -> ir::Inline { return ir::TableRef{t.stable_name}; },
+                       [](const grammar::InlineTerm& t) -> ir::Inline {
+                           return ir::TermInline{term_pieces(t.body), t.role};
+                       },
+                       [](const grammar::InlinePhrase& p) -> ir::Inline {
+                           return ir::PhraseInline{p.phrase, p.index};
+                       },
                    },
                    piece);
            }) |

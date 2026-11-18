@@ -780,6 +780,22 @@ TEST_CASE("ir_json - a synopsis's base-class declarations round-trip and are sil
     CHECK(*back == doc);
 }
 
+TEST_CASE("ir_json - a term and a fixed phrase round-trip") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                         TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                         PhraseInline{Phrase::ImplementationDefined, "what"},
+                                         PhraseInline{Phrase::Ntbs}}}};
+    Document doc;
+    doc.nodes.push_back(item);
+    const std::string json = emit_json(doc);
+    CHECK(json.contains("\"role\":\"element-name\""));
+    CHECK(json.contains("\"phrase\":\"ntbs\""));
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+}
+
 TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
     SpecItem plain;
     plain.decl.signatures.push_back({"void f();", {}});

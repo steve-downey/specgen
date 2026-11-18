@@ -949,6 +949,8 @@ backticks too, and each backend writes them in its own form:
 | `\placeholder{p}`, `\cv{}` | a placeholder |
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers |
 | `\oldconcept{X}` | a C++17 named requirement, printed "Cpp17X" |
+| `\term{x}`, `\defn{x}`, `\Fundescx{X}` | a term, italic; backticks inside mark code |
+| `\impldef{index}`, `\ntbs{}`, `\ntmbs{}` | "implementation-defined", "NTBS", "NTMBS" |
 
 These are the macros `specgen import` reads from the draft's own text (see
 [Reading the working draft's LaTeX](#reading-the-working-drafts-latex) for how
@@ -1671,6 +1673,16 @@ prose:
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers | `*cv2*` | italic |
 | `\oldconcept{X}` | a C++17 named requirement | `*Cpp17X*` | italic |
 | `\tref{t}` | a reference to a table | a link to its caption | a link |
+| `\term{x}`, `\defn{x}` | a term, used or defined | `*x*` | italic |
+| `\Fundescx{X}` | an element named in running text | `*X*` | italic |
+| `\impldef{index}` | "implementation-defined", indexed | the words | the words |
+| `\ntbs`, `\ntmbs` | "NTBS", "NTMBS" in small capitals | the words | the words |
+
+A term's words may hold code, as `\term{valid value type for \tcode{expected}}`
+does; anything else in them keeps the whole term as raw LaTeX. The LaTeX
+backend writes `\ntbs` as the draft did, `\ntbs{}` before a space or bare
+before punctuation, and `\ntbs{}` for one a docblock wrote. Neither that
+choice nor the index text of an `\impldef` is compared by the wording diff.
 
 And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 
@@ -1766,8 +1778,8 @@ it in org, and in mpark `[#]{.pnum}` on a line of its own, since a fenced div or
 a code fence cannot share a line with the number. Prose after the block is the
 rest of that paragraph. A block that is the first thing after an element's tag
 opens the element's paragraph and says nothing, as generated wording has it. A
-docblock cannot write this: an authored note is part of the paragraph before
-it.
+docblock writes this with two blank decorated lines before the block (see
+[Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the

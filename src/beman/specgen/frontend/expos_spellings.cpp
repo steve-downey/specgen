@@ -270,6 +270,12 @@ ir::Paragraph ProseLeafRewriter<Block>::paragraph(ir::Paragraph p) const {
                // AST when it was extracted, and is left alone.
                if (auto* code = std::get_if<ir::CodeInline>(&piece); code != nullptr && code->code.spans.empty())
                    code->code = rename_expos_uses(code->code.text, spellings, taken);
+               // The code in a term is prose's code too (issue #355).
+               if (auto* term = std::get_if<ir::TermInline>(&piece))
+                   std::ranges::for_each(term->content, [this](ir::TermPiece& p) {
+                       if (auto* code = std::get_if<ir::CodeInline>(&p); code != nullptr && code->code.spans.empty())
+                           code->code = rename_expos_uses(code->code.text, spellings, taken);
+                   });
                return piece;
            }) |
            std::ranges::to<ir::Paragraph>();

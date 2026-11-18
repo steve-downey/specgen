@@ -345,13 +345,76 @@ struct RawInline {
 
     friend bool operator==(const RawInline&, const RawInline&) = default;
 };
+// An italic term of the wording (issue #355): the draft's \term{x}, a term
+// used apart from its definition; \defn{x}, a term defined where it stands;
+// and \Fundescx{X}, an element named in running text ("the expressions in the
+// *Effects*"). The words may hold code, as `\term{valid value type for
+// \tcode{expected}}` does, so they are text and code pieces.
+enum class TermRole { Term, Definition, ElementName };
+using TermPiece = std::variant<TextInline, CodeInline>;
+struct TermInline {
+    std::vector<TermPiece> content;
+    TermRole               role = TermRole::Term;
+
+    friend bool operator==(const TermInline&, const TermInline&) = default;
+};
+
+// A phrase the draft writes with a macro of its own (issue #355):
+// \impldef{index} prints "implementation-defined" and indexes `index`, which
+// is LaTeX for the index and never printed; \ntbs and \ntmbs print "NTBS" and
+// "NTMBS" in small capitals.
+enum class Phrase { ImplementationDefined, Ntbs, Ntmbs };
+struct PhraseInline {
+    Phrase      phrase = Phrase::ImplementationDefined;
+    std::string index  = {};
+    // Typesetting, as `Span::no_correction` is: the draft wrote `\ntbs` with
+    // no empty group, which it does before punctuation. Unset is `\ntbs{}`.
+    bool bare = false;
+
+    friend bool operator==(const PhraseInline&, const PhraseInline&) = default;
+};
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::TermRole> = std::array{
+    beman::specgen::ir::TermRole::Term,
+    beman::specgen::ir::TermRole::Definition,
+    beman::specgen::ir::TermRole::ElementName,
+};
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::Phrase> = std::array{
+    beman::specgen::ir::Phrase::ImplementationDefined,
+    beman::specgen::ir::Phrase::Ntbs,
+    beman::specgen::ir::Phrase::Ntmbs,
+};
+
+namespace beman::specgen::ir {
+
+std::string_view        term_role_name(TermRole); // "term", "definition", "element-name"
+std::optional<TermRole> term_role_from_name(std::string_view);
+std::string_view        phrase_name(Phrase); // "implementation-defined", "ntbs", "ntmbs"
+std::optional<Phrase>   phrase_from_name(std::string_view);
+// The words a phrase prints, for a backend that does not write the draft's
+// macro: "implementation-defined", "NTBS", "NTMBS".
+std::string_view phrase_words(Phrase);
+
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
 // itself, so that a visitor over a run's contents dispatches a different,
 // non-recursive sum type and never drives recursion (decision
 // visitation-rules).
-using PlainInline =
-    std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, TableRef, RawInline>;
+using PlainInline = std::variant<TextInline,
+                                 CodeInline,
+                                 RefInline,
+                                 ConceptRef,
+                                 PlaceholderInline,
+                                 OldConceptRef,
+                                 TableRef,
+                                 RawInline,
+                                 TermInline,
+                                 PhraseInline>;
 
 // A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
 // One mark covers the whole run, so a backend writes one span per run rather
@@ -371,6 +434,8 @@ using Inline    = std::variant<TextInline,
                                OldConceptRef,
                                TableRef,
                                RawInline,
+                               TermInline,
+                               PhraseInline,
                                ChangedInline>;
 using Paragraph = std::vector<Inline>;
 

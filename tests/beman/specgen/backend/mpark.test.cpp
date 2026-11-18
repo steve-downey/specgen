@@ -76,6 +76,20 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
     CHECK(mpark::render_to_string(item) == expected);
 }
 
+TEST_CASE("mpark - a term is italic and a fixed phrase is its words") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{TextInline{"An "},
+                                         PhraseInline{Phrase::ImplementationDefined, "what"},
+                                         TextInline{" "},
+                                         PhraseInline{Phrase::Ntbs},
+                                         TextInline{" is a "},
+                                         TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                         TextInline{" in the "},
+                                         TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                         TextInline{"."}}}};
+    CHECK(mpark::render_to_string(item).contains("An implementation-defined NTBS is a *valid `T`* in the *Effects*."));
+}
+
 TEST_CASE("mpark - spans use the framework's embedded-Markdown convention") {
     SpecItem item;
     // "VAL" is the sentinel occupying the exposition-only name's byte range.

@@ -58,8 +58,23 @@ struct InlineConcept {
 struct InlineTableRef {
     std::string stable_name;
 }; // \tref{stable-name}
-using ProseInline = std::
-    variant<InlineText, InlineCode, InlineRef, InlinePlaceholder, InlineOldConcept, InlineConcept, InlineTableRef>;
+struct InlineTerm {
+    std::string  body; // the words, backticks marking code in them
+    ir::TermRole role = ir::TermRole::Term;
+}; // \term{x}, \defn{x}, \Fundescx{X} (issue #355)
+struct InlinePhrase {
+    ir::Phrase  phrase = ir::Phrase::ImplementationDefined;
+    std::string index  = {};
+}; // \impldef{index}, \ntbs{}, \ntmbs{} (issue #355)
+using ProseInline    = std::variant<InlineText,
+                                    InlineCode,
+                                    InlineRef,
+                                    InlinePlaceholder,
+                                    InlineOldConcept,
+                                    InlineConcept,
+                                    InlineTableRef,
+                                    InlineTerm,
+                                    InlinePhrase>;
 using ProseParagraph = std::vector<ProseInline>;
 
 struct Table2DRow {

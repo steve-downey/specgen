@@ -176,8 +176,20 @@ using RawInline = std::variant<RawText, RawCode, RawRef, RawMacro>;
 // has a parser of its own. They are the ones the draft importer reads, so a
 // sentence typed in a docblock and the same sentence inherited from the draft
 // are the same IR (issue #316). A macro that is not here stays text.
-constexpr std::string_view macro_prefixes[]{
-    "\\placeholder{", "\\cv{", "\\cvqual{", "\\oldconcept{", "\\libconcept{", "\\exposconcept{", "\\ref{", "\\tref{"};
+constexpr std::string_view macro_prefixes[]{"\\placeholder{",
+                                            "\\cv{",
+                                            "\\cvqual{",
+                                            "\\oldconcept{",
+                                            "\\libconcept{",
+                                            "\\exposconcept{",
+                                            "\\ref{",
+                                            "\\tref{",
+                                            "\\term{",
+                                            "\\defn{",
+                                            "\\Fundescx{",
+                                            "\\impldef{",
+                                            "\\ntbs{",
+                                            "\\ntmbs{"};
 
 // Prose text as a docblock writes it, with `\&`, `\%` and `\#` read as the
 // characters they stand for. A bare one is the character already, and the
@@ -297,56 +309,67 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
     // accumulator would carry the exact same branching one level down,
     // inside the combining function, which is not an improvement.
     for (RawInline& seg : segments->value) {
-        std::visit(overloaded{[&](RawText& t) {
-                                  if (!t.text.empty())
-                                      para.push_back(InlineText{unescape_prose(t.text)});
-                              },
-                              [&](RawCode& c) {
-                                  if (c.terminated) {
-                                      para.push_back(InlineCode{std::move(c.text)});
-                                  } else {
-                                      diags.push_back({Severity::Error, line, "unterminated ` code span"});
-                                      if (!c.text.empty())
-                                          para.push_back(InlineText{std::move(c.text)});
-                                  }
-                              },
-                              [&](RawRef& ref) {
-                                  if (!ref.terminated) {
-                                      diags.push_back({Severity::Error, line, "unterminated \\iref reference"});
-                                      if (!ref.stable_name.empty())
-                                          para.push_back(InlineText{"\\iref{" + std::move(ref.stable_name)});
-                                  } else if (ref.stable_name.empty()) {
-                                      diags.push_back({Severity::Error, line, "\\iref requires a stable name"});
-                                  } else {
-                                      para.push_back(InlineRef{std::move(ref.stable_name)});
-                                  }
-                              },
-                              [&](RawMacro& m) {
-                                  if (!m.terminated) {
-                                      diags.push_back({Severity::Error, line, "unterminated \\" + m.macro + " macro"});
-                                      para.push_back(InlineText{"\\" + m.macro + "{" + std::move(m.body)});
-                                  } else if (m.macro == "cv") {
-                                      if (!m.body.empty())
-                                          diags.push_back({Severity::Error, line, "\\cv takes no argument"});
-                                      para.push_back(InlinePlaceholder{"cv"});
-                                  } else if (m.body.empty()) {
-                                      diags.push_back(
-                                          {Severity::Error, line, "\\" + m.macro + " requires an argument"});
-                                  } else if (m.macro == "placeholder") {
-                                      para.push_back(InlinePlaceholder{std::move(m.body)});
-                                  } else if (m.macro == "cvqual") {
-                                      para.push_back(InlinePlaceholder{std::move(m.body), true});
-                                  } else if (m.macro == "oldconcept") {
-                                      para.push_back(InlineOldConcept{std::move(m.body)});
-                                  } else if (m.macro == "libconcept" || m.macro == "exposconcept") {
-                                      para.push_back(InlineConcept{std::move(m.body), m.macro == "exposconcept"});
-                                  } else if (m.macro == "ref") {
-                                      para.push_back(InlineRef{std::move(m.body), true});
-                                  } else {
-                                      para.push_back(InlineTableRef{std::move(m.body)});
-                                  }
-                              }},
-                   seg);
+        std::visit(
+            overloaded{[&](RawText& t) {
+                           if (!t.text.empty())
+                               para.push_back(InlineText{unescape_prose(t.text)});
+                       },
+                       [&](RawCode& c) {
+                           if (c.terminated) {
+                               para.push_back(InlineCode{std::move(c.text)});
+                           } else {
+                               diags.push_back({Severity::Error, line, "unterminated ` code span"});
+                               if (!c.text.empty())
+                                   para.push_back(InlineText{std::move(c.text)});
+                           }
+                       },
+                       [&](RawRef& ref) {
+                           if (!ref.terminated) {
+                               diags.push_back({Severity::Error, line, "unterminated \\iref reference"});
+                               if (!ref.stable_name.empty())
+                                   para.push_back(InlineText{"\\iref{" + std::move(ref.stable_name)});
+                           } else if (ref.stable_name.empty()) {
+                               diags.push_back({Severity::Error, line, "\\iref requires a stable name"});
+                           } else {
+                               para.push_back(InlineRef{std::move(ref.stable_name)});
+                           }
+                       },
+                       [&](RawMacro& m) {
+                           if (!m.terminated) {
+                               diags.push_back({Severity::Error, line, "unterminated \\" + m.macro + " macro"});
+                               para.push_back(InlineText{"\\" + m.macro + "{" + std::move(m.body)});
+                           } else if (m.macro == "cv") {
+                               if (!m.body.empty())
+                                   diags.push_back({Severity::Error, line, "\\cv takes no argument"});
+                               para.push_back(InlinePlaceholder{"cv"});
+                           } else if (m.macro == "ntbs" || m.macro == "ntmbs") {
+                               if (!m.body.empty())
+                                   diags.push_back({Severity::Error, line, "\\" + m.macro + " takes no argument"});
+                               para.push_back(InlinePhrase{m.macro == "ntbs" ? ir::Phrase::Ntbs : ir::Phrase::Ntmbs});
+                           } else if (m.body.empty()) {
+                               diags.push_back({Severity::Error, line, "\\" + m.macro + " requires an argument"});
+                           } else if (m.macro == "placeholder") {
+                               para.push_back(InlinePlaceholder{std::move(m.body)});
+                           } else if (m.macro == "cvqual") {
+                               para.push_back(InlinePlaceholder{std::move(m.body), true});
+                           } else if (m.macro == "oldconcept") {
+                               para.push_back(InlineOldConcept{std::move(m.body)});
+                           } else if (m.macro == "libconcept" || m.macro == "exposconcept") {
+                               para.push_back(InlineConcept{std::move(m.body), m.macro == "exposconcept"});
+                           } else if (m.macro == "ref") {
+                               para.push_back(InlineRef{std::move(m.body), true});
+                           } else if (m.macro == "term" || m.macro == "defn" || m.macro == "Fundescx") {
+                               para.push_back(InlineTerm{std::move(m.body),
+                                                         m.macro == "term"   ? ir::TermRole::Term
+                                                         : m.macro == "defn" ? ir::TermRole::Definition
+                                                                             : ir::TermRole::ElementName});
+                           } else if (m.macro == "impldef") {
+                               para.push_back(InlinePhrase{ir::Phrase::ImplementationDefined, std::move(m.body)});
+                           } else {
+                               para.push_back(InlineTableRef{std::move(m.body)});
+                           }
+                       }},
+            seg);
     }
     return para;
 }
