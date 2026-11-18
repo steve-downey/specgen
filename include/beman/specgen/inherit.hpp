@@ -59,8 +59,9 @@ bool has_unresolved(const ir::Document&);
 // marked or not, has its declaration typeset as the baseline's is: each span
 // takes the form (`Span::no_correction`) of the baseline span that says the
 // same, where the document left the form to the context. The marked items pair
-// first. This is typesetting only, so an item that finds no pair is not a
-// finding.
+// first. An extracted synopsis takes its forms from the baseline's synopsis of
+// its class the same way (issue #341). This is typesetting only, so an item or
+// a synopsis that finds no pair is not a finding.
 std::vector<Diagnostic> resolve(ir::Document& current, const ir::Document& baseline);
 
 } // namespace beman::specgen::inherit

@@ -1639,8 +1639,8 @@ namespace std {
     friend constexpr bool operator==(const optional& x, const optional& y);
 
   private:
-    T @\exposidnc{value}@;              // exposition only
-    bool @\exposidnc{engaged}@ = false; // exposition only
+    T @\exposid{value}@;              // exposition only
+    bool @\exposid{engaged}@ = false; // exposition only
   };
 }
 #+end_codeblock

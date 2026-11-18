@@ -247,12 +247,15 @@ void resolve_nodes(std::vector<ir::Node>&                     current,
                    std::vector<Diagnostic>&                   out) {
     enclosing.push_back(&current);
     std::vector<bool> claimed(baseline.size(), false);
-    // The items that ask to inherit, noted before the walk clears the request.
-    const std::vector<bool> asked = current | std::views::transform([](const ir::Node& node) {
-                                        const auto* item = std::get_if<ir::SpecItem>(&node);
-                                        return item != nullptr && item->as_draft;
-                                    }) |
-                                    std::ranges::to<std::vector>();
+    // The items and synopses that ask to inherit, noted before the walk clears
+    // the request.
+    const std::vector<bool> asked =
+        current | std::views::transform([](const ir::Node& node) {
+            const auto* item     = std::get_if<ir::SpecItem>(&node);
+            const auto* synopsis = std::get_if<ir::Synopsis>(&node);
+            return (item != nullptr && item->as_draft) || (synopsis != nullptr && synopsis->as_draft);
+        }) |
+        std::ranges::to<std::vector>();
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
@@ -311,6 +314,19 @@ void resolve_nodes(std::vector<ir::Node>&                     current,
             return;
         if (const ir::SpecItem* from = pair_item(*item, baseline, claimed))
             take_declaration_form(*item, *from);
+    });
+    // And an extracted synopsis with the baseline's synopsis of its class, for
+    // the forms of its exposition-only names (issue #341): the n-th span naming
+    // a member takes the form of the baseline's n-th span naming it, which is
+    // the same member where the two list the members in one order. An
+    // inherited synopsis is the baseline's already, and an authored one keeps
+    // its escapes as typed.
+    std::ranges::for_each(std::views::zip(current, asked), [&](auto&& entry) {
+        auto* synopsis = std::get_if<ir::Synopsis>(&std::get<0>(entry));
+        if (synopsis == nullptr || std::get<1>(entry) || synopsis->code.spans.empty())
+            return;
+        if (const ir::Synopsis* from = pair_synopsis(*synopsis, baseline, claimed))
+            take_form(synopsis->code, from->code);
     });
     enclosing.pop_back();
 }

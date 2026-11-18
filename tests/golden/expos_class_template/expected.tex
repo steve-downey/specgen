@@ -1,7 +1,7 @@
 \begin{codeblock}
 namespace std {
   template<typename T>
-  struct @\exposidnc{box}@ {
+  struct @\exposid{box}@ {
     using type = T;
   }; // \expos
 }
@@ -10,7 +10,7 @@ namespace std {
 \begin{codeblock}
 namespace std {
   template<typename T>
-  struct @\exposidnc{box}@<T*> {
+  struct @\exposid{box}@<T*> {
     using type = T;
   }; // \expos
 }
@@ -19,7 +19,7 @@ namespace std {
 \begin{codeblock}
 namespace std {
   template<typename T>
-  struct @\exposidnc{raw-box}@ {
+  struct @\exposid{raw-box}@ {
     T value;
   }; // \expos
 }
@@ -27,20 +27,20 @@ namespace std {
 
 \begin{codeblock}
 namespace std {
-  template<typename T> inline constexpr bool @\exposidnc{boxed}@ = false; // \expos
+  template<typename T> inline constexpr bool @\exposid{boxed}@ = false; // \expos
 }
 \end{codeblock}
 
 \begin{codeblock}
 namespace std {
-  template<typename T> inline constexpr bool @\exposidnc{boxed}@<@\exposidnc{box}@<T>> = true; // \expos
+  template<typename T> inline constexpr bool @\exposid{boxed}@<@\exposid{box}@<T>> = true; // \expos
 }
 \end{codeblock}
 
 \begin{codeblock}
 namespace std {
   template<typename LEFT, typename RIGHT, typename FALLBACK>
-  struct @\exposidnc{same-model-impl}@ {
+  struct @\exposid{same-model-impl}@ {
     static constexpr bool value = true;
   }; // \expos
 }
@@ -50,8 +50,8 @@ namespace std {
 namespace std {
   template<typename MODEL_GRADE_PARAMETER, typename OPERAND_PARAMETER,
            typename FALLBACK_PARAMETER>
-  concept @\exposidnc{mixes-with-model}@ =
-      @\exposidnc{same-model-impl}@<MODEL_GRADE_PARAMETER, OPERAND_PARAMETER,
+  concept @\exposid{mixes-with-model}@ =
+      @\exposid{same-model-impl}@<MODEL_GRADE_PARAMETER, OPERAND_PARAMETER,
                       FALLBACK_PARAMETER>::value; // \expos
 }
 \end{codeblock}
@@ -59,7 +59,7 @@ namespace std {
 \begin{codeblock}
 namespace std {
   template<typename T>
-  struct @\exposidnc{holder}@ {
+  struct @\exposid{holder}@ {
     using value_type = T;
 
     constexpr T get() const;
@@ -94,7 +94,7 @@ constexpr bool empty() const;
 \indexlibraryglobal{make}%
 \begin{itemdecl}
 template<typename T>
-  constexpr @\exposidnc{box}@<T> make(T t);
+  constexpr @\exposid{box}@<T> make(T t);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -106,7 +106,7 @@ A boxed copy of \tcode{t}.
 \indexlibraryglobal{unwrap}%
 \begin{itemdecl}
 template<typename T>
-  constexpr @\exposidnc{raw-box}@<T> unwrap(@\exposidnc{box}@<T> b);
+  constexpr @\exposid{raw-box}@<T> unwrap(@\exposid{box}@<T> b);
 \end{itemdecl}
 
 \begin{itemdescr}

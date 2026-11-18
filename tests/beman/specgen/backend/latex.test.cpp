@@ -134,7 +134,7 @@ TEST_CASE("latex - spans become macros, in codeblock and in tcode") {
 
     const std::string out = latex::render_to_string(item);
     // Inside a codeblock the draft escapes back into LaTeX with @...@.
-    CHECK(out.find("T @\\exposidnc{val}@;") != std::string::npos);
+    CHECK(out.find("T @\\exposid{val}@;") != std::string::npos);
     // In prose we are already in LaTeX, so no @ delimiters — and a code inline
     // that is *entirely* one span renders as the bare macro: \seebelow is
     // italic prose and \exposid already sets the code font, so a \tcode wrapper
@@ -257,9 +257,8 @@ TEST_CASE("latex - a subscript joins the variable or the code it is on in one ru
 }
 
 // The draft has a no-italic-correction twin of each italic macro. A span that
-// does not say takes the context's form -- \exposidnc in a listing, the plain
-// macro elsewhere -- and one the draft importer read says which the draft wrote
-// (issue #306).
+// does not say takes the plain macro, in a listing as in prose (issue #341), and
+// one the draft importer read says which the draft wrote (issue #306).
 TEST_CASE("latex - a span that says which form of its macro to write gets that form, in a listing and in prose") {
     const beman::specgen::ir::CodeText code{"A B C D E",
                                             {{0, 1, SpanKind::ExposId, "a"},
@@ -283,7 +282,7 @@ TEST_CASE("latex - a span that says which form of its macro to write gets that f
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
-    CHECK(out.contains("@\\exposidnc{a}@ @\\exposid{b}@ @\\placeholdernc{c}@ @\\seebelownc@ @\\impdefnc@\n"));
+    CHECK(out.contains("@\\exposid{a}@ @\\exposid{b}@ @\\placeholdernc{c}@ @\\seebelownc@ @\\impdefnc@\n"));
     CHECK(out.contains("\\tcode{\\exposid{a} \\exposid{b} \\placeholdernc{c} \\seebelownc \\impdefnc}, "
                        "\\exposidnc{b}, \\placeholdernc{p} and \\exposconceptnc{k}."));
 }
@@ -738,7 +737,7 @@ TEST_CASE("latex - a changed run of code is one escape per line, its spans in th
     Document doc;
     doc.nodes.push_back(synopsis);
     CHECK(latex::render_to_string(doc) ==
-          "\\begin{codeblock}\n@\\added{T \\exposidnc{val};}@\n@\\removed{U w;}@\n\\end{codeblock}\n");
+          "\\begin{codeblock}\n@\\added{T \\exposid{val};}@\n@\\removed{U w;}@\n\\end{codeblock}\n");
 }
 
 TEST_CASE("latex - a marked top-level node sits in the draft's block environment") {

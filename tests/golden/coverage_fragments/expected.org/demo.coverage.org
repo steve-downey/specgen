@@ -36,7 +36,7 @@ namespace std {
     // \ref{demo.coverage.ctors}, exposition members
 
     template<class VT>
-    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+    static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@; // exposition only
 
   public:
     // \ref{demo.coverage.ctors}, constructors
@@ -60,7 +60,7 @@ The wrapper stores a callable object.
 
 #+begin_itemdecl
 template<class VT>
-  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum

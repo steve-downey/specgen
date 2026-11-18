@@ -437,10 +437,9 @@ is_convertible_v<int @\cv{}@&, int @\cvqual{cv2}@&> @\opt{noexcept}@
 
 TEST_CASE("draft_import - a span says which form of its macro the draft wrote, where the context would not") {
     // The draft has a no-italic-correction twin of each italic macro and chooses by
-    // hand. In a \tcode the plain form is what this tool writes, so the twin is
-    // recorded; in a listing an exposition-only name is written as the twin, so there
-    // it is the plain form that is recorded. Either way the wording comes back out as
-    // the draft spells it (issue #306).
+    // hand. The plain form is what this tool writes, in a \tcode and in a listing
+    // alike (issue #341), so the twin is what is recorded, and the wording comes back
+    // out as the draft spells it (issue #306).
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 The type \tcode{R(*)(\exposidnc{B}, \exposid{c}) noexcept(\placeholdernc{noex})}, and \exposidnc{z}, \placeholdernc{p}, \exposconceptnc{k} and \seebelownc.
@@ -464,8 +463,8 @@ bool @\exposid{a}@ = @\exposidnc{b}@(@\placeholdernc{noex}@, @\placeholder{q}@) 
     CHECK(std::get<ir::CodeInline>(para.at(9)).code.spans.at(0).no_correction == std::optional<bool>{true});
     const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
     REQUIRE(listing.spans.size() == 5);
-    CHECK(listing.spans[0].no_correction == std::optional<bool>{false});
-    CHECK(listing.spans[1].no_correction == std::nullopt);
+    CHECK(listing.spans[0].no_correction == std::nullopt);
+    CHECK(listing.spans[1].no_correction == std::optional<bool>{true});
     CHECK(listing.spans[2].no_correction == std::optional<bool>{true});
     CHECK(listing.spans[3].no_correction == std::nullopt);
     CHECK(listing.spans[4].no_correction == std::optional<bool>{true});
@@ -514,7 +513,7 @@ R (*@\exposid{thunk-\brk{}ptr}@)(int);
     CHECK(code_at(11).hints == Hints{{8, ir::LayoutHintKind::Break}});
     const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
     CHECK(listing.text == "R (*thunk-ptr)(int);");
-    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr", false});
+    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr"});
     CHECK(listing.hints == Hints{{10, ir::LayoutHintKind::Break, true}});
 
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});

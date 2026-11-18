@@ -13,7 +13,7 @@ constexpr void reset() noexcept;
 /Effects/: Equivalent to:
 
 #+begin_codeblock
-@\exposidnc{engaged}@ = false;
+@\exposid{engaged}@ = false;
 #+end_codeblock
 #+end_pnum
 

@@ -2,7 +2,7 @@
 class gadget {
 public:
   constexpr bool ready() const noexcept;
-@\added{  void reset(\exposidnc{val} v);}@
+@\added{  void reset(\exposid{val} v);}@
 @\removed{  void arm();}@
 };
 #+end_codeblock
@@ -43,7 +43,7 @@ constexpr bool ready() const@\removed{ noexcept}@;
 
 #+begin_addedblock
 #+begin_itemdecl
-void reset(@\exposidnc{val}@ v);
+void reset(@\exposid{val}@ v);
 #+end_itemdecl
 
 #+begin_pnum x+1
@@ -86,13 +86,13 @@ void arm();
 :END:
 
 #+begin_itemdecl
-void reset(@\exposidnc{val}@ v);
+void reset(@\exposid{val}@ v);
 #+end_itemdecl
 
 #+begin_pnum x+2
 /Effects/: Equivalent to:
 
 #+begin_codeblock
-@\exposidnc{val}@ = v;
+@\exposid{val}@ = v;
 #+end_codeblock
 #+end_pnum

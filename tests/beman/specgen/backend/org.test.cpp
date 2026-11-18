@@ -94,7 +94,7 @@ TEST_CASE("org - a span in a code block uses the draft's own @...@ escape") {
     item.decl.signatures.push_back({"T VAL;", {{2, 5, SpanKind::ExposId, "val"}}});
 
     const std::string out = org::render_to_string(item);
-    CHECK(out.find("T @\\exposidnc{val}@;") != std::string::npos);
+    CHECK(out.find("T @\\exposid{val}@;") != std::string::npos);
     // And the escape is literally the shared function's output, not a
     // lookalike -- if latex.cpp's convention ever changes, this moves with it.
     CHECK(out.find(backend::draft_span_codeblock({2, 5, SpanKind::ExposId, "val"}, "VAL")) != std::string::npos);
@@ -816,7 +816,7 @@ TEST_CASE("org - a changed run of code is the draft's escape, the same bytes the
     Document doc;
     doc.nodes.push_back(synopsis);
     CHECK(org::render_to_string(doc) ==
-          "#+begin_codeblock\n@\\added{T \\exposidnc{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
+          "#+begin_codeblock\n@\\added{T \\exposid{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
 }
 
 TEST_CASE("org - a marked section says so in its properties, a marked leaf in a block, added pnums take labels") {

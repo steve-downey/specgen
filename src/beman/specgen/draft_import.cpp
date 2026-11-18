@@ -348,20 +348,20 @@ std::optional<std::string> plain_code_argument(std::string_view arg) {
 
 // One draft macro with a code meaning, at `pos` (a backslash). Appends its
 // span to `out` and returns where it ended, or nullopt when it is not one.
-// `listing` says whether the macro sits in a listing's `@...@` or in a
-// `\tcode`, which decides what an italic macro's plain form and its
-// no-correction twin record: the span says which was written only where that
-// is not what the context takes anyway.
-std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out, bool listing) {
+// An italic macro's no-correction twin is recorded on the span; its plain form
+// is what a span that says nothing takes, in a listing's `@...@` and in a
+// `\tcode` alike.
+std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out) {
     std::size_t end = pos + 1;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     while (end < s.size() && is_letter(s[end]))
         ++end;
     const std::string_view name = s.substr(pos + 1, end - pos - 1);
 
-    const auto written = [&](ir::SpanKind kind, bool no_correction) -> std::optional<bool> {
-        return no_correction == ir::default_no_correction(kind, listing) ? std::nullopt
-                                                                         : std::optional<bool>{no_correction};
+    // Only the no-correction form is said: the plain one is what a span that
+    // says nothing takes (`ir::Span::no_correction`).
+    const auto written = [](bool no_correction) -> std::optional<bool> {
+        return no_correction ? std::optional<bool>{true} : std::nullopt;
     };
     // A macro whose argument is a name, which is the span's text and payload.
     const auto named = [&](ir::SpanKind        kind,
@@ -374,9 +374,9 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
     };
 
     if (name == "exposid" || name == "exposidnc")
-        return named(ir::SpanKind::ExposId, written(ir::SpanKind::ExposId, name == "exposidnc"));
+        return named(ir::SpanKind::ExposId, written(name == "exposidnc"));
     if (name == "placeholder" || name == "placeholdernc")
-        return named(ir::SpanKind::Placeholder, written(ir::SpanKind::Placeholder, name == "placeholdernc"));
+        return named(ir::SpanKind::Placeholder, written(name == "placeholdernc"));
     if (name == "cvqual")
         return named(ir::SpanKind::CvQualifier);
     if (name == "opt") {
@@ -400,14 +400,11 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
         return empty ? empty->next : end;
     }
     if (name == "seebelow" || name == "seebelownc") {
-        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(ir::SpanKind::SeeBelow, name == "seebelownc"));
+        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(name == "seebelownc"));
         return end;
     }
     if (name == "impdef" || name == "impdefnc") {
-        out.span(ir::SpanKind::ImplDefined,
-                 "",
-                 "implementation-defined",
-                 written(ir::SpanKind::ImplDefined, name == "impdefnc"));
+        out.span(ir::SpanKind::ImplDefined, "", "implementation-defined", written(name == "impdefnc"));
         return end;
     }
     if (name == "libglobal") {
@@ -552,7 +549,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                     ok = false;
                     break;
                 }
-                const auto next = code_macro(inner, j, trial, true);
+                const auto next = code_macro(inner, j, trial);
                 if (!next) {
                     ok = false;
                     break;
@@ -597,7 +594,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
             if (listing) {
                 // Inside a listing only the comment macros are TeX (texcl).
                 if (raw.substr(i).starts_with("\\ref{")) {
-                    if (const auto next = code_macro(raw, i, out, true)) {
+                    if (const auto next = code_macro(raw, i, out)) {
                         i = *next;
                         continue;
                     }
@@ -622,7 +619,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                 i = next;
                 continue;
             }
-            if (const auto after = code_macro(raw, i, out, false)) {
+            if (const auto after = code_macro(raw, i, out)) {
                 i = *after;
                 continue;
             }

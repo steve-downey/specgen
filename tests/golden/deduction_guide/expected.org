@@ -9,7 +9,7 @@
 namespace std {
   template<typename I>
   class holder {
-    I @\exposidnc{ptr}@; // exposition only
+    I @\exposid{ptr}@; // exposition only
 
   public:
     constexpr explicit holder(I ptr);

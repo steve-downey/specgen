@@ -78,13 +78,12 @@ inline std::string draft_escape_code_text(std::string_view text) {
            std::views::join | std::ranges::to<std::string>();
 }
 
-// A span's macro, in prose (`listing` false) or inside a listing's escape. The
-// two differ only in which form an exposition-only name takes when the span
-// does not say (`ir::default_no_correction`): the draft has a
-// no-italic-correction twin of each italic macro, and a span the draft
-// importer read says which one the draft wrote.
-inline std::string draft_span_macro(const ir::Span& span, std::string_view spelling, bool listing) {
-    const bool nc = span.no_correction.value_or(ir::default_no_correction(span.kind, listing));
+// A span's macro, the same in prose and inside a listing's escape. The draft
+// has a no-italic-correction twin of each italic macro; a span the draft
+// importer read says which one the draft wrote, and one that does not say
+// takes the plain form (`ir::Span::no_correction`).
+inline std::string draft_span_macro(const ir::Span& span, std::string_view spelling) {
+    const bool nc = span.no_correction.value_or(false);
     return foundation::match(
         span.kind,
         foundation::when<ir::SpanKind::ExposId>(
@@ -128,12 +127,11 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
 // Outside a codeblock we are already in LaTeX, so the macro is written
 // directly.
 inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
-    return draft_span_macro(span, spelling, false);
+    return draft_span_macro(span, spelling);
 }
 
-// Inside a codeblock the draft escapes back into LaTeX with @...@. Exposition
-// identifiers use the no-correction form there unless the span says the
-// draft wrote the other. Ref is a separate exception,
+// Inside a codeblock the draft escapes back into LaTeX with @...@. Ref is the
+// exception,
 // and it is the draft's own, not ours. `macros.tex` sets the
 // listings option `texcl=true` ("all TeX commands are available within
 // comments") in the shared `\lstset`, alongside `escapechar=@` -- so it holds
@@ -147,11 +145,9 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
 // `draft_span_escaped` is the form *inside* an open `@...@`: what the
 // codeblock form wraps, which is also what a span inside a changed run of
 // code renders as, the run having opened the escape already
-// (docs/plans/wording-diff.md). The exposition identifier takes the
-// no-correction form there as it does in a codeblock; a Ref is the bare
-// `\ref` either way.
+// (docs/plans/wording-diff.md). A Ref is the bare `\ref` either way.
 inline std::string draft_span_escaped(const ir::Span& span, std::string_view spelling) {
-    return draft_span_macro(span, spelling, true);
+    return draft_span_macro(span, spelling);
 }
 
 inline std::string draft_span_codeblock(const ir::Span& span, std::string_view spelling) {

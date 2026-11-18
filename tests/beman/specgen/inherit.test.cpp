@@ -275,8 +275,8 @@ SpecItem declared(CodeText signature, std::vector<std::string> entities) {
 } // namespace
 
 TEST_CASE("inherit - a paired declaration is typeset in the form the baseline's has") {
-    // The draft wrote `\exposid` where a listing's default is `\exposidnc`.
-    SpecItem drafted = declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", false), {});
+    // The draft wrote `\exposidnc` where the default is `\exposid`.
+    SpecItem drafted = declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", true), {});
     drafted.descr.elements.push_back(element(ElementKind::Remarks, "The draft's."));
     const Document baseline = in_section("s", {drafted});
 
@@ -285,7 +285,7 @@ TEST_CASE("inherit - a paired declaration is typeset in the form the baseline's 
         asking.as_draft  = true;
         Document current = in_section("s", {asking});
         REQUIRE(inherit::resolve(current, baseline).empty());
-        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{false});
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{true});
         CHECK(element_of(item_at(current, 0), ElementKind::Remarks) != nullptr);
     }
     SECTION("an item with a description of its own, which it keeps") {
@@ -293,15 +293,15 @@ TEST_CASE("inherit - a paired declaration is typeset in the form the baseline's 
         authored.descr.elements.push_back(element(ElementKind::Remarks, "The paper's."));
         Document current = in_section("s", {authored});
         REQUIRE(inherit::resolve(current, baseline).empty());
-        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{false});
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{true});
         CHECK(element_of(item_at(current, 0), ElementKind::Remarks)->body ==
               element(ElementKind::Remarks, "The paper's.").body);
     }
     SECTION("a form the document set stays") {
         Document current =
-            in_section("s", {declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", true), {})});
+            in_section("s", {declared(with_exposid("static constexpr bool is-ok = see below;", "is-ok", false), {})});
         REQUIRE(inherit::resolve(current, baseline).empty());
-        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{true});
+        CHECK(item_at(current, 0).decl.signatures.front().spans.front().no_correction == std::optional<bool>{false});
     }
     SECTION("a span that says something else takes nothing") {
         Document current =
@@ -309,6 +309,33 @@ TEST_CASE("inherit - a paired declaration is typeset in the form the baseline's 
         REQUIRE(inherit::resolve(current, baseline).empty());
         CHECK_FALSE(item_at(current, 0).decl.signatures.front().spans.front().no_correction.has_value());
     }
+}
+
+TEST_CASE("inherit - an extracted synopsis takes the forms of the baseline's synopsis of its class") {
+    // The draft writes the first `func` plain and the second without the italic
+    // correction; the n-th span naming a member takes the n-th one's form.
+    const auto synopsis_of = [](std::optional<bool> first, std::optional<bool> second) {
+        Synopsis synopsis;
+        synopsis.name         = "wrapper";
+        synopsis.code.text    = "class wrapper {\n  F func;\n  F* ptr = &func;\n};";
+        const std::size_t one = synopsis.code.text.find("func");
+        const std::size_t two = synopsis.code.text.find("func", one + 1);
+        synopsis.code.spans   = {{one, one + 4, SpanKind::ExposId, "func", first},
+                                 {two, two + 4, SpanKind::ExposId, "func", second}};
+        return synopsis;
+    };
+    const Document baseline{.nodes = {synopsis_of({}, true)}};
+
+    Document current{.nodes = {synopsis_of({}, {})}};
+    REQUIRE(inherit::resolve(current, baseline).empty());
+    const auto& spans = std::get<Synopsis>(current.nodes.front()).code.spans;
+    CHECK_FALSE(spans[0].no_correction.has_value());
+    CHECK(spans[1].no_correction == std::optional<bool>{true});
+
+    // A form the document set stays.
+    Document set{.nodes = {synopsis_of({}, false)}};
+    REQUIRE(inherit::resolve(set, baseline).empty());
+    CHECK(std::get<Synopsis>(set.nodes.front()).code.spans[1].no_correction == std::optional<bool>{false});
 }
 
 TEST_CASE("inherit - an item that inherits is paired before one that only takes the form") {

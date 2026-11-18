@@ -106,21 +106,18 @@ struct Span {
     // macro is written. Each italic macro has a twin that leaves out the
     // italic correction (\exposidnc, \placeholdernc, \seebelownc,
     // \impdefnc), and the draft's source picks one by hand, by what follows
-    // the name. Unset is the form the context takes (`default_no_correction`),
-    // which is what every generated span has. The draft importer sets it
-    // where the draft wrote the other form, so that inherited wording comes
-    // back out as the draft spells it, and a generated declaration takes it
-    // from the baseline declaration it pairs with (inherit.hpp). Only a backend that writes draft LaTeX
-    // reads it, and the wording diff compares without it.
+    // the name. Unset is the plain form, which is what every generated span
+    // has, in prose and in a listing alike: the draft's source writes
+    // `@\exposid{...}@` in a listing thirteen times for each `@\exposidnc{...}@`
+    // (issue #341). The draft importer sets it where the draft wrote the
+    // no-correction form, so that inherited wording comes back out as the draft
+    // spells it, and a generated declaration or synopsis takes it from the
+    // baseline one it pairs with (inherit.hpp). Only a backend that writes
+    // draft LaTeX reads it, and the wording diff compares without it.
     std::optional<bool> no_correction = {};
 
     friend bool operator==(const Span&, const Span&) = default;
 };
-
-// The form a span's macro takes when nothing says otherwise: the
-// no-correction form for an exposition-only name in a listing, which is what
-// this tool has always written there, and the plain form for everything else.
-constexpr bool default_no_correction(SpanKind kind, bool listing) { return listing && kind == SpanKind::ExposId; }
 
 // Whether a span is wording. A library index span is an index entry around a
 // name, `\libglobal{x}` printing `x`: the draft writes it on some heads and not
