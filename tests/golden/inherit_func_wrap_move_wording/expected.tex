@@ -84,6 +84,25 @@ Such small-object optimization can only be applied to a type \tcode{T} for which
 
 \rSec4[func.wrap.move.ctor]{Constructors, assignments, and destructor}
 
+\begin{itemdecl}
+template<class VT>
+  static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+If \placeholder{noex} is \tcode{true}, \tcode{\exposid{is-callable-from}<VT>} is equal to:
+\begin{codeblock}
+is_nothrow_invocable_r_v<R, VT @\cv{}@ @\placeholder{ref}@, ArgTypes...> &&
+is_nothrow_invocable_r_v<R, VT @\placeholder{inv-quals}@, ArgTypes...>
+\end{codeblock}
+Otherwise, \tcode{\exposid{is-callable-from}<VT>} is equal to:
+\begin{codeblock}
+is_invocable_r_v<R, VT @\cv{}@ @\placeholder{ref}@, ArgTypes...> &&
+is_invocable_r_v<R, VT @\placeholder{inv-quals}@, ArgTypes...>
+\end{codeblock}
+\end{itemdescr}
+
 \indexlibraryctor{move_only_function}%
 \begin{itemdecl}
 constexpr move_only_function() noexcept;

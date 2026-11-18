@@ -35,6 +35,7 @@
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
+#include <beman/specgen/backend/tied_text.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -60,6 +61,13 @@ namespace {
 using beman::specgen::foundation::overloaded;
 
 // --- span substitution: the shared substrate's escape hook ----------------
+
+// A subscript in Markdown: `~x~`, with a name in italics and a number upright,
+// which is how mathematics sets the two (`T$_i$`, `T$_1$`).
+std::string subscript(std::string_view payload) {
+    const bool number = std::ranges::all_of(payload, [](char c) { return c >= '0' && c <= '9'; });
+    return number ? std::format("~{}~", payload) : std::format("~_{}_~", payload);
+}
 
 // mpark/wg21 turns on embedded Markdown for `cpp`, `default` and `diff` code
 // -- both fenced blocks and inline `code` -- with `@` as the Markdown
@@ -95,7 +103,14 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         // The draft's \opt prints its argument and an italic subscript
         // "opt". The framework's manual writes the same thing after code as
         // `~_opt_~`, which is Markdown and so sits in an `@...@`.
-        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "@~_opt_~@"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "@~_opt_~@"; }),
+        // A variable of the mathematics around the code is italic, which is
+        // what the shorthand is. A subscript is Markdown's `~x~`, in an
+        // `@...@` as `\opt`'s is.
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }),
+        // The dots of a sequence with elements left out are the dots.
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -124,7 +139,10 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
         foundation::when<ir::SpanKind::CvQualifier>([&] { return '*' + span.payload + '*'; }),
-        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
+        foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }),
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:
@@ -166,8 +184,10 @@ struct PieceRenderer {
     // Plain prose text, verbatim -- the same treatment the LaTeX backend
     // gives it. The author's prose is the author's in both targets: prose
     // that would need escaping here (a bare `_`, a stray `[`) is prose that
-    // would already have needed escaping to reach the draft.
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    // would already have needed escaping to reach the draft. The draft's tie
+    // is the one piece of its typesetting with a meaning here: a no-break
+    // space, which Markdown writes as the entity.
+    std::string operator()(const ir::TextInline& v) const { return backend::tied_text(v, "&nbsp;"); }
 
     // Inline code. Unlike LaTeX there is no whole-span shortcut: backticks
     // supply the code font that `\tcode` supplies there, and `$...$` adds
@@ -276,8 +296,9 @@ std::string render_flat_table(const ir::Table1D& table) {
 
 // --- items --------------------------------------------------------------
 
-// One block's rendering and paragraph-boundary policy. Lists and tables
-// belong to the preceding numbered paragraph; an extracted body starts one.
+// One block's rendering and paragraph-boundary policy. Lists, tables, code,
+// notes and examples belong to the preceding numbered paragraph unless they
+// say they open one (`ir::opens_paragraph`); an extracted body starts one.
 struct RenderedBodyBlock {
     std::string text;
     bool        starts_paragraph = false;
@@ -310,13 +331,15 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
             return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(p));
         }) |
         std::views::join | std::ranges::to<std::string>();
-    return {items, false, false};
+    return {items, list.opens_paragraph, false};
 }
 
-RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const {
+    return {render_table(t), t.opens_paragraph, false};
+}
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
-    return {render_flat_table(t), false, false};
+    return {render_flat_table(t), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
@@ -331,7 +354,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
         return state;
     });
     const std::string fence(std::max(3uz, runs.second + 1), '`');
-    return {std::format("{0}cpp\n{1}\n{0}\n", fence, text), false, false};
+    return {std::format("{0}cpp\n{1}\n{0}\n", fence, text), code.opens_paragraph, false};
 }
 
 std::string render_informative_body(const ir::InformativeBody& body);
@@ -349,11 +372,13 @@ struct BodyRenderer : LeafBodyRenderer {
 };
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("::: note\n\n{}\n:::\n", render_informative_body(note.body)), false, false};
+    return {std::format("::: note\n\n{}\n:::\n", render_informative_body(note.body)), note.opens_paragraph, false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
-    return {std::format("::: example\n\n{}\n:::\n", render_informative_body(example.body)), false, false};
+    return {std::format("::: example\n\n{}\n:::\n", render_informative_body(example.body)),
+            example.opens_paragraph,
+            false};
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);
@@ -375,7 +400,13 @@ std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optio
             } else if (first || rendered.starts_paragraph) {
                 const std::string prefix =
                     first && kind ? label + (rendered.inline_label ? ": " : ":\n\n") : std::string{};
-                out.push_back(wrap_div(change, "[#]{.pnum} " + prefix + rendered.text));
+                // The number is written at the head of the paragraph's first
+                // line. A block that is not prose has no line to share with
+                // it -- a fenced div or a code fence starts its own -- so
+                // with no label to stand on, the number is a line by itself.
+                const std::string_view number =
+                    prefix.empty() && !rendered.inline_label ? "[#]{.pnum}\n\n" : "[#]{.pnum} ";
+                out.push_back(wrap_div(change, std::string(number) + prefix + rendered.text));
             } else {
                 out.back() += '\n' + wrap_div(change, rendered.text);
             }

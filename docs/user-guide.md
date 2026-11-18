@@ -929,6 +929,26 @@ separates paragraphs, and the next tag ends the current element. Backticks mark
 code. Use `\iref{stable.name}` outside backticks for a reference in prose; it
 may name a standard subclause outside the generated document.
 
+The draft's other prose macros that specgen has a kind for are read outside
+backticks too, and each backend writes them in its own form:
+
+| In a docblock | It is |
+| --- | --- |
+| `\iref{x}` | a reference in parentheses, as the draft prints "(22.10.17)" |
+| `\ref{x}` | the same reference, bare: "Within subclause \ref{x}, ..." |
+| `\tref{t}` | a reference to a table |
+| `\libconcept{c}` | a library concept |
+| `\exposconcept{c}` | an exposition-only concept |
+| `\placeholder{p}`, `\cv{}` | a placeholder |
+| `\cvqual{cv2}` | a placeholder for cv-qualifiers |
+| `\oldconcept{X}` | a C++17 named requirement, printed "Cpp17X" |
+
+These are the macros `specgen import` reads from the draft's own text (see
+[Reading the working draft's LaTeX](#reading-the-working-drafts-latex) for how
+each prints), so a sentence typed here and the same sentence inherited from the
+draft are the same wording to the wording diff. Any other macro stays text: the LaTeX backend passes it
+through, and the mpark and org backends print it as written.
+
 Write literal C++ characters inside backticks, including `&` and `&&`.
 The LaTeX backend escapes text-mode special characters inside `\tcode`;
 semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets
@@ -1076,6 +1096,22 @@ baselines; with none the run is an error, since there is nothing to inherit
 from. An item with no pair is an error naming its signature and the section. An
 `\asdraft` item cannot be `\omit`, `\merge` or `\elsewhere`.
 
+The draft's index does not name an exposition-only member, so its item there has
+no names to pair by. An item that finds no baseline item of its names pairs with
+one that has none, if their declarations read alike. That is how an
+exposition-only member variable inherits:
+
+```cpp
+//! \asdraft
+//! \expos
+//! \seebelow
+template <class VT>
+static constexpr bool is_callable_from = /* ... */;
+```
+
+An exposition-only declaration at namespace scope, and an exposition-only alias
+in a class, have no item, and `\asdraft` on one is an error.
+
 Elements the docblock authors replace the inherited element of the same kind,
 which is how a paper changes one paragraph of an item and leaves the rest:
 
@@ -1151,11 +1187,39 @@ the declaration, as is a class member the synopsis leaves out. A declaration the
 synopsis has and the class does not is a note: it is how a member inherited from
 a base class reads.
 
+Such a member has no declaration in the class to take specifiers from, and it
+may have an item of its own, typed as a detached `\verbatim-itemdecl`:
+
+```cpp
+//! \asdraft
+//! \asdraft-synopsis
+template <class Sig>
+class move_only_function<Sig> : public detail::call_base<move_only_function<Sig>, Sig> { /* ... */ };
+
+// \rSec4[func.wrap.move.inv]{Invocation}
+
+//! \asdraft
+//! \verbatim-itemdecl
+//! constexpr R operator()(ArgTypes... args) @\cv{}@ @\placeholder{ref}@ noexcept(@\placeholder{noex}@);
+```
+
+The synopsis line for `operator()` then takes `constexpr`, `explicit` and
+`noexcept` from that item, so the two declarations of the member agree. The item
+is looked for by name among the items of the section the synopsis is in, then of
+each enclosing section in turn, as far as the top-level one; a synopsis outside
+every section looks through the whole document. The nearest section with an item
+of that name decides, and overloads pair by how alike they read. A declaration
+the class makes is never taken from an item.
+
 Any synopsis that is text rather than extraction is checked the same way, under
 `--validate`: a `\verbatim-synopsis` is compared with the declarations of its
 class, and each disagreement on those specifiers is a warning, and a declaration
-only one side has is a warning or, for the synopsis's own, a note. `\asdraft-synopsis` and `\verbatim-synopsis` are exclusive,
-and `\asdraft-synopsis` applies only to a class definition.
+only one side has is a warning or, for the synopsis's own, a note. A declaration
+the synopsis has and the class does not is also compared with the item that
+declares it, found as above, and a disagreement on `constexpr`, `explicit` or
+`noexcept` is a warning: a typed synopsis is not patched, so this is what says
+its line and the item differ. `\asdraft-synopsis` and `\verbatim-synopsis` are
+exclusive, and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers
 
@@ -1494,9 +1558,8 @@ wrote comes back as the same wording: `\rSecN`, `\pnum`, the element tags,
 `itemdecl` and `itemdescr` (with one item per `itemdecl`, its declarations split
 at the `;`), `codeblock`, `itemize`, `note` and `example`, and the inline
 macros the IR has a kind for. The exceptions are layout only: line breaks inside
-a paragraph, the line-break hints (`\brk`, `\-` and their relatives) that sit in
-running text, and `\index...` entries other than `\indexlibrary...` are
-dropped. A line-break hint inside code is kept; see below.
+a paragraph and `\index...` entries other than `\indexlibrary...` are dropped.
+The draft's line-break hints are kept; see below.
 
 The draft's own vocabulary is read too, where the IR has a kind for it. In
 prose:
@@ -1522,9 +1585,33 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
 | `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
 | `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+| `$i$` in a `\tcode` | a variable of the mathematics around the code | `$i$` | `<var>i</var>` |
+| `$_i$`, `$_{10}$` in a `\tcode` | a subscript | `@~_i_~@`, `@~10~@` | `<sub><var>i</var></sub>`, `<sub>10</sub>` |
+| `$r_K$` in a `\tcode` | a variable and its subscript | `$r$@~_K_~@` | `<var>r</var><sub><var>K</var></sub>` |
+| `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
+| `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
+
+Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
+subscript (one letter or digit, or a group of them), a subscript on a variable
+or on code, or `\dotsc`. The code's text has the variable as its name, the
+subscript after an underscore and the ellipsis as three dots, so
+`\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
+and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
+
+The draft writes a subscript on code two ways, `T$_i$` and `$\tcode{T}_i$`,
+which print alike. Both are read as the same code, so the wording diff does not
+tell them apart, and the LaTeX backend writes each back as it was: where the
+mathematics opens is kept beside the code, as the line-break hints are, and so
+is the group the draft sometimes puts around a subscript of one character there
+(`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
+back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
+
+Any other mathematics there has no kind: an expression (`$i - 1$`), a subscript
+that is one or that is code (`$p_{i-1}$`, `$i_\tcode{x}$`), a Greek letter. The
+whole `\tcode` is kept as raw LaTeX and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1534,12 +1621,52 @@ one was written, so wording inherited with `\asdraft` prints as the draft
 spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
 
-The same holds for the draft's line-break hints inside code: `\brk`, `\-`,
-`\linebreak` and `\newline`, in a `\tcode` or inside a name
-(`\exposid{bound-en\-tity}`). The code and the name are read without them, so
-`std::for\-ward<Args>` is `std::forward<Args>` to the wording diff and to the
-mpark and org backends, and the LaTeX backend writes each hint back where it
-was.
+A declaration extracted from the code has no such choice recorded, and takes
+its context's default: `\exposidnc` in a listing. When a baseline is named and
+the item pairs with a baseline item, whether or not it is `\asdraft`, the
+declaration takes the baseline's choice for each name the two share, so an
+unchanged declaration prints as the draft has it. With no baseline, or a
+baseline that was generated, nothing changes.
+
+The same holds for the draft's line-break hints: `\brk`, `\-`, `\linebreak`
+and `\newline`, in a `\tcode`, in running text, or inside a name
+(`\exposid{bound-en\-tity}`, `\oldconcept{Unary\-Type\-Trait}`). The code, the
+text and the name are read without them, so `std::for\-ward<Args>` is
+`std::forward<Args>` to the wording diff and to the mpark and org backends, and
+the LaTeX backend writes each hint back where it was. A `\linebreak[2]` or
+`\nolinebreak[3]`, which says how much a break is wanted, is dropped.
+
+The draft's tie, `~`, is a space the line may not break at
+(`subclause~\ref{x}`). It is read as a space with a hint on it, so the words
+on either side are two words to the wording diff. The LaTeX backend writes `~`
+back, in running text and in a `\tcode`. It is the one hint the other backends
+write too, in running text: `&nbsp;` in mpark and `\nbsp{}` in org. Inside
+code they write the space. A tilde in a `\tcode` is the draft's `\~`, and in a
+listing the character is the code's own.
+
+A `\pnum` directly before a note, an example, a code block, a list or a table
+is that block's own number. The draft writes a note that way when it stands
+apart from the prose before it:
+
+```latex
+\pnum
+\returns
+A reference to the element.
+
+\pnum
+\begin{note}
+For the overload marked \#1, ...
+\end{note}
+```
+
+The block is read as opening a numbered paragraph (`"opens_paragraph": true` in
+the IR), and every backend numbers it: `\pnum` in LaTeX, a `pnum` block around
+it in org, and in mpark `[#]{.pnum}` on a line of its own, since a fenced div or
+a code fence cannot share a line with the number. Prose after the block is the
+rest of that paragraph. A block that is the first thing after an element's tag
+opens the element's paragraph and says nothing, as generated wording has it. A
+docblock cannot write this: an authored note is part of the paragraph before
+it.
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
@@ -1588,7 +1715,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.42.3 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.42.14 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1600,7 +1727,10 @@ with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
-unreadable rather than dropping the text.
+unreadable rather than dropping the text. A block's `opens_paragraph` is an
+added field, which only the draft importer sets: an older renderer skips it and
+writes the block in the paragraph before it, so the words are all there and the
+paragraph numbers after it are one lower.
 
 ### Section prose
 

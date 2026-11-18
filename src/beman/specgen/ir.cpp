@@ -10,6 +10,7 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <array>
 #include <optional>
 #include <string_view>
@@ -70,13 +71,18 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::Ref>("ref"sv),
                                 foundation::is<SpanKind::LibraryIndex>("library-index"sv),
                                 foundation::is<SpanKind::CvQualifier>("cvqual"sv),
-                                foundation::is<SpanKind::Optional>("opt"sv));
+                                foundation::is<SpanKind::Optional>("opt"sv),
+                                foundation::is<SpanKind::MathVariable>("math-variable"sv),
+                                foundation::is<SpanKind::Subscript>("subscript"sv),
+                                foundation::is<SpanKind::Ellipsis>("ellipsis"sv));
 
 inline constexpr auto kLayoutHintNames =
     foundation::table<LayoutHintKind>(foundation::is<LayoutHintKind::Break>("brk"sv),
                                       foundation::is<LayoutHintKind::Hyphen>("hyphen"sv),
                                       foundation::is<LayoutHintKind::LineBreak>("linebreak"sv),
-                                      foundation::is<LayoutHintKind::NewLine>("newline"sv));
+                                      foundation::is<LayoutHintKind::NewLine>("newline"sv),
+                                      foundation::is<LayoutHintKind::Tie>("tie"sv),
+                                      foundation::is<LayoutHintKind::MathOpen>("math-open"sv));
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
@@ -180,6 +186,24 @@ struct BlockChange {
 
 Change block_change(const BodyBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
 Change block_change(const InformativeBlock& block) { return std::visit(foundation::overloaded{BlockChange{}}, block); }
+
+namespace {
+
+// `opens_paragraph`'s dispatch over the eight block kinds.
+struct OpensParagraph {
+    bool operator()(const BodyParagraph& b) const { return !b.continuation; }
+    bool operator()(const Itemize& b) const { return b.opens_paragraph; }
+    bool operator()(const Table2D& b) const { return b.opens_paragraph; }
+    bool operator()(const Table1D& b) const { return b.opens_paragraph; }
+    bool operator()(const EquivalentTo&) const { return true; }
+    bool operator()(const AuthoredCode& b) const { return b.opens_paragraph; }
+    bool operator()(const Note& b) const { return b.opens_paragraph; }
+    bool operator()(const Example& b) const { return b.opens_paragraph; }
+};
+
+} // namespace
+
+bool opens_paragraph(const BodyBlock& block) { return std::visit(foundation::overloaded{OpensParagraph{}}, block); }
 
 Node with_change(Node node, Change change) {
     return std::visit(foundation::overloaded{WithChange{change}}, std::move(node));
@@ -303,12 +327,32 @@ DescriptionBody coalesce_itemizations(DescriptionBody body) {
         std::move(body) | std::views::as_rvalue, DescriptionBody{}, [](DescriptionBody out, BodyBlock block) {
             auto* next = std::get_if<Itemize>(&block);
             auto* last = out.empty() ? nullptr : std::get_if<Itemize>(&out.back());
-            if (next != nullptr && last != nullptr)
+            if (next != nullptr && last != nullptr && !next->opens_paragraph)
                 last->items.append_range(std::move(next->items) | std::views::as_rvalue);
             else
                 out.push_back(std::move(block));
             return out;
         });
+}
+
+TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end) {
+    const bool last = end >= text.text.size();
+    return TextInline{text.text.substr(begin, end - begin), text.hints | std::views::filter([&](const LayoutHint& h) {
+                                                                return h.at >= begin &&
+                                                                       (h.at < end || (last && h.at == end));
+                                                            }) | std::views::transform([&](LayoutHint h) {
+                                                                h.at -= begin;
+                                                                return h;
+                                                            }) | std::ranges::to<std::vector>()};
+}
+
+void append_text(TextInline& text, const TextInline& more) {
+    const std::size_t shift = text.text.size();
+    text.hints.append_range(more.hints | std::views::transform([&](LayoutHint h) {
+                                h.at += shift;
+                                return h;
+                            }));
+    text.text += more.text;
 }
 
 CodeText without_typesetting(CodeText code) {
@@ -319,21 +363,29 @@ CodeText without_typesetting(CodeText code) {
 
 namespace {
 
-// `without_typesetting`'s dispatch over the plain inline kinds: the three that
+// `without_typesetting`'s dispatch over the plain inline kinds: the five that
 // carry typesetting lose it, and the rest are returned as they came.
 struct TypesettingRemover {
-    PlainInline operator()(TextInline v) const { return v; }
+    PlainInline operator()(TextInline v) const {
+        v.hints.clear();
+        return v;
+    }
     PlainInline operator()(CodeInline v) const { return CodeInline{without_typesetting(std::move(v.code))}; }
     PlainInline operator()(RefInline v) const { return v; }
     PlainInline operator()(ConceptRef v) const {
         v.no_correction = false;
+        v.hints.clear();
         return v;
     }
     PlainInline operator()(PlaceholderInline v) const {
         v.no_correction = false;
+        v.hints.clear();
         return v;
     }
-    PlainInline operator()(OldConceptRef v) const { return v; }
+    PlainInline operator()(OldConceptRef v) const {
+        v.hints.clear();
+        return v;
+    }
     PlainInline operator()(TableRef v) const { return v; }
     PlainInline operator()(RawInline v) const { return v; }
 };

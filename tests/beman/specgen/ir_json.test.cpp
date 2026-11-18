@@ -12,6 +12,7 @@
 
 #include <cstddef>
 #include <expected>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -665,6 +666,34 @@ TEST_CASE("ir_json - block marks round-trip and are omitted at their default") {
     CHECK(emit_json(*back) == json);
 }
 
+TEST_CASE("ir_json - a block that opens a paragraph round-trips and is silent at its default") {
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body = {
+        BodyParagraph{{TextInline{"Prose."}}},
+        Note{{BodyParagraph{{TextInline{"in the paragraph before it"}}}}},
+        Note{{BodyParagraph{{TextInline{"numbered"}}}}, Change::Same, true},
+        Example{{AuthoredCode{{"f();", {}}}}, Change::Same, true},
+        AuthoredCode{{"g();", {}}, Change::Same, true},
+        Itemize{{{TextInline{"one"}}}, Change::Same, true},
+        Table1D{.stable_name = "t", .opens_paragraph = true},
+        Table2D{.stable_name = "u", .opens_paragraph = true},
+    };
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string json = emit_json(item);
+    CHECK(json.find(R"({"block":"note","body":[{"block":"paragraph","text":[{"t":"text","text":"in the paragraph )"
+                    R"(before it"}],"continuation":false}]})") != std::string::npos);
+    CHECK(json.find(R"("text":"numbered"}],"continuation":false}],"opens_paragraph":true})") != std::string::npos);
+    CHECK(std::ranges::distance(std::views::split(json, std::string_view{R"("opens_paragraph":true)"})) == 7);
+
+    const auto back = parse_item(json);
+    REQUIRE(back.has_value());
+    CHECK(back->descr == item.descr);
+    CHECK(emit_json(*back) == json);
+}
+
 TEST_CASE("ir_json - an elided mark round-trips") {
     Document doc;
     doc.nodes.push_back(FreeParagraph{{TextInline{"hidden"}}, Change::Elided});
@@ -685,6 +714,46 @@ TEST_CASE("ir_json - table-reference and raw inlines round-trip") {
     const std::string json = emit_json(doc);
     CHECK(json.find("{\"t\":\"tableref\",\"stable\":\"optional.assign.copy\"}") != std::string::npos);
     CHECK(json.find("{\"t\":\"raw\",\"latex\":\"\\\\term{x}\"}") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
+TEST_CASE("ir_json - a prose inline's line-break hints round-trip and are omitted when there are none") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{TextInline{"An implementation ", {{5, LayoutHintKind::Hyphen}}},
+                                       OldConceptRef{"UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}}},
+                                       ConceptRef{.name = "invocable", .hints = {{2, LayoutHintKind::Break, true}}},
+                                       PlaceholderInline{.text = "long-name", .hints = {{5, LayoutHintKind::Break}}},
+                                       TextInline{"."}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find("{\"t\":\"text\",\"text\":\"An implementation \",\"hints\":[{\"at\":5,\"kind\":\"hyphen\"}]}") !=
+          std::string::npos);
+    CHECK(json.find("{\"t\":\"oldconcept\",\"name\":\"UnaryTypeTrait\",\"hints\":[{\"at\":5,\"kind\":\"hyphen\"}]}") !=
+          std::string::npos);
+    CHECK(json.find("\"hints\":[{\"at\":2,\"kind\":\"brk\",\"braced\":true}]") != std::string::npos);
+    CHECK(json.find("{\"t\":\"text\",\"text\":\".\"}") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
+TEST_CASE("ir_json - an ellipsis span and a math-open hint round-trip by name") {
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{{CodeInline{CodeText{
+        "T_0, ..., T_N",
+        {{1, 3, SpanKind::Subscript, "0"}, {5, 8, SpanKind::Ellipsis, ""}, {11, 13, SpanKind::Subscript, "N"}},
+        {},
+        {{10, LayoutHintKind::MathOpen}}}}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find(R"({"begin":5,"end":8,"kind":"ellipsis","payload":""})") != std::string::npos);
+    CHECK(json.find(R"("hints":[{"at":10,"kind":"math-open"}])") != std::string::npos);
 
     const auto back = parse_document(json);
     REQUIRE(back.has_value());

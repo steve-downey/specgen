@@ -100,6 +100,38 @@ TEST_CASE("ir - change names round-trip") {
     CHECK(!change_from_name("modified").has_value());
 }
 
+TEST_CASE("ir - a piece of a text inline takes the hints that sit in it, and joining gives them back") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    using beman::specgen::ir::TextInline;
+    const TextInline text{"an implementation, ",
+                          {{0, LayoutHintKind::Break},
+                           {8, LayoutHintKind::Hyphen},
+                           {17, LayoutHintKind::Break},
+                           {19, LayoutHintKind::LineBreak}}};
+    // A hint precedes the byte at its offset, so one at a cut belongs to the
+    // piece after it -- except at the end of the text, where there is none.
+    const TextInline first = beman::specgen::ir::text_piece(text, 0, 3);
+    const TextInline word  = beman::specgen::ir::text_piece(text, 3, 17);
+    const TextInline rest  = beman::specgen::ir::text_piece(text, 17, 19);
+    CHECK(first == TextInline{"an ", {{0, LayoutHintKind::Break}}});
+    CHECK(word == TextInline{"implementation", {{5, LayoutHintKind::Hyphen}}});
+    CHECK(rest == TextInline{", ", {{0, LayoutHintKind::Break}, {2, LayoutHintKind::LineBreak}}});
+
+    TextInline joined = first;
+    beman::specgen::ir::append_text(joined, word);
+    beman::specgen::ir::append_text(joined, rest);
+    CHECK(joined == text);
+
+    // Without its typesetting an inline is its wording alone.
+    using beman::specgen::ir::PlainInline;
+    CHECK(beman::specgen::ir::without_typesetting(PlainInline{text}) ==
+          PlainInline{TextInline{"an implementation, "}});
+    CHECK(beman::specgen::ir::without_typesetting(
+              PlainInline{beman::specgen::ir::OldConceptRef{"UnaryTypeTrait", {{5, LayoutHintKind::Hyphen}}}}) ==
+          PlainInline{beman::specgen::ir::OldConceptRef{"UnaryTypeTrait"}});
+}
+
 TEST_CASE("ir - every node and element is unmarked by default") {
     CHECK(Section{}.change == Change::Same);
     CHECK(Synopsis{}.change == Change::Same);
@@ -117,6 +149,37 @@ TEST_CASE("ir - change_of, with_change and all_marked reach the mark on a node o
         CHECK(change_of(node) == Change::Removed);
     CHECK(change_of(with_change(nodes[0], Change::Added)) == Change::Added);
     CHECK(std::get<Section>(with_change(nodes[0], Change::Added)).stable_name == "s");
+}
+
+TEST_CASE("ir - opens_paragraph says which blocks take a paragraph number of their own") {
+    // Prose says it by not continuing, and an extracted body always does.
+    CHECK(opens_paragraph(BodyBlock{BodyParagraph{{TextInline{"p"}}, false}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{BodyParagraph{{TextInline{"p"}}, true}}));
+    CHECK(opens_paragraph(BodyBlock{EquivalentTo{{"x;", {}}}}));
+    // The rest belong to the paragraph before them unless they say otherwise.
+    CHECK_FALSE(opens_paragraph(BodyBlock{Note{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Example{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Itemize{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{AuthoredCode{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Table1D{}}));
+    CHECK_FALSE(opens_paragraph(BodyBlock{Table2D{}}));
+    CHECK(opens_paragraph(BodyBlock{Note{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Example{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Itemize{{}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{AuthoredCode{{"x;", {}}, Change::Same, true}}));
+    CHECK(opens_paragraph(BodyBlock{Table1D{.opens_paragraph = true}}));
+    CHECK(opens_paragraph(BodyBlock{Table2D{.opens_paragraph = true}}));
+}
+
+TEST_CASE("ir - a list that opens a paragraph of its own is not joined to the list before it") {
+    const DescriptionBody joined = coalesce_itemizations({Itemize{{{TextInline{"a"}}}}, Itemize{{{TextInline{"b"}}}}});
+    REQUIRE(joined.size() == 1);
+    CHECK(std::get<Itemize>(joined[0]).items.size() == 2);
+
+    const DescriptionBody apart =
+        coalesce_itemizations({Itemize{{{TextInline{"a"}}}}, Itemize{{{TextInline{"b"}}}, Change::Same, true}});
+    REQUIRE(apart.size() == 2);
+    CHECK(std::get<Itemize>(apart[1]).opens_paragraph);
 }
 
 TEST_CASE("ir - block_change reads the mark on a block of either body") {

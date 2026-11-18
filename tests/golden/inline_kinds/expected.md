@@ -16,4 +16,6 @@
 
 [#]{.pnum} A revision [cites ([gadget.table]{- .sref})]{.rm}[cites subclause [gadget.table]{- .sref} for `$gadget-like$` and *cv2*]{.add}.
 
+[#]{.pnum} A long implementation meets *Cpp17UnaryTypeTrait*, *long-name* and `invocable`.
+
 :::

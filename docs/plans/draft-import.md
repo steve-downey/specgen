@@ -345,6 +345,19 @@ exposition-only variable. Such an item pairs with the other side's item that rea
 if it reads alike at all, both for `\asdraft` and in the differ. A name known on both sides that
 differs is still a rename, an item removed and an item added.
 
+Log:
+
+- 2026-11-17: for `\asdraft` that held in one direction only (issue #328). An item with no
+  names paired by reading; an item with names, against a baseline item with none, did not, and
+  an exposition-only member variable never got that far, because the front end counted it as
+  having no description and dropped it before `\asdraft` was resolved. So `\asdraft` on
+  `is_callable_from` produced no item and no finding, and the diff showed the draft's item as
+  removed. The member is now kept, and pairs as the differ pairs it: by name first, and failing
+  that with a baseline item that has no names and reads alike. An exposition-only declaration at
+  namespace scope, and an exposition-only alias in a class, are not items, so `\asdraft` on one
+  is an Error. Open: inheriting the description of an exposition-only concept or variable at
+  namespace scope (issue #332).
+
 ### same-wording-same-ir
 
 Authored text and imported text of the same wording had different IR, so the differ showed
@@ -353,6 +366,18 @@ importer does, reads a typed `Equivalent to:` and its code block as the `Equival
 typed synopsis for the class it declares, and diffs deleted and inserted lines that read as nearly
 the same code over a different number of lines as one run of tokens, so a line break is not a
 change. Generation is not touched: a `\verbatim-itemdecl` stays exact, span-free text.
+
+Log:
+
+- 2026-11-17: the docblock grammar reads the rest of the importer's prose macros (issue #316):
+  `\ref`, `\tref`, `\libconcept`, `\exposconcept` and `\cvqual`, into the kinds and flags the
+  importer gives them. Part 1 of this plan said the grammar would read the same macros as the
+  importer; it read `\iref`, `\placeholder`, `\cv{}` and `\oldconcept`, and left the others as
+  text, which the mpark and org backends printed as written. The no-italic-correction twins
+  are not read: they are the draft's typesetting, which an author does not type and the differ
+  does not compare. Open: `~` in a docblock is still the character and not the tie the
+  importer reads (issue #312). In a paper written for mpark, `~x~` in prose is a subscript,
+  so reading it as a tie changes what existing text means.
 
 ### synopsis-source
 
@@ -363,6 +388,22 @@ keep an authored `\verbatim-synopsis`. The check compares that with the class's 
 reports a declaration the synopsis has and the class does not as a note, not a warning. Open: a way
 to say that a declaration the class does not make is made elsewhere, so the synopsis can still be
 inherited.
+
+Log:
+
+- 2026-11-17: the item says it (issue #329). A member a class has from a base class already has
+  a declaration in the document when it is described at all: its item, typed as a detached
+  `\verbatim-itemdecl`. A synopsis line the class's declarations have no pair for now pairs with
+  the item of the same name and takes `constexpr`, `explicit` and `noexcept` from it, so no new
+  marker is needed. The item is looked for nearest first: the section the synopsis is in, then
+  each enclosing section, as far as the top-level one. The first section with an item of that name
+  decides, so two classes in one clause that both have an `operator()` each read their own.
+  `static`, `friend`, `= default` and `= delete` are not compared with an item, since an itemdecl
+  does not have to repeat them. `--validate` makes the same pairing for a synopsis that is text
+  and warns where the line and the item disagree, which is what a `\verbatim-synopsis` gets in
+  place of the patch. The note that the class does not declare the member stays. With this,
+  constexpr_callables' two owning wrappers generate the same bytes from `\asdraft-synopsis` as
+  from their 37-line typed synopses.
 
 ### importer-vocabulary-gaps
 
@@ -393,6 +434,17 @@ Log:
   `without_typesetting`. Measured on the draft's library clauses: `@\exposid{...}@` in a
   listing 6,351 times against `@\exposidnc{...}@` 475, so the listing default this tool has
   always written is the draft's minority form; that default is not changed here.
+- 2026-11-17: an extracted declaration takes the form its baseline declaration has (issue
+  #330). The entry above made inherited text keep the draft's form; a declaration is extracted
+  and not inherited, so the item for `is-callable-from` was written `\exposidnc` where the
+  draft's has `\exposid`, and that was the one token in which the consumer's plain wording
+  differed from the draft apart from what the paper changes. Every item that pairs with a
+  baseline item, `\asdraft` or not, now takes the baseline's form for each span of the same
+  kind and payload, where its own is unset. The `\asdraft` items pair first, so one that only
+  wants the form cannot take another's description. The listing default is still not changed:
+  with no baseline the output is what it was. Not done: a class synopsis that is extracted and
+  not `\asdraft-synopsis` keeps the default, and the line-break hints of a baseline declaration
+  are not carried over, since a hint is an offset into text the paper may have changed.
 - 2026-11-16: the line-break hints inside code survive too (issue #306), which also reads the
   last of the five macros, the `\newline` in a `\tcode` (issue #307): [func.wrap.ref] imports
   with no warning. They are `CodeText::hints`, a table of offsets beside the span table. Three
@@ -406,3 +458,91 @@ Log:
   `\-` 93, `\newline` 42, `\brk` 28, `\linebreak` 23), which are still dropped, and the ones
   in the argument of a prose inline such as `\oldconcept{Unary\-Type\-Trait}`, which are still
   left in the name.
+- 2026-11-17: mathematics inside a `\tcode` is read where it is a variable or a subscript
+  (issue #311): `get<$i$>(u)` and `T$_i$`. As code text the dollar signs were escaped by the
+  LaTeX backend and printed. They are two span kinds, `MathVariable` and `Subscript`, for the
+  reason `\cvqual` and `\opt` are. The text of a subscript span is the subscript after an
+  underscore, so the code reads `T_i` to everything that reads the text alone. Any other
+  mathematics in a `\tcode` keeps the whole `\tcode` as raw LaTeX, with a warning, which is
+  what a macro with no kind does. Measured on the library clauses: 691 `\tcode`s hold
+  mathematics, and 487 of them hold only these two shapes. In the other 204 the shapes are a
+  subscript on code written inside the mathematics (`$\tcode{T}_i$`, 132), an ellipsis
+  (`$\dotsc$`, 43), a subscripted variable (`$r_K$`, 24), and 59 others. Open: those.
+- 2026-11-17: the three shapes are read (issue #327), which is 150 of those 204 `\tcode`s;
+  637 of the 691 now read. Each was a different kind of question. `$\dotsc$` is something the
+  code says, the elements left out, so it is a span kind, `Ellipsis`, with the text `...`.
+  `$r_K$` needed nothing new: it is a `MathVariable` and a `Subscript`, and the LaTeX backend
+  now writes a subscript and the variable directly before it as one run of mathematics.
+  `$\tcode{T}_i$` says exactly what `T$_i$` says and prints the same, so the difference is the
+  draft's spelling and belongs beside the wording: a hint, `MathOpen`, in the table the
+  line-break hints are in, at the offset where the code inside the mathematics begins. A span
+  kind for "code inside mathematics" would have made the two spellings different wording to the
+  differ. The hint is written only when the code after it runs up to a subscript, so a stray one
+  cannot leave mathematics open. Counted with the importer's own rules, what stays raw is 54
+  `\tcode`s: a subscript that is code (`$i_\tcode{x}$`, 22 uses), an expression in or out of a
+  subscript (`$a + 0$`, `$p_{i-1}$`), a placeholder with a subscript (`$\placeholder{C}_i$`),
+  Greek letters, and `\ldots` twice. Open: those. The group around a subscript of one character
+  (`$\tcode{B}_{1}$`) is kept on the same hint, in its `braced`: the library clauses write a
+  group of one 30 times, every one after a `\tcode` inside the mathematics, and [meta.logical]
+  alone had 24 differences from the draft without it.
+- 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
+  (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
+  `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`
+  has, for the same reason: everything that reads the text goes on reading words. The other
+  shape weighed was an inline of its own between two inlines. It would have cut a word with a
+  `\-` in it into two text inlines, and the differ would have had to pass over it when
+  cutting words and put it back when joining them; an author's text never has one, so every
+  hint would otherwise have shown as a removal. A hint between two macros has no text to sit
+  in, and is a text inline with a hint and no text. The differ cuts a text inline's hints
+  along with its words, so a paragraph it rebuilds keeps the hints of the words it keeps;
+  the hint-only inline is the exception, since it is no word. `\br` turned out to belong to
+  the grammar environments (`macros.tex` defines it there only), so it is not a prose hint,
+  and `\linebreak[n]` and `\nolinebreak[n]` are dropped with their bracket, which used to be
+  left in the text.
+- 2026-11-17: the draft's tie is read (issue #312). `~` was read as the character: a tilde
+  printed in a `\tcode` (`R(*)(G, A...)~\opt{noexcept}`), and in prose mpark and org printed
+  one where LaTeX set a space. It is a hint kind, `Tie`, on the space it stands for, in the
+  tables that hold the other hints. The alternative was U+00A0 in the text, which is the right
+  character and was set aside for the reason U+00AD was for `\-`: the differ's words, and
+  every other reader of the text, would have had to know a second kind of space. The tie
+  differs from the other hints in two ways. It stands for a byte, so a writer that writes it
+  skips that byte. And it means something outside LaTeX, so mpark and org write it in running
+  text as their own no-break space; inside code they cannot, and write the space.
+
+### prose-line-joins
+
+How the lines of a paragraph join. A line break is a space, and a `%` takes the rest of its line
+and the line break with it. The importer had every `%` join its line to the next with no space,
+which is right for `text%` and wrong for `text % note`, where the space before the `%` is still a
+space: [tuple.cnstr] has `is\linebreak{} % Overfull` before a `\tcode`, and the two ran together
+(issue #313). The space before the comment now decides. A line that is only a comment says
+nothing either way, where before it joined the lines around it.
+
+### paragraph-after-a-block
+
+Which paragraph the prose after a list, a code block or a table belongs to. A backend numbers
+the first block of a body, whatever it is, and a `BodyParagraph` says whether it continues the
+paragraph before it. The importer set that from whether prose had been read since the last
+`\pnum`, so when the block came first, directly after the element's tag, the prose after it was
+read as a new numbered paragraph: [optional.specalg]'s *Constraints* for `swap` is a code block
+and then "is `true`.", and it came back with two numbers (issue #315). The first block of a body
+now takes the pending number, whatever kind it is. A block that is not first in its body leaves
+the number pending, because the IR has no way to say that a block which is not prose opens a
+numbered paragraph in the middle of a body. Open: that. The draft numbers a note or an example
+by itself often (502 times in the library clauses, 255 of them inside an `itemdescr`), and such
+a note loses its number unless it is first in its body (issue #321).
+
+Log:
+
+- 2026-11-17: the IR can now say it (issue #321). `Itemize`, `Table2D`, `Table1D`,
+  `AuthoredCode`, `Note` and `Example` carry `opens_paragraph`, and the importer sets it on a
+  block that follows a `\pnum` and is not first in its body. The number is the block's, so the
+  prose after it continues the paragraph. A block first in its body is left unset, as before:
+  that is the shape generated wording has, and a backend numbers the first block of a body
+  whatever it is. The generator sets the flag nowhere, so no generated wording moved.
+  [tuple.elem], [tuple.creation] and [func.wrap.func.con] now round-trip with no difference.
+  The mpark backend writes the number on a line of its own before a block that is not prose and
+  has no element label ahead of it. It used to write the number and the opening fence on one
+  line when such a block came first in an unlabelled body, which pandoc reads as text and not
+  as a div. Open: a docblock has no way to say a note opens its own paragraph, so an authored
+  note still joins the paragraph before it, and the differ does not report the difference.

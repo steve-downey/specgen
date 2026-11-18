@@ -7,6 +7,7 @@ foreach(
     draft_spans
     element_label
     render_fold
+    tied_text
     latex
     mpark
     org

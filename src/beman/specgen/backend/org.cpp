@@ -49,6 +49,7 @@
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
+#include <beman/specgen/backend/tied_text.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
 #include <beman/specgen/ir.hpp>
@@ -215,7 +216,15 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::Ref>([&] { return "[" + html_escape(span.payload) + "]"; }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return html_escape(spelling); }),
         foundation::when<ir::SpanKind::CvQualifier>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
-        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }),
+        foundation::when<ir::SpanKind::MathVariable>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
+        // A name is italic and a number upright, as mathematics sets them.
+        foundation::when<ir::SpanKind::Subscript>([&] {
+            const bool number = std::ranges::all_of(span.payload, [](char c) { return c >= '0' && c <= '9'; });
+            return number ? "<sub>" + html_escape(span.payload) + "</sub>"
+                          : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
+        }),
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
@@ -256,8 +265,10 @@ struct PieceRenderer {
     // `/` are emphasis), so prose that needs escaping fails more visibly than
     // it would elsewhere. Left as pass-through deliberately: identifiers reach
     // wording inside a code inline, where they are protected, and an escaper
-    // guessing at authored prose would corrupt more than it saved.
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
+    // guessing at authored prose would corrupt more than it saved. The
+    // draft's tie is written as org's entity for a no-break space, which
+    // exports to `~` in LaTeX and to `&nbsp;` in HTML.
+    std::string operator()(const ir::TextInline& v) const { return backend::tied_text(v, "\\nbsp{}"); }
 
     // A code inline. Org-native when org can express it, and a LaTeX export
     // snippet when it cannot -- which is a span (org's code markup is
@@ -305,7 +316,7 @@ struct PieceRenderer {
         return "@@latex:" + backend::draft_placeholder(v) + "@@@@html:<i>" + v.text + "</i>@@";
     }
     std::string operator()(const ir::OldConceptRef& v) const {
-        return "@@latex:\\oldconcept{" + v.name + "}@@@@html:<i>Cpp17" + v.name + "</i>@@";
+        return "@@latex:" + backend::draft_old_concept(v) + "@@@@html:<i>Cpp17" + v.name + "</i>@@";
     }
 
     // A reference to a table: a link to its `#+name`, the bracketed stable name
@@ -453,15 +464,15 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
                                   return "- " + render_paragraph(p, new_roots) + '\n';
                               }) |
                               std::views::join | std::ranges::to<std::string>();
-    return {items, false, false};
+    return {items, list.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const {
-    return {render_table(t, new_roots), false, false};
+    return {render_table(t, new_roots), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
-    return {render_flat_table(t, new_roots), false, false};
+    return {render_flat_table(t, new_roots), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
@@ -469,7 +480,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const 
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) const {
-    return {render_block("codeblock", code.code), false, false};
+    return {render_block("codeblock", code.code), code.opens_paragraph, false};
 }
 
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
@@ -488,12 +499,14 @@ struct BodyRenderer : LeafBodyRenderer {
 };
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("#+begin_note\n{}#+end_note\n", render_informative_body(note.body, new_roots)), false, false};
+    return {std::format("#+begin_note\n{}#+end_note\n", render_informative_body(note.body, new_roots)),
+            note.opens_paragraph,
+            false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("#+begin_wgexample\n{}#+end_wgexample\n", render_informative_body(example.body, new_roots)),
-            false,
+            example.opens_paragraph,
             false};
 }
 

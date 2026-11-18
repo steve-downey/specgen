@@ -102,13 +102,16 @@ std::string render_codeblock(const ir::CodeText& code) {
 struct PieceRenderer {
     bool in_table = false;
 
-    // Plain prose; table text protects its alignment characters.
+    // Plain prose, with the draft's line-break hints where they sat; table
+    // text protects its alignment characters.
     std::string operator()(const ir::TextInline& v) const {
         if (!in_table)
-            return v.text;
-        return v.text |
-               std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
-               std::views::join | std::ranges::to<std::string>();
+            return backend::draft_hinted_text(v.text, v.hints);
+        return backend::draft_hinted_text(v.text, v.hints, [](std::string_view text) {
+            return text |
+                   std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
+                   std::views::join | std::ranges::to<std::string>();
+        });
     }
 
     // A code inline, with the whole-span shortcut the draft's macros need.
@@ -132,7 +135,7 @@ struct PieceRenderer {
     std::string operator()(const ir::PlaceholderInline& v) const { return backend::draft_placeholder(v); }
 
     // A C++17 named requirement, italic with its Cpp17 prefix.
-    std::string operator()(const ir::OldConceptRef& v) const { return "\\oldconcept{" + v.name + '}'; }
+    std::string operator()(const ir::OldConceptRef& v) const { return backend::draft_old_concept(v); }
 
     // A reference to a table by its stable name.
     std::string operator()(const ir::TableRef& v) const { return "\\tref{" + v.stable_name + '}'; }
@@ -233,8 +236,9 @@ std::string render_index(const ir::IndexEntry& entry) {
             [&] { return std::format("\\indexlibrarymisc{{{}}}{{{}}}%\n", entry.name, entry.parent); }));
 }
 
-// One block's rendering and paragraph-boundary policy. Lists and tables
-// belong to the preceding numbered paragraph; an extracted body starts one.
+// One block's rendering and paragraph-boundary policy. Lists, tables, code,
+// notes and examples belong to the preceding numbered paragraph unless they
+// say they open one (`ir::opens_paragraph`); an extracted body starts one.
 struct RenderedBodyBlock {
     std::string text;
     bool        starts_paragraph = false;
@@ -265,13 +269,15 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
         list.items |
         std::views::transform([](const ir::Paragraph& p) { return "\\item " + render_paragraph(p) + '\n'; }) |
         std::views::join | std::ranges::to<std::string>();
-    return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", false, false};
+    return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", list.opens_paragraph, false};
 }
 
-RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const { return {render_table(t), false, false}; }
+RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table2D& t) const {
+    return {render_table(t), t.opens_paragraph, false};
+}
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Table1D& t) const {
-    return {render_flat_table(t), false, false};
+    return {render_flat_table(t), t.opens_paragraph, false};
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const {
@@ -279,7 +285,7 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::EquivalentTo& e) const 
 }
 
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) const {
-    return {render_codeblock(code.code), false, false};
+    return {render_codeblock(code.code), code.opens_paragraph, false};
 }
 
 std::string render_informative_body(const ir::InformativeBody& body);
@@ -297,12 +303,15 @@ struct BodyRenderer : LeafBodyRenderer {
 };
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("\\begin{{note}}\n{}\\end{{note}}\n", render_informative_body(note.body)), false, false};
+    return {std::format("\\begin{{note}}\n{}\\end{{note}}\n", render_informative_body(note.body)),
+            note.opens_paragraph,
+            false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
-    return {
-        std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)), false, false};
+    return {std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)),
+            example.opens_paragraph,
+            false};
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);

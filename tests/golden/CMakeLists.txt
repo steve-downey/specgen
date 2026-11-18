@@ -667,6 +667,25 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_func_wrap_move_asdraft/expected.json"
 )
 
+# A member the class has from a base class (issue #329): `operator()` is
+# declared by a detached item and not by the class, so `\asdraft-synopsis` has
+# no declaration of the class's to patch its line from. It takes `constexpr`
+# from the item, and the diff marks the specifier on the synopsis line and on
+# the item alike. Its `.validate` sibling passes: the one finding is the note
+# that the class does not declare it.
+specgen_add_golden(
+    diff_func_wrap_move_base_call
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_base_call.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_func_wrap_move_base_call_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_func_wrap_move_base_call/expected.json"
+)
+
 # `--inherit-draft`: the same header, with the draft only supplying what
 # `\asdraft` inherits and the wording rendered plain, which is the paper's own
 # wording and not its diff. The IR is the unmarked document, and the latex
@@ -776,6 +795,26 @@ specgen_add_golden(
     inline_kinds
     BACKEND org
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inline_kinds/input.json"
+)
+
+# A block that is not prose and opens a numbered paragraph of its own (issue
+# #321): a note, an example, a code block and a list, each after a `\pnum` in
+# the middle of a body, as the draft writes a note that stands apart from the
+# prose before it. Beside them, the two shapes that already worked: a note
+# first in a description, and a note in the paragraph before it.
+specgen_add_golden(
+    numbered_blocks
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
+)
+specgen_add_golden(
+    numbered_blocks
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
+)
+specgen_add_golden(
+    numbered_blocks
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/numbered_blocks/input.json"
 )
 
 # The draft importer (docs/plans/draft-import.md): a slice of the working
@@ -1797,6 +1836,15 @@ specgen_add_golden(
     MODE diagnose
     INPUT
         "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
+)
+
+# `\asdraft` on an exposition-only declaration that is no item: a concept and
+# a variable at namespace scope, and an alias in a class. Each is an Error.
+specgen_add_golden(
+    asdraft_expos_diagnostics
+    MODE diagnose
+    INPUT
+        "${PROJECT_SOURCE_DIR}/tests/corpus/spec_asdraft_expos_diagnostics.hpp"
 )
 
 # A `\merge`d twin and its survivor are one specification entity, so the

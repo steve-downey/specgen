@@ -44,10 +44,18 @@ class move_only_function; // not defined
 //! \asdraft-synopsis
 template <class R, class... ArgTypes>
 class move_only_function<R(ArgTypes...)> {
+    // \ref{func.wrap.move.ctor}, constructors, assignments, and destructor
+
+    // Exposition-only, so the draft's index does not name it and its item
+    // there has no names to pair by: it pairs by how its declaration reads.
+    //! \asdraft
+    //! \expos
+    //! \seebelow
+    template <class VT>
+    static constexpr bool is_callable_from = true;
+
   public:
     using result_type = R;
-
-    // \ref{func.wrap.move.ctor}, constructors, assignments, and destructor
 
     //! \asdraft
     constexpr move_only_function() noexcept {}
@@ -119,11 +127,6 @@ class move_only_function<R(ArgTypes...)> {
 
     //! \asdraft
     friend constexpr bool operator==(const move_only_function& f, nullptr_t) noexcept { return (void)f, true; }
-
-  private:
-    //! \omit
-    template <class VT>
-    static constexpr bool is_callable_from = true;
 };
 
 // \rSec4[func.wrap.move.ctor]{Constructors, assignments, and destructor}

@@ -167,6 +167,82 @@ TEST_CASE("latex - a cv-qualifier span is \\cvqual and an optional span is \\opt
     CHECK(out.contains(", \\tcode{\\cvqual{cv2}} and \\tcode{\\opt{\\&}}."));
 }
 
+// Mathematics inside code (issue #311): a variable and a subscript, written as
+// the draft writes them, in an `@...@` inside a listing and bare in a \tcode.
+// A subscript of more than one character takes a group.
+TEST_CASE("latex - a math variable and a subscript in code are mathematics") {
+    const beman::specgen::ir::CodeText code{
+        "get<i>(T_i, T_10)",
+        {{4, 5, SpanKind::MathVariable, "i"}, {8, 10, SpanKind::Subscript, "i"}, {13, 16, SpanKind::Subscript, "10"}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The element "},
+                                      CodeInline{code},
+                                      TextInline{" and "},
+                                      CodeInline{{"i", {{0, 1, SpanKind::MathVariable, "i"}}}},
+                                      TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("get<@$i$@>(T@$_i$@, T@$_{10}$@)\n"));
+    CHECK(out.contains("The element \\tcode{get<$i$>(T$_i$, T$_{10}$)} and \\tcode{$i$}."));
+}
+
+// A subscript and what it is on are one run of mathematics (issue #327): a
+// variable and its subscript, and code the draft put inside the mathematics,
+// which a `MathOpen` hint marks. An ellipsis is the draft's \dotsc.
+TEST_CASE("latex - a subscript joins the variable or the code it is on in one run of mathematics") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    const auto in_prose = [](beman::specgen::ir::CodeText code) {
+        SpecItem           item;
+        DescriptionElement remarks;
+        remarks.kind = ElementKind::Remarks;
+        remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+            beman::specgen::ir::Paragraph{TextInline{"See "}, CodeInline{std::move(code)}, TextInline{"."}}});
+        item.descr.elements.push_back(std::move(remarks));
+        return latex::render_to_string(item);
+    };
+
+    // tuple<T_i...>, T_0, ..., r_K
+    beman::specgen::ir::CodeText code{"tuple<T_i...>, T_0, ..., r_K",
+                                      {{7, 9, SpanKind::Subscript, "i"},
+                                       {16, 18, SpanKind::Subscript, "0"},
+                                       {20, 23, SpanKind::Ellipsis, ""},
+                                       {25, 26, SpanKind::MathVariable, "r"},
+                                       {26, 28, SpanKind::Subscript, "K"}}};
+    CHECK(in_prose(code).contains("See \\tcode{tuple<T$_i$...>, T$_0$, $\\dotsc$, $r_K$}."));
+
+    // The same code, with the draft's `$\tcode{T}_i$` for the first subscript.
+    code.hints = {LayoutHint{6, LayoutHintKind::MathOpen, false}};
+    CHECK(in_prose(code).contains("See \\tcode{tuple<$\\tcode{T}_i$...>, T$_0$, $\\dotsc$, $r_K$}."));
+
+    SECTION("a hint that says the subscript was in a group writes the group") {
+        code.hints = {LayoutHint{6, LayoutHintKind::MathOpen, true}};
+        CHECK(in_prose(code).contains("See \\tcode{tuple<$\\tcode{T}_{i}$...>, T$_0$, $\\dotsc$, $r_K$}."));
+    }
+    SECTION("the code inside the mathematics is escaped as code in a \\tcode is") {
+        const beman::specgen::ir::CodeText amp{
+            "a&b_i", {{3, 5, SpanKind::Subscript, "i"}}, {}, {LayoutHint{0, LayoutHintKind::MathOpen, false}}};
+        CHECK(in_prose(amp).contains("See \\tcode{$\\tcode{a\\&b}_i$}."));
+    }
+    SECTION("a hint with no subscript at the end of the code after it is not written") {
+        const beman::specgen::ir::CodeText none{"T, U", {}, {}, {LayoutHint{0, LayoutHintKind::MathOpen, false}}};
+        CHECK(in_prose(none).contains("See \\tcode{T, U}."));
+        const beman::specgen::ir::CodeText other{
+            "T i", {{2, 3, SpanKind::MathVariable, "i"}}, {}, {LayoutHint{0, LayoutHintKind::MathOpen, false}}};
+        CHECK(in_prose(other).contains("See \\tcode{T $i$}."));
+    }
+    SECTION("in a listing each span is its own escape, and the hint is not written") {
+        SpecItem item;
+        item.decl.signatures.push_back(code);
+        CHECK(latex::render_to_string(item).contains("tuple<T@$_i$@...>, T@$_0$@, @$\\dotsc$@, @$r$@@$_K$@\n"));
+    }
+}
+
 // The draft has a no-italic-correction twin of each italic macro. A span that
 // does not say takes the context's form -- \exposidnc in a listing, the plain
 // macro elsewhere -- and one the draft importer read says which the draft wrote
@@ -229,6 +305,38 @@ TEST_CASE("latex - a line-break hint is the draft's macro, in a tcode and inside
     // A control word with no group takes a space before a letter, and none at the end.
     CHECK(out.contains("\\tcode{A\\&\\&::\\newline value\\linebreak}, "));
     CHECK(out.contains(", \\exposid{bound-en\\-tity}."));
+}
+
+// The hints in running text and in the name of a prose inline (issue #314):
+// written back where they sat. Table text escapes its `&` between the hints
+// and not across them, and a control word that ends a text takes the space the
+// draft writes before the macro that follows.
+TEST_CASE("latex - a line-break hint in running text and in a prose inline's name is the draft's macro") {
+    using beman::specgen::ir::LayoutHintKind;
+    using beman::specgen::ir::Paragraph;
+    const Paragraph prose{
+        TextInline{"An implementation, ", {{5, LayoutHintKind::Hyphen}, {19, LayoutHintKind::LineBreak}}},
+        beman::specgen::ir::OldConceptRef{"UnaryTypeTrait",
+                                          {{5, LayoutHintKind::Hyphen}, {9, LayoutHintKind::Hyphen}}},
+        TextInline{" & ", {{3, LayoutHintKind::Break, true}}},
+        beman::specgen::ir::ConceptRef{.name = "invocable", .hints = {{2, LayoutHintKind::Hyphen}}},
+        TextInline{"", {{0, LayoutHintKind::NewLine}}},
+        beman::specgen::ir::PlaceholderInline{.text = "long-name", .hints = {{5, LayoutHintKind::Break}}},
+        TextInline{"."}};
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{prose});
+    beman::specgen::ir::Table1D table;
+    table.stable_name = "t";
+    table.rows.push_back({prose, {}});
+    remarks.body.push_back(std::move(table));
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("An im\\-plementation, \\linebreak \\oldconcept{Unary\\-Type\\-Trait} & \\brk{}"
+                       "\\libconcept{in\\-vocable}\\newline \\placeholder{long-\\brk name}.\n"));
+    CHECK(out.contains("\\oldconcept{Unary\\-Type\\-Trait} \\& \\brk{}\\libconcept{in\\-vocable}"));
 }
 
 // The Ref *span* and the RefInline are two different cross-references

@@ -11,11 +11,15 @@
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <algorithm>
+#include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace beman::specgen::backend {
 
@@ -111,7 +115,14 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
         // The argument is the covered code, and a macro argument is text mode
         // wherever the macro sits -- in a \tcode and inside a listing's
         // `@...@` alike -- so it takes the text-mode escapes either way.
-        foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }));
+        foundation::when<ir::SpanKind::Optional>([&] { return "\\opt{" + draft_escape_code_text(spelling) + '}'; }),
+        // Mathematics inside code, as the draft writes it: `get<$i$>(u)` and
+        // `T$_i$`. A subscript of one character needs no group.
+        foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::Subscript>(
+            [&] { return span.payload.size() == 1 ? "$_" + span.payload + '$' : "$_{" + span.payload + "}$"; }),
+        // The elements left out of a sequence: `T$_0$, $\dotsc$, T$_n$`.
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string{"$\\dotsc$"}; }));
 }
 
 // Outside a codeblock we are already in LaTeX, so the macro is written
@@ -184,7 +195,7 @@ inline std::optional<std::string_view> draft_change_environment(ir::Change chang
 }
 
 // One of the draft's line-break hints, as the draft writes it: the macro, and
-// the empty group after it when the source had one. A control word with no
+// the empty group after it when the source had one; or `~` for a tie. A control word with no
 // group must not run into a letter, so it takes the space TeX would discard;
 // `following` is the text after the hint.
 inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::string_view following) {
@@ -193,7 +204,15 @@ inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::stri
                           foundation::when<ir::LayoutHintKind::Break>([] { return std::string{"\\brk"}; }),
                           foundation::when<ir::LayoutHintKind::Hyphen>([] { return std::string{"\\-"}; }),
                           foundation::when<ir::LayoutHintKind::LineBreak>([] { return std::string{"\\linebreak"}; }),
-                          foundation::when<ir::LayoutHintKind::NewLine>([] { return std::string{"\\newline"}; }));
+                          foundation::when<ir::LayoutHintKind::NewLine>([] { return std::string{"\\newline"}; }),
+                          foundation::when<ir::LayoutHintKind::Tie>([] { return std::string{"~"}; }),
+                          // Not a macro at a point: it opens mathematics that a
+                          // subscript closes, and only `draft_code_inline`, which
+                          // sees both ends, writes it.
+                          foundation::when<ir::LayoutHintKind::MathOpen>([] { return std::string{}; }));
+    // A tie is a character, not a control word: nothing follows it.
+    if (hint.kind == ir::LayoutHintKind::Tie || hint.kind == ir::LayoutHintKind::MathOpen)
+        return macro;
     if (hint.braced)
         return macro + "{}";
     const bool letter_follows = !following.empty() && ((following.front() >= 'a' && following.front() <= 'z') ||
@@ -201,6 +220,34 @@ inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::stri
     if (hint.kind != ir::LayoutHintKind::Hyphen && letter_follows)
         macro += ' ';
     return macro;
+}
+
+// Text with its line-break hints written where they sit: a text inline's
+// running text, or the name in a prose inline's argument. The text between
+// hints goes through `escape_text`, the hints do not. A control word that ends
+// the text takes a space as one before a letter does: what follows is another
+// inline's macro, and the draft mostly writes the space.
+template <typename EscapeText = std::identity>
+std::string
+draft_hinted_text(std::string_view text, const std::vector<ir::LayoutHint>& hints, EscapeText&& escape_text = {}) {
+    std::string out;
+    std::size_t pos = 0;
+    // substrate generic algorithm: the position-tracking walk of
+    // code_spans.hpp, over a hint table with no spans.
+    for (const ir::LayoutHint& hint : hints) {
+        if (hint.at < pos || hint.at > text.size())
+            continue; // defensive: out of order, or past the end
+        out += escape_text(text.substr(pos, hint.at - pos));
+        out += draft_layout_hint_macro(hint, text.substr(hint.at));
+        const bool control_word = hint.kind != ir::LayoutHintKind::Hyphen && hint.kind != ir::LayoutHintKind::Tie &&
+                                  hint.kind != ir::LayoutHintKind::MathOpen;
+        if (!hint.braced && control_word && hint.at == text.size())
+            out += ' ';
+        // A tie stands in place of the space it is on.
+        pos = hint.at + (ir::tied_space(hint, text) ? 1 : 0);
+    }
+    out += escape_text(text.substr(pos));
+    return out;
 }
 
 // The hint writer for code in prose, a \tcode: the text is LaTeX, so a hint is
@@ -225,17 +272,25 @@ inline std::string draft_layout_hint_listing(const ir::LayoutHint& hint, std::st
 inline std::string draft_placeholder(const ir::PlaceholderInline& v) {
     if (v.text == "cv" && !v.cv_qualifier)
         return "\\cv{}";
+    const std::string name = draft_hinted_text(v.text, v.hints);
     if (v.cv_qualifier)
-        return "\\cvqual{" + v.text + '}';
-    return (v.no_correction ? "\\placeholdernc{" : "\\placeholder{") + v.text + '}';
+        return "\\cvqual{" + name + '}';
+    return (v.no_correction ? "\\placeholdernc{" : "\\placeholder{") + name + '}';
 }
 
 // A concept name in prose: \libconcept, or \exposconcept for an
 // exposition-only one.
 inline std::string draft_concept(const ir::ConceptRef& v) {
+    const std::string name = draft_hinted_text(v.name, v.hints);
     if (!v.exposition)
-        return "\\libconcept{" + v.name + '}';
-    return (v.no_correction ? "\\exposconceptnc{" : "\\exposconcept{") + v.name + '}';
+        return "\\libconcept{" + name + '}';
+    return (v.no_correction ? "\\exposconceptnc{" : "\\exposconcept{") + name + '}';
+}
+
+// A C++17 named requirement in prose: \oldconcept, which prints the Cpp17
+// prefix itself.
+inline std::string draft_old_concept(const ir::OldConceptRef& v) {
+    return "\\oldconcept{" + draft_hinted_text(v.name, v.hints) + '}';
 }
 
 // A code inline, in prose, as the draft writes one. Shared for the same
@@ -250,26 +305,67 @@ inline std::string draft_concept(const ir::ConceptRef& v) {
 inline std::string draft_code_inline(const ir::CodeInline& v) {
     // A placeholder is the exception: `\placeholder` sets italic, not the code
     // font, and the draft writes `\tcode{\placeholder{x}}` for it. `\cvqual`
-    // is the same italic, and `\opt` sets its argument in whatever font
-    // surrounds it, so those two keep the wrapper as well.
+    // is the same italic, `\opt` sets its argument in whatever font
+    // surrounds it, and mathematics is mathematics, so those keep the wrapper
+    // as well.
     const auto sets_code_font = [](ir::SpanKind kind) {
         return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
-               kind != ir::SpanKind::Optional;
+               kind != ir::SpanKind::Optional && kind != ir::SpanKind::MathVariable &&
+               kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis;
     };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
                             sets_code_font(v.code.spans.front().kind);
+    // A subscript and what it is on are one run of mathematics, as the draft
+    // writes them: `$r_K$` for a variable and its subscript, where a span each
+    // would give `$r$$_K$`, and `$\tcode{T}_i$` where a `MathOpen` hint says
+    // the draft put the code inside the mathematics too. What is open, if
+    // anything, when the walk reaches a subscript.
+    enum class Open { Nothing, Variable, Code };
+    Open       open                = Open::Nothing;
+    bool       grouped             = false; // the draft wrote a one-character subscript in a group
+    const auto subscript_begins_at = [&](std::size_t at) {
+        return std::ranges::any_of(v.code.spans, [&](const ir::Span& span) {
+            return span.begin == at && span.kind == ir::SpanKind::Subscript;
+        });
+    };
+    const auto write_span = [&](const ir::Span& span, std::string_view spelling) {
+        std::string macro = draft_span_prose(span, spelling);
+        if (span.kind == ir::SpanKind::Subscript && open != Open::Nothing) {
+            // The mathematics is open: no `$` of its own, and the code's group closes first.
+            macro = open == Open::Code && grouped && span.payload.size() == 1
+                        ? "}_{" + span.payload + "}$"
+                        : (open == Open::Code ? "}" : "") + macro.substr(1);
+            open  = Open::Nothing;
+        } else if (span.kind == ir::SpanKind::MathVariable && subscript_begins_at(span.end)) {
+            macro.pop_back(); // the subscript that follows closes it
+            open = Open::Variable;
+        }
+        return macro;
+    };
+    // `following` runs to the next span, so a hint with a subscript at its end
+    // has the whole of that subscript's base after it. Any other is left
+    // alone, and the subscript is then written on its own.
+    const auto write_hint = [&](const ir::LayoutHint& hint, std::string_view following, bool in_span) {
+        if (hint.kind != ir::LayoutHintKind::MathOpen)
+            return draft_layout_hint(hint, following, in_span);
+        if (in_span || following.empty() || !subscript_begins_at(hint.at + following.size()))
+            return std::string{};
+        open    = Open::Code;
+        grouped = hint.braced;
+        return std::string{"$\\tcode{"};
+    };
     // A prose code inline takes no change mark of its own (the mark is on the
     // inline), so the run hooks are the plain ones. The walk is taken for a
     // whole-span inline too: it is what writes a line-break hint inside the
     // span's name, and around one span it yields the bare macro.
     const std::string code = render_code_spans(
         v.code,
-        draft_span_prose,
-        draft_span_prose,
+        write_span,
+        write_span,
         [](ir::Change, std::string_view text) { return std::string(text); },
         draft_escape_code_text,
-        draft_layout_hint);
+        write_hint);
     return whole_span ? code : "\\tcode{" + code + '}';
 }
 

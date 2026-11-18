@@ -38,3 +38,14 @@ Existing IR remains readable; newly emitted IR requires an updated renderer.
 Block order is part of the contract. Paragraph continuation after a list is
 represented separately from an authored new numbered paragraph, so the default
 rendering reproduces the draft's paragraph boundaries.
+
+## Log
+
+- 2026-11-17: the boundary was prose's alone to state, so a block of any other
+  kind was always part of the paragraph before it. The draft numbers a note or
+  an example by itself 502 times in the library clauses, and an imported one
+  lost its number (issue #321). `Itemize`, `Table2D`, `Table1D`, `AuthoredCode`,
+  `Note` and `Example` now carry `opens_paragraph`, default unset, and
+  `ir::opens_paragraph` answers for every block kind. It is an added field and
+  not a new item version: a reader that skips it loses a paragraph number and
+  no wording, which is what every reader did before.

@@ -144,6 +144,74 @@ TEST_CASE("org - a cv-qualifier span and an optional span, in a code block and i
         "@@html:<code>R(G::*)(A...) <var>cv2</var> &amp;<sub><var>opt</var></sub> noexcept(E)</code>@@."));
 }
 
+// Mathematics inside code (issue #311): the draft's own bytes in a block and in
+// the LaTeX snippet; in HTML a variable is italic and a subscript is a
+// subscript, a name in italics and a number upright.
+TEST_CASE("org - a math variable and a subscript in code") {
+    const beman::specgen::ir::CodeText code{
+        "get<i>(T_i, T_1)",
+        {{4, 5, SpanKind::MathVariable, "i"}, {8, 10, SpanKind::Subscript, "i"}, {13, 15, SpanKind::Subscript, "1"}}};
+    SpecItem item;
+    item.decl.signatures.push_back(code);
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"The element "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("get<@$i$@>(T@$_i$@, T@$_1$@)\n"));
+    CHECK(out.contains("The element @@latex:\\tcode{get<$i$>(T$_i$, T$_1$)}@@"
+                       "@@html:<code>get&lt;<var>i</var>&gt;(T<sub><var>i</var></sub>, T<sub>1</sub>)</code>@@."));
+}
+
+// The rest of the mathematics the importer reads in code (issue #327): the
+// LaTeX snippet is the draft's own text, one run of mathematics for a subscript
+// and what it is on, and the HTML has the dots and the subscripts.
+TEST_CASE("org - an ellipsis, and a subscript on code the draft put inside the mathematics") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    const beman::specgen::ir::CodeText code{"T_i, ..., r_K",
+                                            {{1, 3, SpanKind::Subscript, "i"},
+                                             {5, 8, SpanKind::Ellipsis, ""},
+                                             {10, 11, SpanKind::MathVariable, "r"},
+                                             {11, 13, SpanKind::Subscript, "K"}},
+                                            {},
+                                            {LayoutHint{0, LayoutHintKind::MathOpen, false}}};
+    SpecItem                           item;
+    DescriptionElement                 remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{
+        beman::specgen::ir::Paragraph{TextInline{"See "}, CodeInline{code}, TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    CHECK(org::render_to_string(item).contains(
+        "See @@latex:\\tcode{$\\tcode{T}_i$, $\\dotsc$, $r_K$}@@"
+        "@@html:<code>T<sub><var>i</var></sub>, ..., <var>r</var><sub><var>K</var></sub></code>@@."));
+}
+
+// The draft's tie (issue #312): org's entity for a no-break space in running
+// text, which exports to `~` and to `&nbsp;`; in a code inline's LaTeX snippet
+// the draft's own `~`, and in its HTML a space.
+TEST_CASE("org - a tie in running text is the no-break space entity") {
+    using beman::specgen::ir::LayoutHintKind;
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{
+        TextInline{"Within subclause ", {{16, LayoutHintKind::Tie}}},
+        CodeInline{{"x", {{0, 1, SpanKind::ExposId, "x"}}}},
+        TextInline{", "},
+        CodeInline{{"R(*)(G) noexcept", {{8, 16, SpanKind::Optional, ""}}, {}, {{7, LayoutHintKind::Tie}}}},
+        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("Within subclause\\nbsp{}@@latex:\\exposid{x}@@"));
+    CHECK(out.contains("@@latex:\\tcode{R(*)(G)~\\opt{noexcept}}@@"
+                       "@@html:<code>R(*)(G) noexcept<sub><var>opt</var></sub></code>@@."));
+}
+
 // The LaTeX backend's Ref exception, inherited rather than re-decided:
 // `texcl=true` is set in
 // the shared `\lstset`, so it holds inside `codeblock` and `itemdecl` alike and

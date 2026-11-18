@@ -17,6 +17,7 @@
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/ir.hpp>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -41,12 +42,34 @@ struct Patched {
     std::vector<Finding> unpatched; // what remains, which `compare` of the result reports too
 };
 
+// The declarations a class does not make are made elsewhere: a member it has
+// from a base class is declared by its item, or by nothing. These are the
+// signatures of the items around a synopsis, a level per enclosing section,
+// nearest first, each level holding every item under that section.
+using Elsewhere = std::vector<std::vector<ir::CodeText>>;
+
+// The levels for a synopsis, given the node lists that enclose it: the
+// document's own first, the one that holds the synopsis last. A synopsis in a
+// section looks as far as its top-level section; one outside every section has
+// the whole document.
+Elsewhere declared_elsewhere(std::span<const std::vector<ir::Node>* const> enclosing);
+
 // `synopsis` with the specifiers of each paired declaration written as
 // `declared` has them, so the draft's layout, placeholders and comments stay
 // and only what the paper changed is different. `constexpr`, `explicit` and
 // `noexcept` are written; the rest are reported in `unpatched`, as is a
 // declaration only one side has.
-Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared);
+//
+// A declaration of the synopsis that `declared` has no pair for takes the
+// three from the item of `elsewhere` that declares the same name, at the
+// nearest level that has one.
+Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared, const Elsewhere& elsewhere = {});
+
+// Where a declaration the synopsis has and `declared` does not disagrees with
+// the item that declares it, on the specifiers a patch writes. A synopsis line
+// and the item for the same member are two declarations of it in one document.
+std::vector<Finding>
+compare_elsewhere(const ir::CodeText& synopsis, const ir::CodeText& declared, const Elsewhere& elsewhere);
 
 } // namespace beman::specgen::synopsis_check
 

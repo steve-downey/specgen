@@ -431,6 +431,51 @@ TEST_CASE("docblock - authored item diagnostics and resumed prose") {
     CHECK(std::get<BodyParagraph>(after_marker.block.elements.front().body.back()).continuation);
 }
 
+TEST_CASE("docblock - the draft's prose macros the importer reads are inline kinds here too") {
+    // A sentence typed in a header and the same sentence inherited from the
+    // draft have to be the same wording (issue #316).
+    auto r = parse_docblock("//! \\remarks Within subclause \\ref{func.wrap.ref}, a type that satisfies\n"
+                            "//! \\exposconcept{constexpr-param} models \\libconcept{copyable} for some\n"
+                            "//! \\cvqual{cv2}, as \\tref{gadget.table} shows; `\\ref{literal}` is code.\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const ProseParagraph& para = paragraph(r.block.elements.front());
+    REQUIRE(para.size() == 13);
+    CHECK(std::get<InlineText>(para.at(0)).text == "Within subclause ");
+    CHECK(std::get<InlineRef>(para.at(1)).stable_name == "func.wrap.ref");
+    CHECK(std::get<InlineRef>(para.at(1)).bare);
+    CHECK(std::get<InlineConcept>(para.at(3)).name == "constexpr-param");
+    CHECK(std::get<InlineConcept>(para.at(3)).exposition);
+    CHECK(std::get<InlineConcept>(para.at(5)).name == "copyable");
+    CHECK_FALSE(std::get<InlineConcept>(para.at(5)).exposition);
+    CHECK(std::get<InlinePlaceholder>(para.at(7)).text == "cv2");
+    CHECK(std::get<InlinePlaceholder>(para.at(7)).cv_qualifier);
+    CHECK(std::get<InlineTableRef>(para.at(9)).stable_name == "gadget.table");
+    CHECK(std::get<InlineCode>(para.at(11)).code == "\\ref{literal}");
+    CHECK(std::get<InlineText>(para.at(12)).text == " is code.");
+
+    // \iref keeps its parentheses, and the plain placeholder is not a cv-qualifier.
+    auto plain = parse_docblock("//! \\remarks As \\placeholder{p} is\\iref{x}.\n");
+    CHECK(plain.ok());
+    const ProseParagraph& text = paragraph(plain.block.elements.front());
+    CHECK_FALSE(std::get<InlinePlaceholder>(text.at(1)).cv_qualifier);
+    CHECK_FALSE(std::get<InlineRef>(text.at(3)).bare);
+
+    // Each needs its argument, and a macro the grammar does not read stays text.
+    for (const char* macro : {"ref", "tref", "libconcept", "exposconcept", "cvqual"}) {
+        CAPTURE(macro);
+        const auto empty = parse_docblock("//! \\remarks A \\" + std::string(macro) + "{} here.\n");
+        REQUIRE(empty.diags.size() == 1);
+        CHECK(empty.diags.front().message == "\\" + std::string(macro) + " requires an argument");
+        const auto open = parse_docblock("//! \\remarks A \\" + std::string(macro) + "{x here.\n");
+        REQUIRE(open.diags.size() == 1);
+        CHECK(open.diags.front().message == "unterminated \\" + std::string(macro) + " macro");
+    }
+    auto other = parse_docblock("//! \\remarks A \\term{thing} and \\pageref{x}.\n");
+    CHECK(other.ok());
+    CHECK(paragraph(other.block.elements.front()).size() == 1);
+}
+
 TEST_CASE("docblock - iref is prose markup outside backticks") {
     auto r = parse_docblock("//! \\remarks \\iref{class.union.general} follows `\\iref{literal}`.\n");
     CHECK(r.ok());

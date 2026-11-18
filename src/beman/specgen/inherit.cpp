@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -70,40 +71,98 @@ const ir::Section* find_section(const std::vector<ir::Node>& nodes, const std::s
     return found == nodes.end() ? nullptr : std::get_if<ir::Section>(&*found);
 }
 
-// How alike a nameless item's declaration must read a baseline item's to take
-// its description: the differ's own measure and threshold for a pair.
-constexpr double kNamelessThreshold = 0.5;
+// How alike two declarations must read to pair when one side gives no names
+// to pair by: the differ's own measure and threshold for a pair.
+constexpr double kReadingThreshold = 0.5;
+
+// The unclaimed baseline item among the eligible ones whose signature reads
+// most like `item`'s, the first of equals, reading at least `minimum` alike.
+template <class Eligible>
+std::optional<std::size_t> best_reading(const ir::SpecItem&          item,
+                                        const std::vector<ir::Node>& baseline,
+                                        const std::vector<bool>&     claimed,
+                                        double                       minimum,
+                                        Eligible                     eligible) {
+    const auto scored = std::views::iota(std::size_t{0}, baseline.size()) | std::views::filter([&](std::size_t i) {
+                            const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
+                            return candidate != nullptr && !claimed[i] && eligible(*candidate);
+                        }) |
+                        std::views::transform([&](std::size_t i) {
+                            return std::pair{i, declared_alike(item, std::get<ir::SpecItem>(baseline[i]))};
+                        }) |
+                        std::views::filter([&](const auto& entry) { return entry.second >= minimum; }) |
+                        std::ranges::to<std::vector>();
+    const auto best =
+        std::ranges::max_element(scored, std::ranges::less{}, [](const auto& entry) { return entry.second; });
+    return best == scored.end() || best->second <= 0.0 ? std::nullopt : std::optional(best->first);
+}
 
 // The baseline item `item` takes its description from: among the unclaimed
 // items declaring the same names, the one whose signature reads most like its
 // own. Nothing reading alike at all is no pair.
+//
+// Failing that, the pair is made by how the declarations read, as the differ
+// makes it, when one side gives no names to pair by. An item typed as a
+// `\verbatim-itemdecl` names nothing the front end knows of. And the draft's
+// index says nothing of an exposition-only member, so its item for
+// `is-callable-from` has no names where the header's has `is_callable_from`
+// (issue #328).
 const ir::SpecItem*
 pair_item(const ir::SpecItem& item, const std::vector<ir::Node>& baseline, std::vector<bool>& claimed) {
-    const std::vector<std::string> names = sorted_entities(item);
+    const std::vector<std::string> names    = sorted_entities(item);
+    const bool                     declares = !item.decl.signatures.empty();
     std::optional<std::size_t>     best;
-    double                         best_score = 0.0;
-    // substrate generic algorithm: an argmax over the baseline's items, taking
-    // the first of equals, which writes the claim table.
-    for (std::size_t i = 0; i < baseline.size(); ++i) {
-        const auto* candidate = std::get_if<ir::SpecItem>(&baseline[i]);
-        // An item typed as a `\verbatim-itemdecl` names nothing the front end
-        // knows of, so it is matched by how its declaration reads against every
-        // baseline item, and only when it reads alike.
-        const bool nameless = names.empty() && !item.decl.signatures.empty();
-        if (candidate == nullptr || claimed[i] || (!nameless && sorted_entities(*candidate) != names))
-            continue;
-        const double score = declared_alike(item, *candidate);
-        if (nameless && score < kNamelessThreshold)
-            continue;
-        if (score > best_score) {
-            best       = i;
-            best_score = score;
-        }
-    }
+    if (!names.empty() || !declares)
+        best = best_reading(item, baseline, claimed, 0.0, [&](const ir::SpecItem& candidate) {
+            return sorted_entities(candidate) == names;
+        });
+    if (!best && declares)
+        best = best_reading(item, baseline, claimed, kReadingThreshold, [&](const ir::SpecItem& candidate) {
+            return !candidate.decl.signatures.empty() && (names.empty() || candidate.decl.entities.empty());
+        });
     if (!best)
         return nullptr;
     claimed[*best] = true;
     return std::get_if<ir::SpecItem>(&baseline[*best]);
+}
+
+// Which of its macro's two forms each span of `code` is written in, taken from
+// the span of `from` that says the same thing: the same kind and payload, the
+// first with the first. Only a span the document left to its context's default
+// takes one, so a form set by hand stays.
+void take_form(ir::CodeText& code, const ir::CodeText& from) {
+    std::vector<bool> taken(from.spans.size(), false);
+    // substrate generic algorithm: each span claims the first unclaimed span of
+    // the baseline that says the same, which writes the claim table.
+    for (ir::Span& span : code.spans) {
+        const auto indices = std::views::iota(std::size_t{0}, from.spans.size());
+        const auto found   = std::ranges::find_if(indices, [&](std::size_t i) {
+            return !taken[i] && from.spans[i].kind == span.kind && from.spans[i].payload == span.payload;
+        });
+        if (found == indices.end())
+            continue;
+        taken[*found] = true;
+        if (!span.no_correction)
+            span.no_correction = from.spans[*found].no_correction;
+    }
+}
+
+// A declaration that pairs with a baseline declaration is typeset as the
+// baseline's is (issue #330). The draft picks `\exposid` or `\exposidnc` by
+// hand, and the importer keeps the choice; an extracted declaration has none,
+// and took its context's default, so a paper's own wording differed from the
+// draft's in a token the paper does not change. Each signature takes the forms
+// of the baseline signature it reads most like. A baseline that was generated
+// has no forms to give, and nothing moves.
+void take_declaration_form(ir::SpecItem& item, const ir::SpecItem& from) {
+    if (from.decl.signatures.empty())
+        return;
+    std::ranges::for_each(item.decl.signatures, [&](ir::CodeText& code) {
+        const auto alike = [&](const ir::CodeText& other) {
+            return code == other ? 1.0 : diff::declaration_similarity(as_imported(code), as_imported(other));
+        };
+        take_form(code, *std::ranges::max_element(from.decl.signatures, std::ranges::less{}, alike));
+    });
 }
 
 // The description `item` ends with, given the baseline's.
@@ -168,16 +227,32 @@ pair_synopsis(const ir::Synopsis& synopsis, const std::vector<ir::Node>& baselin
 // What cannot be patched is not reported here: `--validate` compares the
 // result with the class's own declarations and says so once, with the same
 // words it uses for an authored synopsis.
-void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from) {
-    synopsis.code     = synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared).code : from.code;
+//
+// A member the class has from a base class is not among its declarations. Its
+// line takes its specifiers from the item that declares it, so the synopsis
+// and that item, two declarations of one member, agree (issue #329).
+void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from, const synopsis_check::Elsewhere& elsewhere) {
+    synopsis.code =
+        synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared, elsewhere).code : from.code;
     synopsis.as_draft = false;
 }
 
-void resolve_nodes(std::vector<ir::Node>&       current,
-                   const std::vector<ir::Node>& baseline,
-                   const std::string&           where,
-                   std::vector<Diagnostic>&     out) {
+// `enclosing` is the node lists from the document's own down to `current`,
+// which is where a synopsis looks for the items that declare what its class
+// does not.
+void resolve_nodes(std::vector<ir::Node>&                     current,
+                   const std::vector<ir::Node>&               baseline,
+                   const std::string&                         where,
+                   std::vector<const std::vector<ir::Node>*>& enclosing,
+                   std::vector<Diagnostic>&                   out) {
+    enclosing.push_back(&current);
     std::vector<bool> claimed(baseline.size(), false);
+    // The items that ask to inherit, noted before the walk clears the request.
+    const std::vector<bool> asked = current | std::views::transform([](const ir::Node& node) {
+                                        const auto* item = std::get_if<ir::SpecItem>(&node);
+                                        return item != nullptr && item->as_draft;
+                                    }) |
+                                    std::ranges::to<std::vector>();
     // substrate generic algorithm: nodes of different kinds resolve differently,
     // and an item's claim on a baseline item is state shared across the siblings.
     for (ir::Node& node : current) {
@@ -185,12 +260,12 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                        [&](ir::Section& section) {
                            const ir::Section* paired = find_section(baseline, section.stable_name);
                            if (paired != nullptr) {
-                               resolve_nodes(section.children, paired->children, section.stable_name, out);
+                               resolve_nodes(section.children, paired->children, section.stable_name, enclosing, out);
                                return;
                            }
                            // A section the baseline lacks has nothing to inherit; an item in
                            // it that asks to is reported by the walk with an empty baseline.
-                           resolve_nodes(section.children, {}, section.stable_name, out);
+                           resolve_nodes(section.children, {}, section.stable_name, enclosing, out);
                        },
                        [&](ir::SpecItem& item) {
                            if (!item.as_draft)
@@ -204,6 +279,7 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                                                           where)});
                                return;
                            }
+                           take_declaration_form(item, *from);
                            inherit_description(item, *from, out);
                        },
                        [&](ir::Synopsis& synopsis) {
@@ -220,12 +296,23 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                                                 where)});
                                return;
                            }
-                           resolve_synopsis(synopsis, *from);
+                           resolve_synopsis(synopsis, *from, synopsis_check::declared_elsewhere(enclosing));
                        },
                        [](ir::FreeParagraph&) {},
                    },
                    node);
     }
+    // What is left of the baseline's items pairs with the items that inherit
+    // nothing, for the typesetting of their declarations alone. After the walk
+    // above, so that no `\asdraft` item loses its pair to one of these.
+    std::ranges::for_each(std::views::zip(current, asked), [&](auto&& entry) {
+        auto* item = std::get_if<ir::SpecItem>(&std::get<0>(entry));
+        if (item == nullptr || std::get<1>(entry) || item->decl.signatures.empty())
+            return;
+        if (const ir::SpecItem* from = pair_item(*item, baseline, claimed))
+            take_declaration_form(*item, *from);
+    });
+    enclosing.pop_back();
 }
 
 bool any_unresolved(const std::vector<ir::Node>& nodes) {
@@ -245,8 +332,9 @@ bool any_unresolved(const std::vector<ir::Node>& nodes) {
 bool has_unresolved(const ir::Document& document) { return any_unresolved(document.nodes); }
 
 std::vector<Diagnostic> resolve(ir::Document& current, const ir::Document& baseline) {
-    std::vector<Diagnostic> out;
-    resolve_nodes(current.nodes, baseline.nodes, {}, out);
+    std::vector<Diagnostic>                   out;
+    std::vector<const std::vector<ir::Node>*> enclosing;
+    resolve_nodes(current.nodes, baseline.nodes, {}, enclosing, out);
     return out;
 }
 

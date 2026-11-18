@@ -406,6 +406,90 @@ TEST_CASE("diff - a line-break hint is not a change, and the current revision's 
     CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
 }
 
+// And in prose (issue #314): the hints in running text and in a prose inline's
+// name are beside the wording. Text that differs only in them is the same
+// wording; and where a word did change, the words that did not keep the hints
+// the current revision has in and beside them.
+TEST_CASE("diff - a line-break hint in prose is not a change, and a kept word keeps its hints") {
+    const auto hinted = [](bool with_hints, std::string_view verb) {
+        Document  d     = gadget();
+        auto&     reset = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[1]);
+        Paragraph para{TextInline{std::string(verb) + " the implementation, for "},
+                       OldConceptRef{"UnaryTypeTrait"},
+                       TextInline{" and "},
+                       CodeInline{{"x", {}}},
+                       TextInline{"."}};
+        if (with_hints) {
+            const std::size_t word                 = verb.size() + 5; // the start of "implementation"
+            std::get<TextInline>(para[0]).hints    = {{word + 5, LayoutHintKind::Hyphen},
+                                                      {verb.size() + 25, LayoutHintKind::LineBreak}};
+            std::get<OldConceptRef>(para[1]).hints = {{5, LayoutHintKind::Hyphen}};
+            std::get<TextInline>(para[2]).hints    = {{5, LayoutHintKind::Break, true}};
+        }
+        std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = std::move(para);
+        return d;
+    };
+    const auto para_of = [](const Document& d) {
+        return std::get<BodyParagraph>(
+                   std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[1]).descr.elements[0].body[0])
+            .text;
+    };
+    const Document before = hinted(false, "Resets");
+    const Document after  = hinted(true, "Resets");
+    CHECK(before != after);
+    const Document same = diff::compare(before, after, {.context = diff::Context::All});
+    CHECK(!diff::has_marks(same));
+    CHECK(same == after);
+    CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
+
+    // One word replaced: the mark is on that word, and the rest of the
+    // paragraph is the current revision's, hints and all.
+    const Document  changed = hinted(true, "Clears");
+    const Paragraph para    = para_of(diff::compare(before, changed));
+    REQUIRE(para.size() == 7);
+    CHECK(std::get<ChangedInline>(para[0]).inlines == std::vector<PlainInline>{TextInline{"Resets"}});
+    CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"Clears"}});
+    CHECK(std::get<TextInline>(para[2]) ==
+          TextInline{" the implementation, for ", {{10, LayoutHintKind::Hyphen}, {25, LayoutHintKind::LineBreak}}});
+    CHECK(std::get<OldConceptRef>(para[3]).hints == std::vector<LayoutHint>{{5, LayoutHintKind::Hyphen}});
+    CHECK(std::get<TextInline>(para[4]) == TextInline{" and ", {{5, LayoutHintKind::Break, true}}});
+}
+
+// The draft's tie (issue #312) is a hint on a space. A baseline that ties a
+// word to what follows and a revision that writes a plain space say the same
+// thing; and where the tied space falls at the edge of a mark, the tie goes
+// with the space.
+TEST_CASE("diff - a tie is not a change, and stays on its space beside a changed word") {
+    const auto tied = [](bool with_tie, std::string_view noun) {
+        Document  d     = gadget();
+        auto&     reset = std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[1]);
+        Paragraph para{TextInline{"See " + std::string(noun) + " "}, RefInline{.stable_name = "x", .bare = true}};
+        if (with_tie)
+            std::get<TextInline>(para[0]).hints = {{4 + noun.size(), LayoutHintKind::Tie}};
+        std::get<BodyParagraph>(reset.descr.elements[0].body[0]).text = std::move(para);
+        return d;
+    };
+    const auto para_of = [](const Document& d) {
+        return std::get<BodyParagraph>(
+                   std::get<SpecItem>(std::get<Section>(d.nodes[0]).children[1]).descr.elements[0].body[0])
+            .text;
+    };
+    const Document before = tied(true, "subclause");
+    const Document after  = tied(false, "subclause");
+    CHECK(!diff::has_marks(diff::compare(before, after, {.context = diff::Context::All})));
+    CHECK(diff::compare(after, before, {.context = diff::Context::All}) == before);
+
+    // The word before the tie is replaced. The mark is on the word, and the
+    // tied space after it is outside the mark with its tie.
+    const Paragraph para = para_of(diff::compare(tied(false, "subclause"), tied(true, "clause")));
+    REQUIRE(para.size() == 5);
+    CHECK(std::get<TextInline>(para[0]).text == "See ");
+    CHECK(std::get<ChangedInline>(para[1]).inlines == std::vector<PlainInline>{TextInline{"subclause"}});
+    CHECK(std::get<ChangedInline>(para[2]).inlines == std::vector<PlainInline>{TextInline{"clause"}});
+    CHECK(std::get<TextInline>(para[3]) == TextInline{" ", {{0, LayoutHintKind::Tie}}});
+    CHECK(std::holds_alternative<RefInline>(para[4]));
+}
+
 TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after them") {
     // Issue #258: a keyword added before a declaration is marked
     // `@\added{constexpr}@ R`, not `@\added{constexpr }@R`.
@@ -667,4 +751,36 @@ TEST_CASE("diff - decls preserves whole added and removed sections and items") {
     CHECK(has_description(std::get<SpecItem>(changed.children.front()).descr));
     CHECK(std::get<SpecItem>(changed.children.back()).change == Change::Added);
     CHECK(has_description(std::get<SpecItem>(changed.children.back()).descr));
+}
+
+TEST_CASE("diff - whether a note opens a paragraph is the current document's to say, and is not a change") {
+    const auto with_note = [](bool opens) {
+        Document doc;
+        doc.nodes.push_back(
+            Section{"s",
+                    "S",
+                    {item("void f();",
+                          {"f"},
+                          {element(ElementKind::Returns,
+                                   {BodyParagraph{text("A reference.")},
+                                    Note{{BodyParagraph{text("About it.")}}, Change::Same, opens}})})}});
+        return doc;
+    };
+    const Document drafted  = with_note(true);
+    const Document authored = with_note(false);
+    const auto     note_of  = [](const Document& doc) {
+        const auto& body =
+            std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front()).descr.elements.front().body;
+        return std::get<Note>(body[1]);
+    };
+
+    // Nothing to show: the default context keeps only what changed.
+    CHECK(diff::compare(drafted, authored).nodes.empty());
+    CHECK(diff::compare(authored, drafted).nodes.empty());
+
+    const Document forward = diff::compare(drafted, authored, {.context = diff::Context::All});
+    CHECK_FALSE(note_of(forward).opens_paragraph);
+    CHECK(note_of(forward).change == Change::Same);
+    const Document back = diff::compare(authored, drafted, {.context = diff::Context::All});
+    CHECK(note_of(back).opens_paragraph);
 }

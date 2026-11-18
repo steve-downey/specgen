@@ -201,8 +201,18 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
             // An `\expos` alias is exposition, not a routed wording item:
             // it renders in the synopsis under its exposid name, and its
             // roster entry is Expos, the same treatment expos data gets.
-            if (expos_set.contains(alias->getCanonicalDecl()))
+            if (expos_set.contains(alias->getCanonicalDecl())) {
+                AttachedItem marked;
+                attach_docblock(marked, alias, sm);
+                if (marked.item.as_draft)
+                    diagnostics.push_back(
+                        {beman::specgen::Severity::Error,
+                         marked.grouping_line,
+                         std::format("\\asdraft: `{}` is an exposition-only alias, which has no item to inherit a "
+                                     "description",
+                                     alias->getNameAsString())});
                 continue;
+            }
 
             AttachedItem attached = attach_alias(alias, sm, lang_opts, ns_drop_set, expos_set);
             diagnostics.append_range(std::move(attached.diagnostics));
@@ -230,8 +240,11 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                 diagnostics.append_range(std::move(attached.diagnostics));
                 if (suppresses_generated_entity(attached.directives))
                     continue;
+                // `\asdraft` is a description too: the baseline's, once the
+                // item has paired with the draft's (issue #328).
                 if (expos_set.contains(member->getCanonicalDecl()) &&
-                    !beman::specgen::ir::has_description(attached.item.descr) && !attached.verbatim_itemdecl)
+                    !beman::specgen::ir::has_description(attached.item.descr) && !attached.item.as_draft &&
+                    !attached.verbatim_itemdecl)
                     continue;
                 add_pending(std::move(attached));
                 continue;

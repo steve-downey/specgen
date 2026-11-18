@@ -33,6 +33,9 @@ enum class SpanKind {
     LibraryIndex, // payload = enclosing class, or empty for a global name
     CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
     Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
+    MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
+    Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
+    Ellipsis,     // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
 };
 
 } // namespace beman::specgen::ir
@@ -47,6 +50,9 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::LibraryIndex,
     beman::specgen::ir::SpanKind::CvQualifier,
     beman::specgen::ir::SpanKind::Optional,
+    beman::specgen::ir::SpanKind::MathVariable,
+    beman::specgen::ir::SpanKind::Subscript,
+    beman::specgen::ir::SpanKind::Ellipsis,
 };
 
 namespace beman::specgen::ir {
@@ -102,7 +108,8 @@ struct Span {
     // the name. Unset is the form the context takes (`default_no_correction`),
     // which is what every generated span has. The draft importer sets it
     // where the draft wrote the other form, so that inherited wording comes
-    // back out as the draft spells it. Only a backend that writes draft LaTeX
+    // back out as the draft spells it, and a generated declaration takes it
+    // from the baseline declaration it pairs with (inherit.hpp). Only a backend that writes draft LaTeX
     // reads it, and the wording diff compares without it.
     std::optional<bool> no_correction = {};
 
@@ -136,6 +143,8 @@ enum class LayoutHintKind {
     Hyphen,    // \-: the line may break here, with a hyphen
     LineBreak, // \linebreak: break here if it helps
     NewLine,   // \newline: break here
+    Tie,       // ~: the space at this offset is one the line may not break at
+    MathOpen,  // $\tcode{: the code from here to the subscript after it is inside that subscript's mathematics
 };
 
 } // namespace beman::specgen::ir
@@ -146,14 +155,17 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::LayoutHintKind::Hyphen,
     beman::specgen::ir::LayoutHintKind::LineBreak,
     beman::specgen::ir::LayoutHintKind::NewLine,
+    beman::specgen::ir::LayoutHintKind::Tie,
+    beman::specgen::ir::LayoutHintKind::MathOpen,
 };
 
 namespace beman::specgen::ir {
 
-std::string_view              layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline"
+std::string_view layout_hint_name(LayoutHintKind); // "brk", "hyphen", "linebreak", "newline", "tie", "math-open"
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 
-// One hint, between two bytes of a CodeText's text: `at` is the offset of the
+// One hint, between two bytes of a text -- a CodeText's, a TextInline's, or the
+// name of a prose inline: `at` is the offset of the
 // byte it precedes, or the text's size for one at the end. `braced` says the
 // draft wrote the empty group after the macro (`\brk{}`), which it mostly
 // does and which is the only other thing there is to its spelling.
@@ -164,6 +176,22 @@ std::optional<LayoutHintKind> layout_hint_from_name(std::string_view);
 // payload is what lets everything that reads code -- the differ, the
 // validator, the other two backends -- go on reading the name and not the
 // LaTeX. Sorted by `at`. Only a backend that writes draft LaTeX reads them.
+//
+// A tie is the one hint that stands for a byte and does not sit between two:
+// the draft's `~` is a space, so the text has a space at `at`, and the hint
+// says the line may not break there. A writer that writes the tie writes it in
+// place of that space (`tied_space`); one that does not leaves the space. It
+// is also the one hint with a meaning outside LaTeX, and the other backends
+// write a tie in running text as their own no-break space.
+//
+// `MathOpen` is not about line breaking at all, and is here because it is
+// typesetting of the same standing: a spelling the draft chose that changes
+// nothing a reader sees. A subscript on code is written `T$_i$` or
+// `$\tcode{T}_i$`, and they print alike. Both are the text `T_i` with a
+// `Subscript` span on `_i`; the second has this hint where the `T` begins, and
+// a writer of draft LaTeX opens the mathematics there (issue #327). Its
+// `braced` is the other thing there is to that spelling: the draft wrote a
+// subscript of one character in a group, `$\tcode{B}_{1}$`.
 struct LayoutHint {
     std::size_t    at     = 0;
     LayoutHintKind kind   = LayoutHintKind::Break;
@@ -171,6 +199,12 @@ struct LayoutHint {
 
     friend bool operator==(const LayoutHint&, const LayoutHint&) = default;
 };
+
+// Whether `hint` is a tie on a space of `text`: the byte a writer of the tie
+// writes it in place of.
+constexpr bool tied_space(const LayoutHint& hint, std::string_view text) {
+    return hint.kind == LayoutHintKind::Tie && hint.at < text.size() && text[hint.at] == ' ';
+}
 
 struct CodeText {
     std::string             text;
@@ -182,11 +216,23 @@ struct CodeText {
 };
 
 // --- prose -----------------------------------------------------------------
+// Running text. `hints` are the draft's line-break hints in it, as
+// `CodeText::hints` are for code: offsets into `text`, sorted, typesetting and
+// not wording, and usually none. A hint that sits between two other inlines
+// has no text to sit in, and is a text inline with a hint and no text.
 struct TextInline {
-    std::string text;
+    std::string             text;
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const TextInline&, const TextInline&) = default;
 };
+
+// The bytes [begin, end) of a text inline, with the hints that sit in them: a
+// hint precedes the byte at its offset, so one at `end` belongs to the piece
+// that follows, unless `end` is the end of the text.
+TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end);
+// `more` joined onto the end of `text`, its hints moved along.
+void append_text(TextInline& text, const TextInline& more);
 struct CodeInline {
     CodeText code;
 
@@ -215,6 +261,9 @@ struct ConceptRef {
     bool        exposition = false;
     // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name (`\libconcept{con\-cept}`):
+    // offsets into `name`, which is the name without them.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const ConceptRef&, const ConceptRef&) = default;
 };
@@ -231,6 +280,8 @@ struct PlaceholderInline {
     bool        cv_qualifier = false;
     // The draft wrote \placeholdernc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft's line-break hints inside the name: offsets into `text`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const PlaceholderInline&, const PlaceholderInline&) = default;
 };
@@ -238,6 +289,9 @@ struct PlaceholderInline {
 // \oldconcept{X}, which prints "Cpp17X" in italics. `name` is the X.
 struct OldConceptRef {
     std::string name;
+    // The draft's line-break hints inside the name
+    // (`\oldconcept{Unary\-Type\-Trait}`): offsets into `name`.
+    std::vector<LayoutHint> hints = {};
 
     friend bool operator==(const OldConceptRef&, const OldConceptRef&) = default;
 };
@@ -356,6 +410,9 @@ struct EquivalentTo {
 struct Itemize {
     std::vector<Paragraph> items;
     Change                 change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Itemize&, const Itemize&) = default;
 };
@@ -378,6 +435,9 @@ struct Table2D {
     Paragraph               column2     = {};
     std::vector<Table2DRow> rows        = {};
     Change                  change      = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Table2D&, const Table2D&) = default;
 };
@@ -401,6 +461,9 @@ struct Table1D {
     Paragraph               column2     = {};
     std::vector<Table1DRow> rows        = {};
     Change                  change      = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Table1D&, const Table1D&) = default;
 };
@@ -418,6 +481,9 @@ struct BodyParagraph {
 struct AuthoredCode {
     CodeText code;
     Change   change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const AuthoredCode&, const AuthoredCode&) = default;
 };
@@ -429,12 +495,18 @@ using InformativeBody  = std::vector<InformativeBlock>;
 struct Note {
     InformativeBody body;
     Change          change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Note&, const Note&) = default;
 };
 struct Example {
     InformativeBody body;
     Change          change = Change::Same;
+    // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
+    // below). Unset, it belongs to the paragraph before it.
+    bool opens_paragraph = false;
 
     friend bool operator==(const Example&, const Example&) = default;
 };
@@ -445,6 +517,21 @@ using DescriptionBody = std::vector<BodyBlock>;
 // The wording diff's mark on a block of either body, whichever kind it is.
 Change block_change(const BodyBlock&);
 Change block_change(const InformativeBlock&);
+
+// Whether a block opens a numbered paragraph, apart from the first block of a
+// body, which always does. Prose says so by not being a `continuation`, and an
+// extracted *Equivalent to* always opens one. A list, a table, a code block, a
+// note or an example belongs to the paragraph before it unless its
+// `opens_paragraph` is set, which is how the draft writes a note or an example
+// that stands apart from the prose before it:
+//
+//     \pnum
+//     \begin{note}
+//
+// Nothing generated sets it; the draft importer does, where the draft numbered
+// the block itself, so inherited wording keeps the draft's paragraph numbers
+// (issue #321).
+bool opens_paragraph(const BodyBlock&);
 
 struct DescriptionElement {
     ElementKind     kind = ElementKind::Effects;

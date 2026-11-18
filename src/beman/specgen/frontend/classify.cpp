@@ -396,6 +396,16 @@ db::DocEvent classify(const RawItem&                                   ev,
         const VariableMask mask = variable_seebelow_mask(ev.decl, marked.directives, marked.grouping_line);
         if (mask.diagnostic)
             marked.diagnostics.push_back(*mask.diagnostic);
+        // Its description is written beside its synopsis and is no item, so
+        // there is nothing for the baseline's to pair with. Saying nothing left
+        // the wording without the description that was asked for (issue #328).
+        if (marked.item.as_draft)
+            marked.diagnostics.push_back(
+                {beman::specgen::Severity::Error,
+                 marked.grouping_line,
+                 std::format("\\asdraft: `{}` is exposition-only at namespace scope, whose description is not "
+                             "inherited; author it",
+                             namespace_expos->getNameAsString())});
         // The kinds whose *definition* is the implementation mask it the same
         // way (issue #50): an alias's RHS, an alias template's, a concept's
         // constraint-expression. Bare `\seebelow` only -- the targeted forms
