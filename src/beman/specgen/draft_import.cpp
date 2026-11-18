@@ -185,6 +185,18 @@ struct Importer {
             return std::nullopt;
         return line_starts[static_cast<std::size_t>(&line - all_lines->data())];
     }
+    // Where lines [first, last) of `lines` are in the file, whole, newlines
+    // and all; nothing for lines that are copies, or none (issue #346).
+    ir::NodeOrigin node_origin(Lines lines, std::size_t first, std::size_t last) const {
+        if (first >= last || last > lines.size())
+            return {};
+        const std::optional<std::size_t> begin = source_offset(lines[first]);
+        const std::optional<std::size_t> end   = source_offset(lines[last - 1]);
+        if (!begin || !end)
+            return {};
+        return {std::make_shared<const ir::SourceRange>(
+            ir::SourceRange{source_name, *begin, *end + lines[last - 1].size() + 1})};
+    }
     // Set by parse_code when it met a macro the span vocabulary lacks: the text
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
@@ -1457,7 +1469,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
     std::vector<ir::Node>       nodes;
     std::vector<std::string>    loose;
     std::vector<ir::IndexEntry> pending;
-    const auto                  has_content = [&] {
+    // Where `loose` and `pending` began among `lines`, for the origin of the
+    // node they become.
+    std::size_t loose_begin   = 0;
+    std::size_t pending_begin = 0;
+    const auto  has_content   = [&] {
         return std::ranges::any_of(loose, [](const std::string& l) { return !trim(l).empty(); });
     };
     const auto flush_loose = [&] {
@@ -1466,8 +1482,22 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         // the differ would show as a removed item.
         if (has_content()) {
             ir::ItemDescr descr = parse_description(loose);
-            if (ir::has_description(descr))
-                nodes.push_back(ir::SpecItem{.decl = {}, .descr = std::move(descr)});
+            if (ir::has_description(descr)) {
+                // The prose's own lines, without the blank ones around it.
+                const auto  blank = [](const std::string& l) { return trim(l).empty(); };
+                std::size_t first = loose_begin;
+                std::size_t last  = loose_begin + loose.size();
+                // substrate generic algorithm: trims a run of blank lines from each end.
+                while (first < last && blank(lines[first]))
+                    ++first;
+                // substrate generic algorithm: the same trim, from the other end.
+                while (last > first && blank(lines[last - 1]))
+                    --last;
+                ir::SpecItem prose{.decl = {}, .descr = std::move(descr)};
+                prose.origin       = node_origin(lines, first, last);
+                prose.descr_origin = prose.origin;
+                nodes.push_back(std::move(prose));
+            }
         }
         loose.clear();
     };
@@ -1479,8 +1509,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         const std::string_view t = trim(lines[i]);
         if (t.starts_with("\\indexlibrary")) {
             flush_loose();
-            if (const auto entry = parse_index(t))
+            if (const auto entry = parse_index(t)) {
+                if (pending.empty())
+                    pending_begin = i;
                 pending.push_back(*entry);
+            }
             ++i;
             continue;
         }
@@ -1489,11 +1522,12 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 flush_loose();
                 const std::size_t end = environment_end(lines, i, *name);
                 ir::SpecItem      item;
-                item.decl.signatures = split_signatures(lines.subspan(i + 1, std::min(end, lines.size()) - i - 1));
-                item.decl.index      = std::exchange(pending, {});
-                item.decl.entities   = declared_entities(item.decl.index);
-                std::size_t next     = end + 1;
-                std::size_t probe    = next;
+                const std::size_t first = pending.empty() ? i : pending_begin;
+                item.decl.signatures    = split_signatures(lines.subspan(i + 1, std::min(end, lines.size()) - i - 1));
+                item.decl.index         = std::exchange(pending, {});
+                item.decl.entities      = declared_entities(item.decl.index);
+                std::size_t next        = end + 1;
+                std::size_t probe       = next;
                 // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
                 // state.
                 while (probe < lines.size() && trim(lines[probe]).empty())
@@ -1501,8 +1535,10 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 if (probe < lines.size() && begin_name(lines[probe]) == std::optional<std::string>{"itemdescr"}) {
                     const std::size_t dend = environment_end(lines, probe, "itemdescr");
                     item.descr = parse_description(lines.subspan(probe + 1, std::min(dend, lines.size()) - probe - 1));
-                    next       = dend + 1;
+                    item.descr_origin = node_origin(lines, probe + 1, std::min(dend, lines.size()));
+                    next              = dend + 1;
                 }
+                item.origin = node_origin(lines, first, std::min(next, lines.size()));
                 nodes.push_back(std::move(item));
                 i = next;
                 continue;
@@ -1512,14 +1548,17 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 const Lines       body = lines.subspan(i + 1, std::min(end, lines.size()) - i - 1);
                 const std::string code = body | std::views::join_with('\n') | std::ranges::to<std::string>();
                 ir::Synopsis      synopsis;
-                synopsis.code = parse_code(code, true, body.empty() ? std::nullopt : source_offset(body.front()));
-                synopsis.name = declared_class(synopsis.code.text);
+                synopsis.code   = parse_code(code, true, body.empty() ? std::nullopt : source_offset(body.front()));
+                synopsis.name   = declared_class(synopsis.code.text);
+                synopsis.origin = node_origin(lines, i, std::min(end + 1, lines.size()));
                 nodes.push_back(std::move(synopsis));
                 pending.clear();
                 i = end + 1;
                 continue;
             }
         }
+        if (loose.empty())
+            loose_begin = i;
         loose.push_back(lines[i]);
         ++i;
     }

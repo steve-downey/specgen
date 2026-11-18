@@ -1207,15 +1207,25 @@ byte for byte: line breaks, `\indexlibrary*` entries, `%` comments, and the
 layout of synopses and items. With several headers, edits to one file are made
 together.
 
-What can be placed is a change to the code of a declaration or of a synopsis:
-a token added, removed or replaced. Code is compared token by token with its
-layout ignored, so a declaration the generator lays out differently from the
-draft is not a change, and an added `constexpr` is written into the draft's own
-line. Any other change is an error naming it and is not placed: a changed
-description or paragraph, and an item, a declaration or a subclause added or
-removed. The other edits are still written, and the run exits 1. A declaration
-outside every subclause has no place in the draft, so it is left out with a
-warning.
+A change to the code of a declaration or of a synopsis is placed token by
+token: a token added, removed or replaced. Code is compared with its layout
+ignored, so a declaration the generator lays out differently from the draft is
+not a change, and an added `constexpr` is written into the draft's own line.
+
+A changed description replaces the numbered paragraphs that changed and leaves
+the others as the draft has them, line for line. The new paragraph is written
+as the LaTeX backend writes it, laid out as the draft's are, a sentence to a
+line. When the paper's description has more or fewer numbered paragraphs than
+the draft's, the description is replaced whole. An item, a synopsis or a
+paragraph the paper adds is written after the draft's node the paper puts
+before it, separated by a blank line. One the paper removes is taken out,
+together with the blank line after it.
+
+Any other change is an error naming it and is not placed: a declaration added
+to or removed from an item, such as an overload joining an `\also` group, and a
+subclause added or removed. The other edits are still written, and the run
+exits 1. A declaration outside every subclause has no place in the draft, so it
+is left out with a warning.
 
 The edited draft is the whole output, so the option takes no baseline, no
 `--inherit-draft`, and no `--split`, `--validate` or `--paper`.

@@ -446,9 +446,20 @@ Measured on constexpr_callables against the draft at 2594eff0 and at 45b03900: 6
 `utilities.tex`, one for each `constexpr` the wording diff marks, and every line changed is the
 draft's with `constexpr` and a space added.
 
-Open: placing a changed description or paragraph, which needs the draft's prose layout (a
-sentence or clause per line) for the new text; inserting a new item, paragraph or subclause, with
-its index entry; and removing one.
+Open: placing a change inside a sentence at the words that change; a declaration joining or
+leaving an item; a subclause added or removed.
+
+Log:
+
+- 2026-11-18: descriptions, and whole nodes, are placed (issue #346). The importer records each
+  item's, synopsis's and prose node's line range, and each description's (`NodeOrigin`, which
+  compares equal to anything, as `CodeText::origin` does). A changed description is cut into its
+  numbered paragraphs, in the draft's source and in the two renderings, and each paragraph that
+  changed is replaced in place with the paper's, laid out a sentence to a line; the others stay
+  line for line. An added item, synopsis or paragraph is written after the draft's node the
+  paper puts before it, a removed one is deleted with its blank line. The granularity is the
+  numbered paragraph and not the word: a paragraph the paper rewrites is a sentence to a line
+  whatever the draft's lines were. constexpr_callables still gets its 66 edits and nothing else.
 
 ### importer-vocabulary-gaps
 

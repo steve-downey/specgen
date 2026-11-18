@@ -2051,7 +2051,8 @@ int generate_command(const std::vector<std::string>& args) {
                         namespace draft_edit  = beman::specgen::backend::draft_edit;
                         draft_edit::Plan plan = draft_edit::merge(
                             std::views::zip(inherited->documents, built) | std::views::transform([](const auto& pair) {
-                                return draft_edit::plan(std::get<0>(pair), std::get<1>(pair).result.document);
+                                return draft_edit::plan(
+                                    std::get<0>(pair), std::get<1>(pair).result.document, read_all);
                             }) |
                             std::ranges::to<std::vector>());
                         // substrate generic algorithm: formatted output, not a fold.

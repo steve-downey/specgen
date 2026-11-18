@@ -242,6 +242,20 @@ struct Provenance {
     friend bool operator==(const Provenance&, const Provenance&) { return true; }
 };
 
+// Where a node of a document was read from, the same way: bytes [begin, end)
+// of `file`, whole lines, beside the node and not part of it (issue #346).
+// Only the draft importer records it, and only draft_edit.hpp reads it.
+struct SourceRange {
+    std::string file;
+    std::size_t begin = 0;
+    std::size_t end   = 0;
+};
+struct NodeOrigin {
+    std::shared_ptr<const SourceRange> range = {};
+
+    friend bool operator==(const NodeOrigin&, const NodeOrigin&) { return true; }
+};
+
 struct CodeText {
     std::string             text;
     std::vector<Span>       spans;        // sorted by begin, non-overlapping
@@ -744,6 +758,11 @@ struct SpecItem {
     // baseline's declaration (inherit.hpp, issue #332). Set only with
     // `as_draft`, and cleared with it when resolved.
     bool describes_synopsis = false;
+    // Where the draft importer read the item, its index entries to the end of
+    // its description, and where it read the description's paragraphs, inside
+    // the `itemdescr` (`NodeOrigin`).
+    NodeOrigin origin       = {};
+    NodeOrigin descr_origin = {};
 
     friend bool operator==(const SpecItem&, const SpecItem&) = default;
 };
@@ -884,6 +903,9 @@ struct Synopsis {
     // `\asdraft-synopsis`: `code` is the baseline synopsis of this class, with
     // the specifiers of `declared` written into it, once resolved (inherit.hpp).
     bool as_draft = false;
+    // Where the draft importer read the synopsis, its code block whole
+    // (`NodeOrigin`).
+    NodeOrigin origin = {};
 
     friend bool operator==(const Synopsis&, const Synopsis&) = default;
 };
