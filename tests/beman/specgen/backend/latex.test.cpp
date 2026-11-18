@@ -49,6 +49,15 @@ TEST_CASE("latex - a listing's exposition-only comment is the draft's macro") {
     CHECK(out.find("Not code: // exposition only") != std::string::npos);
 }
 
+TEST_CASE("latex - prose escapes the characters LaTeX reserves, and only those") {
+    // Issue #352: `&` is an alignment tab, `%` a comment that drops the rest of
+    // the paragraph's line, `#` an error. A brace or a backslash is the author's
+    // LaTeX, which prose keeps.
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{TextInline{"R&D, 50% of it, item #1, and \\textit{x}."}}}};
+    CHECK(latex::render_to_string(item).contains("R\\&D, 50\\% of it, item \\#1, and \\textit{x}.\n"));
+}
+
 TEST_CASE("latex - table cells escape code and prose ampersands once") {
     const Paragraph cell{CodeInline{{"&&", {}}},
                          TextInline{" prose_text & "},
@@ -346,7 +355,7 @@ TEST_CASE("latex - a line-break hint in running text and in a prose inline's nam
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = latex::render_to_string(item);
-    CHECK(out.contains("An im\\-plementation, \\linebreak \\oldconcept{Unary\\-Type\\-Trait} & \\brk{}"
+    CHECK(out.contains("An im\\-plementation, \\linebreak \\oldconcept{Unary\\-Type\\-Trait} \\& \\brk{}"
                        "\\libconcept{in\\-vocable}\\newline \\placeholder{long-\\brk name}.\n"));
     CHECK(out.contains("\\oldconcept{Unary\\-Type\\-Trait} \\& \\brk{}\\libconcept{in\\-vocable}"));
 }

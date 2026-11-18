@@ -179,6 +179,23 @@ using RawInline = std::variant<RawText, RawCode, RawRef, RawMacro>;
 constexpr std::string_view macro_prefixes[]{
     "\\placeholder{", "\\cv{", "\\cvqual{", "\\oldconcept{", "\\libconcept{", "\\exposconcept{", "\\ref{", "\\tref{"};
 
+// Prose text as a docblock writes it, with `\&`, `\%` and `\#` read as the
+// characters they stand for. A bare one is the character already, and the
+// LaTeX backend escapes each again, so either spelling is right in all three
+// backends (issue #352).
+std::string unescape_prose(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    // substrate generic algorithm: a cursor scan that drops the backslash of
+    // three control symbols.
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\\' && i + 1 < text.size() && (text[i + 1] == '&' || text[i + 1] == '%' || text[i + 1] == '#'))
+            ++i;
+        out += text[i];
+    }
+    return out;
+}
+
 std::string_view macro_prefix_at(std::string_view rest) {
     const auto it = std::ranges::find_if(macro_prefixes, [&](std::string_view p) { return rest.starts_with(p); });
     return it == std::end(macro_prefixes) ? std::string_view{} : *it;
@@ -282,7 +299,7 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
     for (RawInline& seg : segments->value) {
         std::visit(overloaded{[&](RawText& t) {
                                   if (!t.text.empty())
-                                      para.push_back(InlineText{std::move(t.text)});
+                                      para.push_back(InlineText{unescape_prose(t.text)});
                               },
                               [&](RawCode& c) {
                                   if (c.terminated) {

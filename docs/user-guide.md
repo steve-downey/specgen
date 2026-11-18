@@ -949,6 +949,13 @@ each prints), so a sentence typed here and the same sentence inherited from the
 draft are the same wording to the wording diff. Any other macro stays text: the LaTeX backend passes it
 through, and the mpark and org backends print it as written.
 
+Outside backticks, `&`, `%` and `#` are the characters themselves: the LaTeX
+backend writes them `\&`, `\%` and `\#`, and the other two backends as they
+are. A docblock may also write them `\&`, `\%` and `\#`, the draft's own
+spelling, which is read as the same character, so either spelling is right in
+all three backends. The importer reads the draft's `\&`, `\%` and `\#` in
+prose the same way.
+
 Write literal C++ characters inside backticks, including `&` and `&&`.
 The LaTeX backend escapes text-mode special characters inside `\tcode`;
 semantic span macros retain their LaTeX spelling. Org's LaTeX inline snippets

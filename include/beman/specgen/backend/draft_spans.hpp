@@ -238,6 +238,25 @@ inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::stri
     return macro;
 }
 
+// Prose text as LaTeX: the three characters LaTeX reserves that prose has as
+// themselves -- `&` (an alignment tab), `%` (a comment, which dropped the rest
+// of a paragraph written on one line) and `#` -- written as the draft writes
+// them, `\&`, `\%` and `\#` (issue #352). The rest stays as it is: prose keeps
+// a command the grammar does not know as written (design §4), so a backslash or
+// a brace in it is the author's LaTeX.
+inline std::string draft_escape_prose_text(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    // substrate generic algorithm: a per-character escape, one character to
+    // one or two.
+    for (const char ch : text) {
+        if (ch == '&' || ch == '%' || ch == '#')
+            out += '\\';
+        out += ch;
+    }
+    return out;
+}
+
 // Text with its line-break hints written where they sit: a text inline's
 // running text, or the name in a prose inline's argument. The text between
 // hints goes through `escape_text`, the hints do not. A control word that ends

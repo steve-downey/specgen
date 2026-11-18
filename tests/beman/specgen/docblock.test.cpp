@@ -243,6 +243,18 @@ TEST_CASE("docblock - macro-led text continues informative bodies") {
     }
 }
 
+TEST_CASE("docblock - an escaped ampersand, percent or hash in prose is the character") {
+    // Either spelling is right in every backend: the LaTeX one escapes the
+    // character again (issue #352).
+    const auto parsed = parse_docblock("//! R\\&D and R&D, 50\\% and 50%, \\#1 and #1, `a\\&b`, \\{.\n");
+    REQUIRE(parsed.diags.empty());
+    const auto& para = std::get<BodyParagraph>(parsed.block.leading.front()).text;
+    REQUIRE(para.size() == 3);
+    CHECK(std::get<InlineText>(para[0]).text == "R&D and R&D, 50% and 50%, #1 and #1, ");
+    CHECK(std::get<InlineCode>(para[1]).code == "a\\&b");
+    CHECK(std::get<InlineText>(para[2]).text == ", \\{.");
+}
+
 TEST_CASE("docblock - unknown commands retain text in paragraphs lists and tables") {
     const auto prose = parse_docblock("//! \\effects Before\n//! \\effect kept `code`.\n//! After.\n");
     CHECK(has_diag(prose, Severity::Error, "unknown tag \\effect; line kept as prose"));

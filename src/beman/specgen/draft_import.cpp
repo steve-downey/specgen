@@ -189,7 +189,7 @@ struct Importer {
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
     bool                      met_unknown_macro = false;
-    ir::Paragraph             parse_prose(std::string_view text, bool in_table = false);
+    ir::Paragraph             parse_prose(std::string_view text);
     ir::InformativeBody       parse_informative(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
     std::vector<ir::Node>     parse_region(Lines lines);
@@ -680,7 +680,7 @@ ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_c
 
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
 
-ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
+ir::Paragraph Importer::parse_prose(std::string_view text) {
     ir::Paragraph  out;
     ir::TextInline pending;
     // A hint with no text beside it -- between two macros, say -- is still kept,
@@ -735,8 +735,10 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             const char next = text[i + 1];
             if (next == ' ') {
                 pending.text += ' ';
-            } else if (in_table && next == '&') {
-                pending.text += '&'; // the LaTeX backend escapes a table cell's `&` again
+            } else if (next == '&' || next == '%' || next == '#') {
+                // The character itself, as a docblock writes it; the LaTeX
+                // backend escapes it again (issue #352).
+                pending.text += next;
             } else if (next != ',') {
                 pending.text += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
             }
@@ -1154,26 +1156,25 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
 
 ir::Table2D Importer::make_table2d(const EvTable& table) {
     ir::Table2D out{.stable_name = table.stable,
-                    .caption     = parse_prose(table.caption, true),
-                    .column1     = parse_prose(table.column1, true),
-                    .column2     = parse_prose(table.column2, true),
+                    .caption     = parse_prose(table.caption),
+                    .column1     = parse_prose(table.column1),
+                    .column2     = parse_prose(table.column2),
                     .rows        = {}};
-    out.rows =
-        table.rows | std::views::transform([&](const std::vector<std::string>& row) {
-            return ir::Table2DRow{parse_prose(row[0], true), parse_prose(row[1], true), parse_prose(row[2], true)};
-        }) |
-        std::ranges::to<std::vector>();
+    out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
+                   return ir::Table2DRow{parse_prose(row[0]), parse_prose(row[1]), parse_prose(row[2])};
+               }) |
+               std::ranges::to<std::vector>();
     return out;
 }
 
 ir::Table1D Importer::make_table1d(const EvTable& table) {
     ir::Table1D out{.stable_name = table.stable,
-                    .caption     = parse_prose(table.caption, true),
-                    .column1     = parse_prose(table.column1, true),
-                    .column2     = parse_prose(table.column2, true),
+                    .caption     = parse_prose(table.caption),
+                    .column1     = parse_prose(table.column1),
+                    .column2     = parse_prose(table.column2),
                     .rows        = {}};
     out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
-                   return ir::Table1DRow{parse_prose(row[0], true), parse_prose(row[1], true)};
+                   return ir::Table1DRow{parse_prose(row[0]), parse_prose(row[1])};
                }) |
                std::ranges::to<std::vector>();
     return out;

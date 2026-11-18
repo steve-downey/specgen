@@ -236,6 +236,17 @@ void f() @\cv{}@ @\added{x}@; // \ref{y}
     CHECK(sigs[1].spans[1].payload == "y");
 }
 
+TEST_CASE("draft_import - an escaped ampersand, percent or hash in prose is the character") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+R\&D, 50\% of it, item \#1, and \{ as written.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.at(0)).text;
+    CHECK(std::get<ir::TextInline>(para.at(0)).text == "R&D, 50% of it, item #1, and \\{ as written.");
+}
+
 TEST_CASE("draft_import - only the macro \\expos in a listing is the words exposition only") {
     const auto code = draft_import::parse_listing("int a; // \\expos\nint b; // \\expos.\nint c; // \\exposition\n");
     CHECK(code.text == "int a; // exposition only\nint b; // exposition only.\nint c; // \\exposition\n");
