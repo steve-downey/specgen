@@ -671,8 +671,8 @@ specgen_add_golden(
 # declared by a detached item and not by the class, so `\asdraft-synopsis` has
 # no declaration of the class's to patch its line from. It takes `constexpr`
 # from the item, and the diff marks the specifier on the synopsis line and on
-# the item alike. Its `.validate` sibling passes: the one finding is the note
-# that the class does not declare it.
+# the item alike. Its `.validate` sibling is silent: the synopsis line agrees
+# with the base class's declaration of `operator()` (issue #342).
 specgen_add_golden(
     diff_func_wrap_move_base_call
     MODE generate
@@ -3087,6 +3087,34 @@ foreach(
         PROPERTIES PASS_REGULAR_EXPRESSION "${refusal_message}"
     )
 endforeach()
+
+# --apply-to-draft (issue #343): the paper's changes made in the draft's own
+# source. The `\asdraft` header whose change to [func.wrap.move] is
+# `constexpr`, applied to the slice it inherits from: the edited file is
+# pinned, and differs from the slice in `constexpr` alone. See
+# run-apply-to-draft.cmake.
+set(apply_to_draft_args
+    "-DSPECGEN=$<TARGET_FILE:specgen>"
+    "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_asdraft.hpp"
+    "-DSLICE=${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    "-DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/apply_to_draft/expected.tex"
+    "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/apply_to_draft"
+)
+add_test(
+    NAME golden.apply_to_draft
+    COMMAND
+        "${CMAKE_COMMAND}" ${apply_to_draft_args} -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-apply-to-draft.cmake"
+)
+list(
+    APPEND GOLDEN_UPDATE_COMMANDS
+    COMMAND
+    ${CMAKE_COMMAND}
+    ${apply_to_draft_args}
+    -DUPDATE_GOLDEN=ON
+    -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/run-apply-to-draft.cmake"
+)
 
 # --section-number at the driver seam (issue #287): one-pass and two-pass
 # agreement, the number in every `--split` fragment, numbered wording diffs

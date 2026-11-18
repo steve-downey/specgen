@@ -1146,6 +1146,38 @@ specgen generate hdr.hpp --baseline-draft draft/source --backend latex -o diff.t
 The two flags together are an error, since the second already inherits. Both
 list the draft files they read in a `--depfile`.
 
+### The paper as an edit of the draft's source
+
+A third output is the draft's own source with the paper applied, ready to commit
+on a branch of the draft and open as a pull request there:
+
+```sh
+specgen generate hdr.hpp --apply-to-draft draft/source -o edited -- -Iinclude
+```
+
+`--apply-to-draft <dir>` resolves `\asdraft` against the draft in that
+directory, as `--inherit-draft` does. Instead of rendering wording, it pairs the
+paper's subclauses with the draft's, as the wording diff does, and makes each
+change in the draft's `.tex` file as an edit of only the bytes that change. Each
+changed file is written, under its own name, to the directory `-o` names, and
+stderr says how many edits each has. Everything else stays as the draft has it,
+byte for byte: line breaks, `\indexlibrary*` entries, `%` comments, and the
+layout of synopses and items. With several headers, edits to one file are made
+together.
+
+What can be placed is a change to the code of a declaration or of a synopsis:
+a token added, removed or replaced. Code is compared token by token with its
+layout ignored, so a declaration the generator lays out differently from the
+draft is not a change, and an added `constexpr` is written into the draft's own
+line. Any other change is an error naming it and is not placed: a changed
+description or paragraph, and an item, a declaration or a subclause added or
+removed. The other edits are still written, and the run exits 1. A declaration
+outside every subclause has no place in the draft, so it is left out with a
+warning.
+
+The edited draft is the whole output, so the option takes no baseline, no
+`--inherit-draft`, and no `--split`, `--validate` or `--paper`.
+
 The same marker works one level up. On a class definition's docblock, `\asdraft`
 takes the class's own description (its *Recommended practice*, notes and prose)
 from the baseline item of the section that has no declaration; as a detached
@@ -1183,9 +1215,19 @@ by how alike they read. For each pair, the specifiers `constexpr`, `explicit` an
 placeholders and comments stay and only what the paper changed is different. A
 `noexcept` whose operand is a placeholder agrees with either. `static`,
 `friend`, `= default` and `= delete` cannot be written, and are warnings naming
-the declaration, as is a class member the synopsis leaves out. A declaration the
-synopsis has and the class does not is a note: it is how a member inherited from
-a base class reads.
+the declaration, as is a class member the synopsis leaves out.
+
+A declaration the synopsis has and the class does not make may be one the class
+has from a base class. The check reads the member functions of the class's
+bases, as Clang has them, and compares the synopsis line with the base's
+declaration of the same name. A base that depends on the class's template
+parameters, such as `detail::call_base<move_only_function<Sig>, Sig>`, may be
+any specialization of its template, so each defined one is a candidate (the
+primary template, each partial specialization, each explicit specialization),
+and the line has to agree with every one that declares the name. A disagreement
+is a warning naming the base class's declaration. Constructors, destructors,
+`operator=` and private members are not inherited and are not read. A line that
+neither the class nor any base declares is a note.
 
 Such a member has no declaration in the class to take specifiers from, and it
 may have an item of its own, typed as a detached `\verbatim-itemdecl`:
@@ -1715,7 +1757,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.42.14 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.43.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

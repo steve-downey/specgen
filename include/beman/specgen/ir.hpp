@@ -11,6 +11,7 @@
 
 #include <array>
 #include <cstddef>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -206,11 +207,41 @@ constexpr bool tied_space(const LayoutHint& hint, std::string_view text) {
     return hint.kind == LayoutHintKind::Tie && hint.at < text.size() && text[hint.at] == ' ';
 }
 
+// Where a code text was read from: the draft source file, and for each byte
+// of the text the range of that file it stands for. A byte copied from the
+// source stands for itself; the bytes of a span read from an `@...@` escape all
+// stand for the whole escape. Only the draft importer records it, for code
+// read from a listing, and only the output that edits the draft's source
+// (draft_edit.hpp) reads it.
+struct CodeSource {
+    struct Range {
+        std::size_t begin = 0;
+        std::size_t end   = 0;
+
+        friend bool operator==(const Range&, const Range&) = default;
+    };
+    std::string        file;
+    std::vector<Range> bytes; // one per byte of the text
+
+    friend bool operator==(const CodeSource&, const CodeSource&) = default;
+};
+
+// A code text's provenance, beside it and not part of it: two texts read from
+// different places are the same wording, so it compares equal to every other,
+// and the JSON form does not have it. Shared, since the text is copied often
+// and the record never changes once read.
+struct Provenance {
+    std::shared_ptr<const CodeSource> source = {};
+
+    friend bool operator==(const Provenance&, const Provenance&) { return true; }
+};
+
 struct CodeText {
     std::string             text;
     std::vector<Span>       spans;        // sorted by begin, non-overlapping
     std::vector<ChangeRun>  changes = {}; // the wording diff's marks, usually none
     std::vector<LayoutHint> hints   = {}; // the draft's line-break hints, usually none
+    Provenance              origin  = {}; // where an imported listing was read from, usually nothing
 
     friend bool operator==(const CodeText&, const CodeText&) = default;
 };
@@ -764,6 +795,12 @@ struct Synopsis {
     // check compares the two for what a paper changes without touching a word
     // (synopsis_check.hpp).
     std::optional<CodeText> declared = {};
+    // Beside `declared`, the member functions the class has from its base
+    // classes: one entry per class they may come from, a dependent base
+    // giving one for each specialization it could be (base_members.hpp).
+    // Validator-only, like `declared`, and kept with it: a synopsis line the
+    // class's own declarations do not make is checked against these.
+    std::vector<CodeText> declared_bases = {};
     // `\asdraft-synopsis`: `code` is the baseline synopsis of this class, with
     // the specifiers of `declared` written into it, once resolved (inherit.hpp).
     bool as_draft = false;

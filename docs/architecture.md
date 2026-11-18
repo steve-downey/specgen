@@ -1138,6 +1138,12 @@ have no independent item description.
   name and not the LaTeX. Only a backend writing draft LaTeX reads any of this: the shared
   span walk (`backend/code_spans.hpp`) takes a hint writer that defaults to writing nothing,
   and writes a hint between the pieces of escaped text or into a span's payload.
+- **Where imported code came from** is beside it too: `CodeText::origin`, a shared
+  `CodeSource` holding the file and, for each byte of the text, the range of the file it stands
+  for (a span read from an `@...@` escape stands for the whole escape). It compares equal to
+  every other and is not serialized, so it is never wording. The importer records it for the
+  listings it reads, and only `backend/draft_edit` reads it, to place a paper's code changes in
+  the draft's own source (`generate --apply-to-draft`).
   `without_typesetting` strips all of it, and the wording diff compares through it: two
   pieces that differ only there are the same wording, and the current revision's is kept.
   Code the diff does change is rebuilt from tokens and comes out with no hints.

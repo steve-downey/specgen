@@ -35,7 +35,8 @@ struct Decl {
     std::size_t head_end   = 0; // after a leading `template<...>`
     std::size_t name_begin = 0;
     std::size_t params_end = 0; // just past the parameter list's `)`
-    std::string text;           // begin..end, whitespace folded
+    std::string text;           // begin..end, whitespace folded, escapes blanked: what pairing reads
+    std::string shown;          // the same as written, escapes and all: what a finding names
 
     // The words of the decl-specifier region, with where each starts and how far it reaches.
     struct Word {
@@ -359,6 +360,7 @@ std::vector<Decl> declarations(const ir::CodeText& code) {
             const std::size_t first = skip_space(w, begin);
             if (first < i)
                 if (auto d = read_decl(w, first, i, code.spans, blanked.placeholders)) {
+                    d->shown = folded(std::string_view(text).substr(first, i - first));
                     if (const auto word =
                             std::ranges::find(d->prefix, std::string_view("explicit"), &Decl::Word::word);
                         word != d->prefix.end())
@@ -444,6 +446,7 @@ enum class Compared {
     All,         // a class's own declaration, every specifier
     Unpatchable, // the same, after a patch has written the ones it can
     Item,        // an item that declares what the class does not: the ones a patch writes
+    Base,        // a base class's declaration of what the class does not declare: every specifier
 };
 
 std::vector<Finding> disagreements(const Decl& s, const Decl& d, Compared compared) {
@@ -457,11 +460,13 @@ std::vector<Finding> disagreements(const Decl& s, const Decl& d, Compared compar
         if (spec.flag == &Decl::is_noexcept && (s.noexcept_any || d.noexcept_any))
             continue;
         if (in_synopsis != in_code)
-            out.push_back({s.text,
+            out.push_back({s.shown,
                            std::format("the synopsis {} `{}` and the {} {}",
                                        in_synopsis ? "has" : "does not have",
                                        spec.name,
-                                       compared == Compared::Item ? "item that declares this" : "declaration",
+                                       compared == Compared::Item   ? "item that declares this"
+                                       : compared == Compared::Base ? "base class's declaration"
+                                                                    : "declaration",
                                        in_code ? "does" : "does not")});
     }
     return out;
@@ -511,21 +516,48 @@ pair_elsewhere(const std::vector<Decl>& synopsis, std::vector<std::size_t> unpai
 
 } // namespace
 
-std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& declared) {
-    const std::vector<Decl> s       = declarations(synopsis);
-    const std::vector<Decl> d       = declarations(declared);
-    const Pairing           pairing = pair_up(s, d);
+std::vector<Finding>
+compare(const ir::CodeText& synopsis, const ir::CodeText& declared, const std::vector<ir::CodeText>& bases) {
+    const std::vector<Decl>              s       = declarations(synopsis);
+    const std::vector<Decl>              d       = declarations(declared);
+    const Pairing                        pairing = pair_up(s, d);
+    const std::vector<std::vector<Decl>> b =
+        bases | std::views::transform(declarations) | std::ranges::to<std::vector>();
 
     std::vector<Finding> out;
     // substrate generic algorithm: collects each pair's findings, in synopsis order.
     for (const auto& [si, di] : pairing.pairs)
         out.append_range(disagreements(s[si], d[di], Compared::All));
+    // A declaration the class does not make is one it may have from a base
+    // class (issue #342). It is compared with the base's declaration that
+    // reads most like it, in every class the base may be: a dependent base
+    // is each of its specializations, and the line has to agree with all
+    // that declare the name. The same finding from several of them is one.
+    // Only one that no base declares is the note.
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
-    for (const std::size_t i : pairing.only_synopsis)
-        out.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});
+    for (const std::size_t i : pairing.only_synopsis) {
+        const std::vector<Decl> one{s[i]};
+        bool                    found = false;
+        std::vector<Finding>    findings;
+        // substrate generic algorithm: each class the member may come from, compared in turn.
+        for (const std::vector<Decl>& base : b) {
+            const Pairing in_base = pair_up(one, base);
+            if (in_base.pairs.empty())
+                continue;
+            found = true;
+            // substrate generic algorithm: keeps each distinct finding once.
+            for (Finding& f : disagreements(s[i], base[in_base.pairs.front().second], Compared::Base))
+                if (std::ranges::none_of(findings, [&](const Finding& g) { return g.message == f.message; }))
+                    findings.push_back(std::move(f));
+        }
+        if (found)
+            out.append_range(std::move(findings));
+        else
+            out.push_back({s[i].shown, "the synopsis declares this, and the code does not", Severity::Note});
+    }
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_declared)
-        out.push_back({d[i].text, "the code declares this, and the synopsis does not"});
+        out.push_back({d[i].shown, "the code declares this, and the synopsis does not"});
     return out;
 }
 
@@ -623,10 +655,10 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared, const 
                           [&](const ElsewherePair& pair) { write_specifiers(s[pair.synopsis], pair.item); });
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_synopsis)
-        unpatched.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});
+        unpatched.push_back({s[i].shown, "the synopsis declares this, and the code does not", Severity::Note});
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_declared)
-        unpatched.push_back({d[i].text, "the code declares this, and the synopsis does not"});
+        unpatched.push_back({d[i].shown, "the code declares this, and the synopsis does not"});
 
     std::ranges::stable_sort(edits, {}, &Edit::pos);
 

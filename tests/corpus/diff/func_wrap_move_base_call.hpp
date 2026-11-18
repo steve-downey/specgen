@@ -11,9 +11,8 @@
 // The class's own declarations are what `\asdraft-synopsis` patches the
 // draft's synopsis from, and `operator()` is not among them. Its line takes
 // `constexpr` from the item that declares it, so the synopsis and the item
-// agree and the diff marks the specifier in both. The synopsis check still
-// notes that the class does not declare it, which is how a base-class member
-// reads.
+// agree and the diff marks the specifier in both. The synopsis check reads
+// the base class's declaration of it, which agrees, and says nothing.
 //
 // Self-contained and parsed standalone under -std=c++2c.
 

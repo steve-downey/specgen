@@ -9,6 +9,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 #include <vector>
@@ -234,4 +235,43 @@ TEST_CASE("synopsis_check - a synopsis looks for items as far as its top-level s
         REQUIRE(levels.size() == 1);
         CHECK(levels[0].size() == 2);
     }
+}
+
+TEST_CASE("synopsis_check - a declaration the class does not make is compared with its base class's") {
+    const auto synopsis = code("class f {\n  R call(Args...) const;\n  bool empty() const;\n  void reset();\n};");
+    const auto declared = code("class f {\n};");
+    // One base, with two specializations it may be, and an ordinary one.
+    const std::vector<CodeText> bases = {code("constexpr R call(Args ...args);\n"),
+                                         code("constexpr R call(Args ...args) const;\n"),
+                                         code("bool empty() const;\nunsigned size() const;\n")};
+
+    const auto findings = check::compare(synopsis, declared, bases);
+    // Both specializations say constexpr: one finding, not two.
+    REQUIRE(findings.size() == 2);
+    CHECK(findings[0].declaration == "R call(Args...) const");
+    CHECK(findings[0].message == "the synopsis does not have `constexpr` and the base class's declaration does");
+    CHECK(findings[0].severity == beman::specgen::Severity::Warning);
+    // Only what no base declares is the note.
+    CHECK(findings[1].declaration == "void reset()");
+    CHECK(findings[1].severity == beman::specgen::Severity::Note);
+
+    SECTION("with no bases, every such declaration is the note, as before") {
+        const auto without = check::compare(synopsis, declared);
+        REQUIRE(without.size() == 3);
+        CHECK(std::ranges::all_of(
+            without, [](const check::Finding& f) { return f.severity == beman::specgen::Severity::Note; }));
+    }
+    SECTION("a declaration the class makes is the class's, whatever a base has") {
+        CHECK(check::compare(code("class f {\n  bool empty() const;\n};"),
+                             code("class f {\n  bool empty() const;\n};"),
+                             {code("constexpr bool empty() const;\n")})
+                  .empty());
+    }
+}
+
+TEST_CASE("synopsis_check - a finding names the declaration as written, escapes and all") {
+    const auto synopsis = code("class f {\n  R call(Args...) @\\cv{}@ noexcept(@\\placeholder{noex}@);\n};");
+    const auto findings = check::compare(synopsis, code("class f {\n};"));
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().declaration == "R call(Args...) @\\cv{}@ noexcept(@\\placeholder{noex}@)");
 }

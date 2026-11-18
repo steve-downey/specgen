@@ -13,6 +13,7 @@
 #include <beman/specgen/rsec.hpp>
 #include <beman/specgen/section_markers.hpp>
 #include <beman/specgen/frontend/attach.hpp>
+#include <beman/specgen/frontend/base_members.hpp>
 #include <beman/specgen/frontend/class_head_mandates.hpp>
 #include <beman/specgen/frontend/coverage_roster.hpp>
 #include <beman/specgen/frontend/decl_projections.hpp>
@@ -499,8 +500,10 @@ db::DocEvent classify(const RawItem&                                   ev,
         out.synopsis.as_draft  = block.synopsis_as_draft;
         // An authored or inherited synopsis is text nothing ties to the
         // declarations, so the code's own is kept beside it for the check.
-        if (block.synopsis || block.synopsis_as_draft)
-            out.synopsis.declared = extracted;
+        if (block.synopsis || block.synopsis_as_draft) {
+            out.synopsis.declared       = extracted;
+            out.synopsis.declared_bases = base_class_members(record, lang_opts);
+        }
         out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}} : std::move(extracted);
         collect_inclass_items(
             record, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);
@@ -544,8 +547,10 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                   ns_drop_set,
                                                   tmpl);
         out.synopsis.as_draft  = block.synopsis_as_draft;
-        if (block.synopsis || block.synopsis_as_draft)
-            out.synopsis.declared = extracted;
+        if (block.synopsis || block.synopsis_as_draft) {
+            out.synopsis.declared       = extracted;
+            out.synopsis.declared_bases = base_class_members(templated, lang_opts);
+        }
         out.synopsis.code = block.synopsis ? ir::CodeText{std::move(*block.synopsis), {}} : std::move(extracted);
         collect_inclass_items(
             templated, sm, lang_opts, ns_drop_set, expos_set, skipped, source_markup, out.pending, out.diagnostics);

@@ -16,6 +16,8 @@
 #include <ios>
 #include <iterator>
 #include <map>
+#include <memory>
+#include <numeric>
 #include <optional>
 #include <ranges>
 #include <set>
@@ -166,7 +168,23 @@ struct Importer {
 
     Result run(std::string_view tex, const Options& options);
 
-    ir::CodeText parse_code(std::string_view raw, bool listing);
+    // `source_at`, when given, is where `raw` begins in the source file named
+    // by `source_name`, and the code records where each of its bytes came from
+    // (`ir::CodeText::origin`).
+    ir::CodeText parse_code(std::string_view raw, bool listing, std::optional<std::size_t> source_at = std::nullopt);
+    // The file being read, as `Options::source_name` gives it, the lines it
+    // was split into, and where each begins, for `source_at`.
+    std::string                     source_name;
+    const std::vector<std::string>* all_lines = nullptr;
+    std::vector<std::size_t>        line_starts;
+    // Where `line`, a line of `all_lines` (a subspan of it reaches here as
+    // `Lines`), begins in the file; nothing for a line that is a copy.
+    std::optional<std::size_t> source_offset(const std::string& line) const {
+        if (all_lines == nullptr || all_lines->empty() || &line < all_lines->data() ||
+            &line >= all_lines->data() + all_lines->size())
+            return std::nullopt;
+        return line_starts[static_cast<std::size_t>(&line - all_lines->data())];
+    }
     // Set by parse_code when it met a macro the span vocabulary lacks: the text
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
@@ -489,13 +507,32 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
     return out.code;
 }
 
-ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
+ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optional<std::size_t> source_at) {
     CodeBuilder out;
     std::size_t i = 0;
+    // Where each byte of the text came from. Each step of the scan below
+    // consumes some of `raw` and appends some text: bytes it copied stand for
+    // themselves, and anything else it made, a span from an escape, stands
+    // for all it consumed.
+    std::vector<ir::CodeSource::Range> origin;
+    std::size_t                        step_at   = 0;
+    std::size_t                        step_text = 0;
+    const auto                         settle    = [&](std::size_t now) {
+        const std::size_t added = out.code.text.size() - step_text;
+        const bool copied = added == now - step_at &&
+                            std::string_view(out.code.text).substr(step_text) == raw.substr(step_at, now - step_at);
+        // substrate generic algorithm: one origin per byte the step appended.
+        for (std::size_t k = 0; k < added; ++k)
+            origin.push_back(copied ? ir::CodeSource::Range{step_at + k, step_at + k + 1}
+                                    : ir::CodeSource::Range{step_at, now});
+        step_at   = now;
+        step_text = out.code.text.size();
+    };
     // substrate generic algorithm: a single left-to-right scan that consumes
     // a variable-length macro or escape at each step; the position is the
     // loop's state.
     while (i < raw.size()) {
+        settle(i);
         const char c = raw[i];
         if (listing && c == '@') {
             const std::size_t close = raw.find('@', i + 1);
@@ -601,6 +638,16 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing) {
         }
         out.text(raw.substr(i, 1));
         ++i;
+    }
+    settle(i);
+    if (source_at) {
+        auto source            = std::make_shared<ir::CodeSource>();
+        source->file           = source_name;
+        source->bytes          = origin | std::views::transform([&](ir::CodeSource::Range r) {
+                            return ir::CodeSource::Range{*source_at + r.begin, *source_at + r.end};
+                                 }) |
+                                 std::ranges::to<std::vector>();
+        out.code.origin.source = std::move(source);
     }
     return std::move(out.code);
 }
@@ -1244,14 +1291,20 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
 }
 
 std::vector<ir::CodeText> Importer::split_signatures(Lines lines) {
-    const std::string         text = lines | std::views::join_with('\n') | std::ranges::to<std::string>();
-    std::vector<ir::CodeText> out;
-    int                       depth = 0;
-    std::size_t               start = 0;
-    const auto                emit  = [&](std::size_t end) {
+    const std::string text = lines | std::views::join_with('\n') | std::ranges::to<std::string>();
+    // The lines are the file's own, so their join is the file's text from the first.
+    const std::optional<std::size_t> at = lines.empty() ? std::nullopt : source_offset(lines.front());
+    std::vector<ir::CodeText>        out;
+    int                              depth = 0;
+    std::size_t                      start = 0;
+    const auto                       emit  = [&](std::size_t end) {
         const std::string_view sig = trim(std::string_view(text).substr(start, end - start));
         if (!sig.empty())
-            out.push_back(parse_code(sig, true));
+            out.push_back(
+                parse_code(sig,
+                           true,
+                           at ? std::optional<std::size_t>{*at + static_cast<std::size_t>(sig.data() - text.data())}
+                              : std::nullopt));
         start = end;
     };
     // substrate generic algorithm: a declaration ends at the first `;` outside
@@ -1386,10 +1439,10 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
             }
             if (*name == "codeblock" && !has_content()) {
                 const std::size_t end  = environment_end(lines, i, *name);
-                const std::string code = lines.subspan(i + 1, std::min(end, lines.size()) - i - 1) |
-                                         std::views::join_with('\n') | std::ranges::to<std::string>();
+                const Lines       body = lines.subspan(i + 1, std::min(end, lines.size()) - i - 1);
+                const std::string code = body | std::views::join_with('\n') | std::ranges::to<std::string>();
                 ir::Synopsis      synopsis;
-                synopsis.code = parse_code(code, true);
+                synopsis.code = parse_code(code, true, body.empty() ? std::nullopt : source_offset(body.front()));
                 synopsis.name = declared_class(synopsis.code.text);
                 nodes.push_back(std::move(synopsis));
                 pending.clear();
@@ -1409,10 +1462,13 @@ ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t
     const std::string saved = std::exchange(section, head.stable);
     ir::Section       out{.stable_name = head.stable, .title = head.title, .children = {}};
 
-    std::vector<std::string> own;
-    const auto               flush_own = [&] {
-        out.children.append_range(parse_region(own));
-        own.clear();
+    // The section's own lines between its subsections: always a run of the
+    // given lines, which stay the file's own, so what is read from them can
+    // say where in the file it was.
+    std::size_t own_begin = header + 1;
+    std::size_t own_end   = header + 1;
+    const auto  flush_own = [&] {
+        out.children.append_range(parse_region(lines.subspan(own_begin, own_end - own_begin)));
     };
     std::size_t i = header + 1;
     // substrate generic algorithm: a subsection consumes a variable number of
@@ -1429,12 +1485,13 @@ ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t
                 ++sub_end;
             }
             out.children.push_back(parse_section(lines, i, sub_end));
-            section = head.stable;
-            i       = sub_end;
+            section   = head.stable;
+            i         = sub_end;
+            own_begin = own_end = i;
             continue;
         }
-        own.push_back(lines[i]);
         ++i;
+        own_end = i;
     }
     flush_own();
     section = saved;
@@ -1444,6 +1501,11 @@ ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t
 Result Importer::run(std::string_view tex, const Options& options) {
     const std::vector<std::string> lines = split_lines(tex);
     Result                         result;
+    source_name = options.source_name;
+    all_lines   = &lines;
+    line_starts = lines | std::views::transform([](const std::string& line) { return line.size() + 1; }) |
+                  std::ranges::to<std::vector<std::size_t>>();
+    std::exclusive_scan(line_starts.begin(), line_starts.end(), line_starts.begin(), std::size_t{0});
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const std::string& name : options.sections) {
         const auto header = std::ranges::find_if(lines, [&](const std::string& l) {
@@ -1531,7 +1593,7 @@ TreeResult import_from_directory(const std::filesystem::path& directory, std::sp
                                               std::ranges::to<std::vector<std::string>>();
         if (here.empty())
             continue;
-        Result imported = import_sections(*tex, {.sections = here});
+        Result imported = import_sections(*tex, {.sections = here, .source_name = file.string()});
         result.sources.push_back(file.string());
         result.diagnostics.append_range(std::move(imported.diagnostics));
         // substrate generic algorithm: pairs each name with the node imported for it.

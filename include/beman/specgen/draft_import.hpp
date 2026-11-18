@@ -34,6 +34,10 @@ struct Options {
     // Stable names of the subclauses to import, each with its subsections.
     // The result has one top-level section per name, in this order.
     std::vector<std::string> sections;
+    // The file the text is, recorded as where each listing was read from
+    // (`ir::CodeText::origin`). The listings record their source whether or
+    // not it is given.
+    std::string source_name = {};
 };
 
 struct Result {

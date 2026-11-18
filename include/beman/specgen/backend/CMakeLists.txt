@@ -7,6 +7,7 @@ target_sources(
         FILE_SET HEADERS
             FILES
                 code_spans.hpp
+                draft_edit.hpp
                 draft_spans.hpp
                 element_label.hpp
                 render_fold.hpp

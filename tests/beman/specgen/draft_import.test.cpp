@@ -872,3 +872,45 @@ TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes
     CHECK(std::ranges::count_if(para, [](const ir::Inline& i) { return std::holds_alternative<ir::RawInline>(i); }) ==
           6);
 }
+
+TEST_CASE("draft_import - a listing records where each of its bytes was read from") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+
+\begin{codeblock}
+class c {
+  R f() @\cv{}@;
+};
+\end{codeblock}
+
+\begin{itemdecl}
+template<class T>
+  R g(T) @\cv{}@;
+\end{itemdecl}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}, "x.tex"});
+    CHECK(r.diagnostics.empty());
+    const auto& section = only_section(r);
+    const auto  check   = [&](const ir::CodeText& code) {
+        REQUIRE(code.origin.source != nullptr);
+        const ir::CodeSource& source = *code.origin.source;
+        CHECK(source.file == "x.tex");
+        REQUIRE(source.bytes.size() == code.text.size());
+        // substrate generic algorithm: every byte, against the text it came from.
+        for (std::size_t i = 0; i < code.text.size(); ++i) {
+            const auto [begin, end]     = source.bytes[i];
+            const std::string_view from = tex.substr(begin, end - begin);
+            const auto             span =
+                std::ranges::find_if(code.spans, [&](const ir::Span& s) { return s.begin <= i && i < s.end; });
+            if (span == code.spans.end())
+                CHECK(from == code.text.substr(i, 1));
+            else
+                CHECK(from == "@\\cv{}@"); // a span's bytes stand for its whole escape
+        }
+    };
+    check(std::get<ir::Synopsis>(section.children.at(0)).code);
+    check(item_at(section, 1).decl.signatures.front());
+    // Provenance is not wording: the same code read from elsewhere is equal.
+    ir::CodeText bare = item_at(section, 1).decl.signatures.front();
+    bare.origin       = {};
+    CHECK(bare == item_at(section, 1).decl.signatures.front());
+}

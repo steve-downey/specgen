@@ -27,6 +27,7 @@
 // `--depfile` then says what the run read to produce them, so a build can
 // rebuild the wording when a header moves (decision depfile-emission).
 
+#include <beman/specgen/backend/draft_edit.hpp>
 #include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/backend/mpark.hpp>
 #include <beman/specgen/backend/org.hpp>
@@ -177,6 +178,11 @@ generate options:
   --inherit-draft <dir>     resolve \asdraft against the draft in this
                              directory, as --baseline-draft does, but render
                              the wording itself and not a diff. One per run
+  --apply-to-draft <dir>    resolve \asdraft against the draft in this
+                             directory, and write its source files with the
+                             paper's changes made in them, each changed file
+                             to the directory -o names; a change that cannot
+                             be placed is an error. One per run
   --diff-context <level>    with a baseline: `changed` (the default) keeps the
                              sections that changed, `all` keeps every section,
                              `items` also elides the unchanged items inside a
@@ -369,7 +375,12 @@ struct WordingOptions {
     // --inherit-draft <dir>: `\asdraft` takes its descriptions from the draft's
     // LaTeX in this directory, and the wording is rendered plain, with no
     // diff. The paper's own wording, as --baseline-draft is its diff.
-    std::optional<std::string>   inherit_draft;
+    std::optional<std::string> inherit_draft;
+    // --apply-to-draft <dir>: `\asdraft` resolves against the draft in this
+    // directory, as for --inherit-draft, and what is written is that draft's
+    // source with the paper's changes made in it, one edited copy of each
+    // changed file in the directory -o names (draft_edit.hpp).
+    std::optional<std::string>   apply_to_draft;
     std::optional<diff::Context> diff_context;
 
     bool has_baseline() const {
@@ -598,6 +609,18 @@ std::optional<std::string> wording_option_error(const WordingOptions& options) {
     if (options.inherit_draft && options.baseline_draft)
         return std::string("specgen: --baseline-draft already inherits from the draft; --inherit-draft is for the "
                            "wording without a diff");
+    // The edited draft is the whole output: no wording is rendered, diffed,
+    // split or validated, so the options that steer those mean nothing here.
+    if (options.apply_to_draft) {
+        if (options.has_baseline() || options.inherit_draft)
+            return std::string("specgen: --apply-to-draft already reads the draft it edits; it takes no baseline "
+                               "and no --inherit-draft");
+        if (!options.split_dir.empty() || options.validate || options.paper)
+            return std::string("specgen: --apply-to-draft writes the draft's source, not wording, so --split, "
+                               "--validate and --paper do not apply");
+        if (options.output.empty() || options.output == "-")
+            return std::string("specgen: --apply-to-draft needs -o, the directory the edited files are written to");
+    }
     if (options.baseline_kinds() > 1)
         return std::string("specgen: a run takes one kind of baseline, --baseline-ir, --baseline-header, "
                            "--baseline-rev or --baseline-draft, not several");
@@ -1523,6 +1546,17 @@ int generate_command(const std::vector<std::string>& args) {
                 return 2;
             }
             wording.baseline_draft = std::move(directory);
+        } else if (arg == "--apply-to-draft") {
+            // The draft source directory the paper's changes are made in.
+            std::string directory;
+            if (!next(directory))
+                return 2;
+            if (wording.apply_to_draft) {
+                std::println(stderr, "specgen: --apply-to-draft names one directory for the run; it was given twice");
+                return 2;
+            }
+            wording_only();
+            wording.apply_to_draft = std::move(directory);
         } else if (arg == "--inherit-draft") {
             // Like --baseline-draft, a directory for the whole paper; it only
             // resolves `\asdraft`, so what is rendered is the paper's wording
@@ -1925,8 +1959,10 @@ int generate_command(const std::vector<std::string>& args) {
                     // What `\asdraft` inherits from: the draft named by --inherit-draft,
                     // which renders no diff, or else the baseline, whatever its kind.
                     std::optional<Baselines> inherited;
-                    if (wording.inherit_draft) {
-                        auto draft = build_draft_baselines(*wording.inherit_draft, built);
+                    if (const auto& draft_dir =
+                            wording.apply_to_draft ? wording.apply_to_draft : wording.inherit_draft;
+                        draft_dir) {
+                        auto draft = build_draft_baselines(*draft_dir, built);
                         if (!draft)
                             return std::unexpected(draft.error());
                         inherited = std::move(*draft);
@@ -1998,7 +2034,77 @@ int generate_command(const std::vector<std::string>& args) {
                                    : emit_paper(headers, documents, roots, wording, baseline_documents);
                     };
 
-                    return (emit_ir ? write_ir() : write_wording())
+                    // --apply-to-draft: the draft's own files, with the paper's
+                    // changes made in place of rendering anything. Each change
+                    // that cannot be placed is reported, the rest are written,
+                    // and the run fails, as an Error does elsewhere.
+                    const auto write_draft_edit = [&]() -> std::expected<Written, std::string> {
+                        namespace draft_edit  = beman::specgen::backend::draft_edit;
+                        draft_edit::Plan plan = draft_edit::merge(
+                            std::views::zip(inherited->documents, built) | std::views::transform([](const auto& pair) {
+                                return draft_edit::plan(std::get<0>(pair), std::get<1>(pair).result.document);
+                            }) |
+                            std::ranges::to<std::vector>());
+                        // substrate generic algorithm: formatted output, not a fold.
+                        for (const draft_edit::Finding& finding : plan.findings)
+                            std::println(stderr,
+                                         "specgen: {}: {}: {}",
+                                         beman::specgen::severity_label(finding.severity),
+                                         finding.where,
+                                         finding.message);
+                        std::error_code failed;
+                        std::filesystem::create_directories(wording.output, failed);
+                        if (failed)
+                            return std::unexpected(
+                                std::format("specgen: cannot create '{}': {}", wording.output, failed.message()));
+                        return beman::specgen::foundation::fold_left_short(
+                                   plan.files,
+                                   Written{},
+                                   [&](Written                      acc,
+                                       const draft_edit::FileEdits& file) -> std::expected<Written, std::string> {
+                                       const std::string target = (std::filesystem::path(wording.output) /
+                                                                   std::filesystem::path(file.file).filename())
+                                                                      .string();
+                                       return read_all_or_fail(file.file)
+                                           .and_then([&](const std::string& text) {
+                                               return draft_edit::apply(text, file.edits)
+                                                   .transform_error([&](const std::string& why) {
+                                                       return std::format("specgen: {}: {}", file.file, why);
+                                                   });
+                                           })
+                                           .and_then(
+                                               [&](const std::string& edited) -> std::expected<Written, std::string> {
+                                                   std::ofstream out(target, std::ios::binary);
+                                                   out << edited;
+                                                   if (!out)
+                                                       return std::unexpected(
+                                                           std::format("specgen: cannot write '{}'", target));
+                                                   std::println(stderr,
+                                                                "specgen: {}: {} edit{}",
+                                                                target,
+                                                                file.edits.size(),
+                                                                file.edits.size() == 1 ? "" : "s");
+                                                   acc.push_back(target);
+                                                   return std::move(acc);
+                                               });
+                                   })
+                            .and_then([&](Written written) -> std::expected<Written, std::string> {
+                                const auto errors = std::ranges::count_if(plan.findings, [](const auto& finding) {
+                                    return finding.severity == beman::specgen::Severity::Error;
+                                });
+                                if (errors > 0)
+                                    return std::unexpected(std::format(
+                                        "specgen: --apply-to-draft: {} change{} could not be placed in the draft's "
+                                        "source; the rest are written",
+                                        errors,
+                                        errors == 1 ? "" : "s"));
+                                return written;
+                            });
+                    };
+
+                    return (emit_ir                  ? write_ir()
+                            : wording.apply_to_draft ? write_draft_edit()
+                                                     : write_wording())
                         .and_then([&](const Written& written) -> std::expected<int, std::string> {
                             // Every file every parse read, which is what the output
                             // is a build artifact of -- the baselines' included.

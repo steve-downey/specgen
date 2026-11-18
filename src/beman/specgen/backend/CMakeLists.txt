@@ -3,4 +3,4 @@
 
 # Serializers over the IR. These are clang-free by construction: a backend
 # that needed the AST would mean the IR had lost information it should carry.
-target_sources(beman.specgen PRIVATE latex.cpp mpark.cpp org.cpp)
+target_sources(beman.specgen PRIVATE draft_edit.cpp latex.cpp mpark.cpp org.cpp)

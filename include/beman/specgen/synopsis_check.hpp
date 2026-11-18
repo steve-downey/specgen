@@ -24,18 +24,24 @@
 namespace beman::specgen::synopsis_check {
 
 struct Finding {
-    std::string declaration; // the synopsis's declaration, on one line; the code's when the synopsis lacks it
+    std::string
+        declaration; // the synopsis's declaration as written, on one line; the code's when the synopsis lacks it
     std::string message;
-    // A Note when the synopsis declares what the code does not: that is how a
-    // member inherited from a base class reads, and nothing is wrong with it.
-    // A Warning for every other disagreement, including a class member the
-    // synopsis leaves out.
+    // A Note when the synopsis declares what neither the class nor, when they
+    // are given, its bases declare. A Warning for every other disagreement,
+    // including a class member the synopsis leaves out.
     Severity severity = Severity::Warning;
 };
 
 // Where the synopsis and the declarations disagree: a paired declaration whose
 // specifiers differ, and a declaration only one side has. Empty when they agree.
-std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& declared);
+//
+// `bases` are the member functions the class has from its base classes, one
+// entry per class they may come from (`Synopsis::declared_bases`). A synopsis
+// declaration the class does not make is compared with the declaration of the
+// same name in each of them that has one, and is a note only when none does.
+std::vector<Finding>
+compare(const ir::CodeText& synopsis, const ir::CodeText& declared, const std::vector<ir::CodeText>& bases = {});
 
 struct Patched {
     ir::CodeText         code;

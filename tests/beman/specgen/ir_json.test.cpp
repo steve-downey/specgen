@@ -761,6 +761,25 @@ TEST_CASE("ir_json - an ellipsis span and a math-open hint round-trip by name") 
     CHECK(emit_json(*back) == json);
 }
 
+TEST_CASE("ir_json - a synopsis's base-class declarations round-trip and are silent when there are none") {
+    Document doc;
+    Synopsis with;
+    with.name           = "f";
+    with.code           = {"class f {\n  R call();\n};", {}};
+    with.declared       = CodeText{"class f {\n};", {}};
+    with.declared_bases = {CodeText{"constexpr R call();\n", {}}};
+    doc.nodes.push_back(with);
+    Synopsis without = with;
+    without.declared_bases.clear();
+    doc.nodes.push_back(without);
+
+    const std::string json = emit_json(doc);
+    CHECK(std::ranges::distance(std::views::split(json, std::string_view{"\"declared_bases\""})) == 2);
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+}
+
 TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
     SpecItem plain;
     plain.decl.signatures.push_back({"void f();", {}});
