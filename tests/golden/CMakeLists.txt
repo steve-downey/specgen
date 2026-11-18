@@ -671,8 +671,8 @@ specgen_add_golden(
 # declared by a detached item and not by the class, so `\asdraft-synopsis` has
 # no declaration of the class's to patch its line from. It takes `constexpr`
 # from the item, and the diff marks the specifier on the synopsis line and on
-# the item alike. Its `.validate` sibling passes: the one finding is the note
-# that the class does not declare it.
+# the item alike. Its `.validate` sibling is silent: the synopsis line agrees
+# with the base class's declaration of `operator()` (issue #342).
 specgen_add_golden(
     diff_func_wrap_move_base_call
     MODE generate

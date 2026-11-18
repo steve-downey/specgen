@@ -503,6 +503,7 @@ struct json_descriptor<Synopsis> {
         field("roster", &Synopsis::roster),
         defaulted_enum_field("change", &Synopsis::change, Change::Same, change_name, change_from_name, "change"),
         optional_field("declared", &Synopsis::declared),
+        defaulted_field("declared_bases", &Synopsis::declared_bases),
         defaulted_field("as_draft", &Synopsis::as_draft),
     };
 };

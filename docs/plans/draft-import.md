@@ -404,6 +404,16 @@ Log:
   place of the patch. The note that the class does not declare the member stays. With this,
   constexpr_callables' two owning wrappers generate the same bytes from `\asdraft-synopsis` as
   from their 37-line typed synopses.
+- 2026-11-18: the code says it too (issue #342). The front end now keeps, beside `declared`,
+  the member functions of the class's bases (`Synopsis::declared_bases`), printed by Clang, so a
+  synopsis line the class does not declare is compared with real code and is not a note. A base
+  that depends on the class's parameters is each specialization it could be, the primary and
+  the partial and explicit specializations, and the line must agree with every one that
+  declares the name: constexpr_callables' `call_base` has six partial specializations, each
+  declaring one `operator()`. The note now means that nothing declares the line. The patch is
+  unchanged: it still takes specifiers from the class's declarations and then from items,
+  not from a base, whose printed declaration has the implementation's names in it. Findings
+  now name a declaration as written, where the escapes used to print as underscores.
 
 ### importer-vocabulary-gaps
 

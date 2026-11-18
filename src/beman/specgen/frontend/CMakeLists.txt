@@ -14,6 +14,7 @@ target_sources(
     beman.specgen.frontend
     PRIVATE
         attach.cpp
+        base_members.cpp
         body_uses.cpp
         build_document.cpp
         class_head_mandates.cpp
@@ -53,6 +54,7 @@ target_sources(
             BASE_DIRS "${PROJECT_SOURCE_DIR}/include"
             FILES
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/attach.hpp"
+                "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/base_members.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/body_uses.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_document.hpp"
                 "${PROJECT_SOURCE_DIR}/include/beman/specgen/frontend/build_failure.hpp"

@@ -11,6 +11,7 @@ foreach(
     synopsis
     template
     attach
+    base_members
     markers
     aliases
     class_at

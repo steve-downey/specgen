@@ -1183,9 +1183,19 @@ by how alike they read. For each pair, the specifiers `constexpr`, `explicit` an
 placeholders and comments stay and only what the paper changed is different. A
 `noexcept` whose operand is a placeholder agrees with either. `static`,
 `friend`, `= default` and `= delete` cannot be written, and are warnings naming
-the declaration, as is a class member the synopsis leaves out. A declaration the
-synopsis has and the class does not is a note: it is how a member inherited from
-a base class reads.
+the declaration, as is a class member the synopsis leaves out.
+
+A declaration the synopsis has and the class does not make may be one the class
+has from a base class. The check reads the member functions of the class's
+bases, as Clang has them, and compares the synopsis line with the base's
+declaration of the same name. A base that depends on the class's template
+parameters, such as `detail::call_base<move_only_function<Sig>, Sig>`, may be
+any specialization of its template, so each defined one is a candidate (the
+primary template, each partial specialization, each explicit specialization),
+and the line has to agree with every one that declares the name. A disagreement
+is a warning naming the base class's declaration. Constructors, destructors,
+`operator=` and private members are not inherited and are not read. A line that
+neither the class nor any base declares is a note.
 
 Such a member has no declaration in the class to take specifiers from, and it
 may have an item of its own, typed as a detached `\verbatim-itemdecl`:

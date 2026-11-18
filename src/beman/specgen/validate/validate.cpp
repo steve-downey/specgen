@@ -180,7 +180,7 @@ std::string roster_context(const std::string& synopsis_name, const ir::SynopsisE
 Diagnostics check_synopsis_agreement(const std::string& context, const ir::Synopsis& synopsis) {
     if (!synopsis.declared || synopsis.as_draft)
         return {};
-    return synopsis_check::compare(synopsis.code, *synopsis.declared) |
+    return synopsis_check::compare(synopsis.code, *synopsis.declared, synopsis.declared_bases) |
            std::views::transform([&](const synopsis_check::Finding& finding) {
                return Diagnostic{
                    finding.severity, context, std::format("`{}`: {}", finding.declaration, finding.message)};

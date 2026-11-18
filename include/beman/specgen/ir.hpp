@@ -764,6 +764,12 @@ struct Synopsis {
     // check compares the two for what a paper changes without touching a word
     // (synopsis_check.hpp).
     std::optional<CodeText> declared = {};
+    // Beside `declared`, the member functions the class has from its base
+    // classes: one entry per class they may come from, a dependent base
+    // giving one for each specialization it could be (base_members.hpp).
+    // Validator-only, like `declared`, and kept with it: a synopsis line the
+    // class's own declarations do not make is checked against these.
+    std::vector<CodeText> declared_bases = {};
     // `\asdraft-synopsis`: `code` is the baseline synopsis of this class, with
     // the specifiers of `declared` written into it, once resolved (inherit.hpp).
     bool as_draft = false;
