@@ -136,11 +136,13 @@ generate options:
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
-                             (exit 1) instead
+                             (exit 1) instead. An error found reading the
+                             header's docblocks fails the run with or without
+                             it, after the wording is written
   --warnings-as-errors      with --validate: a finding at warning severity
-                             aborts the render too. A warning is something
-                             specgen verified; a note is something to check
-                             outside it, and never fails the run
+                             fails the run too, in the same way. A warning is
+                             something specgen verified; a note is something
+                             to check outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -1778,9 +1780,10 @@ OUT=$(out_dir 65-diagnostics)
 
 (
     cd "$REPO_ROOT/tests/corpus"
+    # It exits 1, after writing the IR: some of the findings are errors.
     "$SPECGEN" generate --emit-ir spec_diagnostics.hpp \
         --no-compile-commands \
-        -o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag"
+        -o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag" || test $? -eq 1
 )
 ```
 
@@ -1794,6 +1797,7 @@ spec_diagnostics.hpp:100: warning: END [gadget.extra] has no open section to clo
 spec_diagnostics.hpp:102: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
 spec_diagnostics.hpp:104: warning: malformed \rSec marker: expected '{' (comment offset 26)
 spec_diagnostics.hpp:108: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}
+specgen: 2 findings in the documented header fail the run; the output is written
 ```
 
 

@@ -527,8 +527,9 @@ The grammar produces its own diagnostics at three severities (the element-orderi
 duplicate-element Warning, the **unknown-tag Error**), and `generate` prints them to stderr as
 `<header>:<line>: <severity>: <message>`. Two consequences: markup written out of
 [structure.specifications] order is reported even though the output is canonicalized either
-way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
-not fail on it, so read stderr instead of trusting the exit code.
+way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` writes
+its output and then exits 1, so a build that gates on the exit status fails on it
+(issue #350).
 
 Only element tags, registered markers, and block keywords change docblock
 structure. Other line-leading commands with braced or optional arguments,
@@ -1862,4 +1863,5 @@ The build assembles the tool from these components, each following the shared CM
   pinned by a golden (§10), never a skipped check.
 - **Diagnostics are said out loud**: the grammar's findings, unrecognized draft headings, and
   fence mismatches all report rather than silently self-correct (§3.2, §4), while `generate`
-  still emits IR where it can — stderr, not the exit code, is the record.
+  still emits IR where it can. An error among them fails the run after the output is
+  written; stderr says what it was.

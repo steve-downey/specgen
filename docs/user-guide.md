@@ -226,8 +226,8 @@ disagree:
 4. Add docblocks to definitions, and mark every declaration that is deliberately
    not an ordinary specification entity with `\expos`, `\omit`, or `\merge`.
 5. Run `generate --validate` frequently. Read standard error as well as the exit
-   status: docblock errors are findings about usable input and do not by
-   themselves stop the output.
+   status: a docblock error is a finding about usable input, so the output is
+   still written, and the run then exits with status 1.
 6. Inspect all three backends before settling taste-sensitive phrasing. The
    backends share semantics, but tables, code spans, headings, and paragraph
    framing necessarily appear in different syntax.
@@ -1501,8 +1501,10 @@ unrecognized draft-style headings, gathered `.syn` regions that are not closed
 before the next section, and errors for a docblock on an entity kind
 that produces no wording (a namespace alias, or a function declaration whose
 markup belongs on the definition). These diagnostics describe markup on a header
-that parsed successfully, so even an error does not prevent output or change
-`generate`'s exit status. Always inspect standard error.
+that parsed successfully, so even an error does not prevent output. It does
+fail the run: once the output is written, `generate` says how many findings
+fail it and exits with status 1. Under `--warnings-as-errors` a warning here
+does the same. Always inspect standard error.
 
 `--validate` prints findings as `specgen: <context>: <severity>: <message>`.
 After notes and warnings, rendering continues. If any finding has error
@@ -1759,12 +1761,14 @@ specgen generate include/beman/example/example.hpp \
   build an AST, Clang reports a parse error, or the output cannot be written.
   It never emits plausible partial wording after a C++ parse failure. When it
   renders, it also exits with status 1 on a fragment error or, under
-  `--validate`, on an error-severity finding. With several headers, it parses
+  `--validate`, on an error-severity finding. An error-severity docblock
+  finding exits with status 1 too, after the output is written. With several headers, it parses
   all of them before writing anything and stops at the first that fails.
 - `render` exits with status 1 on unreadable or invalid JSON, an output
   failure, a fragment error, or an error-severity validation finding.
 - Under `--warnings-as-errors`, a warning-severity validation finding exits
-  with status 1 from either command. Without `--validate` the option is a
+  with status 1 from either command, and so does a warning-severity docblock
+  finding from `generate`. Without `--validate` the option is a
   usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already

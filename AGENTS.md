@@ -44,7 +44,7 @@ Gotchas that bite:
   when the IR itself is wanted. The two must agree byte for byte; every
   generate-mode golden's `.singlepass` sibling says so.
 - `generate` reports docblock findings on stderr and still produces output on an
-  Error; read stderr instead of trusting the exit code.
+  Error, then exits 1 (issue #350); read stderr for what the finding was.
 - `split_inline <header>` (`tools/split_inline/`, plan `docs/plans/split-inline.md`)
   moves in-class member definitions out of line, into the class's own namespace
   block; `--move-comments` carries `//!` docblocks along and places definitions

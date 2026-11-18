@@ -14,7 +14,8 @@ OUT=$(out_dir 65-diagnostics)
 
 (
     cd "$REPO_ROOT/tests/corpus"
+    # It exits 1, after writing the IR: some of the findings are errors.
     "$SPECGEN" generate --emit-ir spec_diagnostics.hpp \
         --no-compile-commands \
-        -o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag"
+        -o "$OUT/diagnostics.json" 2> "$OUT/diagnostics.diag" || test $? -eq 1
 )

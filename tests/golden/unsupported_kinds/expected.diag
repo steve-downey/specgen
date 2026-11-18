@@ -1,2 +1,3 @@
 spec_unsupported_kinds.hpp:23: error: a documented NamespaceAlias produces no wording: unsupported entity kind
 spec_unsupported_kinds.hpp:26: error: a documented function declaration produces no wording; markup belongs at the definition, which places a function's wording (design §3.3)
+specgen: 2 findings in the documented header fail the run; the output is written
