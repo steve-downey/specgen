@@ -84,11 +84,11 @@ declaration_docblock_findings(const clang::Decl* decl, const clang::SourceManage
 
     std::vector<beman::specgen::document_build::Diagnostic> out = docblock_diagnostics(rc, *start, parsed.diags, sm);
     if (asks_for_wording)
-        out.push_back(
-            beman::specgen::document_build::Diagnostic{beman::specgen::Severity::Error,
-                                                       sm.getSpellingLineNumber(decl->getBeginLoc()),
-                                                       std::move(problem),
-                                                       diagnostic_file_name(sm, sm.getFileID(decl->getBeginLoc()))});
+        out.push_back(beman::specgen::document_build::Diagnostic{
+            beman::specgen::Severity::Error,
+            sm.getSpellingLineNumber(sm.getFileLoc(decl->getBeginLoc())),
+            std::move(problem),
+            diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(decl->getBeginLoc())))});
     return out;
 }
 
@@ -113,7 +113,7 @@ std::string misplaced_declaration_markup(const clang::FunctionDecl*  fn,
                            "definition (design §3.3), and this translation unit has none; name the source file that "
                            "defines it with --source",
                            name);
-    const clang::SourceLocation at   = definition->getBeginLoc();
+    const clang::SourceLocation at   = sm.getFileLoc(definition->getBeginLoc());
     const std::string           file = diagnostic_file_name(sm, sm.getFileID(at));
     return std::format("the documented declaration of `{}` produces no wording: markup belongs at its definition, "
                        "{}{}{}, which places a member's wording (design §3.3)",
@@ -128,7 +128,7 @@ std::string misplaced_declaration_markup(const clang::FunctionDecl*  fn,
 ClassRefGroups::ClassRefGroups(const clang::CXXRecordDecl* record,
                                const clang::SourceManager& sm,
                                const clang::LangOptions&   lang_opts) {
-    const unsigned              class_begin = sm.getDecomposedLoc(record->getBeginLoc()).second;
+    const unsigned              class_begin = sm.getDecomposedLoc(sm.getFileLoc(record->getBeginLoc())).second;
     const clang::SourceLocation end_of_brace =
         clang::Lexer::getLocForEndOfToken(record->getEndLoc(), 0, sm, lang_opts);
     const unsigned class_end = sm.getDecomposedLoc(end_of_brace).second;
@@ -136,7 +136,7 @@ ClassRefGroups::ClassRefGroups(const clang::CXXRecordDecl* record,
     // ascending by offset -- getCommentsInFile is offset-keyed, and
     // neither the filter nor the transform below reorders.
     if (const std::map<unsigned, clang::RawComment*>* comments =
-            file_comments(record->getASTContext(), sm, record->getBeginLoc())) {
+            file_comments(record->getASTContext(), sm, sm.getFileLoc(record->getBeginLoc()))) {
         groups_ = *comments | std::views::filter([&](const auto& kv) {
             return kv.first >= class_begin && kv.first < class_end && parse_ref(kv.second->getRawText(sm)).has_value();
         }) | std::views::transform([&](const auto& kv) {
@@ -229,7 +229,7 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
         const clang::FunctionDecl* fn = member_function_or_template(member);
         if (fn != nullptr) {
             if (const auto* friend_decl = llvm::dyn_cast<clang::FriendDecl>(member))
-                friend_begin = friend_decl->getBeginLoc();
+                friend_begin = sm.getFileLoc(friend_decl->getBeginLoc());
         }
         if (fn == nullptr) {
             // Documented static data members route like aliases (issues #148,
@@ -286,10 +286,11 @@ void collect_inclass_items(const clang::CXXRecordDecl*                          
                     declaration_docblock_findings(fn, sm, misplaced_declaration_markup(fn, sm, definition)));
             if (sourced == source_markup.end())
                 continue;
-            AttachedItem                attached   = sourced->second->attached;
-            const clang::SourceLocation anchor_loc = friend_begin.isValid() ? friend_begin : fn->getBeginLoc();
-            attached.inclass_offset                = sm.getDecomposedLoc(anchor_loc).second;
-            attached.file                          = sm.getFileID(anchor_loc);
+            AttachedItem                attached = sourced->second->attached;
+            const clang::SourceLocation anchor_loc =
+                friend_begin.isValid() ? friend_begin : sm.getFileLoc(fn->getBeginLoc());
+            attached.inclass_offset = sm.getDecomposedLoc(anchor_loc).second;
+            attached.file           = sm.getFileID(anchor_loc);
             diagnostics.append_range(std::move(attached.diagnostics));
             if (suppresses_generated_entity(attached.directives))
                 continue;

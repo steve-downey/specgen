@@ -124,7 +124,7 @@ const clang::FunctionDecl* member_function_or_template(const clang::Decl* member
 }
 
 unsigned spliced_tail_begin(const clang::FunctionDecl* fn, const clang::Stmt* body, const clang::SourceManager& sm) {
-    const unsigned body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+    const unsigned body_begin = sm.getDecomposedLoc(sm.getFileLoc(body->getBeginLoc())).second;
     const auto*    ctor       = llvm::dyn_cast<clang::CXXConstructorDecl>(fn);
     if (ctor == nullptr)
         return body_begin;

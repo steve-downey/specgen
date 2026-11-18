@@ -577,8 +577,8 @@ db::DocEvent classify(const RawItem&                                   ev,
     if (const clang::FunctionDecl* declared = declared_free_function(ev.decl)) {
         if (const auto sourced = source_markup.find(declared->getCanonicalDecl()); sourced != source_markup.end()) {
             AttachedItem attached   = sourced->second->attached;
-            attached.inclass_offset = sm.getDecomposedLoc(ev.decl->getBeginLoc()).second;
-            attached.file           = sm.getFileID(ev.decl->getBeginLoc());
+            attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(ev.decl->getBeginLoc())).second;
+            attached.file           = sm.getFileID(sm.getFileLoc(ev.decl->getBeginLoc()));
             if (suppresses_generated_entity(attached.directives))
                 return db::Ignored{std::move(attached.diagnostics)};
             return item_decl_event(std::move(attached), doc);
@@ -612,10 +612,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                                             "the definition, which places a function's wording (design §3.3)"
                                           : std::format("a documented {} produces no wording: unsupported entity kind",
                                                         ev.decl->getDeclKindName());
-                return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Error,
-                                                   line,
-                                                   std::move(message),
-                                                   diagnostic_file_name(sm, sm.getFileID(ev.decl->getBeginLoc()))}}};
+                return db::Ignored{
+                    {db::Diagnostic{beman::specgen::Severity::Error,
+                                    line,
+                                    std::move(message),
+                                    diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(ev.decl->getBeginLoc())))}}};
             }
         }
         return db::Ignored{};

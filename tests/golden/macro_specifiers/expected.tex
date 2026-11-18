@@ -6,8 +6,9 @@ namespace std {
   public:
     inline constexpr int f() const;
     inline int g() const;
-    inline constexpr int h() const;
+    constexpr int h() const;
     int k() const;
+    int m() const noexcept;
     int v(int x = DEMO_VALUE) const;
   };
 }
@@ -40,7 +41,7 @@ inline int g() const;
 
 \indexlibrarymember{h}{thing}%
 \begin{itemdecl}
-inline constexpr int h() const;
+constexpr int h() const;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -60,6 +61,17 @@ int k() const;
 4.
 \end{itemdescr}
 
+\indexlibrarymember{m}{thing}%
+\begin{itemdecl}
+int m() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+5.
+\end{itemdescr}
+
 \indexlibrarymember{v}{thing}%
 \begin{itemdecl}
 int v(int x = DEMO_VALUE) const;
@@ -70,3 +82,15 @@ int v(int x = DEMO_VALUE) const;
 \returns
 \tcode{x}.
 \end{itemdescr}
+
+\rSec3[w.box]{Class template \tcode{box}}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  struct @\libglobal{box}@ {};
+}
+\end{codeblock}
+
+\pnum
+A box.

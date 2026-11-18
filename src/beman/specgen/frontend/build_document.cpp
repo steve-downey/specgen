@@ -237,7 +237,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         const clang::RawComment* rc = attached_raw_comment(decl);
         if (rc == nullptr || !is_docblock_comment(rc->getRawText(sm)))
             return;
-        const auto [begin_file, begin] = sm.getDecomposedLoc(rc->getBeginLoc());
+        const auto [begin_file, begin] = sm.getDecomposedLoc(sm.getFileLoc(rc->getBeginLoc()));
         const auto [end_file, end]     = sm.getDecomposedLoc(rc->getEndLoc());
         if (begin_file == end_file && doc.contains(begin_file))
             attached_comments.emplace_back(doc.offset_in(begin_file, begin), doc.offset_in(end_file, end));
@@ -254,7 +254,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         if (fn->getBody() == nullptr)
             return;
         const clang::Stmt* body        = fn->getBody();
-        const auto [begin_file, begin] = sm.getDecomposedLoc(body->getBeginLoc());
+        const auto [begin_file, begin] = sm.getDecomposedLoc(sm.getFileLoc(body->getBeginLoc()));
         const auto [end_file, end]     = sm.getDecomposedLoc(body->getEndLoc());
         if (begin_file == end_file && doc.contains(begin_file))
             body_ranges.emplace_back(doc.offset_in(begin_file, begin), doc.offset_in(end_file, end));
@@ -549,8 +549,10 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                     grouping_scope =
                                         std::format("gathered-record:{}",
                                                     record->getCanonicalDecl()->getLocation().getRawEncoding());
-                                    inherited = ClassRefGroups(record, sm, lang_opts)
-                                                    .section_for(sm.getDecomposedLoc(in_class->getBeginLoc()).second);
+                                    inherited =
+                                        ClassRefGroups(record, sm, lang_opts)
+                                            .section_for(
+                                                sm.getDecomposedLoc(sm.getFileLoc(in_class->getBeginLoc())).second);
                                 }
                             }
                             const std::string section = directives.at_anchor.value_or(inherited);

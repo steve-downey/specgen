@@ -70,7 +70,7 @@ std::vector<synopsis_edits::SynopsisEdit> requires_clause_removals(const clang::
     }
     const clang::Expr* trailing = fn->getTrailingRequiresClause().ConstraintExpr;
     if (trailing != nullptr && trailing->getBeginLoc().isFileID()) {
-        const auto [file, expr_begin]                    = sm.getDecomposedLoc(trailing->getBeginLoc());
+        const auto [file, expr_begin]                    = sm.getDecomposedLoc(sm.getFileLoc(trailing->getBeginLoc()));
         const llvm::StringRef                buffer      = sm.getBufferData(file);
         static constexpr std::string_view    kWhitespace = " \t\n\v\f\r";
         static constexpr llvm::StringLiteral kRequires{"requires"};

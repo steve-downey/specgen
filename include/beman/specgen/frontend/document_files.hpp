@@ -51,9 +51,12 @@ class DocumentFiles {
         return file == main_ || std::ranges::any_of(parts_, [&](const Part& p) { return p.file == file; });
     }
 
-    // The document offset of a location, or of a (file, local offset) pair.
+    // The document offset of a location, or of a (file, local offset) pair. A
+    // location inside a macro's expansion is where the macro is used: a
+    // declaration whose first token comes from a macro is where it is written,
+    // not where the macro is defined (issue #348).
     unsigned offset(const clang::SourceManager& sm, clang::SourceLocation loc) const {
-        const auto [file, local] = sm.getDecomposedLoc(loc);
+        const auto [file, local] = sm.getDecomposedLoc(sm.getFileLoc(loc));
         return offset_in(file, local);
     }
 

@@ -1334,7 +1334,11 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
   keywords alone, or nothing, or another such macro. A function-like macro, or
   one whose expansion holds a number, a name that is not such a macro, or an
   attribute, is left as written. Whether the expansion is the one the wording wants is settled with
-  a `-D` after the `--`.
+  a `-D` after the `--`. A declaration or a definition whose first token comes
+  from a macro is where it is written, so its docblock attaches to it and its
+  item is placed with its class's other members. A declaration that a
+  function-like macro stamps out, its name and all, is the macro's, and
+  produces no wording.
 - A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in

@@ -57,7 +57,7 @@ namespace beman::specgen::frontend {
 namespace {
 
 DeclPosition decl_position(const clang::Decl* decl, const clang::SourceManager& sm, std::string_view main_path) {
-    const auto [file, offset] = sm.getDecomposedLoc(decl->getBeginLoc());
+    const auto [file, offset] = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc()));
     return {canonical_file_path(sm, file, main_path), offset};
 }
 
@@ -93,7 +93,7 @@ void collect_file_decls(clang::Decl*                decl,
     }
     if (decl->isImplicit() || !decl->getBeginLoc().isValid())
         return;
-    if (wanted(sm.getFileID(sm.getExpansionLoc(decl->getBeginLoc()))))
+    if (wanted(sm.getFileID(sm.getFileLoc(sm.getExpansionLoc(decl->getBeginLoc())))))
         out.push_back(decl);
 }
 
@@ -163,8 +163,10 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
 
     SourceHarvest harvest;
     harvest.sources    = parse_sources(source.path, *parsed.ast);
-    const auto line_of = [&](const clang::Decl* decl) { return sm.getSpellingLineNumber(decl->getBeginLoc()); };
-    const auto report  = [&](const clang::Decl* decl, std::string message) {
+    const auto line_of = [&](const clang::Decl* decl) {
+        return sm.getSpellingLineNumber(sm.getFileLoc(decl->getBeginLoc()));
+    };
+    const auto report = [&](const clang::Decl* decl, std::string message) {
         harvest.diagnostics.push_back(
             db::Diagnostic{beman::specgen::Severity::Error, line_of(decl), std::move(message), source.path});
     };
@@ -195,12 +197,13 @@ std::expected<SourceHarvest, BuildFailure> harvest_source_file(const SourceFile&
                                named));
             continue;
         }
-        if (!is_document_file(sm.getFileID(first->getBeginLoc()))) {
-            report(decl,
-                   std::format("the documented definition of `{}` produces no wording: its class is declared in "
-                               "'{}', which is not part of this document",
-                               named,
-                               canonical_file_path(sm, sm.getFileID(first->getBeginLoc()), source.path)));
+        if (!is_document_file(sm.getFileID(sm.getFileLoc(first->getBeginLoc())))) {
+            report(
+                decl,
+                std::format("the documented definition of `{}` produces no wording: its class is declared in "
+                            "'{}', which is not part of this document",
+                            named,
+                            canonical_file_path(sm, sm.getFileID(sm.getFileLoc(first->getBeginLoc())), source.path)));
             continue;
         }
 

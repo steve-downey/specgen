@@ -254,26 +254,26 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
     if (prologue.extraction_first == nullptr)
         return {};
 
-    const unsigned begin = sm.getDecomposedLoc(prologue.extraction_first->getBeginLoc()).second;
+    const unsigned begin = sm.getDecomposedLoc(sm.getFileLoc(prologue.extraction_first->getBeginLoc())).second;
     const unsigned end   = sm.getDecomposedLoc(body->getRBracLoc()).second;
     if (end <= begin)
         return {};
 
-    const llvm::StringRef                      buffer = file_buffer(sm, prologue.extraction_first->getBeginLoc());
+    const llvm::StringRef buffer = file_buffer(sm, sm.getFileLoc(prologue.extraction_first->getBeginLoc()));
     std::vector<std::pair<unsigned, unsigned>> deletions =
         namespace_qualifier_edits(const_cast<clang::CompoundStmt*>(body), ns_drop_set, sm, lang_opts, expos_set);
+    deletions.append_range(conditional_body_edits(
+        buffer, sm.getFileID(sm.getFileLoc(prologue.extraction_first->getBeginLoc())), begin, end, skipped));
+    deletions.append_range(body_comment_edits(
+        ctx, sm, lang_opts, buffer, sm.getFileLoc(prologue.extraction_first->getBeginLoc()), begin, end));
     deletions.append_range(
-        conditional_body_edits(buffer, sm.getFileID(prologue.extraction_first->getBeginLoc()), begin, end, skipped));
-    deletions.append_range(
-        body_comment_edits(ctx, sm, lang_opts, buffer, prologue.extraction_first->getBeginLoc(), begin, end));
-    deletions.append_range(prologue.assertions | std::views::transform([&](const clang::DeclStmt* statement) {
-                               const unsigned statement_begin = sm.getDecomposedLoc(statement->getBeginLoc()).second;
-                               const unsigned statement_end =
-                                   sm.getDecomposedLoc(
-                                         clang::Lexer::getLocForEndOfToken(statement->getEndLoc(), 0, sm, lang_opts))
-                                       .second;
-                               return std::pair{statement_begin, statement_end};
-                           }));
+        prologue.assertions | std::views::transform([&](const clang::DeclStmt* statement) {
+            const unsigned statement_begin = sm.getDecomposedLoc(sm.getFileLoc(statement->getBeginLoc())).second;
+            const unsigned statement_end =
+                sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(statement->getEndLoc(), 0, sm, lang_opts))
+                    .second;
+            return std::pair{statement_begin, statement_end};
+        }));
 
     const std::vector<ExposUse> semantic_uses =
         expos_uses(const_cast<clang::CompoundStmt*>(body), expos_set, sm, lang_opts);
@@ -511,10 +511,11 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     namespace lowering = beman::specgen::lowering;
 
     AttachedItem attached;
-    attached.is_function_def               = true;
-    const clang::SourceLocation anchor_loc = friend_begin.isValid() ? friend_begin : decl_form->getBeginLoc();
-    attached.inclass_offset                = sm.getDecomposedLoc(anchor_loc).second;
-    attached.file                          = sm.getFileID(anchor_loc);
+    attached.is_function_def = true;
+    const clang::SourceLocation anchor_loc =
+        sm.getFileLoc(friend_begin.isValid() ? friend_begin : decl_form->getBeginLoc());
+    attached.inclass_offset = sm.getDecomposedLoc(anchor_loc).second;
+    attached.file           = sm.getFileID(anchor_loc);
 
     // Descr: the definition's own `//!` docblock, if it has one.
     // attached_raw_comment yields the immediately preceding comment;
@@ -672,7 +673,7 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                 beman::specgen::Severity::Error,
                 attached.grouping_line,
                 std::move(returns.error()),
-                diagnostic_file_name(sm, sm.getFileID(def->getBeginLoc()))});
+                diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(def->getBeginLoc())))});
         }
     }
     rewrite_prose_expos(attached.item.descr, expos_names, taken_names(enclosing_record(def), expos_set, def));
@@ -689,8 +690,8 @@ AttachedItem attach_alias(const clang::TypeAliasDecl*                      alias
     const clang::Decl* anchor = head != nullptr ? static_cast<const clang::Decl*>(head) : alias;
 
     AttachedItem attached;
-    attached.inclass_offset = sm.getDecomposedLoc(anchor->getBeginLoc()).second;
-    attached.file           = sm.getFileID(anchor->getBeginLoc());
+    attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(anchor->getBeginLoc())).second;
+    attached.file           = sm.getFileID(sm.getFileLoc(anchor->getBeginLoc()));
 
     attach_docblock(attached, anchor, sm);
     if (attached.directives.seebelow_target && attached.grouping_line > 0)
@@ -724,8 +725,8 @@ AttachedItem attach_record_declaration(const clang::NamedDecl*                  
                                        const std::set<std::string>&                     ns_drop_set,
                                        const std::map<const clang::Decl*, std::string>& expos_set) {
     AttachedItem attached;
-    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    attached.file           = sm.getFileID(decl->getBeginLoc());
+    attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
+    attached.file           = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
     attach_docblock(attached, decl, sm);
 
     const llvm::StringRef tag = record->getKindName();
@@ -757,8 +758,8 @@ AttachedItem attach_namespace_entity(const clang::NamedDecl*                    
                                      const std::map<const clang::Decl*, std::string>& expos_set,
                                      std::string_view                                 declarator_qualifier) {
     AttachedItem attached;
-    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    attached.file           = sm.getFileID(decl->getBeginLoc());
+    attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
+    attached.file           = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
     attach_docblock(attached, decl, sm);
 
     const VariableMask mask = variable_seebelow_mask(decl, attached.directives, attached.grouping_line);
@@ -799,8 +800,8 @@ AttachedItem attach_static_member(const clang::NamedDecl*                       
                                   const std::set<std::string>&                     ns_drop_set,
                                   const std::map<const clang::Decl*, std::string>& expos_set) {
     AttachedItem attached;
-    attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    attached.file           = sm.getFileID(decl->getBeginLoc());
+    attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
+    attached.file           = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
     attach_docblock(attached, decl, sm);
 
     if (attached.directives.seebelow_target && attached.grouping_line > 0)
@@ -875,8 +876,8 @@ AttachedItem build_spec_item(clang::Decl*                                     de
                                             skipped,
                                             declarator_qualifier(fn->getFirstDecl(), ns_drop_set, specified_set));
     if (documented_free)
-        attached.inclass_offset = sm.getDecomposedLoc(decl->getBeginLoc()).second;
-    attached.file = sm.getFileID(decl->getBeginLoc());
+        attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
+    attached.file = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
     return attached;
 }
 

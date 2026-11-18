@@ -116,7 +116,7 @@ build_roster(const clang::CXXRecordDecl*                                     rec
         // friend, whose `friend` keyword is not part of the inner FunctionDecl's
         // range, else the decl's own begin.
         const clang::Decl* key_decl  = llvm::isa<clang::FriendDecl>(member) ? member : named;
-        const auto         routed_to = routed.find(sm.getDecomposedLoc(key_decl->getBeginLoc()).second);
+        const auto         routed_to = routed.find(sm.getDecomposedLoc(sm.getFileLoc(key_decl->getBeginLoc())).second);
 
         // Markup is read from the definition when there is one (a marker is
         // written where the wording is), else from the declaration itself. A

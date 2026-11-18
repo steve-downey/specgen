@@ -135,9 +135,11 @@ twin_cut_edits(const clang::FunctionDecl* fn, const clang::SourceManager& sm, co
     const std::vector<bool> mask = twin_cut_mask(fn, sm, lang_opts);
     if (mask.empty())
         return {};
-    const std::vector<const clang::Expr*> leaves = trailing_conjuncts(fn);
-    const auto begin_of = [&sm](const clang::Expr* e) { return sm.getDecomposedLoc(e->getBeginLoc()).second; };
-    const auto end_of   = [&](const clang::Expr* e) {
+    const std::vector<const clang::Expr*> leaves   = trailing_conjuncts(fn);
+    const auto                            begin_of = [&sm](const clang::Expr* e) {
+        return sm.getDecomposedLoc(sm.getFileLoc(e->getBeginLoc())).second;
+    };
+    const auto end_of = [&](const clang::Expr* e) {
         return sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(e->getEndLoc(), 0, sm, lang_opts)).second;
     };
     if (std::ranges::all_of(mask, std::identity{})) {

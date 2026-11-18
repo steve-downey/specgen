@@ -71,9 +71,10 @@ DocumentFiles DocumentFiles::discover(clang::ASTUnit& ast, const clang::SourceMa
     // not is a header the author has to reorder.
     std::vector<clang::FileID> candidates;
     const auto                 note_file = [&](const clang::Decl* decl) {
-        if (decl == nullptr || decl->getBeginLoc().isInvalid())
+        if (decl == nullptr || decl->getBeginLoc().isInvalid() ||
+            (decl->getBeginLoc().isMacroID() && decl->getLocation().isMacroID()))
             return;
-        const clang::FileID file = sm.getFileID(decl->getBeginLoc());
+        const clang::FileID file = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
         if (file.isInvalid() || file == doc.main_)
             return;
         if (!std::ranges::contains(candidates, file))
@@ -144,7 +145,13 @@ void collect_top_level_decl(clang::Decl*                decl,
     if (decl->isImplicit())
         return;
 
-    const clang::SourceLocation loc = decl->getBeginLoc();
+    // A declaration whose first token comes from a macro is where the macro is
+    // used (issue #348). One whose name comes from a macro too is the macro's
+    // own, such as each specialization a function-like macro stamps out, and
+    // no declaration the header writes.
+    if (decl->getBeginLoc().isMacroID() && decl->getLocation().isMacroID())
+        return;
+    const clang::SourceLocation loc = sm.getFileLoc(decl->getBeginLoc());
     if (!loc.isValid())
         return;
     const auto [file_id, offset] = sm.getDecomposedLoc(loc);
@@ -189,7 +196,9 @@ void collect_expos_scope_decl(clang::Decl*                decl,
                               const clang::SourceManager& sm,
                               clang::FileID               main_file,
                               std::vector<clang::Decl*>&  out) {
-    const clang::SourceLocation loc = decl->getBeginLoc();
+    if (decl->getBeginLoc().isMacroID() && decl->getLocation().isMacroID())
+        return; // a macro's own declaration, as in collect_top_level_decl
+    const clang::SourceLocation loc = sm.getFileLoc(decl->getBeginLoc());
     if (!loc.isValid() || sm.isInSystemHeader(loc))
         return;
     if (auto* ns = llvm::dyn_cast<clang::NamespaceDecl>(decl)) {

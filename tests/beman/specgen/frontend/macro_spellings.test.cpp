@@ -50,7 +50,13 @@ TEST_CASE("macro_spellings - a comment, a literal and a span are not code to exp
 TEST_CASE("macro_spellings - the synopsis and the item declarations of a header read as they expand") {
     const auto built = frontend::build_document(std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_macro_specifiers.hpp");
     REQUIRE(built.has_value());
-    const auto&              section = std::get<ir::Section>(built->document.nodes.back());
+    const auto& nodes = built->document.nodes;
+    const auto  found = std::ranges::find_if(nodes, [](const ir::Node& node) {
+        const auto* section = std::get_if<ir::Section>(&node);
+        return section != nullptr && section->stable_name == "w.thing";
+    });
+    REQUIRE(found != nodes.end());
+    const auto&              section = std::get<ir::Section>(*found);
     std::vector<std::string> codes;
     std::ranges::for_each(section.children, [&](const ir::Node& node) {
         if (const auto* synopsis = std::get_if<ir::Synopsis>(&node))
@@ -63,10 +69,12 @@ TEST_CASE("macro_spellings - the synopsis and the item declarations of a header 
     };
     CHECK(has("inline constexpr int f() const;"));
     CHECK(has("inline int g() const;"));
-    CHECK(has("inline constexpr int h() const;"));
+    CHECK(has("constexpr int h() const;"));
+    CHECK(has("int m() const noexcept;"));
     CHECK(has("int k() const;"));
     CHECK(has("DEMO_VALUE"));
     CHECK_FALSE(has("DEMO_CONSTEXPR"));
     CHECK_FALSE(has("DEMO_INDIRECT"));
+    CHECK_FALSE(has("DEMO_NOEXCEPT"));
     CHECK_FALSE(has("DEMO_NOTHING int"));
 }
