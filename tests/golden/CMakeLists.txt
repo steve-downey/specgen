@@ -3088,6 +3088,34 @@ foreach(
     )
 endforeach()
 
+# --apply-to-draft (issue #343): the paper's changes made in the draft's own
+# source. The `\asdraft` header whose change to [func.wrap.move] is
+# `constexpr`, applied to the slice it inherits from: the edited file is
+# pinned, and differs from the slice in `constexpr` alone. See
+# run-apply-to-draft.cmake.
+set(apply_to_draft_args
+    "-DSPECGEN=$<TARGET_FILE:specgen>"
+    "-DHEADER=${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_asdraft.hpp"
+    "-DSLICE=${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    "-DEXPECTED=${CMAKE_CURRENT_SOURCE_DIR}/apply_to_draft/expected.tex"
+    "-DSCRATCH=${CMAKE_CURRENT_BINARY_DIR}/apply_to_draft"
+)
+add_test(
+    NAME golden.apply_to_draft
+    COMMAND
+        "${CMAKE_COMMAND}" ${apply_to_draft_args} -P
+        "${CMAKE_CURRENT_SOURCE_DIR}/run-apply-to-draft.cmake"
+)
+list(
+    APPEND GOLDEN_UPDATE_COMMANDS
+    COMMAND
+    ${CMAKE_COMMAND}
+    ${apply_to_draft_args}
+    -DUPDATE_GOLDEN=ON
+    -P
+    "${CMAKE_CURRENT_SOURCE_DIR}/run-apply-to-draft.cmake"
+)
+
 # --section-number at the driver seam (issue #287): one-pass and two-pass
 # agreement, the number in every `--split` fragment, numbered wording diffs
 # through both baseline routes, a number for a section the diff leaves out,

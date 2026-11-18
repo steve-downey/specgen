@@ -415,6 +415,31 @@ Log:
   not from a base, whose printed declaration has the implementation's names in it. Findings
   now name a declaration as written, where the escapes used to print as underscores.
 
+### draft-source-edit
+
+A paper wants a third rendering beside its wording and its diff: the draft's own source with the
+paper applied, as a pull request to the draft (issue #343). Rendering the paper's wording over a
+subclause loses the draft's line breaks, index entries and comments, so the edit has to be made
+in the source text, at the bytes that change.
+
+`generate --apply-to-draft <dir>` does it for code. The importer records, for each listing it
+reads, the file and the range of it each byte of the text came from (`CodeText::origin`, which
+compares equal to anything and is not in the JSON). `backend/draft_edit` pairs the paper's
+subclauses with the draft's as the differ pairs them, and for each paired declaration and
+synopsis compares the code token by token with whitespace ignored, so a layout the generator
+chose differently is not a change. Each run of changed tokens becomes one edit of the file,
+mapped through the recorded ranges; inserted code is written as the draft writes a listing,
+spans as escapes, and a removed token takes its space with it. Anything else the paper changes
+is an Error naming it, not a re-render. **Decided by:** the implementer.
+
+Measured on constexpr_callables against the draft at 2594eff0 and at 45b03900: 66 edits to
+`utilities.tex`, one for each `constexpr` the wording diff marks, and every line changed is the
+draft's with `constexpr` and a space added.
+
+Open: placing a changed description or paragraph, which needs the draft's prose layout (a
+sentence or clause per line) for the new text; inserting a new item, paragraph or subclause, with
+its index entry; and removing one.
+
 ### importer-vocabulary-gaps
 
 `\ref`, `\cvqual`, `\exposconcept`, `\newline` and `\opt` have no IR kind. The importer keeps

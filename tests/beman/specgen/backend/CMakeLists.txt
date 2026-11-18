@@ -4,6 +4,7 @@
 foreach(
     component
     code_spans
+    draft_edit
     draft_spans
     element_label
     render_fold
