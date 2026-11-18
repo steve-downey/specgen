@@ -109,11 +109,11 @@ std::optional<std::string> listing_text(const ir::CodeText& code, std::size_t be
             continue;
         if (span.begin < begin || span.end > end)
             return std::nullopt;
-        out += code.text.substr(pos, span.begin - pos);
+        out += draft_listing_text(std::string_view(code.text).substr(pos, span.begin - pos));
         out += draft_span_codeblock(span, std::string_view(code.text).substr(span.begin, span.end - span.begin));
         pos = span.end;
     }
-    out += code.text.substr(pos, end - pos);
+    out += draft_listing_text(std::string_view(code.text).substr(pos, end - pos));
     std::string folded;
     // substrate generic algorithm: folds each run of whitespace that holds a
     // line break to one space, and keeps the rest as written.

@@ -85,14 +85,14 @@ The concept is specified below.
 
 \begin{codeblock}
 namespace std {
-  template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // exposition only
+  template<class T> using @\exposidnc{hidden-t}@ = @\seebelow@; // \expos
 }
 \end{codeblock}
 
 \begin{codeblock}
 namespace std {
   template<class T>
-  concept @\exposidnc{hidden-usable}@ = @\seebelow@; // exposition only
+  concept @\exposidnc{hidden-usable}@ = @\seebelow@; // \expos
 }
 \end{codeblock}
 
@@ -124,7 +124,7 @@ The width of a link, in bytes.
 
 \begin{codeblock}
 namespace std {
-  enum class @\exposidnc{channel-state}@ { open, closed }; // exposition only
+  enum class @\exposidnc{channel-state}@ { open, closed }; // \expos
 }
 \end{codeblock}
 

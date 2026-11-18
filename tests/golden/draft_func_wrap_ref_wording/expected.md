@@ -34,10 +34,10 @@ namespace std {
 
   private:
     template<class... T>
-      static constexpr bool $is-invocable-using$ = $see below$;             // \expos
+      static constexpr bool $is-invocable-using$ = $see below$;             // exposition only
 
-    R (*$thunk-ptr$)($BoundEntityType$, ArgTypes&&...) noexcept($noex$);      // \expos
-    $BoundEntityType$ $bound-entity$;                                       // \expos
+    R (*$thunk-ptr$)($BoundEntityType$, ArgTypes&&...) noexcept($noex$);      // exposition only
+    $BoundEntityType$ $bound-entity$;                                       // exposition only
   };
 
   // @[func.wrap.ref.deduct]{- .sref}@, deduction guides

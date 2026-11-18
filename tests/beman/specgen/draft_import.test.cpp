@@ -226,13 +226,19 @@ void f() @\cv{}@ @\added{x}@; // \ref{y}
     REQUIRE(sigs[0].spans.size() == 2);
     CHECK(sigs[0].spans[0].kind == ir::SpanKind::ExposId);
     CHECK(sigs[0].spans[1].kind == ir::SpanKind::SeeBelow);
-    CHECK(sigs[0].text.ends_with("; // \\expos"));
+    // The exposition-only comment reads as the words a generated synopsis has (issue #353).
+    CHECK(sigs[0].text.ends_with("; // exposition only"));
     REQUIRE(sigs[1].spans.size() == 2);
     CHECK(sigs[1].spans[0].kind == ir::SpanKind::Placeholder);
     CHECK(sigs[1].spans[0].payload == "cv");
     CHECK(sigs[1].text.find("@\\added{x}@") != std::string::npos);
     CHECK(sigs[1].spans[1].kind == ir::SpanKind::Ref);
     CHECK(sigs[1].spans[1].payload == "y");
+}
+
+TEST_CASE("draft_import - only the macro \\expos in a listing is the words exposition only") {
+    const auto code = draft_import::parse_listing("int a; // \\expos\nint b; // \\expos.\nint c; // \\exposition\n");
+    CHECK(code.text == "int a; // exposition only\nint b; // exposition only.\nint c; // \\exposition\n");
 }
 
 TEST_CASE("draft_import - elements, Equivalent to, lists, notes, and continuations") {

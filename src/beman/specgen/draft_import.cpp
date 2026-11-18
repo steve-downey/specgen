@@ -602,6 +602,16 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                         continue;
                     }
                 }
+                // `// \expos` is the words "exposition only", which is how a
+                // generated synopsis has them, so the two read alike; the LaTeX
+                // backend writes the macro back (issue #353).
+                if (constexpr std::string_view expos = "\\expos";
+                    raw.substr(i).starts_with(expos) &&
+                    (i + expos.size() == raw.size() || !is_letter(raw[i + expos.size()]))) {
+                    out.text("exposition only");
+                    i += expos.size();
+                    continue;
+                }
                 out.text(raw.substr(i, 1));
                 ++i;
                 continue;

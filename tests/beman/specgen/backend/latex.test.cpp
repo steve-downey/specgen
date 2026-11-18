@@ -36,6 +36,19 @@ TEST_CASE("latex - code inlines escape text-mode characters while listings remai
     CHECK(out.find(R"(\added{\tcode{\&}})") != std::string::npos);
 }
 
+TEST_CASE("latex - a listing's exposition-only comment is the draft's macro") {
+    SpecItem item;
+    item.decl.signatures.push_back({"int value_; // exposition only", {}});
+    item.descr.leading = {
+        BodyParagraph{{TextInline{"Not code: // exposition only"}}},
+        AuthoredCode{{"int other_; // exposition only, and more", {}}},
+    };
+    const auto out = latex::render_to_string(item);
+    CHECK(out.find("int value_; // \\expos\n") != std::string::npos);
+    CHECK(out.find("int other_; // \\expos, and more") != std::string::npos);
+    CHECK(out.find("Not code: // exposition only") != std::string::npos);
+}
+
 TEST_CASE("latex - table cells escape code and prose ampersands once") {
     const Paragraph cell{CodeInline{{"&&", {}}},
                          TextInline{" prose_text & "},

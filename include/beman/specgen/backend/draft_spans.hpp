@@ -160,6 +160,26 @@ inline std::string draft_span_codeblock(const ir::Span& span, std::string_view s
     return '@' + draft_span_escaped(span, spelling) + '@';
 }
 
+// A listing's own text, as the draft's source writes it. The draft writes the
+// exposition-only comment as its macro, `// \expos` (`\EXPO{exposition only}`
+// in macros.tex), and never as the words (issue #353); the importer reads the
+// macro as the words, so the IR has one spelling of it, and this writes it
+// back. A comment in a listing is LaTeX (texcl), so the macro is written bare.
+inline std::string draft_listing_text(std::string_view text) {
+    constexpr std::string_view words = "// exposition only";
+    std::string                out;
+    std::size_t                pos = 0;
+    // substrate generic algorithm: a find-and-replace scan; the position is
+    // the loop's state.
+    for (std::size_t at = text.find(words); at != std::string_view::npos; at = text.find(words, pos)) {
+        out += text.substr(pos, at - pos);
+        out += "// \\expos";
+        pos = at + words.size();
+    }
+    out += text.substr(pos);
+    return out;
+}
+
 // --- the draft's own change marks (macros.tex) ------------------------------
 //
 // `\added{...}` and `\removed{...}` in prose; the same inside a code escape,

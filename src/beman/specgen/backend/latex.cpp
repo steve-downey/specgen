@@ -37,7 +37,6 @@
 
 #include <algorithm>
 #include <format>
-#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -66,8 +65,9 @@ using beman::specgen::foundation::overloaded;
 // The shared header says the rest.
 using backend::draft_span_codeblock;
 
-// Listing code is the author's own tokens; it is never re-escaped. Only the
-// spans are substituted, via the shared substrate (backend/code_spans.hpp)
+// Listing code is the author's own tokens; it is never re-escaped, and only
+// its exposition-only comment is written as the draft's macro
+// (`draft_listing_text`). The spans are substituted, via the shared substrate (backend/code_spans.hpp)
 // -- and the wording diff's change runs, each closed in the draft's own
 // `@\added{...}@` with the spans inside it in their escaped form, since the
 // run has opened the `@...@` already (docs/plans/wording-diff.md).
@@ -76,7 +76,7 @@ std::string render_code_codeblock(const ir::CodeText& code) {
                                       draft_span_codeblock,
                                       backend::draft_span_escaped,
                                       backend::draft_change_codeblock,
-                                      std::identity{},
+                                      backend::draft_listing_text,
                                       backend::draft_layout_hint_listing);
 }
 

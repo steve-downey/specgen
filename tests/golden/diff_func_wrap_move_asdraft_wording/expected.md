@@ -60,7 +60,7 @@ namespace std {
 
   private:
     template<class VT>
-      static constexpr bool $is-callable-from$ = $see below$;       // \expos
+      static constexpr bool $is-callable-from$ = $see below$;       // exposition only
   };
 }
 ```
