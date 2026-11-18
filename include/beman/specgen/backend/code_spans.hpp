@@ -5,7 +5,7 @@
 // Every backend renders one the same way: the author's own tokens pass
 // through the literal-text hook, and the byte-ranged spans are substituted, each with
 // a backend-specific escape (LaTeX's `\exposid{...}` in prose and
-// `@\exposidnc{...}@` in code, the mpark backend's own convention, ...). That
+// `@\exposid{...}@` in code, the mpark backend's own convention, ...). That
 // walk is written once here rather than once per backend. `escape_span` owns
 // the macro spelling; `escape_text` defaults to identity for literal listings.
 #ifndef BEMAN_SPECGEN_BACKEND_CODE_SPANS_HPP

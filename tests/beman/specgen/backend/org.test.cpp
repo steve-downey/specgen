@@ -36,6 +36,24 @@ TEST_CASE("org - HeaderIsIdempotent") {
 
 // The same [optional.observe]/value_or shape both sibling files open with, so
 // the three expected strings can be read side by side.
+TEST_CASE("org - a term and a fixed phrase are the draft's macros, and italic words in HTML") {
+    SpecItem item;
+    item.descr.leading    = {BodyParagraph{{TextInline{"An "},
+                                            PhraseInline{Phrase::ImplementationDefined, "what"},
+                                            TextInline{" "},
+                                            PhraseInline{Phrase::Ntbs},
+                                            TextInline{" is a "},
+                                            TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                            TextInline{" in the "},
+                                            TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                            TextInline{"."}}}};
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("An @@latex:\\impldef{what}@@@@html:implementation-defined@@ "));
+    CHECK(out.contains("@@latex:\\ntbs{}@@@@html:NTBS@@"));
+    CHECK(out.contains("@@latex:\\term{valid \\tcode{T}}@@@@html:<i>valid <code>T</code></i>@@"));
+    CHECK(out.contains("@@latex:\\Fundescx{Effects}@@@@html:<i>Effects</i>@@"));
+}
+
 TEST_CASE("org - value_or golden") {
     SpecItem item;
     // Dropped, per design §8 — asserted below by the absence of any index text.
@@ -94,7 +112,7 @@ TEST_CASE("org - a span in a code block uses the draft's own @...@ escape") {
     item.decl.signatures.push_back({"T VAL;", {{2, 5, SpanKind::ExposId, "val"}}});
 
     const std::string out = org::render_to_string(item);
-    CHECK(out.find("T @\\exposidnc{val}@;") != std::string::npos);
+    CHECK(out.find("T @\\exposid{val}@;") != std::string::npos);
     // And the escape is literally the shared function's output, not a
     // lookalike -- if latex.cpp's convention ever changes, this moves with it.
     CHECK(out.find(backend::draft_span_codeblock({2, 5, SpanKind::ExposId, "val"}, "VAL")) != std::string::npos);
@@ -147,6 +165,15 @@ TEST_CASE("org - a cv-qualifier span and an optional span, in a code block and i
 // Mathematics inside code (issue #311): the draft's own bytes in a block and in
 // the LaTeX snippet; in HTML a variable is italic and a subscript is a
 // subscript, a name in italics and a number upright.
+TEST_CASE("org - code as a subscript is the draft's mathematics, and upright in HTML") {
+    SpecItem item;
+    item.descr.leading    = {BodyParagraph{
+        {CodeInline{{"i_x", {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::CodeSubscript, "x"}}}}}}};
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("@@latex:\\tcode{$i_\\tcode{x}$}@@"));
+    CHECK(out.contains("<var>i</var><sub>x</sub>"));
+}
+
 TEST_CASE("org - a math variable and a subscript in code") {
     const beman::specgen::ir::CodeText code{
         "get<i>(T_i, T_1)",
@@ -816,7 +843,7 @@ TEST_CASE("org - a changed run of code is the draft's escape, the same bytes the
     Document doc;
     doc.nodes.push_back(synopsis);
     CHECK(org::render_to_string(doc) ==
-          "#+begin_codeblock\n@\\added{T \\exposidnc{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
+          "#+begin_codeblock\n@\\added{T \\exposid{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
 }
 
 TEST_CASE("org - a marked section says so in its properties, a marked leaf in a block, added pnums take labels") {

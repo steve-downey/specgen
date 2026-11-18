@@ -3,14 +3,14 @@ namespace std {
   class @\libglobal{predicate}@ {
   public:
     // \ref{predicate.members}, exposition members
-    static constexpr bool @\exposidnc{test-value}@ = true; // exposition only
+    static constexpr bool @\exposid{test-value}@ = true; // \expos
 
   private:
-    template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@; // exposition only
+    template<class T> static constexpr bool @\exposid{accepts-type}@ = @\seebelow@; // \expos
 
-    static constexpr int @\exposidnc{storage-limit}@{42}; // exposition only
+    static constexpr int @\exposid{storage-limit}@{42}; // \expos
 
-    static constexpr int @\exposidnc{marker-only}@ = 8; // exposition only
+    static constexpr int @\exposid{marker-only}@ = 8; // \expos
   };
 }
 \end{codeblock}
@@ -20,7 +20,7 @@ namespace std {
 \rSec4[predicate.members]{Exposition members}
 
 \begin{itemdecl}
-static constexpr bool @\exposidnc{test-value}@ = true;
+static constexpr bool @\exposid{test-value}@ = true;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -31,7 +31,7 @@ static constexpr bool @\exposidnc{test-value}@ = true;
 
 \begin{itemdecl}
 template<class T>
-  static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
+  static constexpr bool @\exposid{accepts-type}@ = @\seebelow@;
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -49,7 +49,7 @@ static_assert(true);
 \rSec4[predicate.limits]{Limits}
 
 \begin{itemdecl}
-static constexpr int @\exposidnc{storage-limit}@{42};
+static constexpr int @\exposid{storage-limit}@{42};
 \end{itemdecl}
 
 \begin{itemdescr}

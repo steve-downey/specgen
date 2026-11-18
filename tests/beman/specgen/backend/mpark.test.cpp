@@ -76,6 +76,20 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(std::forward<U>(v));
     CHECK(mpark::render_to_string(item) == expected);
 }
 
+TEST_CASE("mpark - a term is italic and a fixed phrase is its words") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{TextInline{"An "},
+                                         PhraseInline{Phrase::ImplementationDefined, "what"},
+                                         TextInline{" "},
+                                         PhraseInline{Phrase::Ntbs},
+                                         TextInline{" is a "},
+                                         TermInline{{TextInline{"valid "}, CodeInline{{"T", {}}}}},
+                                         TextInline{" in the "},
+                                         TermInline{{TextInline{"Effects"}}, TermRole::ElementName},
+                                         TextInline{"."}}}};
+    CHECK(mpark::render_to_string(item).contains("An implementation-defined NTBS is a *valid `T`* in the *Effects*."));
+}
+
 TEST_CASE("mpark - spans use the framework's embedded-Markdown convention") {
     SpecItem item;
     // "VAL" is the sentinel occupying the exposition-only name's byte range.
@@ -172,6 +186,13 @@ TEST_CASE("mpark - a cv-qualifier span is italic and an optional span takes a su
 // Mathematics inside code (issue #311). A variable is italic, which is the
 // `$x$` shorthand. A subscript is Markdown's `~x~`, in an `@...@` unless a
 // changed run has opened one; a name in it is italic and a number upright.
+TEST_CASE("mpark - code as a subscript is upright") {
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{
+        {CodeInline{{"i_x", {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::CodeSubscript, "x"}}}}}}};
+    CHECK(mpark::render_to_string(item).contains("`$i$@~x~@`"));
+}
+
 TEST_CASE("mpark - a math variable is italic and a subscript is a subscript") {
     beman::specgen::ir::CodeText code{
         "get<i>(T_i, T_1)",

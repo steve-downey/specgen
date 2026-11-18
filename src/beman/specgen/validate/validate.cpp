@@ -743,6 +743,12 @@ struct InlineHasContent {
     bool operator()(const ir::OldConceptRef& v) const { return has_non_whitespace(v.name); }
     bool operator()(const ir::TableRef& v) const { return has_non_whitespace(v.stable_name); }
     bool operator()(const ir::RawInline& v) const { return has_non_whitespace(v.latex); }
+    bool operator()(const ir::TermInline& v) const {
+        return std::ranges::any_of(v.content, [](const ir::TermPiece& piece) {
+            return std::visit([](const auto& p) { return InlineHasContent{}(p); }, piece);
+        });
+    }
+    bool operator()(const ir::PhraseInline&) const { return true; }
     bool operator()(const ir::ChangedInline& run) const {
         return std::ranges::any_of(
             run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
@@ -1025,6 +1031,8 @@ struct UnmarkedPieces {
     std::vector<ir::PlainInline> operator()(const ir::OldConceptRef& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::TableRef& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::RawInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::TermInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::PhraseInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
 };
 
@@ -1036,6 +1044,15 @@ std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PlaceholderInl
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::OldConceptRef& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TableRef& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RawInline& piece) const { return {piece}; }
+// A term's words and code are the paragraph's, so the checks that read code
+// read the code inside a term too.
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TermInline& piece) const {
+    return piece.content | std::views::transform([](const ir::TermPiece& p) {
+               return std::visit([](const auto& v) -> ir::PlainInline { return v; }, p);
+           }) |
+           std::ranges::to<std::vector>();
+}
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PhraseInline& piece) const { return {piece}; }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
 
 std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
@@ -1595,6 +1612,13 @@ struct InlineText {
     std::string operator()(const ir::OldConceptRef& v) const { return v.name; }
     std::string operator()(const ir::TableRef& v) const { return v.stable_name; }
     std::string operator()(const ir::RawInline& v) const { return v.latex; }
+    std::string operator()(const ir::TermInline& v) const {
+        return v.content | std::views::transform([](const ir::TermPiece& piece) {
+                   return std::visit([](const auto& p) { return InlineText{}(p); }, piece);
+               }) |
+               std::views::join | std::ranges::to<std::string>();
+    }
+    std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_name(v.phrase)); }
     std::string operator()(const ir::ChangedInline& run) const {
         return foundation::mconcat_map(
             run.inlines,

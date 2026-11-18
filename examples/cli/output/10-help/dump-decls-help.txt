@@ -52,11 +52,13 @@ generate options:
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
-                             (exit 1) instead
+                             (exit 1) instead. An error found reading the
+                             header's docblocks fails the run with or without
+                             it, after the wording is written
   --warnings-as-errors      with --validate: a finding at warning severity
-                             aborts the render too. A warning is something
-                             specgen verified; a note is something to check
-                             outside it, and never fails the run
+                             fails the run too, in the same way. A warning is
+                             something specgen verified; a note is something
+                             to check outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org

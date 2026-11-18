@@ -146,11 +146,13 @@ generate options:
   --backend <name>          latex (default), mpark, or org
   --validate                run the wording validators before rendering; a
                              finding at error severity aborts the render
-                             (exit 1) instead
+                             (exit 1) instead. An error found reading the
+                             header's docblocks fails the run with or without
+                             it, after the wording is written
   --warnings-as-errors      with --validate: a finding at warning severity
-                             aborts the render too. A warning is something
-                             specgen verified; a note is something to check
-                             outside it, and never fails the run
+                             fails the run too, in the same way. A warning is
+                             something specgen verified; a note is something
+                             to check outside it, and never fails the run
   --paper                   mark the whole fragment as added wording: the
                              editing-instruction form of each backend, with
                              paragraphs numbered as added under mpark and org
@@ -1907,7 +1909,12 @@ int generate_command(const std::vector<std::string>& args) {
             });
     };
 
-    auto result =
+    // The headers' own findings that fail the run: an Error, and a Warning
+    // under --warnings-as-errors (issue #350). They do not stop it, since that
+    // would withhold the wording and not just the finding; the wording is
+    // written and the run then exits 1, as a validation error's would.
+    std::size_t build_failures = 0;
+    auto        result =
         beman::specgen::foundation::fold_left_short(
             std::views::iota(std::size_t{0}, headers.size()),
             std::vector<frontend::DocumentBuild>{},
@@ -1928,21 +1935,23 @@ int generate_command(const std::vector<std::string>& args) {
                         // reader can actually find, not a byte offset, and the
                         // severity is each finding's own — notes and errors are
                         // not all printed as the literal word "warning". An
-                        // Error here still does not fail the build: failing it
-                        // would withhold the wording, not just the finding's
-                        // own text. `diagnostic.file` is set only for a finding
+                        // Error here is counted, and fails the run once the
+                        // wording is written (`build_failures`). `diagnostic.file` is set only for a finding
                         // in a header the document follows (a `.syn` region's
                         // includes), where the main file's name would be the
                         // wrong one — which is also what already tells a
                         // paper's findings apart, with no per-document prefix
                         // needed.
-                        for (const auto& diagnostic : one.result.diagnostics)
+                        for (const auto& diagnostic : one.result.diagnostics) {
                             std::println(stderr,
                                          "{}:{}: {}: {}",
                                          diagnostic.file.empty() ? header : diagnostic.file,
                                          diagnostic.line,
                                          beman::specgen::severity_label(diagnostic.severity),
                                          diagnostic.message);
+                            if (fails_run(diagnostic.severity, wording.warnings_as_errors))
+                                ++build_failures;
+                        }
                         built.push_back(std::move(one));
                         return std::move(built);
                     });
@@ -2042,7 +2051,8 @@ int generate_command(const std::vector<std::string>& args) {
                         namespace draft_edit  = beman::specgen::backend::draft_edit;
                         draft_edit::Plan plan = draft_edit::merge(
                             std::views::zip(inherited->documents, built) | std::views::transform([](const auto& pair) {
-                                return draft_edit::plan(std::get<0>(pair), std::get<1>(pair).result.document);
+                                return draft_edit::plan(
+                                    std::get<0>(pair), std::get<1>(pair).result.document, read_all);
                             }) |
                             std::ranges::to<std::vector>());
                         // substrate generic algorithm: formatted output, not a fold.
@@ -2125,6 +2135,15 @@ int generate_command(const std::vector<std::string>& args) {
 
     if (!result) {
         std::println(stderr, "{}", result.error());
+        return 1;
+    }
+    if (*result == 0 && build_failures > 0) {
+        std::println(stderr,
+                     "specgen: {} finding{} in the documented header{} fail{} the run; the output is written",
+                     build_failures,
+                     build_failures == 1 ? "" : "s",
+                     headers.size() == 1 ? "" : "s",
+                     build_failures == 1 ? "s" : "");
         return 1;
     }
     return *result;

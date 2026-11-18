@@ -1,13 +1,13 @@
 #+begin_codeblock
 namespace std {
-  inline constexpr int @\exposidnc{limit}@ = 1; // exposition only
+  inline constexpr int @\exposid{limit}@ = 1; // exposition only
 }
 #+end_codeblock
 
 #+begin_codeblock
 namespace std {
   template<class T>
-  concept @\exposidnc{enabled}@ = true; // exposition only
+  concept @\exposid{enabled}@ = true; // exposition only
 }
 #+end_codeblock
 
@@ -17,13 +17,13 @@ namespace std {
 
 #+begin_codeblock
 namespace std {
-  using @\exposidnc{token}@ = int; // exposition only
+  using @\exposid{token}@ = int; // exposition only
 }
 #+end_codeblock
 
 #+begin_codeblock
 namespace std {
-  template<class T> using @\exposidnc{traverse-context-t}@ = @\exposidnc{token}@*; // exposition only
+  template<class T> using @\exposid{traverse-context-t}@ = @\exposid{token}@*; // exposition only
 }
 #+end_codeblock
 
@@ -40,7 +40,7 @@ namespace std {
     void bump();
 
   private:
-    int @\exposidnc{value}@ = 0; // exposition only
+    int @\exposid{value}@ = 0; // exposition only
   };
 }
 #+end_codeblock
@@ -73,8 +73,8 @@ void bump();
 
 #+begin_codeblock
 int exposed_limit = 2;
-if constexpr (@\exposidnc{enabled}@<int>)
-  @\exposidnc{value}@ = @\exposidnc{value}@ + @\exposidnc{limit}@ + exposed_limit;
+if constexpr (@\exposid{enabled}@<int>)
+  @\exposid{value}@ = @\exposid{value}@ + @\exposid{limit}@ + exposed_limit;
 #+end_codeblock
 #+end_pnum
 
@@ -84,7 +84,7 @@ if constexpr (@\exposidnc{enabled}@<int>)
 
 #+begin_itemdecl
 template<class F>
-  int apply_in_context(F&& f, @\exposidnc{traverse-context-t}@<int> context);
+  int apply_in_context(F&& f, @\exposid{traverse-context-t}@<int> context);
 #+end_itemdecl
 
 #+begin_pnum
@@ -100,9 +100,9 @@ template<class F>
 
 #+begin_codeblock
 namespace std {
-  template<@\exposidnc{enabled}@ U,
-  class T = @\exposidnc{token}@>
-    requires @\exposidnc{enabled}@<T>
+  template<@\exposid{enabled}@ U,
+  class T = @\exposid{token}@>
+    requires @\exposid{enabled}@<T>
   class gauge {
   public:
     // \ref{counter.gauge}, observers

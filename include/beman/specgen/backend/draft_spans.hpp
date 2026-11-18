@@ -78,13 +78,12 @@ inline std::string draft_escape_code_text(std::string_view text) {
            std::views::join | std::ranges::to<std::string>();
 }
 
-// A span's macro, in prose (`listing` false) or inside a listing's escape. The
-// two differ only in which form an exposition-only name takes when the span
-// does not say (`ir::default_no_correction`): the draft has a
-// no-italic-correction twin of each italic macro, and a span the draft
-// importer read says which one the draft wrote.
-inline std::string draft_span_macro(const ir::Span& span, std::string_view spelling, bool listing) {
-    const bool nc = span.no_correction.value_or(ir::default_no_correction(span.kind, listing));
+// A span's macro, the same in prose and inside a listing's escape. The draft
+// has a no-italic-correction twin of each italic macro; a span the draft
+// importer read says which one the draft wrote, and one that does not say
+// takes the plain form (`ir::Span::no_correction`).
+inline std::string draft_span_macro(const ir::Span& span, std::string_view spelling) {
+    const bool nc = span.no_correction.value_or(false);
     return foundation::match(
         span.kind,
         foundation::when<ir::SpanKind::ExposId>(
@@ -122,18 +121,21 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
         foundation::when<ir::SpanKind::Subscript>(
             [&] { return span.payload.size() == 1 ? "$_" + span.payload + '$' : "$_{" + span.payload + "}$"; }),
         // The elements left out of a sequence: `T$_0$, $\dotsc$, T$_n$`.
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string{"$\\dotsc$"}; }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string{"$\\dotsc$"}; }),
+        // Code as a subscript, in the code font inside the mathematics:
+        // `$i_\tcode{x}$` (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>(
+            [&] { return "$_\\tcode{" + draft_escape_code_text(span.payload) + "}$"; }));
 }
 
 // Outside a codeblock we are already in LaTeX, so the macro is written
 // directly.
 inline std::string draft_span_prose(const ir::Span& span, std::string_view spelling) {
-    return draft_span_macro(span, spelling, false);
+    return draft_span_macro(span, spelling);
 }
 
-// Inside a codeblock the draft escapes back into LaTeX with @...@. Exposition
-// identifiers use the no-correction form there unless the span says the
-// draft wrote the other. Ref is a separate exception,
+// Inside a codeblock the draft escapes back into LaTeX with @...@. Ref is the
+// exception,
 // and it is the draft's own, not ours. `macros.tex` sets the
 // listings option `texcl=true` ("all TeX commands are available within
 // comments") in the shared `\lstset`, alongside `escapechar=@` -- so it holds
@@ -147,17 +149,35 @@ inline std::string draft_span_prose(const ir::Span& span, std::string_view spell
 // `draft_span_escaped` is the form *inside* an open `@...@`: what the
 // codeblock form wraps, which is also what a span inside a changed run of
 // code renders as, the run having opened the escape already
-// (docs/plans/wording-diff.md). The exposition identifier takes the
-// no-correction form there as it does in a codeblock; a Ref is the bare
-// `\ref` either way.
+// (docs/plans/wording-diff.md). A Ref is the bare `\ref` either way.
 inline std::string draft_span_escaped(const ir::Span& span, std::string_view spelling) {
-    return draft_span_macro(span, spelling, true);
+    return draft_span_macro(span, spelling);
 }
 
 inline std::string draft_span_codeblock(const ir::Span& span, std::string_view spelling) {
     if (span.kind == ir::SpanKind::Ref)
         return draft_span_prose(span, spelling);
     return '@' + draft_span_escaped(span, spelling) + '@';
+}
+
+// A listing's own text, as the draft's source writes it. The draft writes the
+// exposition-only comment as its macro, `// \expos` (`\EXPO{exposition only}`
+// in macros.tex), and never as the words (issue #353); the importer reads the
+// macro as the words, so the IR has one spelling of it, and this writes it
+// back. A comment in a listing is LaTeX (texcl), so the macro is written bare.
+inline std::string draft_listing_text(std::string_view text) {
+    constexpr std::string_view words = "// exposition only";
+    std::string                out;
+    std::size_t                pos = 0;
+    // substrate generic algorithm: a find-and-replace scan; the position is
+    // the loop's state.
+    for (std::size_t at = text.find(words); at != std::string_view::npos; at = text.find(words, pos)) {
+        out += text.substr(pos, at - pos);
+        out += "// \\expos";
+        pos = at + words.size();
+    }
+    out += text.substr(pos);
+    return out;
 }
 
 // --- the draft's own change marks (macros.tex) ------------------------------
@@ -220,6 +240,25 @@ inline std::string draft_layout_hint_macro(const ir::LayoutHint& hint, std::stri
     if (hint.kind != ir::LayoutHintKind::Hyphen && letter_follows)
         macro += ' ';
     return macro;
+}
+
+// Prose text as LaTeX: the three characters LaTeX reserves that prose has as
+// themselves -- `&` (an alignment tab), `%` (a comment, which dropped the rest
+// of a paragraph written on one line) and `#` -- written as the draft writes
+// them, `\&`, `\%` and `\#` (issue #352). The rest stays as it is: prose keeps
+// a command the grammar does not know as written (design §4), so a backslash or
+// a brace in it is the author's LaTeX.
+inline std::string draft_escape_prose_text(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    // substrate generic algorithm: a per-character escape, one character to
+    // one or two.
+    for (const char ch : text) {
+        if (ch == '&' || ch == '%' || ch == '#')
+            out += '\\';
+        out += ch;
+    }
+    return out;
 }
 
 // Text with its line-break hints written where they sit: a text inline's
@@ -311,7 +350,8 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     const auto sets_code_font = [](ir::SpanKind kind) {
         return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
                kind != ir::SpanKind::Optional && kind != ir::SpanKind::MathVariable &&
-               kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis;
+               kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis &&
+               kind != ir::SpanKind::CodeSubscript;
     };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
@@ -326,12 +366,14 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     bool       grouped             = false; // the draft wrote a one-character subscript in a group
     const auto subscript_begins_at = [&](std::size_t at) {
         return std::ranges::any_of(v.code.spans, [&](const ir::Span& span) {
-            return span.begin == at && span.kind == ir::SpanKind::Subscript;
+            return span.begin == at &&
+                   (span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript);
         });
     };
     const auto write_span = [&](const ir::Span& span, std::string_view spelling) {
         std::string macro = draft_span_prose(span, spelling);
-        if (span.kind == ir::SpanKind::Subscript && open != Open::Nothing) {
+        if ((span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript) &&
+            open != Open::Nothing) {
             // The mathematics is open: no `$` of its own, and the code's group closes first.
             macro = open == Open::Code && grouped && span.payload.size() == 1
                         ? "}_{" + span.payload + "}$"
@@ -367,6 +409,36 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
         draft_escape_code_text,
         write_hint);
     return whole_span ? code : "\\tcode{" + code + '}';
+}
+
+// A term in prose (issue #355): the draft's macro for its role, around its
+// words and code as prose writes them. Shared with the org backend for the
+// reason the code inline is.
+inline std::string draft_term(const ir::TermInline& v) {
+    const std::string_view macro =
+        foundation::match(v.role,
+                          foundation::when<ir::TermRole::Term>([] { return std::string_view{"\\term{"}; }),
+                          foundation::when<ir::TermRole::Definition>([] { return std::string_view{"\\defn{"}; }),
+                          foundation::when<ir::TermRole::ElementName>([] { return std::string_view{"\\Fundescx{"}; }));
+    std::string out{macro};
+    std::ranges::for_each(v.content, [&](const ir::TermPiece& piece) {
+        if (const auto* text = std::get_if<ir::TextInline>(&piece))
+            out += draft_hinted_text(text->text, text->hints, draft_escape_prose_text);
+        else
+            out += draft_code_inline(std::get<ir::CodeInline>(piece));
+    });
+    return out + '}';
+}
+
+// A fixed phrase in prose as the draft writes it (issue #355). `\ntbs` takes
+// an empty group, the draft's own spelling before a space, unless the draft
+// wrote it bare.
+inline std::string draft_phrase(const ir::PhraseInline& v) {
+    return foundation::match(
+        v.phrase,
+        foundation::when<ir::Phrase::ImplementationDefined>([&] { return "\\impldef{" + v.index + '}'; }),
+        foundation::when<ir::Phrase::Ntbs>([&] { return std::string{v.bare ? "\\ntbs" : "\\ntbs{}"}; }),
+        foundation::when<ir::Phrase::Ntmbs>([&] { return std::string{v.bare ? "\\ntmbs" : "\\ntmbs{}"}; }));
 }
 
 } // namespace beman::specgen::backend

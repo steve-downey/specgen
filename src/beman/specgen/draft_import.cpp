@@ -185,11 +185,23 @@ struct Importer {
             return std::nullopt;
         return line_starts[static_cast<std::size_t>(&line - all_lines->data())];
     }
+    // Where lines [first, last) of `lines` are in the file, whole, newlines
+    // and all; nothing for lines that are copies, or none (issue #346).
+    ir::NodeOrigin node_origin(Lines lines, std::size_t first, std::size_t last) const {
+        if (first >= last || last > lines.size())
+            return {};
+        const std::optional<std::size_t> begin = source_offset(lines[first]);
+        const std::optional<std::size_t> end   = source_offset(lines[last - 1]);
+        if (!begin || !end)
+            return {};
+        return {std::make_shared<const ir::SourceRange>(
+            ir::SourceRange{source_name, *begin, *end + lines[last - 1].size() + 1})};
+    }
     // Set by parse_code when it met a macro the span vocabulary lacks: the text
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
     bool                      met_unknown_macro = false;
-    ir::Paragraph             parse_prose(std::string_view text, bool in_table = false);
+    ir::Paragraph             parse_prose(std::string_view text);
     ir::InformativeBody       parse_informative(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
     std::vector<ir::Node>     parse_region(Lines lines);
@@ -348,20 +360,20 @@ std::optional<std::string> plain_code_argument(std::string_view arg) {
 
 // One draft macro with a code meaning, at `pos` (a backslash). Appends its
 // span to `out` and returns where it ended, or nullopt when it is not one.
-// `listing` says whether the macro sits in a listing's `@...@` or in a
-// `\tcode`, which decides what an italic macro's plain form and its
-// no-correction twin record: the span says which was written only where that
-// is not what the context takes anyway.
-std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out, bool listing) {
+// An italic macro's no-correction twin is recorded on the span; its plain form
+// is what a span that says nothing takes, in a listing's `@...@` and in a
+// `\tcode` alike.
+std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeBuilder& out) {
     std::size_t end = pos + 1;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     while (end < s.size() && is_letter(s[end]))
         ++end;
     const std::string_view name = s.substr(pos + 1, end - pos - 1);
 
-    const auto written = [&](ir::SpanKind kind, bool no_correction) -> std::optional<bool> {
-        return no_correction == ir::default_no_correction(kind, listing) ? std::nullopt
-                                                                         : std::optional<bool>{no_correction};
+    // Only the no-correction form is said: the plain one is what a span that
+    // says nothing takes (`ir::Span::no_correction`).
+    const auto written = [](bool no_correction) -> std::optional<bool> {
+        return no_correction ? std::optional<bool>{true} : std::nullopt;
     };
     // A macro whose argument is a name, which is the span's text and payload.
     const auto named = [&](ir::SpanKind        kind,
@@ -374,9 +386,9 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
     };
 
     if (name == "exposid" || name == "exposidnc")
-        return named(ir::SpanKind::ExposId, written(ir::SpanKind::ExposId, name == "exposidnc"));
+        return named(ir::SpanKind::ExposId, written(name == "exposidnc"));
     if (name == "placeholder" || name == "placeholdernc")
-        return named(ir::SpanKind::Placeholder, written(ir::SpanKind::Placeholder, name == "placeholdernc"));
+        return named(ir::SpanKind::Placeholder, written(name == "placeholdernc"));
     if (name == "cvqual")
         return named(ir::SpanKind::CvQualifier);
     if (name == "opt") {
@@ -400,14 +412,11 @@ std::optional<std::size_t> code_macro(std::string_view s, std::size_t pos, CodeB
         return empty ? empty->next : end;
     }
     if (name == "seebelow" || name == "seebelownc") {
-        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(ir::SpanKind::SeeBelow, name == "seebelownc"));
+        out.span(ir::SpanKind::SeeBelow, "", "SEEBELOW", written(name == "seebelownc"));
         return end;
     }
     if (name == "impdef" || name == "impdefnc") {
-        out.span(ir::SpanKind::ImplDefined,
-                 "",
-                 "implementation-defined",
-                 written(ir::SpanKind::ImplDefined, name == "impdefnc"));
+        out.span(ir::SpanKind::ImplDefined, "", "implementation-defined", written(name == "impdefnc"));
         return end;
     }
     if (name == "libglobal") {
@@ -491,13 +500,23 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
         return at == 0 ? std::nullopt : std::optional(out.code);
     if (inner[at] != '_')
         return std::nullopt;
-    std::string_view sub     = inner.substr(at + 1);
-    const bool       grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
+    std::string_view sub = inner.substr(at + 1);
+    // Code as the subscript of a variable, `$i_\tcode{x}$` (issue #339).
+    if (sub.starts_with("\\tcode{") && sub.ends_with('}') && at > 0 && out.code.hints.empty()) {
+        const std::optional<std::string> code = plain_code_argument(sub.substr(7, sub.size() - 8));
+        if (!code || code->empty())
+            return std::nullopt;
+        out.span(ir::SpanKind::CodeSubscript, *code, '_' + *code);
+        return out.code;
+    }
+    const bool grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
     if (grouped)
         sub = sub.substr(1, sub.size() - 2);
     else if (sub.size() != 1)
         return std::nullopt;
-    if (sub.empty() || !std::ranges::all_of(sub, alnum))
+    // A grouped subscript may be an expression, `$p_{i-1}$` (issue #339).
+    const auto in_subscript = [&](char c) { return alnum(c) || (grouped && (c == '+' || c == '-')); };
+    if (sub.empty() || !std::ranges::all_of(sub, in_subscript))
         return std::nullopt;
     // A group around one character is spelling too, and the draft writes it
     // only after code (`$\tcode{B}_{1}$`), so the hint that is there carries it.
@@ -552,7 +571,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                     ok = false;
                     break;
                 }
-                const auto next = code_macro(inner, j, trial, true);
+                const auto next = code_macro(inner, j, trial);
                 if (!next) {
                     ok = false;
                     break;
@@ -597,10 +616,20 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
             if (listing) {
                 // Inside a listing only the comment macros are TeX (texcl).
                 if (raw.substr(i).starts_with("\\ref{")) {
-                    if (const auto next = code_macro(raw, i, out, true)) {
+                    if (const auto next = code_macro(raw, i, out)) {
                         i = *next;
                         continue;
                     }
+                }
+                // `// \expos` is the words "exposition only", which is how a
+                // generated synopsis has them, so the two read alike; the LaTeX
+                // backend writes the macro back (issue #353).
+                if (constexpr std::string_view expos = "\\expos";
+                    raw.substr(i).starts_with(expos) &&
+                    (i + expos.size() == raw.size() || !is_letter(raw[i + expos.size()]))) {
+                    out.text("exposition only");
+                    i += expos.size();
+                    continue;
                 }
                 out.text(raw.substr(i, 1));
                 ++i;
@@ -612,7 +641,7 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                 i = next;
                 continue;
             }
-            if (const auto after = code_macro(raw, i, out, false)) {
+            if (const auto after = code_macro(raw, i, out)) {
                 i = *after;
                 continue;
             }
@@ -673,7 +702,18 @@ ir::CodeText whole_named_span(ir::SpanKind kind, std::string_view raw, bool no_c
 
 ir::Inline code_inline_of(ir::CodeText code) { return ir::CodeInline{std::move(code)}; }
 
-ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
+// The role of a term macro, or nothing for another macro (issue #355).
+std::optional<ir::TermRole> term_role_of(std::string_view name) {
+    if (name == "term")
+        return ir::TermRole::Term;
+    if (name == "defn")
+        return ir::TermRole::Definition;
+    if (name == "Fundescx")
+        return ir::TermRole::ElementName;
+    return std::nullopt;
+}
+
+ir::Paragraph Importer::parse_prose(std::string_view text) {
     ir::Paragraph  out;
     ir::TextInline pending;
     // A hint with no text beside it -- between two macros, say -- is still kept,
@@ -728,8 +768,10 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             const char next = text[i + 1];
             if (next == ' ') {
                 pending.text += ' ';
-            } else if (in_table && next == '&') {
-                pending.text += '&'; // the LaTeX backend escapes a table cell's `&` again
+            } else if (next == '&' || next == '%' || next == '#') {
+                // The character itself, as a docblock writes it; the LaTeX
+                // backend escapes it again (issue #352).
+                pending.text += next;
             } else if (next != ',') {
                 pending.text += text.substr(i, 2); // \& \% \{ ... stay as the draft writes them
             }
@@ -801,6 +843,39 @@ ir::Paragraph Importer::parse_prose(std::string_view text, bool in_table) {
             flush();
             out.push_back(ir::TableRef{arg->inner});
             i = arg->next;
+        } else if (const auto role = term_role_of(name); role && arg) {
+            // A term's words, which may hold code (issue #355). Anything else
+            // in them has no place in a term, and the whole stays raw.
+            flush();
+            std::vector<ir::TermPiece> content;
+            const ir::Paragraph        words = parse_prose(arg->inner);
+            const bool                 plain = std::ranges::all_of(words, [&](const ir::Inline& piece) {
+                if (const auto* t = std::get_if<ir::TextInline>(&piece))
+                    content.emplace_back(*t);
+                else if (const auto* c = std::get_if<ir::CodeInline>(&piece))
+                    content.emplace_back(*c);
+                else
+                    return false;
+                return true;
+            });
+            if (plain)
+                out.push_back(ir::TermInline{std::move(content), *role});
+            else
+                raw(text.substr(i, arg->next - i),
+                    "\\" + name + " holds what a term cannot, and is kept as raw LaTeX");
+            i = arg->next;
+        } else if (name == "impldef" && arg) {
+            flush();
+            out.push_back(ir::PhraseInline{ir::Phrase::ImplementationDefined, arg->inner});
+            i = arg->next;
+        } else if (name == "ntbs" || name == "ntmbs") {
+            flush();
+            // `\ntbs{}`: the empty group is the draft's spelling before a
+            // space, and a bare `\ntbs` its spelling before punctuation.
+            const bool braced = arg && arg->inner.empty();
+            out.push_back(ir::PhraseInline{
+                .phrase = name == "ntbs" ? ir::Phrase::Ntbs : ir::Phrase::Ntmbs, .index = {}, .bare = !braced});
+            i = braced ? arg->next : end;
         } else if ((name == "iref" || name == "ref") && arg) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
@@ -1100,9 +1175,11 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             } else if (*name == "itemize") {
                 std::vector<std::string> items;
                 std::vector<std::string> current;
-                bool                     open   = false;
-                bool                     nested = false;
-                const auto               close  = [&] {
+                bool                     open = false;
+                // The first environment inside an item, which the IR's list
+                // item, a paragraph, cannot hold.
+                std::optional<std::string> nested;
+                const auto                 close = [&] {
                     if (open)
                         items.push_back(join_prose(current));
                     current.clear();
@@ -1115,13 +1192,19 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                         open = true;
                         current.push_back(std::string(trim(trim(item_line).substr(5))));
                     } else {
-                        nested = nested || begin_name(item_line).has_value();
+                        if (!nested)
+                            nested = begin_name(item_line);
                         current.push_back(item_line);
                     }
                 }
                 close();
                 if (nested) {
-                    imp.report(Severity::Warning, "a nested list is kept as raw LaTeX");
+                    // Named for what the item holds (issue #355): a list item
+                    // holding a code block is no nested list.
+                    imp.report(Severity::Warning,
+                               *nested == "itemize" || *nested == "enumerate"
+                                   ? std::string("a nested list is kept as raw LaTeX")
+                                   : "a list item holding a " + *nested + " is kept as raw LaTeX");
                     events.push_back(EvRaw{lines.subspan(i, std::min(end + 1, lines.size()) - i) |
                                                std::views::join_with('\n') | std::ranges::to<std::string>(),
                                            *name});
@@ -1147,26 +1230,25 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
 
 ir::Table2D Importer::make_table2d(const EvTable& table) {
     ir::Table2D out{.stable_name = table.stable,
-                    .caption     = parse_prose(table.caption, true),
-                    .column1     = parse_prose(table.column1, true),
-                    .column2     = parse_prose(table.column2, true),
+                    .caption     = parse_prose(table.caption),
+                    .column1     = parse_prose(table.column1),
+                    .column2     = parse_prose(table.column2),
                     .rows        = {}};
-    out.rows =
-        table.rows | std::views::transform([&](const std::vector<std::string>& row) {
-            return ir::Table2DRow{parse_prose(row[0], true), parse_prose(row[1], true), parse_prose(row[2], true)};
-        }) |
-        std::ranges::to<std::vector>();
+    out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
+                   return ir::Table2DRow{parse_prose(row[0]), parse_prose(row[1]), parse_prose(row[2])};
+               }) |
+               std::ranges::to<std::vector>();
     return out;
 }
 
 ir::Table1D Importer::make_table1d(const EvTable& table) {
     ir::Table1D out{.stable_name = table.stable,
-                    .caption     = parse_prose(table.caption, true),
-                    .column1     = parse_prose(table.column1, true),
-                    .column2     = parse_prose(table.column2, true),
+                    .caption     = parse_prose(table.caption),
+                    .column1     = parse_prose(table.column1),
+                    .column2     = parse_prose(table.column2),
                     .rows        = {}};
     out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
-                   return ir::Table1DRow{parse_prose(row[0], true), parse_prose(row[1], true)};
+                   return ir::Table1DRow{parse_prose(row[0]), parse_prose(row[1])};
                }) |
                std::ranges::to<std::vector>();
     return out;
@@ -1387,7 +1469,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
     std::vector<ir::Node>       nodes;
     std::vector<std::string>    loose;
     std::vector<ir::IndexEntry> pending;
-    const auto                  has_content = [&] {
+    // Where `loose` and `pending` began among `lines`, for the origin of the
+    // node they become.
+    std::size_t loose_begin   = 0;
+    std::size_t pending_begin = 0;
+    const auto  has_content   = [&] {
         return std::ranges::any_of(loose, [](const std::string& l) { return !trim(l).empty(); });
     };
     const auto flush_loose = [&] {
@@ -1396,8 +1482,22 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         // the differ would show as a removed item.
         if (has_content()) {
             ir::ItemDescr descr = parse_description(loose);
-            if (ir::has_description(descr))
-                nodes.push_back(ir::SpecItem{.decl = {}, .descr = std::move(descr)});
+            if (ir::has_description(descr)) {
+                // The prose's own lines, without the blank ones around it.
+                const auto  blank = [](const std::string& l) { return trim(l).empty(); };
+                std::size_t first = loose_begin;
+                std::size_t last  = loose_begin + loose.size();
+                // substrate generic algorithm: trims a run of blank lines from each end.
+                while (first < last && blank(lines[first]))
+                    ++first;
+                // substrate generic algorithm: the same trim, from the other end.
+                while (last > first && blank(lines[last - 1]))
+                    --last;
+                ir::SpecItem prose{.decl = {}, .descr = std::move(descr)};
+                prose.origin       = node_origin(lines, first, last);
+                prose.descr_origin = prose.origin;
+                nodes.push_back(std::move(prose));
+            }
         }
         loose.clear();
     };
@@ -1409,8 +1509,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
         const std::string_view t = trim(lines[i]);
         if (t.starts_with("\\indexlibrary")) {
             flush_loose();
-            if (const auto entry = parse_index(t))
+            if (const auto entry = parse_index(t)) {
+                if (pending.empty())
+                    pending_begin = i;
                 pending.push_back(*entry);
+            }
             ++i;
             continue;
         }
@@ -1419,11 +1522,12 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 flush_loose();
                 const std::size_t end = environment_end(lines, i, *name);
                 ir::SpecItem      item;
-                item.decl.signatures = split_signatures(lines.subspan(i + 1, std::min(end, lines.size()) - i - 1));
-                item.decl.index      = std::exchange(pending, {});
-                item.decl.entities   = declared_entities(item.decl.index);
-                std::size_t next     = end + 1;
-                std::size_t probe    = next;
+                const std::size_t first = pending.empty() ? i : pending_begin;
+                item.decl.signatures    = split_signatures(lines.subspan(i + 1, std::min(end, lines.size()) - i - 1));
+                item.decl.index         = std::exchange(pending, {});
+                item.decl.entities      = declared_entities(item.decl.index);
+                std::size_t next        = end + 1;
+                std::size_t probe       = next;
                 // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
                 // state.
                 while (probe < lines.size() && trim(lines[probe]).empty())
@@ -1431,8 +1535,10 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 if (probe < lines.size() && begin_name(lines[probe]) == std::optional<std::string>{"itemdescr"}) {
                     const std::size_t dend = environment_end(lines, probe, "itemdescr");
                     item.descr = parse_description(lines.subspan(probe + 1, std::min(dend, lines.size()) - probe - 1));
-                    next       = dend + 1;
+                    item.descr_origin = node_origin(lines, probe + 1, std::min(dend, lines.size()));
+                    next              = dend + 1;
                 }
+                item.origin = node_origin(lines, first, std::min(next, lines.size()));
                 nodes.push_back(std::move(item));
                 i = next;
                 continue;
@@ -1442,14 +1548,17 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 const Lines       body = lines.subspan(i + 1, std::min(end, lines.size()) - i - 1);
                 const std::string code = body | std::views::join_with('\n') | std::ranges::to<std::string>();
                 ir::Synopsis      synopsis;
-                synopsis.code = parse_code(code, true, body.empty() ? std::nullopt : source_offset(body.front()));
-                synopsis.name = declared_class(synopsis.code.text);
+                synopsis.code   = parse_code(code, true, body.empty() ? std::nullopt : source_offset(body.front()));
+                synopsis.name   = declared_class(synopsis.code.text);
+                synopsis.origin = node_origin(lines, i, std::min(end + 1, lines.size()));
                 nodes.push_back(std::move(synopsis));
                 pending.clear();
                 i = end + 1;
                 continue;
             }
         }
+        if (loose.empty())
+            loose_begin = i;
         loose.push_back(lines[i]);
         ++i;
     }

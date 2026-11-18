@@ -46,6 +46,6 @@ inline constexpr @\placeholder{unspecified}@ forwarded;
 
 #+begin_codeblock
 namespace std {
-  inline constexpr @\placeholder{unspecified}@ @\exposidnc{helper-obj}@; // exposition only
+  inline constexpr @\placeholder{unspecified}@ @\exposid{helper-obj}@; // exposition only
 }
 #+end_codeblock

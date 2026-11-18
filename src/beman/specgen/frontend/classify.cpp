@@ -397,16 +397,6 @@ db::DocEvent classify(const RawItem&                                   ev,
         const VariableMask mask = variable_seebelow_mask(ev.decl, marked.directives, marked.grouping_line);
         if (mask.diagnostic)
             marked.diagnostics.push_back(*mask.diagnostic);
-        // Its description is written beside its synopsis and is no item, so
-        // there is nothing for the baseline's to pair with. Saying nothing left
-        // the wording without the description that was asked for (issue #328).
-        if (marked.item.as_draft)
-            marked.diagnostics.push_back(
-                {beman::specgen::Severity::Error,
-                 marked.grouping_line,
-                 std::format("\\asdraft: `{}` is exposition-only at namespace scope, whose description is not "
-                             "inherited; author it",
-                             namespace_expos->getNameAsString())});
         // The kinds whose *definition* is the implementation mask it the same
         // way (issue #50): an alias's RHS, an alias template's, a concept's
         // constraint-expression. Bare `\seebelow` only -- the targeted forms
@@ -429,6 +419,11 @@ db::DocEvent classify(const RawItem&                                   ev,
         // its description then discarded, which dropped that wording silently.
         out.descr       = std::move(marked.item.descr);
         out.diagnostics = std::move(marked.diagnostics);
+        // `\asdraft` inherits the description by the synopsis's declaration,
+        // since it is written beside the synopsis and is no item (issue #332).
+        out.descr_as_draft     = marked.item.as_draft;
+        out.descr_covers       = std::move(marked.item.covers);
+        out.describes_synopsis = marked.item.as_draft;
         return out;
     }
 
@@ -577,8 +572,8 @@ db::DocEvent classify(const RawItem&                                   ev,
     if (const clang::FunctionDecl* declared = declared_free_function(ev.decl)) {
         if (const auto sourced = source_markup.find(declared->getCanonicalDecl()); sourced != source_markup.end()) {
             AttachedItem attached   = sourced->second->attached;
-            attached.inclass_offset = sm.getDecomposedLoc(ev.decl->getBeginLoc()).second;
-            attached.file           = sm.getFileID(ev.decl->getBeginLoc());
+            attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(ev.decl->getBeginLoc())).second;
+            attached.file           = sm.getFileID(sm.getFileLoc(ev.decl->getBeginLoc()));
             if (suppresses_generated_entity(attached.directives))
                 return db::Ignored{std::move(attached.diagnostics)};
             return item_decl_event(std::move(attached), doc);
@@ -612,10 +607,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                                             "the definition, which places a function's wording (design §3.3)"
                                           : std::format("a documented {} produces no wording: unsupported entity kind",
                                                         ev.decl->getDeclKindName());
-                return db::Ignored{{db::Diagnostic{beman::specgen::Severity::Error,
-                                                   line,
-                                                   std::move(message),
-                                                   diagnostic_file_name(sm, sm.getFileID(ev.decl->getBeginLoc()))}}};
+                return db::Ignored{
+                    {db::Diagnostic{beman::specgen::Severity::Error,
+                                    line,
+                                    std::move(message),
+                                    diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(ev.decl->getBeginLoc())))}}};
             }
         }
         return db::Ignored{};

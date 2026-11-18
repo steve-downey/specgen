@@ -4,6 +4,7 @@
 #include <beman/specgen/backend/draft_edit.hpp>
 
 #include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/latex.hpp>
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/diff/sequence.hpp>
@@ -80,10 +81,14 @@ struct SameToken {
     const ir::CodeText& a;
     const ir::CodeText& b;
 
+    // An index entry around a name is the name (`ir::is_wording`): the draft's
+    // choice of whether a head carries one stands.
     bool operator()(const Token& x, const Token& y) const {
-        if ((x.span == nullptr) != (y.span == nullptr))
+        const ir::Span* xs = x.span != nullptr && ir::is_wording(*x.span) ? x.span : nullptr;
+        const ir::Span* ys = y.span != nullptr && ir::is_wording(*y.span) ? y.span : nullptr;
+        if ((xs == nullptr) != (ys == nullptr))
             return false;
-        if (x.span != nullptr && (x.span->kind != y.span->kind || x.span->payload != y.span->payload))
+        if (xs != nullptr && (xs->kind != ys->kind || xs->payload != ys->payload))
             return false;
         return std::string_view(a.text).substr(x.begin, x.end - x.begin) ==
                std::string_view(b.text).substr(y.begin, y.end - y.begin);
@@ -109,11 +114,11 @@ std::optional<std::string> listing_text(const ir::CodeText& code, std::size_t be
             continue;
         if (span.begin < begin || span.end > end)
             return std::nullopt;
-        out += code.text.substr(pos, span.begin - pos);
+        out += draft_listing_text(std::string_view(code.text).substr(pos, span.begin - pos));
         out += draft_span_codeblock(span, std::string_view(code.text).substr(span.begin, span.end - span.begin));
         pos = span.end;
     }
-    out += code.text.substr(pos, end - pos);
+    out += draft_listing_text(std::string_view(code.text).substr(pos, end - pos));
     std::string folded;
     // substrate generic algorithm: folds each run of whitespace that holds a
     // line break to one space, and keeps the rest as written.
@@ -138,9 +143,23 @@ std::optional<std::string> listing_text(const ir::CodeText& code, std::size_t be
 struct Collector {
     std::map<std::string, std::vector<Edit>> edits;
     std::vector<Finding>                     findings;
+    // The draft's source, by file, for the edits that have to see it: which
+    // paragraphs of a description changed, and the blank line after a node
+    // that goes. Read once each.
+    Reader                                                         read    = {};
+    std::map<std::string, std::optional<std::string>, std::less<>> sources = {};
 
     void error(std::string where, std::string message) {
         findings.push_back({Severity::Error, std::move(where), std::move(message)});
+    }
+
+    std::optional<std::string_view> text_of(const std::string& file) {
+        auto found = sources.find(file);
+        if (found == sources.end())
+            found = sources.emplace(file, read ? read(file) : std::nullopt).first;
+        if (!found->second)
+            return std::nullopt;
+        return std::string_view(*found->second);
     }
 };
 
@@ -228,6 +247,170 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
         out.edits[source->file].push_back(
             {file_at(begin), begin == end ? file_at(begin) : file_end(end), replacement});
     }
+}
+
+// --- placing whole nodes and descriptions (issue #346) ----------------------------
+
+// A node as the LaTeX backend writes it.
+std::string latex_of(const ir::Node& node) {
+    ir::Document document;
+    document.nodes.push_back(node);
+    return latex::render_to_string(document);
+}
+
+// LaTeX laid out as the draft's source is: a sentence to a line. The backend
+// writes a paragraph on one line; a line of prose is cut after each `. ` that
+// ends a sentence, outside every group, where the next sentence begins with a
+// capital or a macro. A code block's lines are its own.
+std::string draft_layout(std::string_view latex) {
+    std::string out;
+    bool        in_code = false;
+    // substrate generic algorithm: a line-by-line rewrite whose state is
+    // whether the line is inside a code block.
+    for (const auto part : latex | std::views::split('\n')) {
+        const std::string_view line(part.begin(), part.end());
+        if (line.starts_with("\\begin{codeblock}") || line.starts_with("\\begin{itemdecl}"))
+            in_code = true;
+        if (in_code) {
+            out += line;
+        } else {
+            int depth = 0;
+            // substrate generic algorithm: a scan of one line that copies it,
+            // breaking it after each sentence; the brace depth is its state.
+            for (std::size_t i = 0; i < line.size(); ++i) {
+                const char c = line[i];
+                if (c == '\\' && i + 1 < line.size()) {
+                    out += line.substr(i, 2);
+                    ++i;
+                    continue;
+                }
+                depth += c == '{' ? 1 : c == '}' ? -1 : 0;
+                if (c == ' ' && depth == 0 && i > 0 && line[i - 1] == '.' && i + 1 < line.size() &&
+                    (std::isupper(static_cast<unsigned char>(line[i + 1])) != 0 || line[i + 1] == '\\')) {
+                    out += '\n';
+                    continue;
+                }
+                out += c;
+            }
+        }
+        if (line.starts_with("\\end{codeblock}") || line.starts_with("\\end{itemdecl}"))
+            in_code = false;
+        out += '\n';
+    }
+    // The split leaves one more line than the text had.
+    if (out.ends_with("\n\n") && !latex.ends_with("\n\n"))
+        out.pop_back();
+    return out;
+}
+
+// The text of a description as the LaTeX backend writes it, without the
+// `itemdescr` around it: what the draft's source has between
+// `\begin{itemdescr}` and `\end{itemdescr}`, or the whole of prose that is no
+// item's.
+std::string description_latex(const ir::SpecItem& item) {
+    const std::string          whole = latex_of(item);
+    constexpr std::string_view open  = "\\begin{itemdescr}\n";
+    constexpr std::string_view close = "\\end{itemdescr}";
+    const std::size_t          begin = whole.find(open);
+    const std::size_t          end   = whole.rfind(close);
+    if (begin == std::string::npos || end == std::string::npos || end < begin)
+        return whole;
+    return whole.substr(begin + open.size(), end - begin - open.size());
+}
+
+// A description cut into its numbered paragraphs: before each line that is a
+// `\pnum`. What comes before the first is a piece of its own.
+std::vector<std::string_view> numbered_paragraphs(std::string_view text) {
+    std::vector<std::string_view> out;
+    std::size_t                   from = 0;
+    std::size_t                   at   = 0;
+    // substrate generic algorithm: a scan for each line that is `\pnum`.
+    while ((at = text.find("\\pnum\n", at)) != std::string_view::npos) {
+        if (at == 0 || text[at - 1] == '\n') {
+            if (at > from)
+                out.push_back(text.substr(from, at - from));
+            from = at;
+        }
+        at += 6;
+    }
+    out.push_back(text.substr(from));
+    return out;
+}
+
+// The edits that make the draft's description of `draft` the paper's. Where
+// the two have as many numbered paragraphs, only those that changed are
+// replaced, each in the draft's source with the paper's paragraph laid out as
+// the draft's are; otherwise the description is replaced whole.
+void place_description(const ir::SpecItem& draft,
+                       const ir::SpecItem& paper,
+                       const std::string&  where,
+                       Collector&          out) {
+    const ir::SourceRange* range = draft.descr_origin.range.get();
+    if (range == nullptr) {
+        out.error(where,
+                  "the draft's description here was not read from a file, so the change cannot be placed in it");
+        return;
+    }
+    const std::string ours   = description_latex(paper);
+    const std::string theirs = description_latex(draft);
+    const auto        text   = out.text_of(range->file);
+    const auto        source = text && range->end <= text->size()
+                                   ? std::optional(text->substr(range->begin, range->end - range->begin))
+                                   : std::nullopt;
+    const auto        mine   = numbered_paragraphs(ours);
+    const auto        before = numbered_paragraphs(theirs);
+    const auto        lines  = source ? numbered_paragraphs(*source) : std::vector<std::string_view>{};
+    if (!source || mine.size() != before.size() || lines.size() != before.size()) {
+        out.edits[range->file].push_back({range->begin, range->end, draft_layout(ours)});
+        return;
+    }
+    std::size_t offset = range->begin;
+    // substrate generic algorithm: each numbered paragraph, kept or replaced in place.
+    for (std::size_t k = 0; k < lines.size(); ++k) {
+        if (mine[k] != before[k])
+            out.edits[range->file].push_back({offset, offset + lines[k].size(), draft_layout(mine[k])});
+        offset += lines[k].size();
+    }
+}
+
+// The edit that puts `node`, which the paper adds, after `anchor`'s place in
+// the draft's source, or before it when `before` is set. A blank line
+// separates it from its neighbour, as the draft's items are separated.
+bool place_added(const ir::Node& node, const ir::NodeOrigin& anchor, bool before, Collector& out) {
+    const ir::SourceRange* range = anchor.range.get();
+    if (range == nullptr || std::holds_alternative<ir::Section>(node))
+        return false;
+    std::string written = draft_layout(latex_of(node));
+    if (!written.ends_with('\n'))
+        written += '\n';
+    if (before)
+        out.edits[range->file].push_back({range->begin, range->begin, written + '\n'});
+    else
+        out.edits[range->file].push_back({range->end, range->end, '\n' + written});
+    return true;
+}
+
+// The edit that takes a node the paper removes out of the draft's source,
+// with the blank line after it.
+bool place_removed(const ir::NodeOrigin& origin, Collector& out) {
+    const ir::SourceRange* range = origin.range.get();
+    if (range == nullptr)
+        return false;
+    std::size_t end  = range->end;
+    const auto  text = out.text_of(range->file);
+    if (text && end < text->size() && (*text)[end] == '\n')
+        ++end;
+    out.edits[range->file].push_back({range->begin, end, {}});
+    return true;
+}
+
+// Where a node was read from, when it says.
+ir::NodeOrigin origin_of(const ir::Node& node) {
+    if (const auto* item = std::get_if<ir::SpecItem>(&node))
+        return item->origin;
+    if (const auto* synopsis = std::get_if<ir::Synopsis>(&node))
+        return synopsis->origin;
+    return {};
 }
 
 // --- pairing -----------------------------------------------------------------------
@@ -409,7 +592,7 @@ void place_item(const ir::SpecItem& draft, const ir::SpecItem& paper, const std:
     if (std::ranges::any_of(claimed, std::logical_not<>{}))
         out.error(here, "the paper removes a declaration from this item, which cannot be placed yet");
     if (wording_differs(draft, paper))
-        out.error(here, "the paper changes this item's description, which cannot be placed in the draft's source yet");
+        place_description(draft, paper, here, out);
 }
 
 void place_node(const ir::Node& draft, const ir::Node& paper, const std::string& where, Collector& out) {
@@ -436,12 +619,28 @@ void place_nodes(const std::vector<ir::Node>& draft,
                  Collector&                   out) {
     const std::vector<std::optional<std::size_t>> pairs = pair_nodes(draft, paper);
     std::vector<bool>                             used(draft.size(), false);
+    // Where a node the paper adds goes: after the draft's node the paper's
+    // node before it pairs with, or, for one ahead of every pair, before the
+    // first paired node.
+    const auto anchor_for = [&](std::size_t p) -> std::pair<ir::NodeOrigin, bool> {
+        // substrate generic algorithm: a search back for the nearest pair.
+        for (std::size_t q = p; q-- > 0;)
+            if (pairs[q])
+                return {origin_of(draft[*pairs[q]]), false};
+        // substrate generic algorithm: a search forward for the nearest pair.
+        for (std::size_t q = p + 1; q < paper.size(); ++q)
+            if (pairs[q])
+                return {origin_of(draft[*pairs[q]]), true};
+        return {};
+    };
     // substrate generic algorithm: each paper node, placed against its pair.
     for (std::size_t p = 0; p < paper.size(); ++p) {
         if (!pairs[p]) {
-            out.error(where,
-                      std::format("the paper adds {}, which cannot be placed in the draft's source yet",
-                                  describe(paper[p])));
+            const auto [anchor, before] = anchor_for(p);
+            if (!place_added(paper[p], anchor, before, out))
+                out.error(where,
+                          std::format("the paper adds {}, which cannot be placed in the draft's source yet",
+                                      describe(paper[p])));
             continue;
         }
         used[*pairs[p]] = true;
@@ -449,7 +648,7 @@ void place_nodes(const std::vector<ir::Node>& draft,
     }
     // substrate generic algorithm: what the paper does not have of the draft's.
     for (std::size_t d = 0; d < draft.size(); ++d)
-        if (!used[d])
+        if (!used[d] && !place_removed(origin_of(draft[d]), out))
             out.error(where,
                       std::format("the paper removes {}, which cannot be placed in the draft's source yet",
                                   describe(draft[d])));
@@ -469,8 +668,9 @@ Plan finish(std::map<std::string, std::vector<Edit>> edits, std::vector<Finding>
 
 } // namespace
 
-Plan plan(const ir::Document& draft, const ir::Document& paper) {
+Plan plan(const ir::Document& draft, const ir::Document& paper, Reader read) {
     Collector out;
+    out.read = std::move(read);
     // The draft is subclauses, so only the paper's subclauses have a place in
     // it. Anything the paper has outside every one is left out, and said so.
     std::vector<ir::Node> sections;

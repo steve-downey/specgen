@@ -38,7 +38,7 @@ namespace std {
     // \ref{callable.ctor}, exposition members
 
     template<class VT>
-    static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@; // exposition only
+    static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@; // exposition only
   };
 }
 #+end_codeblock
@@ -78,7 +78,7 @@ Otherwise, ~*this~ has a target object initialized with ~f~.
 
 #+begin_itemdecl
 template<class VT>
-  static constexpr bool @\exposidnc{is-callable-from}@ = @\seebelow@;
+  static constexpr bool @\exposid{is-callable-from}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum

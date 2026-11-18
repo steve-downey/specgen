@@ -211,14 +211,14 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         std::optional<clang::SourceRange>                see_below,
                                                         unsigned                                         indent,
                                                         const ConstraintsStated& constraints_stated) {
-    const unsigned decl_begin = sm.getDecomposedLoc(decl->getBeginLoc()).second;
+    const unsigned decl_begin = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
     // Through the `;`, which for a deleted or defaulted function is past a
     // tail the declaration's recorded end does not reach (issue #282): the
     // declaration used to stop at its parameter list, with no `= delete` and
     // no semicolon.
     const unsigned decl_end = member_declaration_end(decl, sm, lang_opts);
 
-    const llvm::StringRef           buffer = file_buffer(sm, decl->getBeginLoc());
+    const llvm::StringRef           buffer = file_buffer(sm, sm.getFileLoc(decl->getBeginLoc()));
     std::string                     text   = buffer.substr(decl_begin, decl_end - decl_begin).str();
     std::vector<SynopsisEdit>       edits;
     std::map<std::string, SpanInfo> sentinels;
@@ -239,7 +239,7 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
     if (const clang::FunctionDecl* fn = function_or_template(decl);
         fn != nullptr && fn->doesThisDeclarationHaveABody() && !fn->isDefaulted() && !fn->isDeleted())
         if (const clang::Stmt* body = fn->getBody(); body != nullptr && body->getSourceRange().isValid()) {
-            const unsigned body_begin = sm.getDecomposedLoc(body->getBeginLoc()).second;
+            const unsigned body_begin = sm.getDecomposedLoc(sm.getFileLoc(body->getBeginLoc())).second;
             if (body_begin > decl_begin && body_begin < decl_end) {
                 body_splice = std::pair{body_begin, decl_end};
                 edits.push_back(SynopsisEdit{body_begin, decl_end, ";"});

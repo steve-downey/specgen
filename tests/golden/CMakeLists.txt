@@ -111,7 +111,8 @@ endif()
 # MODE diagnose: INPUT is a corpus header, run through the same
 # `generate --emit-ir` the generate mode uses, but with its *stderr* compared
 # against <case>/expected.diag and the IR discarded — the build-time findings
-# as golden text.
+# as golden text. A case whose findings include an error says EXPECT_EXIT 1:
+# the IR is written and the run then fails (issue #350).
 #
 # MODE split: INPUT is checked-in IR JSON, run through
 # `specgen render --split` twice into one scratch directory; the fragments are
@@ -701,6 +702,21 @@ specgen_add_golden(
     inherit_func_wrap_move_wording
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_func_wrap_move/expected.json"
 )
+
+# `\asdraft` on an exposition-only concept at namespace scope pairs by its
+# synopsis's declaration with the draft's item, which has no description of
+# its own, and inherits the paragraphs after it (issue #332).
+specgen_add_golden(
+    inherit_namespace_expos
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_asdraft_namespace_expos.hpp"
+    INHERIT_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/concept.booleantestable.slice"
+)
+specgen_add_golden(
+    inherit_namespace_expos_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/inherit_namespace_expos/expected.json"
+)
 specgen_add_golden(
     inherit_func_wrap_move_wording
     BACKEND mpark
@@ -1249,6 +1265,7 @@ specgen_add_golden(
 specgen_add_golden(
     specified_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_specified_diagnostics.hpp"
 )
 
@@ -1479,6 +1496,7 @@ specgen_add_golden(
 specgen_add_golden(
     variable_mask_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_variable_mask_diagnostics.hpp"
 )
 
@@ -1599,6 +1617,7 @@ specgen_add_golden(
 specgen_add_golden(
     expos_static_missing
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_static_missing.hpp"
 )
 
@@ -1623,6 +1642,7 @@ specgen_add_golden(
 specgen_add_golden(
     source_markup_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup_diagnostics.hpp"
     SOURCE "${PROJECT_SOURCE_DIR}/tests/corpus/spec_source_markup_diagnostics.cc"
 )
@@ -1634,6 +1654,7 @@ specgen_add_golden(
 specgen_add_golden(
     declaration_docblocks
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_declaration_docblocks.hpp"
 )
 
@@ -1826,6 +1847,7 @@ endforeach()
 specgen_add_golden(
     synopsis_here_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_synopsis_here_diagnostics.hpp"
 )
 
@@ -1834,15 +1856,17 @@ specgen_add_golden(
 specgen_add_golden(
     class_prose_covers_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT
         "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_prose_covers_diagnostics.hpp"
 )
 
-# `\asdraft` on an exposition-only declaration that is no item: a concept and
-# a variable at namespace scope, and an alias in a class. Each is an Error.
+# `\asdraft` on an exposition-only alias in a class, which is no item: an
+# Error. One at namespace scope inherits (inherit_namespace_expos).
 specgen_add_golden(
     asdraft_expos_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT
         "${PROJECT_SOURCE_DIR}/tests/corpus/spec_asdraft_expos_diagnostics.hpp"
 )
@@ -2043,6 +2067,7 @@ specgen_add_golden(
 specgen_add_golden(
     returns_expr_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_returns_expr_diagnostics.hpp"
 )
 
@@ -2126,6 +2151,7 @@ specgen_add_golden(
 specgen_add_golden(
     document_span_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_document_span_diagnostics.hpp"
 )
 
@@ -2224,6 +2250,7 @@ specgen_add_golden(
 specgen_add_golden(
     diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_diagnostics.hpp"
 )
 
@@ -2234,6 +2261,7 @@ specgen_add_golden(
 specgen_add_golden(
     unsupported_kinds
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_unsupported_kinds.hpp"
 )
 
@@ -2810,6 +2838,7 @@ specgen_add_golden(
 specgen_add_golden(
     detached_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_detached_diagnostics.hpp"
 )
 
@@ -2893,6 +2922,7 @@ endforeach()
 specgen_add_golden(
     section_prose_diagnostics
     MODE diagnose
+    EXPECT_EXIT 1
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_section_prose_diagnostics.hpp"
 )
 
@@ -2934,6 +2964,19 @@ foreach(backend IN ITEMS latex mpark org)
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/routed_overloads/expected.json"
     )
 endforeach()
+
+# Specifiers spelled through macros are written as they expand (issue #349).
+specgen_add_golden(
+    macro_specifiers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_macro_specifiers.hpp"
+)
+specgen_add_golden(
+    macro_specifiers
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/macro_specifiers/expected.json"
+)
 
 specgen_add_golden(
     drift_prose

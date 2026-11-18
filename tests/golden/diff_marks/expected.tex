@@ -2,7 +2,7 @@
 class gadget {
 public:
   constexpr bool ready() const noexcept;
-@\added{  void reset(\exposidnc{val} v);}@
+@\added{  void reset(\exposid{val} v);}@
 @\removed{  void arm();}@
 };
 \end{codeblock}
@@ -40,7 +40,7 @@ A remark the revision adds, naming \tcode{x.\exposid{val}}.
 
 \begin{addedblock}
 \begin{itemdecl}
-void reset(@\exposidnc{val}@ v);
+void reset(@\exposid{val}@ v);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -76,7 +76,7 @@ Arms the gadget.
 \rSec3[gadget.mod]{Modifiers}
 
 \begin{itemdecl}
-void reset(@\exposidnc{val}@ v);
+void reset(@\exposid{val}@ v);
 \end{itemdecl}
 
 \begin{itemdescr}
@@ -84,7 +84,7 @@ void reset(@\exposidnc{val}@ v);
 \effects
 Equivalent to:
 \begin{codeblock}
-@\exposidnc{val}@ = v;
+@\exposid{val}@ = v;
 \end{codeblock}
 \end{itemdescr}
 \end{addedblock}

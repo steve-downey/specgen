@@ -77,6 +77,7 @@ using beman::specgen::ir::member_kind_name;
 using beman::specgen::ir::MemberKind;
 using beman::specgen::ir::Node;
 using beman::specgen::ir::OldConceptRef;
+using beman::specgen::ir::PhraseInline;
 using beman::specgen::ir::PlaceholderInline;
 using beman::specgen::ir::PlainInline;
 using beman::specgen::ir::RawInline;
@@ -93,6 +94,8 @@ using beman::specgen::ir::Table1DRow;
 using beman::specgen::ir::Table2D;
 using beman::specgen::ir::Table2DRow;
 using beman::specgen::ir::TableRef;
+using beman::specgen::ir::TermInline;
+using beman::specgen::ir::TermPiece;
 using beman::specgen::ir::TextInline;
 
 template <>
@@ -416,6 +419,31 @@ struct json_descriptor<RawInline> {
     static constexpr auto members = std::tuple{field("latex", &RawInline::latex)};
 };
 
+// A term's pieces, tagged as the same inlines are in a paragraph.
+template <>
+struct json_descriptor<TermPiece> {
+    static constexpr auto alts =
+        alternatives("t", "term piece type", alt<TextInline>("text"), alt<CodeInline>("code"));
+};
+
+template <>
+struct json_descriptor<TermInline> {
+    static constexpr auto members = std::tuple{
+        field("content", &TermInline::content),
+        defaulted_enum_field(
+            "role", &TermInline::role, ir::TermRole::Term, ir::term_role_name, ir::term_role_from_name, "term role"),
+    };
+};
+
+template <>
+struct json_descriptor<PhraseInline> {
+    static constexpr auto members = std::tuple{
+        enum_field("phrase", &PhraseInline::phrase, ir::phrase_name, ir::phrase_from_name, "phrase"),
+        defaulted_field("index", &PhraseInline::index),
+        defaulted_field("bare", &PhraseInline::bare),
+    };
+};
+
 // A plain inline inside a changed run serializes exactly as the same inline
 // does outside one: the two variants share the tag key and the plain tags.
 template <>
@@ -429,7 +457,9 @@ struct json_descriptor<PlainInline> {
                                               alt<PlaceholderInline>("placeholder"),
                                               alt<OldConceptRef>("oldconcept"),
                                               alt<TableRef>("tableref"),
-                                              alt<RawInline>("raw"));
+                                              alt<RawInline>("raw"),
+                                              alt<TermInline>("term"),
+                                              alt<PhraseInline>("phrase"));
 };
 
 template <>
@@ -452,6 +482,8 @@ struct json_descriptor<Inline> {
                                               alt<OldConceptRef>("oldconcept"),
                                               alt<TableRef>("tableref"),
                                               alt<RawInline>("raw"),
+                                              alt<TermInline>("term"),
+                                              alt<PhraseInline>("phrase"),
                                               alt<ChangedInline>("changed"));
 };
 
@@ -471,6 +503,7 @@ struct json_descriptor<SpecItem> {
         defaulted_enum_field("change", &SpecItem::change, Change::Same, change_name, change_from_name, "change"),
         defaulted_field("as_draft", &SpecItem::as_draft),
         defaulted_field("covers", &SpecItem::covers),
+        defaulted_field("describes_synopsis", &SpecItem::describes_synopsis),
     };
 };
 

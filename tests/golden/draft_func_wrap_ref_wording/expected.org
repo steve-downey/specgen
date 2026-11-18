@@ -47,10 +47,10 @@ namespace std {
 
   private:
     template<class... T>
-      static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelownc@;             // \expos
+      static constexpr bool @\exposidnc{is-invocable-using}@ = @\seebelownc@;             // exposition only
 
-    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholdernc{noex}@);      // \expos
-    @\exposidnc{BoundEntityType}@ @\exposidnc{bound-entity}@;                                       // \expos
+    R (*@\exposidnc{thunk-ptr}@)(@\exposidnc{BoundEntityType}@, ArgTypes&&...) noexcept(@\placeholdernc{noex}@);      // exposition only
+    @\exposidnc{BoundEntityType}@ @\exposidnc{bound-entity}@;                                       // exposition only
   };
 
   // \ref{func.wrap.ref.deduct}, deduction guides

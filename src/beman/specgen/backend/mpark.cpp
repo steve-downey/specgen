@@ -110,7 +110,9 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::MathVariable>([&] { return '$' + span.payload + '$'; }),
         foundation::when<ir::SpanKind::Subscript>([&] { return '@' + subscript(span.payload) + '@'; }),
         // The dots of a sequence with elements left out are the dots.
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
+        // Code as a subscript is upright, as code is (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("@~{}~@", span.payload); }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -142,7 +144,8 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
         foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
         foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }),
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("~{}~", span.payload); }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:
@@ -231,6 +234,18 @@ struct PieceRenderer {
     // Draft LaTeX kept as written: pandoc's raw inline, the one form that
     // carries it through to a LaTeX build and is ignored by any other.
     std::string operator()(const ir::RawInline& v) const { return '`' + v.latex + "`{=latex}"; }
+
+    // A term, italic as the draft sets it, its code in backticks; a fixed
+    // phrase, as the words it prints (issue #355).
+    std::string operator()(const ir::TermInline& v) const {
+        return '*' +
+               (v.content | std::views::transform([this](const ir::TermPiece& piece) {
+                    return std::visit([this](const auto& p) { return (*this)(p); }, piece);
+                }) |
+                std::views::join | std::ranges::to<std::string>()) +
+               '*';
+    }
+    std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_words(v.phrase)); }
 
     // A changed run of prose (the wording diff's mark): the framework's
     // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would

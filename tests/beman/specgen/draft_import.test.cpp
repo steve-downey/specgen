@@ -226,13 +226,30 @@ void f() @\cv{}@ @\added{x}@; // \ref{y}
     REQUIRE(sigs[0].spans.size() == 2);
     CHECK(sigs[0].spans[0].kind == ir::SpanKind::ExposId);
     CHECK(sigs[0].spans[1].kind == ir::SpanKind::SeeBelow);
-    CHECK(sigs[0].text.ends_with("; // \\expos"));
+    // The exposition-only comment reads as the words a generated synopsis has (issue #353).
+    CHECK(sigs[0].text.ends_with("; // exposition only"));
     REQUIRE(sigs[1].spans.size() == 2);
     CHECK(sigs[1].spans[0].kind == ir::SpanKind::Placeholder);
     CHECK(sigs[1].spans[0].payload == "cv");
     CHECK(sigs[1].text.find("@\\added{x}@") != std::string::npos);
     CHECK(sigs[1].spans[1].kind == ir::SpanKind::Ref);
     CHECK(sigs[1].spans[1].payload == "y");
+}
+
+TEST_CASE("draft_import - an escaped ampersand, percent or hash in prose is the character") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+R\&D, 50\% of it, item \#1, and \{ as written.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.at(0)).text;
+    CHECK(std::get<ir::TextInline>(para.at(0)).text == "R&D, 50% of it, item #1, and \\{ as written.");
+}
+
+TEST_CASE("draft_import - only the macro \\expos in a listing is the words exposition only") {
+    const auto code = draft_import::parse_listing("int a; // \\expos\nint b; // \\expos.\nint c; // \\exposition\n");
+    CHECK(code.text == "int a; // exposition only\nint b; // exposition only.\nint c; // \\exposition\n");
 }
 
 TEST_CASE("draft_import - elements, Equivalent to, lists, notes, and continuations") {
@@ -300,20 +317,47 @@ namespace std {
 TEST_CASE("draft_import - what the IR has no kind for is kept as raw LaTeX and reported") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-A \term{thing} costs $O(n)$.
+A \textbf{thing} costs $O(n)$.
 \begin{tokens}
 foo
 \end{tokens}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    CHECK(has_diag(r, Severity::Warning, "\\term has no IR kind"));
+    CHECK(has_diag(r, Severity::Warning, "\\textbf has no IR kind"));
     CHECK(has_diag(r, Severity::Warning, "mathematics"));
     CHECK(has_diag(r, Severity::Warning, "tokens environment"));
     for (const auto& d : r.diagnostics)
         CHECK(d.section == "x");
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     CHECK(std::holds_alternative<ir::RawInline>(para[1]));
-    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\term{thing}");
+    CHECK(std::get<ir::RawInline>(para[1]).latex == "\\textbf{thing}");
+}
+
+TEST_CASE("draft_import - a term and a fixed phrase are inline kinds, and come back as written") {
+    // Issue #355, from [expected.bad] and [expected.object.general].
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+An \impldef{return value of \tcode{what}} \ntbs{}, a \term{valid value type for \tcode{expected}}, the \Fundescx{Effects}, \defn{a term}, \ntmbs, and \term{a \placeholder{p}}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(has_diag(r, Severity::Warning, "\\term holds what a term cannot"));
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    CHECK(std::get<ir::PhraseInline>(para.at(1)) ==
+          ir::PhraseInline{ir::Phrase::ImplementationDefined, "return value of \\tcode{what}"});
+    CHECK(std::get<ir::PhraseInline>(para.at(3)).phrase == ir::Phrase::Ntbs);
+    const auto& term = std::get<ir::TermInline>(para.at(5));
+    REQUIRE(term.content.size() == 2);
+    CHECK(std::get<ir::TextInline>(term.content[0]).text == "valid value type for ");
+    CHECK(std::get<ir::CodeInline>(term.content[1]).code.text == "expected");
+    CHECK(std::get<ir::TermInline>(para.at(7)).role == ir::TermRole::ElementName);
+    CHECK(std::get<ir::TermInline>(para.at(9)).role == ir::TermRole::Definition);
+    CHECK(std::get<ir::PhraseInline>(para.at(11)).phrase == ir::Phrase::Ntmbs);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("An \\impldef{return value of \\tcode{what}} \\ntbs{}, a \\term{valid value type for "
+                            "\\tcode{expected}}, the \\Fundescx{Effects}, \\defn{a term}, \\ntmbs, and "
+                            "\\term{a \\placeholder{p}}."));
 }
 
 TEST_CASE("draft_import - the corpus slices round-trip through the LaTeX backend") {
@@ -431,10 +475,9 @@ is_convertible_v<int @\cv{}@&, int @\cvqual{cv2}@&> @\opt{noexcept}@
 
 TEST_CASE("draft_import - a span says which form of its macro the draft wrote, where the context would not") {
     // The draft has a no-italic-correction twin of each italic macro and chooses by
-    // hand. In a \tcode the plain form is what this tool writes, so the twin is
-    // recorded; in a listing an exposition-only name is written as the twin, so there
-    // it is the plain form that is recorded. Either way the wording comes back out as
-    // the draft spells it (issue #306).
+    // hand. The plain form is what this tool writes, in a \tcode and in a listing
+    // alike (issue #341), so the twin is what is recorded, and the wording comes back
+    // out as the draft spells it (issue #306).
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 The type \tcode{R(*)(\exposidnc{B}, \exposid{c}) noexcept(\placeholdernc{noex})}, and \exposidnc{z}, \placeholdernc{p}, \exposconceptnc{k} and \seebelownc.
@@ -458,8 +501,8 @@ bool @\exposid{a}@ = @\exposidnc{b}@(@\placeholdernc{noex}@, @\placeholder{q}@) 
     CHECK(std::get<ir::CodeInline>(para.at(9)).code.spans.at(0).no_correction == std::optional<bool>{true});
     const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
     REQUIRE(listing.spans.size() == 5);
-    CHECK(listing.spans[0].no_correction == std::optional<bool>{false});
-    CHECK(listing.spans[1].no_correction == std::nullopt);
+    CHECK(listing.spans[0].no_correction == std::nullopt);
+    CHECK(listing.spans[1].no_correction == std::optional<bool>{true});
     CHECK(listing.spans[2].no_correction == std::optional<bool>{true});
     CHECK(listing.spans[3].no_correction == std::nullopt);
     CHECK(listing.spans[4].no_correction == std::optional<bool>{true});
@@ -508,7 +551,7 @@ R (*@\exposid{thunk-\brk{}ptr}@)(int);
     CHECK(code_at(11).hints == Hints{{8, ir::LayoutHintKind::Break}});
     const auto& listing = std::get<ir::AuthoredCode>(leading.at(1)).code;
     CHECK(listing.text == "R (*thunk-ptr)(int);");
-    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr", false});
+    CHECK(listing.spans.at(0) == ir::Span{4, 13, ir::SpanKind::ExposId, "thunk-ptr"});
     CHECK(listing.hints == Hints{{10, ir::LayoutHintKind::Break, true}});
 
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
@@ -545,7 +588,7 @@ TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole
     // reported once, and the macros inside the mathematics are not read as code.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-The range \tcode{a[$i - 1$]} through \tcode{a[$i_\tcode{x}$]}, and \tcode{b[$j$]}.
+The range \tcode{a[$i - 1$]} through \tcode{a[$\rho$]}, and \tcode{b[$j$]}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
@@ -556,7 +599,7 @@ The range \tcode{a[$i - 1$]} through \tcode{a[$i_\tcode{x}$]}, and \tcode{b[$j$]
     CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
     CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$i_\\tcode{x}$]}, and \\tcode{b[$j$]}."));
+    CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\rho$]}, and \\tcode{b[$j$]}."));
 }
 
 TEST_CASE("draft_import - an \\opt whose argument holds a macro is not a span") {
@@ -862,7 +905,7 @@ and the value \tcode{$r_K$}.
 TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes read stays raw") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
-\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i-1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
+\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i*1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
     // One report for the subclause, however many there are.
@@ -871,6 +914,30 @@ TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     CHECK(std::ranges::count_if(para, [](const ir::Inline& i) { return std::holds_alternative<ir::RawInline>(i); }) ==
           6);
+}
+
+TEST_CASE("draft_import - code and an expression as a subscript in a \\tcode are spans") {
+    // Issue #339: [range.zip.transform.iterator]'s `$i_\tcode{x}$`, and
+    // [inplace.vector]'s `$p_{i-1}$`. Code as the subscript of code is not read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and \tcode{$\tcode{Ds}_{\tcode{T}}$}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& sub  = std::get<ir::CodeInline>(para.at(0)).code;
+    CHECK(sub.text == "i_x + 1");
+    REQUIRE(sub.spans.size() == 2);
+    CHECK(sub.spans[1] == ir::Span{1, 3, ir::SpanKind::CodeSubscript, "x"});
+    const auto& expr = std::get<ir::CodeInline>(para.at(2)).code;
+    CHECK(expr.text == "a[p_i-1]");
+    CHECK(expr.spans.at(1) == ir::Span{3, 7, ir::SpanKind::Subscript, "i-1"});
+    CHECK(std::get<ir::CodeInline>(para.at(4)).code.spans.at(1).payload == "n+1");
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(6)));
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(R"(\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and)"));
 }
 
 TEST_CASE("draft_import - a listing records where each of its bytes was read from") {

@@ -10,6 +10,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -84,6 +87,19 @@ TEST_CASE("draft_edit - the draft against itself is no edit and no finding") {
     CHECK(plan.findings.empty());
 }
 
+TEST_CASE("draft_edit - an index entry the draft does not have is no edit") {
+    // An extracted class head is `\libglobal{wrapper}`; the draft's is plain
+    // (issue #354).
+    ir::Document      paper    = imported();
+    auto&             synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    const std::size_t at       = synopsis.text.find("class wrapper") + 6;
+    synopsis.spans.push_back({at, at + 7, ir::SpanKind::LibraryIndex, ""});
+    std::ranges::sort(synopsis.spans, {}, &ir::Span::begin);
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(plan.files.empty());
+}
+
 TEST_CASE("draft_edit - an added specifier is an edit of that token alone, in the draft's own layout") {
     ir::Document paper = imported();
     auto&        kids  = children(paper);
@@ -126,19 +142,63 @@ TEST_CASE("draft_edit - a removed token takes its space with it") {
     CHECK(out.contains("    wrapper() noexcept;"));
 }
 
-TEST_CASE("draft_edit - a change it cannot place is an error, and nothing is placed for it") {
+// The draft's source, for the edits that read it.
+std::optional<std::string> read_draft(const std::string& file) {
+    return file == "w.tex" ? std::optional<std::string>(kDraft) : std::nullopt;
+}
+
+TEST_CASE("draft_edit - a changed description replaces the paragraph that changed, laid out as the draft's") {
     ir::Document paper               = imported();
     auto&        item                = std::get<ir::SpecItem>(children(paper)[1]);
-    item.descr.elements.front().body = {ir::BodyParagraph{{ir::TextInline{"Constructs a wrapper with no target."}}}};
-    children(paper).push_back(ir::FreeParagraph{{ir::TextInline{"A new paragraph."}}});
+    item.descr.elements.front().body = {
+        ir::BodyParagraph{{ir::TextInline{"Constructs a wrapper with no target. It is empty."}}}};
 
-    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper, read_draft);
+    CHECK(plan.findings.empty());
+    REQUIRE(plan.files.size() == 1);
+    REQUIRE(plan.files.front().edits.size() == 1);
+    const std::string out = applied(plan);
+    CHECK(out.contains("\\begin{itemdescr}\n\\pnum\n\\effects\nConstructs a wrapper with no target.\nIt is empty.\n"
+                       "\\end{itemdescr}"));
+    // The other item's description is the draft's, as it was.
+    CHECK(out.contains("\\pnum\n\\returns\nThe result.\n\\end{itemdescr}"));
+}
+
+TEST_CASE("draft_edit - an item the paper adds goes after the one before it, and one it removes goes") {
+    ir::Document paper = imported();
+    ir::SpecItem added;
+    added.decl.signatures.push_back({"void clear();", {}});
+    ir::DescriptionElement effects;
+    effects.kind = ir::ElementKind::Effects;
+    effects.body = {ir::BodyParagraph{{ir::TextInline{"Clears it."}}}};
+    added.descr.elements.push_back(std::move(effects));
+    children(paper).insert(children(paper).begin() + 2, added);
+    // The paper drops the call operator's item.
+    children(paper).erase(children(paper).begin() + 3);
+
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper, read_draft);
+    CHECK(plan.findings.empty());
+    const std::string out = applied(plan);
+    CHECK(
+        out.contains("Constructs an empty wrapper.% a comment\n\\end{itemdescr}\n\n\\begin{itemdecl}\nvoid clear();\n"
+                     "\\end{itemdecl}\n\n\\begin{itemdescr}\n\\pnum\n\\effects\nClears it.\n\\end{itemdescr}\n"));
+    CHECK_FALSE(out.contains("\\indexlibrarymember{operator()}{wrapper}"));
+    CHECK_FALSE(out.contains("The result."));
+}
+
+TEST_CASE("draft_edit - a change it cannot place is an error, and nothing is placed for it") {
+    ir::Document paper = imported();
+    auto&        item  = std::get<ir::SpecItem>(children(paper)[1]);
+    item.decl.signatures.push_back({"wrapper(int);", {}});
+    children(paper).push_back(ir::Section{"w.new", "New", {}});
+
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper, read_draft);
     CHECK(plan.files.empty());
     REQUIRE(plan.findings.size() == 2);
     CHECK(plan.findings[0].severity == beman::specgen::Severity::Error);
     CHECK(plan.findings[0].where == "w: `wrapper() noexcept;`");
-    CHECK(plan.findings[0].message.contains("description"));
-    CHECK(plan.findings[1].message.contains("adds a paragraph"));
+    CHECK(plan.findings[0].message.contains("adds a declaration"));
+    CHECK(plan.findings[1].message.contains("adds the subclause [w.new]"));
 }
 
 TEST_CASE("draft_edit - edits of one file from several documents are merged, each once") {

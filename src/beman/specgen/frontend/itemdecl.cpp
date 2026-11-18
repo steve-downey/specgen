@@ -67,9 +67,10 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     if (const clang::FunctionTemplateDecl* described = in_class->getDescribedFunctionTemplate())
         range_decl = described;
 
-    const clang::SourceLocation begin_loc   = friend_begin.isValid() ? friend_begin : range_decl->getBeginLoc();
-    const unsigned              decl_begin  = sm.getDecomposedLoc(begin_loc).second;
-    const llvm::StringRef       source_text = clang::Lexer::getSourceText(
+    const clang::SourceLocation begin_loc =
+        sm.getFileLoc(friend_begin.isValid() ? friend_begin : range_decl->getBeginLoc());
+    const unsigned        decl_begin  = sm.getDecomposedLoc(begin_loc).second;
+    const llvm::StringRef source_text = clang::Lexer::getSourceText(
         clang::CharSourceRange::getTokenRange(begin_loc, range_decl->getEndLoc()), sm, lang_opts);
 
     std::string text;
@@ -93,8 +94,9 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
 
     const clang::AssociatedConstraint& requires_clause = in_class->getTrailingRequiresClause();
     if (strip_requires_clause && requires_clause.ConstraintExpr != nullptr) {
-        const unsigned req_begin = sm.getDecomposedLoc(requires_clause.ConstraintExpr->getBeginLoc()).second;
-        text                     = text.substr(0, req_begin - decl_begin);
+        const unsigned req_begin =
+            sm.getDecomposedLoc(sm.getFileLoc(requires_clause.ConstraintExpr->getBeginLoc())).second;
+        text = text.substr(0, req_begin - decl_begin);
         // The whitespace set matches std::isspace under the classic "C"
         // locale (the only locale this text is ever scanned in), stated
         // directly rather than through a per-character predicate call --
@@ -229,8 +231,9 @@ beman::specgen::ir::CodeText extract_alias_itemdecl(const clang::TypeAliasDecl* 
                                                     const clang::Decl*                               head) {
     namespace ir = beman::specgen::ir;
 
-    const clang::SourceLocation begin_loc  = head != nullptr ? head->getBeginLoc() : alias->getBeginLoc();
-    const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
+    const clang::SourceLocation begin_loc =
+        sm.getFileLoc(head != nullptr ? head->getBeginLoc() : alias->getBeginLoc());
+    const unsigned decl_begin = sm.getDecomposedLoc(begin_loc).second;
     // Through the declaration's last token, not the type's: they differ when
     // the RHS ends in a cv-qualifier, and the semicolon is added back here.
     std::string text =

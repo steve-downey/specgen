@@ -113,7 +113,7 @@ docblock_diagnostics(const clang::RawComment*                rc,
         return {};
     const unsigned first_line =
         sm.getSpellingLineNumber(rc->getBeginLoc().getLocWithOffset(static_cast<int>(markup_start)));
-    const std::string file = diagnostic_file_name(sm, sm.getFileID(rc->getBeginLoc()));
+    const std::string file = diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(rc->getBeginLoc())));
     return diags | std::views::transform([&](const grammar::Diagnostic& d) {
                const unsigned line = d.line > 0 ? first_line + static_cast<unsigned>(d.line) - 1 : first_line;
                return beman::specgen::document_build::Diagnostic{d.severity, line, d.message, file};

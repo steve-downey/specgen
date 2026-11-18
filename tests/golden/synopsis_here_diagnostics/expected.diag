@@ -2,3 +2,4 @@ spec_synopsis_here_diagnostics.hpp:20: error: \synopsis-here divides the leading
 spec_synopsis_here_diagnostics.hpp:25: warning: duplicate \synopsis-here marker
 spec_synopsis_here_diagnostics.hpp:29: warning: trailing text after \synopsis-here ignored
 spec_synopsis_here_diagnostics.hpp:32: error: \synopsis-here applies to a class or class template definition
+specgen: 2 findings in the documented header fail the run; the output is written

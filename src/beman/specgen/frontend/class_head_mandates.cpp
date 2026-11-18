@@ -168,11 +168,11 @@ void attach_class_description(beman::specgen::document_build::SynopsisDecl&    o
     // derived paragraph (issue #283).
     std::vector<ir::Paragraph> stand_in;
     const auto                 reject = [&](std::string message) {
-        out.diagnostics.push_back(
-            beman::specgen::document_build::Diagnostic{beman::specgen::Severity::Error,
-                                                       sm.getSpellingLineNumber(record->getBeginLoc()),
-                                                       std::move(message),
-                                                       diagnostic_file_name(sm, sm.getFileID(record->getBeginLoc()))});
+        out.diagnostics.push_back(beman::specgen::document_build::Diagnostic{
+            beman::specgen::Severity::Error,
+            sm.getSpellingLineNumber(sm.getFileLoc(record->getBeginLoc())),
+            std::move(message),
+            diagnostic_file_name(sm, sm.getFileID(sm.getFileLoc(record->getBeginLoc())))});
     };
     if (!out.descr_as_draft) {
         if (std::ranges::any_of(out.descr_covers,

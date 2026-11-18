@@ -28,6 +28,7 @@
 
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/draft_spans.hpp>
+#include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 #include <beman/specgen/foundation/overloaded.hpp>
@@ -37,7 +38,6 @@
 
 #include <algorithm>
 #include <format>
-#include <functional>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -66,8 +66,9 @@ using beman::specgen::foundation::overloaded;
 // The shared header says the rest.
 using backend::draft_span_codeblock;
 
-// Listing code is the author's own tokens; it is never re-escaped. Only the
-// spans are substituted, via the shared substrate (backend/code_spans.hpp)
+// Listing code is the author's own tokens; it is never re-escaped, and only
+// its exposition-only comment is written as the draft's macro
+// (`draft_listing_text`). The spans are substituted, via the shared substrate (backend/code_spans.hpp)
 // -- and the wording diff's change runs, each closed in the draft's own
 // `@\added{...}@` with the spans inside it in their escaped form, since the
 // run has opened the `@...@` already (docs/plans/wording-diff.md).
@@ -76,7 +77,7 @@ std::string render_code_codeblock(const ir::CodeText& code) {
                                       draft_span_codeblock,
                                       backend::draft_span_escaped,
                                       backend::draft_change_codeblock,
-                                      std::identity{},
+                                      backend::draft_listing_text,
                                       backend::draft_layout_hint_listing);
 }
 
@@ -100,18 +101,10 @@ std::string render_codeblock(const ir::CodeText& code) {
 // Four alternatives (decision visitation-rules' >3 rule), so a named
 // visitor struct rather than an overloaded-lambda set.
 struct PieceRenderer {
-    bool in_table = false;
-
-    // Plain prose, with the draft's line-break hints where they sat; table
-    // text protects its alignment characters.
+    // Plain prose, with the draft's line-break hints where they sat, and the
+    // characters LaTeX reserves escaped, in a table cell and out of one.
     std::string operator()(const ir::TextInline& v) const {
-        if (!in_table)
-            return backend::draft_hinted_text(v.text, v.hints);
-        return backend::draft_hinted_text(v.text, v.hints, [](std::string_view text) {
-            return text |
-                   std::views::transform([](char ch) { return ch == '&' ? std::string{"\\&"} : std::string(1, ch); }) |
-                   std::views::join | std::ranges::to<std::string>();
-        });
+        return backend::draft_hinted_text(v.text, v.hints, backend::draft_escape_prose_text);
     }
 
     // A code inline, with the whole-span shortcut the draft's macros need.
@@ -143,6 +136,10 @@ struct PieceRenderer {
     // Draft LaTeX the importer kept as written.
     std::string operator()(const ir::RawInline& v) const { return v.latex; }
 
+    // A term and a fixed phrase, as the draft's macros (issue #355).
+    std::string operator()(const ir::TermInline& v) const { return backend::draft_term(v); }
+    std::string operator()(const ir::PhraseInline& v) const { return backend::draft_phrase(v); }
+
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
     // rendered as it would be unmarked. Defined after `render_run` below,
@@ -151,28 +148,28 @@ struct PieceRenderer {
     std::string operator()(const ir::ChangedInline& run) const;
 };
 
-std::string render_run(const std::vector<ir::PlainInline>& inlines, bool in_table) {
-    return inlines | std::views::transform([in_table](const ir::PlainInline& piece) {
-               return std::visit(overloaded{PieceRenderer{in_table}}, piece);
+std::string render_run(const std::vector<ir::PlainInline>& inlines) {
+    return inlines | std::views::transform([](const ir::PlainInline& piece) {
+               return std::visit(overloaded{PieceRenderer{}}, piece);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
 std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
-    return backend::draft_change_prose(run.change, render_run(run.inlines, in_table));
+    return backend::draft_change_prose(run.change, render_run(run.inlines));
 }
 
-std::string render_paragraph(const ir::Paragraph& para, bool in_table = false) {
-    return para | std::views::transform([in_table](const ir::Inline& piece) {
-               return std::visit(overloaded{PieceRenderer{in_table}}, piece);
+std::string render_paragraph(const ir::Paragraph& para) {
+    return para | std::views::transform([](const ir::Inline& piece) {
+               return std::visit(overloaded{PieceRenderer{}}, piece);
            }) |
            std::views::join | std::ranges::to<std::string>();
 }
 
 std::string render_table_field(const ir::Paragraph& paragraph) {
-    // Escape text pieces before code macros are inserted; escaping the
+    // Text pieces are escaped before code macros are inserted; escaping the
     // assembled field would escape a code inline's \\& a second time.
-    return render_paragraph(paragraph, true);
+    return render_paragraph(paragraph);
 }
 
 std::string render_table(const ir::Table2D& table) {
@@ -446,7 +443,8 @@ struct SeededProjector {
     // exactly this, unlike `ir::SectionF::stable_name`, which stays the
     // frozen JSON field it must remain (see backend/render_fold.hpp).
     backend::RenderF<Seeded> operator()(const ir::Section& s) const {
-        std::string         header = std::format("\\rSec{}[{}]{{{}}}\n", ctx.depth, s.stable_name, s.title);
+        std::string header = std::format(
+            "\\rSec{}[{}]{{{}}}\n", ctx.depth, s.stable_name, backend::render_section_title_draft(s.title));
         const RenderCtx     child_ctx{ctx.depth + 1, ctx.pnum_base};
         std::vector<Seeded> children =
             s.children |

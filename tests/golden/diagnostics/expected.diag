@@ -7,3 +7,4 @@ spec_diagnostics.hpp:100: warning: END [gadget.extra] has no open section to clo
 spec_diagnostics.hpp:102: warning: malformed \rSec marker: digits: value out of range (comment offset 8)
 spec_diagnostics.hpp:104: warning: malformed \rSec marker: expected '{' (comment offset 26)
 spec_diagnostics.hpp:108: warning: unrecognized section header [gadget.mod]; use \rSec<depth>[gadget.mod]{title}
+specgen: 2 findings in the documented header fail the run; the output is written

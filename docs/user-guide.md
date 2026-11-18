@@ -226,8 +226,8 @@ disagree:
 4. Add docblocks to definitions, and mark every declaration that is deliberately
    not an ordinary specification entity with `\expos`, `\omit`, or `\merge`.
 5. Run `generate --validate` frequently. Read standard error as well as the exit
-   status: docblock errors are findings about usable input and do not by
-   themselves stop the output.
+   status: a docblock error is a finding about usable input, so the output is
+   still written, and the run then exits with status 1.
 6. Inspect all three backends before settling taste-sensitive phrasing. The
    backends share semantics, but tables, code spans, headings, and paragraph
    framing necessarily appear in different syntax.
@@ -726,6 +726,13 @@ plain `//` lines, which is the shape `clang-format` produces when it wraps a
 long marker; the continuation lines are joined into one title with single
 spaces. A `{title}` that never closes is reported as a malformed marker.
 
+A title names code in backticks, as prose does, or in the draft's own
+`\tcode{...}`; each backend writes either as its code. In LaTeX a backticked
+span becomes `\tcode{...}` with its `&` escaped, and outside code `&`, `%` and
+`#` are escaped as they are in prose, so a title written
+``{Partial specialization `thing<E&>`}`` compiles. mpark and org read `\&` and the draft's other escaped
+characters in a title as the characters, inside `\tcode` and out of it.
+
 An exact Doxygen fence closes an ordinary section explicitly:
 
 ```cpp
@@ -942,12 +949,21 @@ backticks too, and each backend writes them in its own form:
 | `\placeholder{p}`, `\cv{}` | a placeholder |
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers |
 | `\oldconcept{X}` | a C++17 named requirement, printed "Cpp17X" |
+| `\term{x}`, `\defn{x}`, `\Fundescx{X}` | a term, italic; backticks inside mark code |
+| `\impldef{index}`, `\ntbs{}`, `\ntmbs{}` | "implementation-defined", "NTBS", "NTMBS" |
 
 These are the macros `specgen import` reads from the draft's own text (see
 [Reading the working draft's LaTeX](#reading-the-working-drafts-latex) for how
 each prints), so a sentence typed here and the same sentence inherited from the
 draft are the same wording to the wording diff. Any other macro stays text: the LaTeX backend passes it
 through, and the mpark and org backends print it as written.
+
+Outside backticks, `&`, `%` and `#` are the characters themselves: the LaTeX
+backend writes them `\&`, `\%` and `\#`, and the other two backends as they
+are. A docblock may also write them `\&`, `\%` and `\#`, the draft's own
+spelling, which is read as the same character, so either spelling is right in
+all three backends. The importer reads the draft's `\&`, `\%` and `\#` in
+prose the same way.
 
 Write literal C++ characters inside backticks, including `&` and `&&`.
 The LaTeX backend escapes text-mode special characters inside `\tcode`;
@@ -1031,6 +1047,26 @@ examples cannot nest. Their paragraphs do not advance the surrounding wording's
 paragraph counter. Prose after a closed block continues the enclosing paragraph;
 a subsequent blank decorated line starts a new paragraph.
 
+A note or an example is part of the paragraph before it, as the draft's
+`\begin{note}` is when no `\pnum` precedes it. Two consecutive blank decorated
+lines before it make it a numbered paragraph of its own, the rule that already
+starts a new paragraph after a list or a table:
+
+```cpp
+//! \returns A reference to the element.
+//!
+//!
+//! \note For the overload marked #1, ...
+//! \endnote
+```
+
+is the draft's `\pnum` `\returns` paragraph followed by a second `\pnum` and the
+note. The same two lines before a code block, a list, or a table do the same
+for it. A single blank line before a note keeps it in the paragraph before, so
+existing docblocks keep their meaning. The first block of a description or an
+element opens its paragraph anyway, and nothing inside a note or an example is
+numbered.
+
 `\codeblock` / `\endcodeblock` preserves the decorated payload lines,
 including indentation and blank lines. Tags inside the payload are literal;
 only a line containing `\endcodeblock` closes it. Authored code has no
@@ -1109,8 +1145,14 @@ template <class VT>
 static constexpr bool is_callable_from = /* ... */;
 ```
 
-An exposition-only declaration at namespace scope, and an exposition-only alias
-in a class, have no item, and `\asdraft` on one is an error.
+An exposition-only concept or variable at namespace scope has no item: its
+description is written beside its synopsis. `\asdraft` on one pairs by the
+synopsis's declaration instead, with the draft's declaration that reads most
+like it, whether the draft writes that as an item or as a declaration in a code
+block. It inherits that item's description, or, where the declaration has none
+of its own, as [concept.booleantestable] writes *boolean-testable-impl*, the
+paragraphs after it up to the next declaration. An exposition-only alias in a
+class is a line of the class synopsis, and `\asdraft` on one is an error.
 
 Elements the docblock authors replace the inherited element of the same kind,
 which is how a paper changes one paragraph of an item and leaves the rest:
@@ -1165,15 +1207,25 @@ byte for byte: line breaks, `\indexlibrary*` entries, `%` comments, and the
 layout of synopses and items. With several headers, edits to one file are made
 together.
 
-What can be placed is a change to the code of a declaration or of a synopsis:
-a token added, removed or replaced. Code is compared token by token with its
-layout ignored, so a declaration the generator lays out differently from the
-draft is not a change, and an added `constexpr` is written into the draft's own
-line. Any other change is an error naming it and is not placed: a changed
-description or paragraph, and an item, a declaration or a subclause added or
-removed. The other edits are still written, and the run exits 1. A declaration
-outside every subclause has no place in the draft, so it is left out with a
-warning.
+A change to the code of a declaration or of a synopsis is placed token by
+token: a token added, removed or replaced. Code is compared with its layout
+ignored, so a declaration the generator lays out differently from the draft is
+not a change, and an added `constexpr` is written into the draft's own line.
+
+A changed description replaces the numbered paragraphs that changed and leaves
+the others as the draft has them, line for line. The new paragraph is written
+as the LaTeX backend writes it, laid out as the draft's are, a sentence to a
+line. When the paper's description has more or fewer numbered paragraphs than
+the draft's, the description is replaced whole. An item, a synopsis or a
+paragraph the paper adds is written after the draft's node the paper puts
+before it, separated by a blank line. One the paper removes is taken out,
+together with the blank line after it.
+
+Any other change is an error naming it and is not placed: a declaration added
+to or removed from an item, such as an overload joining an `\also` group, and a
+subclause added or removed. The other edits are still written, and the run
+exits 1. A declaration outside every subclause has no place in the draft, so it
+is left out with a warning.
 
 The edited draft is the whole output, so the option takes no baseline, no
 `--inherit-draft`, and no `--split`, `--validate` or `--paper`.
@@ -1292,6 +1344,19 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
   (`= delete("reason")`) is dropped, and so is a macro standing for the
   keyword, so a header that writes `= MY_DELETE("reason")` to compile before
   C++26 generates the same wording as one that writes `= delete`.
+- A specifier spelled through a macro reads as what the macro expands to in
+  this translation unit, in a synopsis and in an item declaration:
+  `inline DEMO_CONSTEXPR int f();` with `#define DEMO_CONSTEXPR constexpr` reads
+  `inline constexpr int f();`, and a macro that expands to nothing is dropped
+  with the space beside it. This covers an object-like macro whose expansion is
+  keywords alone, or nothing, or another such macro. A function-like macro, or
+  one whose expansion holds a number, a name that is not such a macro, or an
+  attribute, is left as written. Whether the expansion is the one the wording wants is settled with
+  a `-D` after the `--`. A declaration or a definition whose first token comes
+  from a macro is where it is written, so its docblock attaches to it and its
+  item is placed with its class's other members. A declaration that a
+  function-like macro stamps out, its name and all, is the macro's, and
+  produces no wording.
 - A bare `\also`, or an empty docblock, joins an overload's signature to the
   preceding described item in the same section.
 - `\group id` names a group primary. `\also id` joins that earlier primary in
@@ -1481,8 +1546,10 @@ unrecognized draft-style headings, gathered `.syn` regions that are not closed
 before the next section, and errors for a docblock on an entity kind
 that produces no wording (a namespace alias, or a function declaration whose
 markup belongs on the definition). These diagnostics describe markup on a header
-that parsed successfully, so even an error does not prevent output or change
-`generate`'s exit status. Always inspect standard error.
+that parsed successfully, so even an error does not prevent output. It does
+fail the run: once the output is written, `generate` says how many findings
+fail it and exits with status 1. Under `--warnings-as-errors` a warning here
+does the same. Always inspect standard error.
 
 `--validate` prints findings as `specgen: <context>: <severity>: <message>`.
 After notes and warnings, rendering continues. If any finding has error
@@ -1616,6 +1683,16 @@ prose:
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers | `*cv2*` | italic |
 | `\oldconcept{X}` | a C++17 named requirement | `*Cpp17X*` | italic |
 | `\tref{t}` | a reference to a table | a link to its caption | a link |
+| `\term{x}`, `\defn{x}` | a term, used or defined | `*x*` | italic |
+| `\Fundescx{X}` | an element named in running text | `*X*` | italic |
+| `\impldef{index}` | "implementation-defined", indexed | the words | the words |
+| `\ntbs`, `\ntmbs` | "NTBS", "NTMBS" in small capitals | the words | the words |
+
+A term's words may hold code, as `\term{valid value type for \tcode{expected}}`
+does; anything else in them keeps the whole term as raw LaTeX. The LaTeX
+backend writes `\ntbs` as the draft did, `\ntbs{}` before a space or bare
+before punctuation, and `\ntbs{}` for one a docblock wrote. Neither that
+choice nor the index text of an `\impldef` is compared by the wording diff.
 
 And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 
@@ -1632,13 +1709,16 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `$r_K$` in a `\tcode` | a variable and its subscript | `$r$@~_K_~@` | `<var>r</var><sub><var>K</var></sub>` |
 | `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
 | `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
+| `$i_\tcode{x}$` in a `\tcode` | a variable and code as its subscript | `$i$@~x~@` | `<var>i</var><sub>x</sub>` |
+| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i-1_~@` | `<var>p</var><sub><var>i-1</var></sub>` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
 Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
-subscript (one letter or digit, or a group of them), a subscript on a variable
-or on code, or `\dotsc`. The code's text has the variable as its name, the
+subscript (one letter or digit, or a group of them, which may hold `+` and
+`-`), a subscript on a variable or on code, code as the subscript of a
+variable, or `\dotsc`. The code's text has the variable as its name, the
 subscript after an underscore and the ellipsis as three dots, so
 `\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
 and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
@@ -1651,9 +1731,10 @@ is the group the draft sometimes puts around a subscript of one character there
 (`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
 back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
 
-Any other mathematics there has no kind: an expression (`$i - 1$`), a subscript
-that is one or that is code (`$p_{i-1}$`, `$i_\tcode{x}$`), a Greek letter. The
-whole `\tcode` is kept as raw LaTeX and the command warns.
+Any other mathematics there has no kind: an expression (`$i - 1$`), code as
+the subscript of code (`$\tcode{Ds}_{\tcode{T}}$`), a placeholder with a
+subscript, a Greek letter. The whole `\tcode` is kept as raw LaTeX and the
+command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1664,11 +1745,15 @@ spells it. The choice is typesetting, so the wording diff does not report it,
 and the mpark and org backends ignore it.
 
 A declaration extracted from the code has no such choice recorded, and takes
-its context's default: `\exposidnc` in a listing. When a baseline is named and
-the item pairs with a baseline item, whether or not it is `\asdraft`, the
-declaration takes the baseline's choice for each name the two share, so an
-unchanged declaration prints as the draft has it. With no baseline, or a
-baseline that was generated, nothing changes.
+the plain macro, `\exposid`, in a listing as in prose: the form the draft's
+source writes in a listing thirteen times in fourteen. When a baseline is
+named and the item pairs with a baseline item, whether or not it is
+`\asdraft`, the declaration takes the baseline's choice for each name the two
+share, so an unchanged declaration prints as the draft has it. An extracted
+synopsis does the same with the baseline's synopsis of its class: the first
+span naming a member takes the form of the first span in the baseline's
+synopsis naming it, and so on. With no baseline, or a baseline that was
+generated, nothing changes.
 
 The same holds for the draft's line-break hints: `\brk`, `\-`, `\linebreak`
 and `\newline`, in a `\tcode`, in running text, or inside a name
@@ -1707,8 +1792,8 @@ it in org, and in mpark `[#]{.pnum}` on a line of its own, since a fenced div or
 a code fence cannot share a line with the number. Prose after the block is the
 rest of that paragraph. A block that is the first thing after an element's tag
 opens the element's paragraph and says nothing, as generated wording has it. A
-docblock cannot write this: an authored note is part of the paragraph before
-it.
+docblock writes this with two blank decorated lines before the block (see
+[Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
@@ -1739,12 +1824,14 @@ specgen generate include/beman/example/example.hpp \
   build an AST, Clang reports a parse error, or the output cannot be written.
   It never emits plausible partial wording after a C++ parse failure. When it
   renders, it also exits with status 1 on a fragment error or, under
-  `--validate`, on an error-severity finding. With several headers, it parses
+  `--validate`, on an error-severity finding. An error-severity docblock
+  finding exits with status 1 too, after the output is written. With several headers, it parses
   all of them before writing anything and stops at the first that fails.
 - `render` exits with status 1 on unreadable or invalid JSON, an output
   failure, a fragment error, or an error-severity validation finding.
 - Under `--warnings-as-errors`, a warning-severity validation finding exits
-  with status 1 from either command. Without `--validate` the option is a
+  with status 1 from either command, and so does a warning-severity docblock
+  finding from `generate`. Without `--validate` the option is a
   usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already
@@ -1757,7 +1844,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.43.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.47.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

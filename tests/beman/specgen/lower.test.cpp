@@ -106,6 +106,21 @@ TEST_CASE("lower - multi-paragraph prose survives") {
     CHECK(text_of(body_test::paragraph(out.descr.elements[0], 1)[0]) == "Second paragraph.");
 }
 
+TEST_CASE("lower - a block that opens a paragraph of its own says so in the IR") {
+    auto out = lower_text("//! \\returns A reference.\n"
+                          "//!\n"
+                          "//!\n"
+                          "//! \\note A note.\n"
+                          "//! \\endnote\n"
+                          "//! \\example An example.\n"
+                          "//! \\endexample\n");
+    REQUIRE(out.descr.elements.size() == 1);
+    const auto& body = out.descr.elements.front().body;
+    REQUIRE(body.size() == 3);
+    CHECK(ir::opens_paragraph(body[1]));
+    CHECK_FALSE(ir::opens_paragraph(body[2]));
+}
+
 TEST_CASE("lower - authored items and references become semantic IR") {
     auto out = lower_text("//! \\constraints All of:\n"
                           "//! \\item `A` is `true`,\n"

@@ -25,10 +25,10 @@ TEST_CASE("draft_spans - draft_span_prose writes each span as the draft's macro"
 }
 
 // Inside a codeblock the draft escapes back to LaTeX with @...@, except for a
-// Ref, which only ever sits in a comment that is already in TeX mode, and an
-// exposition-only name takes the no-correction form.
+// Ref, which only ever sits in a comment that is already in TeX mode. An
+// exposition-only name takes the plain form there, as in prose (issue #341).
 TEST_CASE("draft_spans - draft_span_codeblock wraps every span but a Ref in the draft's escape") {
-    CHECK(backend::draft_span_codeblock({0, 3, SpanKind::ExposId, "val"}, "VAL") == "@\\exposidnc{val}@");
+    CHECK(backend::draft_span_codeblock({0, 3, SpanKind::ExposId, "val"}, "VAL") == "@\\exposid{val}@");
     CHECK(backend::draft_span_codeblock({0, 1, SpanKind::SeeBelow, ""}, "x") == "@\\seebelow@");
     CHECK(backend::draft_span_codeblock({0, 1, SpanKind::Ref, "optional.ctor"}, "x") == "\\ref{optional.ctor}");
 }
@@ -54,8 +54,8 @@ TEST_CASE("draft_spans - inline code escapes literal text without escaping span 
 
 TEST_CASE("draft_spans - the escaped form is what the codeblock form wraps") {
     const Span expos{0, 3, SpanKind::ExposId, "val"};
-    CHECK(backend::draft_span_escaped(expos, "VAL") == "\\exposidnc{val}");
-    CHECK(backend::draft_span_codeblock(expos, "VAL") == "@\\exposidnc{val}@");
+    CHECK(backend::draft_span_escaped(expos, "VAL") == "\\exposid{val}");
+    CHECK(backend::draft_span_codeblock(expos, "VAL") == "@\\exposid{val}@");
     const Span ref{0, 3, SpanKind::Ref, "a.b"};
     CHECK(backend::draft_span_escaped(ref, "a.b") == "\\ref{a.b}");
     CHECK(backend::draft_span_codeblock(ref, "a.b") == "\\ref{a.b}");

@@ -74,6 +74,7 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::Optional>("opt"sv),
                                 foundation::is<SpanKind::MathVariable>("math-variable"sv),
                                 foundation::is<SpanKind::Subscript>("subscript"sv),
+                                foundation::is<SpanKind::CodeSubscript>("code-subscript"sv),
                                 foundation::is<SpanKind::Ellipsis>("ellipsis"sv));
 
 inline constexpr auto kLayoutHintNames =
@@ -83,6 +84,21 @@ inline constexpr auto kLayoutHintNames =
                                       foundation::is<LayoutHintKind::NewLine>("newline"sv),
                                       foundation::is<LayoutHintKind::Tie>("tie"sv),
                                       foundation::is<LayoutHintKind::MathOpen>("math-open"sv));
+
+inline constexpr auto kTermRoleNames =
+    foundation::table<TermRole>(foundation::is<TermRole::Term>("term"sv),
+                                foundation::is<TermRole::Definition>("definition"sv),
+                                foundation::is<TermRole::ElementName>("element-name"sv));
+
+inline constexpr auto kPhraseNames =
+    foundation::table<Phrase>(foundation::is<Phrase::ImplementationDefined>("implementation-defined"sv),
+                              foundation::is<Phrase::Ntbs>("ntbs"sv),
+                              foundation::is<Phrase::Ntmbs>("ntmbs"sv));
+
+inline constexpr auto kPhraseWords =
+    foundation::table<Phrase>(foundation::is<Phrase::ImplementationDefined>("implementation-defined"sv),
+                              foundation::is<Phrase::Ntbs>("NTBS"sv),
+                              foundation::is<Phrase::Ntmbs>("NTMBS"sv));
 
 inline constexpr auto kChangeNames = foundation::table<Change>(foundation::is<Change::Same>("same"sv),
                                                                foundation::is<Change::Added>("added"sv),
@@ -126,6 +142,13 @@ std::string_view              layout_hint_name(LayoutHintKind k) { return kLayou
 std::optional<LayoutHintKind> layout_hint_from_name(std::string_view s) {
     return enumerator_named(kLayoutHintNames, s);
 }
+
+std::string_view        term_role_name(TermRole r) { return kTermRoleNames[r]; }
+std::optional<TermRole> term_role_from_name(std::string_view s) { return enumerator_named(kTermRoleNames, s); }
+
+std::string_view      phrase_name(Phrase p) { return kPhraseNames[p]; }
+std::optional<Phrase> phrase_from_name(std::string_view s) { return enumerator_named(kPhraseNames, s); }
+std::string_view      phrase_words(Phrase p) { return kPhraseWords[p]; }
 
 std::string_view      change_name(Change c) { return kChangeNames[c]; }
 std::optional<Change> change_from_name(std::string_view s) { return enumerator_named(kChangeNames, s); }
@@ -356,6 +379,7 @@ void append_text(TextInline& text, const TextInline& more) {
 }
 
 CodeText without_typesetting(CodeText code) {
+    std::erase_if(code.spans, [](const Span& span) { return !is_wording(span); });
     std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
     code.hints.clear();
     return code;
@@ -388,6 +412,21 @@ struct TypesettingRemover {
     }
     PlainInline operator()(TableRef v) const { return v; }
     PlainInline operator()(RawInline v) const { return v; }
+    PlainInline operator()(TermInline v) const {
+        std::ranges::for_each(v.content, [](TermPiece& piece) {
+            if (auto* text = std::get_if<TextInline>(&piece))
+                text->hints.clear();
+            else
+                std::get<CodeInline>(piece).code = without_typesetting(std::move(std::get<CodeInline>(piece).code));
+        });
+        return v;
+    }
+    // An index entry is not wording (`is_wording`).
+    PlainInline operator()(PhraseInline v) const {
+        v.index.clear();
+        v.bare = false;
+        return v;
+    }
 };
 
 } // namespace

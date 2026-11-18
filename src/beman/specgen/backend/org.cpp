@@ -224,7 +224,9 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
             return number ? "<sub>" + html_escape(span.payload) + "</sub>"
                           : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
         }),
-        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }));
+        foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }),
+        // Code as a subscript is upright, as code is (issue #339).
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return "<sub>" + html_escape(span.payload) + "</sub>"; }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
@@ -329,6 +331,22 @@ struct PieceRenderer {
     // Draft LaTeX kept as written, as an export snippet.
     std::string operator()(const ir::RawInline& v) const { return "@@latex:" + v.latex + "@@"; }
 
+    // A term and a fixed phrase (issue #355): the draft's macro in an export
+    // snippet, for the reason a placeholder is one, and italic words and code
+    // in HTML.
+    std::string operator()(const ir::TermInline& v) const {
+        const std::string html = v.content | std::views::transform([](const ir::TermPiece& piece) {
+                                     if (const auto* text = std::get_if<ir::TextInline>(&piece))
+                                         return html_escape(text->text);
+                                     return html_code_inline(std::get<ir::CodeInline>(piece));
+                                 }) |
+                                 std::views::join | std::ranges::to<std::string>();
+        return "@@latex:" + backend::draft_term(v) + "@@@@html:<i>" + html + "</i>@@";
+    }
+    std::string operator()(const ir::PhraseInline& v) const {
+        return "@@latex:" + backend::draft_phrase(v) + "@@@@html:" + std::string(ir::phrase_words(v.phrase)) + "@@";
+    }
+
     // A changed run of prose (the wording diff's mark): wg21org's
     // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
     // after `RunPieceRenderer` below, which renders the run's contents.
@@ -352,6 +370,8 @@ struct RunPieceRenderer {
     std::string operator()(const ir::OldConceptRef& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::TableRef& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::RawInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::TermInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::PhraseInline& v) const { return PieceRenderer{}(v); }
 };
 
 std::string render_run(const std::vector<ir::PlainInline>& inlines) {

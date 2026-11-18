@@ -26,17 +26,19 @@ namespace beman::specgen::ir {
 // Rendered code is never a flat string: byte-ranged spans carry semantics
 // that each backend serializes with its own escape convention.
 enum class SpanKind {
-    ExposId,      // payload = kebab-case exposition-only name
-    SeeBelow,     // "see below" substitution
-    ImplDefined,  // "implementation-defined" substitution
-    Placeholder,  // payload = placeholder text
-    Ref,          // payload = stable name (cross-reference inside a comment)
-    LibraryIndex, // payload = enclosing class, or empty for a global name
-    CvQualifier,  // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
-    Optional,     // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
-    MathVariable, // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
-    Subscript,    // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
-    Ellipsis,     // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
+    ExposId,       // payload = kebab-case exposition-only name
+    SeeBelow,      // "see below" substitution
+    ImplDefined,   // "implementation-defined" substitution
+    Placeholder,   // payload = placeholder text
+    Ref,           // payload = stable name (cross-reference inside a comment)
+    LibraryIndex,  // payload = enclosing class, or empty for a global name
+    CvQualifier,   // payload = a placeholder that stands for cv-qualifiers (the draft's \cvqual)
+    Optional,      // the covered text may be absent (the draft's \opt): it prints with a subscript "opt"
+    MathVariable,  // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
+    Subscript,     // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
+    Ellipsis,      // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
+    CodeSubscript, // payload = code subscripting the variable before it (the draft's $i_\tcode{x}$); the text is "_" +
+                   // payload
 };
 
 } // namespace beman::specgen::ir
@@ -54,6 +56,7 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::MathVariable,
     beman::specgen::ir::SpanKind::Subscript,
     beman::specgen::ir::SpanKind::Ellipsis,
+    beman::specgen::ir::SpanKind::CodeSubscript,
 };
 
 namespace beman::specgen::ir {
@@ -106,21 +109,24 @@ struct Span {
     // macro is written. Each italic macro has a twin that leaves out the
     // italic correction (\exposidnc, \placeholdernc, \seebelownc,
     // \impdefnc), and the draft's source picks one by hand, by what follows
-    // the name. Unset is the form the context takes (`default_no_correction`),
-    // which is what every generated span has. The draft importer sets it
-    // where the draft wrote the other form, so that inherited wording comes
-    // back out as the draft spells it, and a generated declaration takes it
-    // from the baseline declaration it pairs with (inherit.hpp). Only a backend that writes draft LaTeX
-    // reads it, and the wording diff compares without it.
+    // the name. Unset is the plain form, which is what every generated span
+    // has, in prose and in a listing alike: the draft's source writes
+    // `@\exposid{...}@` in a listing thirteen times for each `@\exposidnc{...}@`
+    // (issue #341). The draft importer sets it where the draft wrote the
+    // no-correction form, so that inherited wording comes back out as the draft
+    // spells it, and a generated declaration or synopsis takes it from the
+    // baseline one it pairs with (inherit.hpp). Only a backend that writes
+    // draft LaTeX reads it, and the wording diff compares without it.
     std::optional<bool> no_correction = {};
 
     friend bool operator==(const Span&, const Span&) = default;
 };
 
-// The form a span's macro takes when nothing says otherwise: the
-// no-correction form for an exposition-only name in a listing, which is what
-// this tool has always written there, and the plain form for everything else.
-constexpr bool default_no_correction(SpanKind kind, bool listing) { return listing && kind == SpanKind::ExposId; }
+// Whether a span is wording. A library index span is an index entry around a
+// name, `\libglobal{x}` printing `x`: the draft writes it on some heads and not
+// others, and a name is the same name with or without its entry, so the
+// wording diff and `--apply-to-draft` read it as the name alone (issue #354).
+constexpr bool is_wording(const Span& span) { return span.kind != SpanKind::LibraryIndex; }
 
 // A run of changed bytes in a CodeText: a second table beside `spans` rather
 // than two more `SpanKind`s, because a change run *contains* semantic spans
@@ -236,6 +242,20 @@ struct Provenance {
     friend bool operator==(const Provenance&, const Provenance&) { return true; }
 };
 
+// Where a node of a document was read from, the same way: bytes [begin, end)
+// of `file`, whole lines, beside the node and not part of it (issue #346).
+// Only the draft importer records it, and only draft_edit.hpp reads it.
+struct SourceRange {
+    std::string file;
+    std::size_t begin = 0;
+    std::size_t end   = 0;
+};
+struct NodeOrigin {
+    std::shared_ptr<const SourceRange> range = {};
+
+    friend bool operator==(const NodeOrigin&, const NodeOrigin&) { return true; }
+};
+
 struct CodeText {
     std::string             text;
     std::vector<Span>       spans;        // sorted by begin, non-overlapping
@@ -342,13 +362,76 @@ struct RawInline {
 
     friend bool operator==(const RawInline&, const RawInline&) = default;
 };
+// An italic term of the wording (issue #355): the draft's \term{x}, a term
+// used apart from its definition; \defn{x}, a term defined where it stands;
+// and \Fundescx{X}, an element named in running text ("the expressions in the
+// *Effects*"). The words may hold code, as `\term{valid value type for
+// \tcode{expected}}` does, so they are text and code pieces.
+enum class TermRole { Term, Definition, ElementName };
+using TermPiece = std::variant<TextInline, CodeInline>;
+struct TermInline {
+    std::vector<TermPiece> content;
+    TermRole               role = TermRole::Term;
+
+    friend bool operator==(const TermInline&, const TermInline&) = default;
+};
+
+// A phrase the draft writes with a macro of its own (issue #355):
+// \impldef{index} prints "implementation-defined" and indexes `index`, which
+// is LaTeX for the index and never printed; \ntbs and \ntmbs print "NTBS" and
+// "NTMBS" in small capitals.
+enum class Phrase { ImplementationDefined, Ntbs, Ntmbs };
+struct PhraseInline {
+    Phrase      phrase = Phrase::ImplementationDefined;
+    std::string index  = {};
+    // Typesetting, as `Span::no_correction` is: the draft wrote `\ntbs` with
+    // no empty group, which it does before punctuation. Unset is `\ntbs{}`.
+    bool bare = false;
+
+    friend bool operator==(const PhraseInline&, const PhraseInline&) = default;
+};
+
+} // namespace beman::specgen::ir
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::TermRole> = std::array{
+    beman::specgen::ir::TermRole::Term,
+    beman::specgen::ir::TermRole::Definition,
+    beman::specgen::ir::TermRole::ElementName,
+};
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir::Phrase> = std::array{
+    beman::specgen::ir::Phrase::ImplementationDefined,
+    beman::specgen::ir::Phrase::Ntbs,
+    beman::specgen::ir::Phrase::Ntmbs,
+};
+
+namespace beman::specgen::ir {
+
+std::string_view        term_role_name(TermRole); // "term", "definition", "element-name"
+std::optional<TermRole> term_role_from_name(std::string_view);
+std::string_view        phrase_name(Phrase); // "implementation-defined", "ntbs", "ntmbs"
+std::optional<Phrase>   phrase_from_name(std::string_view);
+// The words a phrase prints, for a backend that does not write the draft's
+// macro: "implementation-defined", "NTBS", "NTMBS".
+std::string_view phrase_words(Phrase);
+
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
 // itself, so that a visitor over a run's contents dispatches a different,
 // non-recursive sum type and never drives recursion (decision
 // visitation-rules).
-using PlainInline =
-    std::variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, TableRef, RawInline>;
+using PlainInline = std::variant<TextInline,
+                                 CodeInline,
+                                 RefInline,
+                                 ConceptRef,
+                                 PlaceholderInline,
+                                 OldConceptRef,
+                                 TableRef,
+                                 RawInline,
+                                 TermInline,
+                                 PhraseInline>;
 
 // A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
 // One mark covers the whole run, so a backend writes one span per run rather
@@ -368,6 +451,8 @@ using Inline    = std::variant<TextInline,
                                OldConceptRef,
                                TableRef,
                                RawInline,
+                               TermInline,
+                               PhraseInline,
                                ChangedInline>;
 using Paragraph = std::vector<Inline>;
 
@@ -375,6 +460,8 @@ using Paragraph = std::vector<Inline>;
 // between a macro and its no-italic-correction twin, and the line-break
 // hints. Two pieces that differ only there say the same thing, which is how
 // the wording diff compares them.
+// The code, or the inline, without what only typesets it: line-break hints,
+// which form of its macro a span takes, and the index entries (`is_wording`).
 CodeText    without_typesetting(CodeText code);
 PlainInline without_typesetting(PlainInline piece);
 
@@ -559,9 +646,9 @@ Change block_change(const InformativeBlock&);
 //     \pnum
 //     \begin{note}
 //
-// Nothing generated sets it; the draft importer does, where the draft numbered
-// the block itself, so inherited wording keeps the draft's paragraph numbers
-// (issue #321).
+// The draft importer sets it where the draft numbered the block itself, so
+// inherited wording keeps the draft's paragraph numbers (issue #321), and a
+// docblock sets it with two blank lines before the block (issue #340).
 bool opens_paragraph(const BodyBlock&);
 
 struct DescriptionElement {
@@ -664,6 +751,18 @@ struct SpecItem {
     // validated against. Cleared when resolved.
     bool                        as_draft = false;
     std::vector<InheritedCover> covers   = {};
+    // This is the description beside the synopsis before it, of an
+    // exposition-only concept or variable at namespace scope (design §4.3),
+    // and has no declaration of its own: `\asdraft` pairs it by the
+    // synopsis's declaration, and takes the description that follows the
+    // baseline's declaration (inherit.hpp, issue #332). Set only with
+    // `as_draft`, and cleared with it when resolved.
+    bool describes_synopsis = false;
+    // Where the draft importer read the item, its index entries to the end of
+    // its description, and where it read the description's paragraphs, inside
+    // the `itemdescr` (`NodeOrigin`).
+    NodeOrigin origin       = {};
+    NodeOrigin descr_origin = {};
 
     friend bool operator==(const SpecItem&, const SpecItem&) = default;
 };
@@ -804,6 +903,9 @@ struct Synopsis {
     // `\asdraft-synopsis`: `code` is the baseline synopsis of this class, with
     // the specifiers of `declared` written into it, once resolved (inherit.hpp).
     bool as_draft = false;
+    // Where the draft importer read the synopsis, its code block whole
+    // (`NodeOrigin`).
+    NodeOrigin origin = {};
 
     friend bool operator==(const Synopsis&, const Synopsis&) = default;
 };

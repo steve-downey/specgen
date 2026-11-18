@@ -21,6 +21,25 @@ namespace {
 
 using beman::specgen::foundation::overloaded;
 
+// A term's words, backticks marking the code in them, as text and code pieces.
+// The code's names are raw until the front end resolves them, as a code
+// inline's are.
+std::vector<ir::TermPiece> term_pieces(std::string_view body) {
+    std::vector<ir::TermPiece> out;
+    bool                       code = false;
+    // substrate generic algorithm: a split on backticks that alternates the
+    // kind of each piece.
+    for (const auto part : body | std::views::split('`')) {
+        const std::string piece(std::string_view(part.begin(), part.end()));
+        if (code)
+            out.emplace_back(ir::CodeInline{ir::CodeText{piece, {}}});
+        else if (!piece.empty())
+            out.emplace_back(ir::TextInline{piece});
+        code = !code;
+    }
+    return out;
+}
+
 ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
     return para | std::views::transform([](const grammar::ProseInline& piece) -> ir::Inline {
                return std::visit(
@@ -41,6 +60,12 @@ ir::Paragraph lower_paragraph(const grammar::ProseParagraph& para) {
                            return ir::ConceptRef{.name = c.name, .exposition = c.exposition};
                        },
                        [](const grammar::InlineTableRef& t) -> ir::Inline { return ir::TableRef{t.stable_name}; },
+                       [](const grammar::InlineTerm& t) -> ir::Inline {
+                           return ir::TermInline{term_pieces(t.body), t.role};
+                       },
+                       [](const grammar::InlinePhrase& p) -> ir::Inline {
+                           return ir::PhraseInline{p.phrase, p.index};
+                       },
                    },
                    piece);
            }) |
@@ -62,36 +87,40 @@ Block LeafBodyLowerer<Block>::operator()(const grammar::BodyParagraph& p) const 
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Itemize& list) const {
-    return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>()};
+    return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>(),
+                       ir::Change::Same,
+                       list.opens_paragraph};
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Table2D& table) const {
-    return ir::Table2D{.stable_name = table.stable_name,
-                       .caption     = lower_paragraph(table.caption),
-                       .column1     = lower_paragraph(table.column1),
-                       .column2     = lower_paragraph(table.column2),
-                       .rows        = table.rows | std::views::transform([](const grammar::Table2DRow& row) {
+    return ir::Table2D{.stable_name     = table.stable_name,
+                       .caption         = lower_paragraph(table.caption),
+                       .column1         = lower_paragraph(table.column1),
+                       .column2         = lower_paragraph(table.column2),
+                       .rows            = table.rows | std::views::transform([](const grammar::Table2DRow& row) {
                                    return ir::Table2DRow{lower_paragraph(row.header),
                                                          lower_paragraph(row.cell1),
                                                          lower_paragraph(row.cell2)};
-                                      }) |
-                                      std::ranges::to<std::vector>()};
+                                          }) |
+                                          std::ranges::to<std::vector>(),
+                       .opens_paragraph = table.opens_paragraph};
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Table1D& table) const {
-    return ir::Table1D{.stable_name = table.stable_name,
-                       .caption     = lower_paragraph(table.caption),
-                       .column1     = lower_paragraph(table.column1),
-                       .column2     = lower_paragraph(table.column2),
-                       .rows        = table.rows | std::views::transform([](const grammar::Table1DRow& row) {
+    return ir::Table1D{.stable_name     = table.stable_name,
+                       .caption         = lower_paragraph(table.caption),
+                       .column1         = lower_paragraph(table.column1),
+                       .column2         = lower_paragraph(table.column2),
+                       .rows            = table.rows | std::views::transform([](const grammar::Table1DRow& row) {
                                    return ir::Table1DRow{lower_paragraph(row.cell1), lower_paragraph(row.cell2)};
-                                      }) |
-                                      std::ranges::to<std::vector>()};
+                                          }) |
+                                          std::ranges::to<std::vector>(),
+                       .opens_paragraph = table.opens_paragraph};
 }
 
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::AuthoredCode& code) const {
-    return ir::AuthoredCode{code.code};
+    return ir::AuthoredCode{code.code, ir::Change::Same, code.opens_paragraph};
 }
 
 ir::InformativeBody lower_informative_body(const grammar::InformativeBody&);
@@ -109,10 +138,10 @@ struct BodyLowerer : LeafBodyLowerer<ir::BodyBlock> {
 };
 
 ir::BodyBlock BodyLowerer::operator()(const grammar::Note& note) const {
-    return ir::Note{lower_informative_body(note.body)};
+    return ir::Note{lower_informative_body(note.body), ir::Change::Same, note.opens_paragraph};
 }
 ir::BodyBlock BodyLowerer::operator()(const grammar::Example& example) const {
-    return ir::Example{lower_informative_body(example.body)};
+    return ir::Example{lower_informative_body(example.body), ir::Change::Same, example.opens_paragraph};
 }
 
 ir::DescriptionElement lower_element(const grammar::Element& element) {

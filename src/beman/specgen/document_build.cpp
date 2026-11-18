@@ -313,8 +313,9 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     // lets a following \also item join onto it.
                     if (beman::specgen::ir::has_description(syn.descr) || syn.descr_as_draft) {
                         ir::SpecItem own{{}, std::move(syn.descr)};
-                        own.as_draft = syn.descr_as_draft;
-                        own.covers   = std::move(syn.descr_covers);
+                        own.as_draft           = syn.descr_as_draft;
+                        own.covers             = std::move(syn.descr_covers);
+                        own.describes_synopsis = syn.describes_synopsis;
                         stack.back().pushed.push_back(GroupCandidate{syn.offset, std::move(own), false});
                     }
                     // substrate generic algorithm: distributes each

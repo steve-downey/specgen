@@ -3,14 +3,14 @@ namespace std {
   class predicate {
   public:
     // \ref{predicate.members}, exposition members
-    static constexpr bool @\exposidnc{test-value}@ = true; // exposition only
+    static constexpr bool @\exposid{test-value}@ = true; // exposition only
 
   private:
-    template<class T> static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@; // exposition only
+    template<class T> static constexpr bool @\exposid{accepts-type}@ = @\seebelow@; // exposition only
 
-    static constexpr int @\exposidnc{storage-limit}@{42}; // exposition only
+    static constexpr int @\exposid{storage-limit}@{42}; // exposition only
 
-    static constexpr int @\exposidnc{marker-only}@ = 8; // exposition only
+    static constexpr int @\exposid{marker-only}@ = 8; // exposition only
   };
 }
 #+end_codeblock
@@ -29,7 +29,7 @@ namespace std {
 :END:
 
 #+begin_itemdecl
-static constexpr bool @\exposidnc{test-value}@ = true;
+static constexpr bool @\exposid{test-value}@ = true;
 #+end_itemdecl
 
 #+begin_pnum
@@ -38,7 +38,7 @@ static constexpr bool @\exposidnc{test-value}@ = true;
 
 #+begin_itemdecl
 template<class T>
-  static constexpr bool @\exposidnc{accepts-type}@ = @\seebelow@;
+  static constexpr bool @\exposid{accepts-type}@ = @\seebelow@;
 #+end_itemdecl
 
 #+begin_pnum
@@ -60,7 +60,7 @@ static_assert(true);
 :END:
 
 #+begin_itemdecl
-static constexpr int @\exposidnc{storage-limit}@{42};
+static constexpr int @\exposid{storage-limit}@{42};
 #+end_itemdecl
 
 #+begin_pnum

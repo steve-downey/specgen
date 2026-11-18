@@ -1,3 +1,2 @@
-spec_asdraft_expos_diagnostics.hpp:22: error: \asdraft: `thing_like` is exposition-only at namespace scope, whose description is not inherited; author it
-spec_asdraft_expos_diagnostics.hpp:27: error: \asdraft: `is_thing` is exposition-only at namespace scope, whose description is not inherited; author it
-spec_asdraft_expos_diagnostics.hpp:35: error: \asdraft: `stored` is an exposition-only alias, which has no item to inherit a description
+spec_asdraft_expos_diagnostics.hpp:25: error: \asdraft: `stored` is an exposition-only alias, which has no item to inherit a description
+specgen: 1 finding in the documented header fails the run; the output is written

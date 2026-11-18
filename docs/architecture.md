@@ -445,7 +445,7 @@ back to name match within the class's fragments only):
   implementation namespace itself is never added to the drop set; declarations it genuinely
   owns stay qualified (and then trip the leakage checker, §9, which is the point).
 - Expos renaming: referents in the expos set → an ExposId sentinel, rendered as
-  `\exposidnc{kebab-name}` in code contexts and `\exposid{kebab-name}` in prose.
+  `@\exposid{kebab-name}@` in code contexts and `\exposid{kebab-name}` in prose.
   Namespace-scope concepts, variable templates, ordinary variables, enumerations, aliases,
   alias templates, classes, and class templates can enter that set (a plain class's uses are
   TagTypeLocs, issue #142), and so can a **nested class and its own members**
@@ -527,8 +527,9 @@ The grammar produces its own diagnostics at three severities (the element-orderi
 duplicate-element Warning, the **unknown-tag Error**), and `generate` prints them to stderr as
 `<header>:<line>: <severity>: <message>`. Two consequences: markup written out of
 [structure.specifications] order is reported even though the output is canonicalized either
-way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` does
-not fail on it, so read stderr instead of trusting the exit code.
+way, and a misspelled tag reports as an Error while the IR is still emitted; `generate` writes
+its output and then exits 1, so a build that gates on the exit status fails on it
+(issue #350).
 
 Only element tags, registered markers, and block keywords change docblock
 structure. Other line-leading commands with braced or optional arguments,
@@ -1121,12 +1122,13 @@ have no independent item description.
   draft has a no-italic-correction twin of each italic macro (`\exposidnc`, `\placeholdernc`,
   `\seebelownc`, `\impdefnc`, `\exposconceptnc`) and its source chooses between the two by
   hand, so a paper that inherits a paragraph with `\asdraft` can only print the draft's text if
-  the choice survives the import. `Span::no_correction` is three-state: unset is the form the
-  context takes (`default_no_correction`: the twin for an exposition-only name in a listing, the
-  plain macro everywhere else), which is what every generated span has, and the importer sets
-  it only where the draft wrote the other form. An extracted declaration that pairs with a
-  baseline declaration takes the baseline's form for each span the two share (`inherit`), so the
-  one token a paper does not change is not the one token its wording differs in.
+  the choice survives the import. `Span::no_correction` is three-state: unset is the plain
+  macro, in a listing as in prose, which is what every generated span has and what the draft's
+  source writes in a listing thirteen times in fourteen (issue #341), and the importer sets it
+  only where the draft wrote the twin. An extracted declaration that pairs with a baseline
+  declaration takes the baseline's form for each span the two share (`inherit`), and an
+  extracted synopsis takes the forms of the baseline's synopsis of its class, so the one token
+  a paper does not change is not the one token its wording differs in.
   `PlaceholderInline` and `ConceptRef` carry a plain flag, since prose takes the plain macro.
   The draft's line-break hints inside code (`\brk`, `\-`, `\linebreak`, `\newline`) are the
   other half: `CodeText::hints`, a third
@@ -1231,15 +1233,15 @@ number of a section the diff leaves out is simply not written.
 There are exactly three backends, and **adding wording to one means adding it to all three**:
 
 - **Draft LaTeX** (`backend/latex.cpp`): `\begin{itemdecl}` / `\begin{itemdescr}` / `\pnum` /
-  description macros; `@\exposidnc{...}@` escapes in code (`\exposid` in prose), unless the
-  span says which of the two the draft wrote (`Span::no_correction`, §7);
+  description macros; `@\exposid{...}@` escapes in code (`\exposid` in prose), unless the
+  span says the draft wrote the no-correction twin (`Span::no_correction`, §7);
   `\ref`/`\iref`; `\tcode`, `\libconcept` (`\exposconcept` for an exposition-only concept),
   `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
   cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
   `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
-  as `@\added{...}@` with the spans inside it in their escaped form (`\exposidnc{x}`,
+  as `@\added{...}@` with the spans inside it in their escaped form (`\exposid{x}`,
   `draft_span_escaped`), the run having opened the escape. Paper mode (`--paper`), once
   refused here for want of anything to emit, is the empty-baseline diff: adjacent marked
   top-level nodes share one `addedblock`. `render_to_string` is the backend's whole surface.
@@ -1862,4 +1864,5 @@ The build assembles the tool from these components, each following the shared CM
   pinned by a golden (§10), never a skipped check.
 - **Diagnostics are said out loud**: the grammar's findings, unrecognized draft headings, and
   fence mismatches all report rather than silently self-correct (§3.2, §4), while `generate`
-  still emits IR where it can — stderr, not the exit code, is the record.
+  still emits IR where it can. An error among them fails the run after the output is
+  written; stderr says what it was.

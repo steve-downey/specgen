@@ -176,8 +176,37 @@ using RawInline = std::variant<RawText, RawCode, RawRef, RawMacro>;
 // has a parser of its own. They are the ones the draft importer reads, so a
 // sentence typed in a docblock and the same sentence inherited from the draft
 // are the same IR (issue #316). A macro that is not here stays text.
-constexpr std::string_view macro_prefixes[]{
-    "\\placeholder{", "\\cv{", "\\cvqual{", "\\oldconcept{", "\\libconcept{", "\\exposconcept{", "\\ref{", "\\tref{"};
+constexpr std::string_view macro_prefixes[]{"\\placeholder{",
+                                            "\\cv{",
+                                            "\\cvqual{",
+                                            "\\oldconcept{",
+                                            "\\libconcept{",
+                                            "\\exposconcept{",
+                                            "\\ref{",
+                                            "\\tref{",
+                                            "\\term{",
+                                            "\\defn{",
+                                            "\\Fundescx{",
+                                            "\\impldef{",
+                                            "\\ntbs{",
+                                            "\\ntmbs{"};
+
+// Prose text as a docblock writes it, with `\&`, `\%` and `\#` read as the
+// characters they stand for. A bare one is the character already, and the
+// LaTeX backend escapes each again, so either spelling is right in all three
+// backends (issue #352).
+std::string unescape_prose(std::string_view text) {
+    std::string out;
+    out.reserve(text.size());
+    // substrate generic algorithm: a cursor scan that drops the backslash of
+    // three control symbols.
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '\\' && i + 1 < text.size() && (text[i + 1] == '&' || text[i + 1] == '%' || text[i + 1] == '#'))
+            ++i;
+        out += text[i];
+    }
+    return out;
+}
 
 std::string_view macro_prefix_at(std::string_view rest) {
     const auto it = std::ranges::find_if(macro_prefixes, [&](std::string_view p) { return rest.starts_with(p); });
@@ -280,56 +309,67 @@ ProseParagraph parse_inlines(std::string_view text, int line, std::vector<Diagno
     // accumulator would carry the exact same branching one level down,
     // inside the combining function, which is not an improvement.
     for (RawInline& seg : segments->value) {
-        std::visit(overloaded{[&](RawText& t) {
-                                  if (!t.text.empty())
-                                      para.push_back(InlineText{std::move(t.text)});
-                              },
-                              [&](RawCode& c) {
-                                  if (c.terminated) {
-                                      para.push_back(InlineCode{std::move(c.text)});
-                                  } else {
-                                      diags.push_back({Severity::Error, line, "unterminated ` code span"});
-                                      if (!c.text.empty())
-                                          para.push_back(InlineText{std::move(c.text)});
-                                  }
-                              },
-                              [&](RawRef& ref) {
-                                  if (!ref.terminated) {
-                                      diags.push_back({Severity::Error, line, "unterminated \\iref reference"});
-                                      if (!ref.stable_name.empty())
-                                          para.push_back(InlineText{"\\iref{" + std::move(ref.stable_name)});
-                                  } else if (ref.stable_name.empty()) {
-                                      diags.push_back({Severity::Error, line, "\\iref requires a stable name"});
-                                  } else {
-                                      para.push_back(InlineRef{std::move(ref.stable_name)});
-                                  }
-                              },
-                              [&](RawMacro& m) {
-                                  if (!m.terminated) {
-                                      diags.push_back({Severity::Error, line, "unterminated \\" + m.macro + " macro"});
-                                      para.push_back(InlineText{"\\" + m.macro + "{" + std::move(m.body)});
-                                  } else if (m.macro == "cv") {
-                                      if (!m.body.empty())
-                                          diags.push_back({Severity::Error, line, "\\cv takes no argument"});
-                                      para.push_back(InlinePlaceholder{"cv"});
-                                  } else if (m.body.empty()) {
-                                      diags.push_back(
-                                          {Severity::Error, line, "\\" + m.macro + " requires an argument"});
-                                  } else if (m.macro == "placeholder") {
-                                      para.push_back(InlinePlaceholder{std::move(m.body)});
-                                  } else if (m.macro == "cvqual") {
-                                      para.push_back(InlinePlaceholder{std::move(m.body), true});
-                                  } else if (m.macro == "oldconcept") {
-                                      para.push_back(InlineOldConcept{std::move(m.body)});
-                                  } else if (m.macro == "libconcept" || m.macro == "exposconcept") {
-                                      para.push_back(InlineConcept{std::move(m.body), m.macro == "exposconcept"});
-                                  } else if (m.macro == "ref") {
-                                      para.push_back(InlineRef{std::move(m.body), true});
-                                  } else {
-                                      para.push_back(InlineTableRef{std::move(m.body)});
-                                  }
-                              }},
-                   seg);
+        std::visit(
+            overloaded{[&](RawText& t) {
+                           if (!t.text.empty())
+                               para.push_back(InlineText{unescape_prose(t.text)});
+                       },
+                       [&](RawCode& c) {
+                           if (c.terminated) {
+                               para.push_back(InlineCode{std::move(c.text)});
+                           } else {
+                               diags.push_back({Severity::Error, line, "unterminated ` code span"});
+                               if (!c.text.empty())
+                                   para.push_back(InlineText{std::move(c.text)});
+                           }
+                       },
+                       [&](RawRef& ref) {
+                           if (!ref.terminated) {
+                               diags.push_back({Severity::Error, line, "unterminated \\iref reference"});
+                               if (!ref.stable_name.empty())
+                                   para.push_back(InlineText{"\\iref{" + std::move(ref.stable_name)});
+                           } else if (ref.stable_name.empty()) {
+                               diags.push_back({Severity::Error, line, "\\iref requires a stable name"});
+                           } else {
+                               para.push_back(InlineRef{std::move(ref.stable_name)});
+                           }
+                       },
+                       [&](RawMacro& m) {
+                           if (!m.terminated) {
+                               diags.push_back({Severity::Error, line, "unterminated \\" + m.macro + " macro"});
+                               para.push_back(InlineText{"\\" + m.macro + "{" + std::move(m.body)});
+                           } else if (m.macro == "cv") {
+                               if (!m.body.empty())
+                                   diags.push_back({Severity::Error, line, "\\cv takes no argument"});
+                               para.push_back(InlinePlaceholder{"cv"});
+                           } else if (m.macro == "ntbs" || m.macro == "ntmbs") {
+                               if (!m.body.empty())
+                                   diags.push_back({Severity::Error, line, "\\" + m.macro + " takes no argument"});
+                               para.push_back(InlinePhrase{m.macro == "ntbs" ? ir::Phrase::Ntbs : ir::Phrase::Ntmbs});
+                           } else if (m.body.empty()) {
+                               diags.push_back({Severity::Error, line, "\\" + m.macro + " requires an argument"});
+                           } else if (m.macro == "placeholder") {
+                               para.push_back(InlinePlaceholder{std::move(m.body)});
+                           } else if (m.macro == "cvqual") {
+                               para.push_back(InlinePlaceholder{std::move(m.body), true});
+                           } else if (m.macro == "oldconcept") {
+                               para.push_back(InlineOldConcept{std::move(m.body)});
+                           } else if (m.macro == "libconcept" || m.macro == "exposconcept") {
+                               para.push_back(InlineConcept{std::move(m.body), m.macro == "exposconcept"});
+                           } else if (m.macro == "ref") {
+                               para.push_back(InlineRef{std::move(m.body), true});
+                           } else if (m.macro == "term" || m.macro == "defn" || m.macro == "Fundescx") {
+                               para.push_back(InlineTerm{std::move(m.body),
+                                                         m.macro == "term"   ? ir::TermRole::Term
+                                                         : m.macro == "defn" ? ir::TermRole::Definition
+                                                                             : ir::TermRole::ElementName});
+                           } else if (m.macro == "impldef") {
+                               para.push_back(InlinePhrase{ir::Phrase::ImplementationDefined, std::move(m.body)});
+                           } else {
+                               para.push_back(InlineTableRef{std::move(m.body)});
+                           }
+                       }},
+            seg);
     }
     return para;
 }
@@ -503,11 +543,15 @@ ParseResult parse_docblock(std::string_view raw) {
     ir::ElementKind last_kind = ir::ElementKind::Effects;
 
     auto current_element = [&]() -> Element* { return block.elements.empty() ? nullptr : &block.elements.back(); };
-    InformativeBody*         informative = nullptr;
-    std::string_view         informative_name;
-    int                      informative_line = 0;
-    bool                     in_code          = false;
-    int                      code_line        = 0;
+    InformativeBody* informative = nullptr;
+    std::string_view informative_name;
+    int              informative_line = 0;
+    bool             in_code          = false;
+    int              code_line        = 0;
+    // Whether the code block or list being read opens a numbered paragraph of
+    // its own (issue #340); read when the block is made.
+    bool                     code_opens = false;
+    bool                     item_opens = false;
     std::vector<std::string> code_lines;
 
     auto current_body = [&]() -> DescriptionBody& {
@@ -536,7 +580,8 @@ ParseResult parse_docblock(std::string_view raw) {
     };
     auto finish_code = [&] {
         append_block(
-            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}}});
+            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}},
+                         std::exchange(code_opens, false)});
         code_lines.clear();
         in_code           = false;
         continuation_next = true;
@@ -571,8 +616,8 @@ ParseResult parse_docblock(std::string_view raw) {
             std::get<Itemize>(informative->back()).items.push_back(std::move(parsed));
         } else {
             auto& body = current_body();
-            if (body.empty() || !std::holds_alternative<Itemize>(body.back()))
-                body.push_back(Itemize{});
+            if (body.empty() || !std::holds_alternative<Itemize>(body.back()) || item_opens)
+                body.push_back(Itemize{.items = {}, .opens_paragraph = std::exchange(item_opens, false)});
             std::get<Itemize>(body.back()).items.push_back(std::move(parsed));
         }
     };
@@ -746,7 +791,13 @@ ParseResult parse_docblock(std::string_view raw) {
             }
             continue;
         }
-        blank_lines = 0;
+        // Two blank decorated lines before a note, an example, a code block, a
+        // list or a table say it opens a numbered paragraph of its own, as
+        // they say it of prose after one (issue #340). Inside a note or an
+        // example nothing is numbered, and the first block of a body opens
+        // its paragraph regardless.
+        const bool opens_here =
+            std::exchange(blank_lines, 0) >= 2 && informative == nullptr && !current_body().empty();
 
         std::string_view stripped = trim(line);
         auto             tag      = parse::opt(tag_head())(parse::cursor{stripped});
@@ -915,10 +966,10 @@ ParseResult parse_docblock(std::string_view raw) {
                     continue;
                 }
                 if (name == "note") {
-                    append_block(Note{});
+                    append_block(Note{.body = {}, .opens_paragraph = opens_here});
                     informative = &std::get<Note>(current_body().back()).body;
                 } else {
-                    append_block(Example{});
+                    append_block(Example{.body = {}, .opens_paragraph = opens_here});
                     informative = &std::get<Example>(current_body().back()).body;
                 }
                 informative_name = name == "note" ? "note" : "example";
@@ -954,6 +1005,7 @@ ParseResult parse_docblock(std::string_view raw) {
                 in_itemize = false;
                 in_code    = true;
                 code_line  = lineno;
+                code_opens = opens_here;
                 if (!trim(after).empty())
                     diags.push_back({Severity::Warning, lineno, "trailing text after \\codeblock ignored"});
                 continue;
@@ -1004,9 +1056,9 @@ ParseResult parse_docblock(std::string_view raw) {
                         {Severity::Error, lineno, std::format("\\{} requires a preceding element tag", open_tag)});
                 else {
                     if (kind == TableKind::TwoD)
-                        append_block(Table2D{.stable_name = head.stable_name});
+                        append_block(Table2D{.stable_name = head.stable_name, .opens_paragraph = opens_here});
                     else
-                        append_block(Table1D{.stable_name = head.stable_name});
+                        append_block(Table1D{.stable_name = head.stable_name, .opens_paragraph = opens_here});
                 }
                 in_table        = true;
                 table_kind      = kind;
@@ -1023,6 +1075,8 @@ ParseResult parse_docblock(std::string_view raw) {
             } else if (name == "item") {
                 flush_paragraph();
                 flush_item();
+                if (!in_itemize)
+                    item_opens = opens_here;
                 in_itemize                  = true;
                 item_open                   = true;
                 item_line                   = lineno;

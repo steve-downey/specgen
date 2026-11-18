@@ -157,9 +157,9 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl) {
     const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
-    const llvm::StringRef buffer = file_buffer(sm, head->getBeginLoc());
+    const llvm::StringRef buffer = file_buffer(sm, sm.getFileLoc(head->getBeginLoc()));
 
-    const unsigned              class_begin = sm.getDecomposedLoc(head->getBeginLoc()).second;
+    const unsigned              class_begin = sm.getDecomposedLoc(sm.getFileLoc(head->getBeginLoc())).second;
     const clang::SourceLocation end_of_brace =
         clang::Lexer::getLocForEndOfToken(record->getEndLoc(), 0, sm, lang_opts);
     const unsigned class_end = sm.getDecomposedLoc(end_of_brace).second;
@@ -268,12 +268,12 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     };
     std::vector<RefGroup>                         ref_groups;
     const std::map<unsigned, clang::RawComment*>* comments =
-        file_comments(record->getASTContext(), sm, record->getBeginLoc());
+        file_comments(record->getASTContext(), sm, sm.getFileLoc(record->getBeginLoc()));
     const auto inside_direct_declaration = [&](unsigned pos) {
         return std::ranges::any_of(record->decls(), [&](const clang::Decl* member) {
             if (member->isImplicit() || member->getBeginLoc().isInvalid() || member->getEndLoc().isInvalid())
                 return false;
-            const unsigned begin = sm.getDecomposedLoc(member->getBeginLoc()).second;
+            const unsigned begin = sm.getDecomposedLoc(sm.getFileLoc(member->getBeginLoc())).second;
             const unsigned end =
                 sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(member->getEndLoc(), 0, sm, lang_opts)).second;
             return begin < pos && pos < end;
@@ -289,7 +289,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                  return entry.first >= class_begin && entry.first < class_end;
              })) {
             const llvm::StringRef raw           = comment->getRawText(sm);
-            const unsigned        comment_begin = sm.getDecomposedLoc(comment->getBeginLoc()).second;
+            const unsigned        comment_begin = sm.getDecomposedLoc(sm.getFileLoc(comment->getBeginLoc())).second;
             // substrate generic algorithm: a stateful physical-line scan over
             // StringRef preserves each line's source offset and handles a final
             // line without a newline, which no available line view provides.
@@ -335,7 +335,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // was spliced to `;` (issue #5).
     std::vector<std::pair<unsigned, unsigned>> removed_ranges;
     const auto                                 omit_line = [&](const clang::Decl* outer) {
-        const unsigned remove_begin = line_start(sm.getDecomposedLoc(outer->getBeginLoc()).second);
+        const unsigned remove_begin = line_start(sm.getDecomposedLoc(sm.getFileLoc(outer->getBeginLoc())).second);
         unsigned       remove_end   = member_declaration_end(outer, sm, lang_opts);
         if (remove_end < class_end && buffer[remove_end] == '\r')
             ++remove_end;
@@ -462,7 +462,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
     // logic wrapped in more machinery.
     for (const clang::Decl* member : record->decls()) {
         if (!member->isImplicit() && member->getBeginLoc().isValid())
-            open_groups_before(sm.getDecomposedLoc(member->getBeginLoc()).second);
+            open_groups_before(sm.getDecomposedLoc(sm.getFileLoc(member->getBeginLoc())).second);
         if (const auto* access = llvm::dyn_cast<clang::AccessSpecDecl>(member)) {
             labels.push_back(AccessLabel{member, access->getAccess(), false, member_shown});
             current_label = static_cast<long>(labels.size()) - 1;
@@ -547,7 +547,8 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             if (const auto it = expos_set.find(expos_key); it != expos_set.end()) {
                 const auto* named = llvm::cast<clang::NamedDecl>(member);
                 if (docblock_directives(member, sm).seebelow) {
-                    const unsigned        record_begin = sm.getDecomposedLoc(nested_record->getBeginLoc()).second;
+                    const unsigned record_begin =
+                        sm.getDecomposedLoc(sm.getFileLoc(nested_record->getBeginLoc())).second;
                     clang::SourceLocation end_loc =
                         clang::Lexer::getLocForEndOfToken(member->getEndLoc(), 0, sm, lang_opts);
                     if (const std::optional<clang::Token> semi =
@@ -1017,7 +1018,7 @@ extract_freestanding_declaration(const clang::NamedDecl*                        
                                  std::string_view                                 declarator_qualifier,
                                  const clang::VarDecl*                            initialized_below,
                                  DraftContext                                     context) {
-    const clang::SourceLocation begin_loc  = named->getBeginLoc();
+    const clang::SourceLocation begin_loc  = sm.getFileLoc(named->getBeginLoc());
     const unsigned              decl_begin = sm.getDecomposedLoc(begin_loc).second;
 
     clang::SourceLocation end_loc = clang::Lexer::getLocForEndOfToken(named->getEndLoc(), 0, sm, lang_opts);
