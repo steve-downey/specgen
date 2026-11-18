@@ -356,6 +356,7 @@ void append_text(TextInline& text, const TextInline& more) {
 }
 
 CodeText without_typesetting(CodeText code) {
+    std::erase_if(code.spans, [](const Span& span) { return !is_wording(span); });
     std::ranges::for_each(code.spans, [](Span& span) { span.no_correction.reset(); });
     code.hints.clear();
     return code;

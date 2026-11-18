@@ -10,6 +10,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <algorithm>
+#include <cstddef>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -82,6 +84,19 @@ TEST_CASE("draft_edit - the draft against itself is no edit and no finding") {
     const draft_edit::Plan plan = draft_edit::plan(imported(), imported());
     CHECK(plan.files.empty());
     CHECK(plan.findings.empty());
+}
+
+TEST_CASE("draft_edit - an index entry the draft does not have is no edit") {
+    // An extracted class head is `\libglobal{wrapper}`; the draft's is plain
+    // (issue #354).
+    ir::Document      paper    = imported();
+    auto&             synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    const std::size_t at       = synopsis.text.find("class wrapper") + 6;
+    synopsis.spans.push_back({at, at + 7, ir::SpanKind::LibraryIndex, ""});
+    std::ranges::sort(synopsis.spans, {}, &ir::Span::begin);
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(plan.files.empty());
 }
 
 TEST_CASE("draft_edit - an added specifier is an edit of that token alone, in the draft's own layout") {

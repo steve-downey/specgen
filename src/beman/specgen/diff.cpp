@@ -333,13 +333,17 @@ bool same_span(const ir::Span& a, const ir::Span& b) {
     return a.begin == b.begin && a.end == b.end && a.kind == b.kind && a.payload == b.payload;
 }
 
+// The spans that are wording, of the ones given: an index entry is not
+// (`ir::is_wording`).
+auto wording_spans(const std::vector<ir::Span>& spans) { return spans | std::views::filter(ir::is_wording); }
+
 // One line of a CodeText, its spans' offsets relative to the line.
 struct Line {
     std::string           text;
     std::vector<ir::Span> spans;
 
     friend bool operator==(const Line& a, const Line& b) {
-        return a.text == b.text && std::ranges::equal(a.spans, b.spans, same_span);
+        return a.text == b.text && std::ranges::equal(wording_spans(a.spans), wording_spans(b.spans), same_span);
     }
 };
 
@@ -381,9 +385,14 @@ struct CodeToken {
 
 // Two tokens are the same token whatever whitespace follows them, as two
 // words are; the kept one takes the current revision's spacing.
+//
+// A name inside an index entry is the same token as the name: the entry's span
+// covers the name and nothing else, so the two tokens have the same text.
 bool same_code_token(const CodeToken& a, const CodeToken& b) {
-    return rstripped(a.text) == rstripped(b.text) && a.span.has_value() == b.span.has_value() &&
-           (!a.span || same_span(*a.span, *b.span));
+    const auto wording = [](const CodeToken& t) { return t.span && ir::is_wording(*t.span) ? t.span : std::nullopt; };
+    const std::optional<ir::Span> sa = wording(a);
+    const std::optional<ir::Span> sb = wording(b);
+    return rstripped(a.text) == rstripped(b.text) && sa.has_value() == sb.has_value() && (!sa || same_span(*sa, *sb));
 }
 
 std::vector<CodeToken> code_tokens(const Line& line) {

@@ -378,6 +378,28 @@ TEST_CASE("diff - the form of a span's macro is not a change, and the current re
     CHECK(code.spans[0] == Span{22, 27, SpanKind::ExposId, "ready", false});
 }
 
+// An index entry around a name is not wording (issue #354): the draft writes a
+// class head plain where an extracted synopsis writes `\libglobal{gadget}`.
+TEST_CASE("diff - an index entry around a name is not a change, and the current revision's is kept") {
+    const Document before = gadget();
+    Document       after  = gadget();
+    // "class gadget {\n  bool ready() const;\n};": `gadget` is bytes [6, 12).
+    std::get<Synopsis>(after.nodes[0]).code.spans = {{6, 12, SpanKind::LibraryIndex, ""}};
+    const Document same                           = diff::compare(before, after, {.context = diff::Context::All});
+    CHECK(!diff::has_marks(same));
+    CHECK(same == after);
+
+    // A real change on the line is found alone, and the entry is kept.
+    std::get<Synopsis>(after.nodes[0]).code.text = "class gadget final {\n  bool ready() const;\n};";
+    const Document out                           = diff::compare(before, after, {.context = diff::Context::All});
+    const auto&    code                          = std::get<Synopsis>(out.nodes[0]).code;
+    REQUIRE(code.changes.size() == 1);
+    CHECK(code.text.substr(code.changes[0].begin, code.changes[0].end - code.changes[0].begin) == "final");
+    REQUIRE(code.spans.size() == 1);
+    CHECK(code.spans[0].kind == SpanKind::LibraryIndex);
+    CHECK(code.text.substr(code.spans[0].begin, code.spans[0].end - code.spans[0].begin) == "gadget");
+}
+
 // The draft's line-break hints are typesetting too. Code that differs only in
 // them is the same wording, and comes out as the current revision has it.
 TEST_CASE("diff - a line-break hint is not a change, and the current revision's hints are kept") {

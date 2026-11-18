@@ -122,6 +122,12 @@ struct Span {
 // this tool has always written there, and the plain form for everything else.
 constexpr bool default_no_correction(SpanKind kind, bool listing) { return listing && kind == SpanKind::ExposId; }
 
+// Whether a span is wording. A library index span is an index entry around a
+// name, `\libglobal{x}` printing `x`: the draft writes it on some heads and not
+// others, and a name is the same name with or without its entry, so the
+// wording diff and `--apply-to-draft` read it as the name alone (issue #354).
+constexpr bool is_wording(const Span& span) { return span.kind != SpanKind::LibraryIndex; }
+
 // A run of changed bytes in a CodeText: a second table beside `spans` rather
 // than two more `SpanKind`s, because a change run *contains* semantic spans
 // whole and spans do not nest. Sorted by begin, non-overlapping, and never
@@ -375,6 +381,8 @@ using Paragraph = std::vector<Inline>;
 // between a macro and its no-italic-correction twin, and the line-break
 // hints. Two pieces that differ only there say the same thing, which is how
 // the wording diff compares them.
+// The code, or the inline, without what only typesets it: line-break hints,
+// which form of its macro a span takes, and the index entries (`is_wording`).
 CodeText    without_typesetting(CodeText code);
 PlainInline without_typesetting(PlainInline piece);
 

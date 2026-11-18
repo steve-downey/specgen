@@ -80,10 +80,14 @@ struct SameToken {
     const ir::CodeText& a;
     const ir::CodeText& b;
 
+    // An index entry around a name is the name (`ir::is_wording`): the draft's
+    // choice of whether a head carries one stands.
     bool operator()(const Token& x, const Token& y) const {
-        if ((x.span == nullptr) != (y.span == nullptr))
+        const ir::Span* xs = x.span != nullptr && ir::is_wording(*x.span) ? x.span : nullptr;
+        const ir::Span* ys = y.span != nullptr && ir::is_wording(*y.span) ? y.span : nullptr;
+        if ((xs == nullptr) != (ys == nullptr))
             return false;
-        if (x.span != nullptr && (x.span->kind != y.span->kind || x.span->payload != y.span->payload))
+        if (xs != nullptr && (xs->kind != ys->kind || xs->payload != ys->payload))
             return false;
         return std::string_view(a.text).substr(x.begin, x.end - x.begin) ==
                std::string_view(b.text).substr(y.begin, y.end - y.begin);
