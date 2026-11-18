@@ -667,6 +667,25 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_func_wrap_move_asdraft/expected.json"
 )
 
+# A member the class has from a base class (issue #329): `operator()` is
+# declared by a detached item and not by the class, so `\asdraft-synopsis` has
+# no declaration of the class's to patch its line from. It takes `constexpr`
+# from the item, and the diff marks the specifier on the synopsis line and on
+# the item alike. Its `.validate` sibling passes: the one finding is the note
+# that the class does not declare it.
+specgen_add_golden(
+    diff_func_wrap_move_base_call
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/diff/func_wrap_move_base_call.hpp"
+    BASELINE_DRAFT_SLICE
+        "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/func.wrap.move.slice"
+    DIFF_CONTEXT items
+)
+specgen_add_golden(
+    diff_func_wrap_move_base_call_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/diff_func_wrap_move_base_call/expected.json"
+)
+
 # `--inherit-draft`: the same header, with the draft only supplying what
 # `\asdraft` inherits and the wording rendered plain, which is the paper's own
 # wording and not its diff. The IR is the unmarked document, and the latex

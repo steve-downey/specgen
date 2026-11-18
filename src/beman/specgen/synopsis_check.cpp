@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace beman::specgen::synopsis_check {
@@ -56,6 +57,10 @@ struct Decl {
     std::size_t noexcept_begin = 0; // `noexcept` and its parenthesised operand, when there is one
     std::size_t noexcept_end   = 0;
     std::size_t tail_insert    = 0; // where a `noexcept` would go
+    // The two specifiers that have operands, as the declaration's own text has
+    // them, which is what a patch writes.
+    std::string explicit_text;
+    std::string noexcept_text;
 };
 
 // The text with comments, access labels and authored `@...@` escapes blanked,
@@ -353,8 +358,15 @@ std::vector<Decl> declarations(const ir::CodeText& code) {
         if (c == ';') {
             const std::size_t first = skip_space(w, begin);
             if (first < i)
-                if (auto d = read_decl(w, first, i, code.spans, blanked.placeholders))
+                if (auto d = read_decl(w, first, i, code.spans, blanked.placeholders)) {
+                    if (const auto word =
+                            std::ranges::find(d->prefix, std::string_view("explicit"), &Decl::Word::word);
+                        word != d->prefix.end())
+                        d->explicit_text = text.substr(word->begin, word->end - word->begin);
+                    if (d->is_noexcept)
+                        d->noexcept_text = text.substr(d->noexcept_begin, d->noexcept_end - d->noexcept_begin);
                     out.push_back(std::move(*d));
+                }
         }
         begin  = i + 1;
         parens = 0;
@@ -427,11 +439,18 @@ constexpr Specifier kSpecifiers[] = {
     {"= delete", &Decl::is_delete, false},
 };
 
-std::vector<Finding> disagreements(const Decl& s, const Decl& d, bool only_unpatchable) {
+// Which specifiers a comparison is about, and what the other side is called.
+enum class Compared {
+    All,         // a class's own declaration, every specifier
+    Unpatchable, // the same, after a patch has written the ones it can
+    Item,        // an item that declares what the class does not: the ones a patch writes
+};
+
+std::vector<Finding> disagreements(const Decl& s, const Decl& d, Compared compared) {
     std::vector<Finding> out;
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const Specifier& spec : kSpecifiers) {
-        if (only_unpatchable && spec.patchable)
+        if ((compared == Compared::Unpatchable && spec.patchable) || (compared == Compared::Item && !spec.patchable))
             continue;
         const bool in_synopsis = s.*spec.flag;
         const bool in_code     = d.*spec.flag;
@@ -439,10 +458,53 @@ std::vector<Finding> disagreements(const Decl& s, const Decl& d, bool only_unpat
             continue;
         if (in_synopsis != in_code)
             out.push_back({s.text,
-                           std::format("the synopsis {} `{}` and the declaration {}",
+                           std::format("the synopsis {} `{}` and the {} {}",
                                        in_synopsis ? "has" : "does not have",
                                        spec.name,
+                                       compared == Compared::Item ? "item that declares this" : "declaration",
                                        in_code ? "does" : "does not")});
+    }
+    return out;
+}
+
+void collect_signatures(const std::vector<ir::Node>& nodes, std::vector<ir::CodeText>& out) {
+    std::ranges::for_each(nodes, [&](const ir::Node& node) {
+        if (const auto* section = std::get_if<ir::Section>(&node))
+            collect_signatures(section->children, out);
+        else if (const auto* item = std::get_if<ir::SpecItem>(&node))
+            out.append_range(item->decl.signatures);
+    });
+}
+
+// A synopsis declaration the class does not make, with the item declaration it
+// pairs with.
+struct ElsewherePair {
+    std::size_t synopsis;
+    Decl        item;
+};
+
+// The nearest level decides: a declaration pairs among the items of the first
+// level that has one of its name, as `pair_up` pairs, and only what is still
+// unpaired looks further out.
+std::vector<ElsewherePair>
+pair_elsewhere(const std::vector<Decl>& synopsis, std::vector<std::size_t> unpaired, const Elsewhere& elsewhere) {
+    std::vector<ElsewherePair> out;
+    // substrate generic algorithm: a fold over the levels, nearest first, whose
+    // state is the declarations still unpaired.
+    for (const std::vector<ir::CodeText>& level : elsewhere) {
+        if (unpaired.empty())
+            break;
+        const std::vector<Decl> items =
+            level | std::views::transform(declarations) | std::views::join | std::ranges::to<std::vector>();
+        const std::vector<Decl> waiting = unpaired |
+                                          std::views::transform([&](std::size_t i) { return synopsis[i]; }) |
+                                          std::ranges::to<std::vector>();
+        const Pairing           pairing = pair_up(waiting, items);
+        out.append_range(pairing.pairs | std::views::transform([&](const auto& pair) {
+                             return ElsewherePair{unpaired[pair.first], items[pair.second]};
+                         }));
+        unpaired = pairing.only_synopsis | std::views::transform([&](std::size_t i) { return unpaired[i]; }) |
+                   std::ranges::to<std::vector>();
     }
     return out;
 }
@@ -457,7 +519,7 @@ std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& d
     std::vector<Finding> out;
     // substrate generic algorithm: collects each pair's findings, in synopsis order.
     for (const auto& [si, di] : pairing.pairs)
-        out.append_range(disagreements(s[si], d[di], false));
+        out.append_range(disagreements(s[si], d[di], Compared::All));
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_synopsis)
         out.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});
@@ -467,7 +529,28 @@ std::vector<Finding> compare(const ir::CodeText& synopsis, const ir::CodeText& d
     return out;
 }
 
-Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
+Elsewhere declared_elsewhere(std::span<const std::vector<ir::Node>* const> enclosing) {
+    const auto signatures = [](const std::vector<ir::Node>* nodes) {
+        std::vector<ir::CodeText> out;
+        collect_signatures(*nodes, out);
+        return out;
+    };
+    // The document's own list is a level only for a synopsis that sits in it:
+    // a synopsis in a section looks no further than its top-level section.
+    const auto levels = enclosing.size() > 1 ? enclosing.subspan(1) : enclosing;
+    return levels | std::views::reverse | std::views::transform(signatures) | std::ranges::to<std::vector>();
+}
+
+std::vector<Finding>
+compare_elsewhere(const ir::CodeText& synopsis, const ir::CodeText& declared, const Elsewhere& elsewhere) {
+    const std::vector<Decl> s = declarations(synopsis);
+    return pair_elsewhere(s, pair_up(s, declarations(declared)).only_synopsis, elsewhere) |
+           std::views::transform(
+               [&](const ElsewherePair& pair) { return disagreements(s[pair.synopsis], pair.item, Compared::Item); }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+
+Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared, const Elsewhere& elsewhere) {
     const std::string       w       = blank_text(synopsis.text).text;
     const std::vector<Decl> s       = declarations(synopsis);
     const std::vector<Decl> d       = declarations(declared);
@@ -497,10 +580,10 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
         edits.push_back({word.begin, end - word.begin, {}});
     };
 
-    // substrate generic algorithm: each paired declaration contributes its edits.
-    for (const auto& [si, di] : pairing.pairs) {
-        const Decl& sd = s[si];
-        const Decl& dd = d[di];
+    // The specifiers a patch writes, as `dd` has them, onto `sd`. One whose
+    // text is an authored `@...@` escape is left: the synopsis may be spans,
+    // where an escape is not markup.
+    const auto write_specifiers = [&](const Decl& sd, const Decl& dd) {
         if (sd.is_constexpr != dd.is_constexpr) {
             if (dd.is_constexpr)
                 edits.push_back({specifier_point(sd, {"friend", "static", "virtual", "inline"}), 0, "constexpr "});
@@ -508,21 +591,18 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
                 remove_word(*named(sd.prefix, "constexpr"));
         }
         if (sd.is_explicit != dd.is_explicit) {
-            if (dd.is_explicit) {
-                const auto word = named(dd.prefix, "explicit");
+            if (!dd.is_explicit)
+                remove_word(*named(sd.prefix, "explicit"));
+            else if (!dd.explicit_text.contains('@'))
                 edits.push_back({specifier_point(sd, {"friend", "static", "virtual", "inline", "constexpr"}),
                                  0,
-                                 declared.text.substr(word->begin, word->end - word->begin) + " "});
-            } else {
-                remove_word(*named(sd.prefix, "explicit"));
-            }
+                                 dd.explicit_text + " "});
         }
         if (sd.is_noexcept != dd.is_noexcept && !sd.noexcept_any && !dd.noexcept_any) {
-            if (dd.is_noexcept)
-                edits.push_back({sd.tail_insert,
-                                 0,
-                                 " " + declared.text.substr(dd.noexcept_begin, dd.noexcept_end - dd.noexcept_begin)});
-            else {
+            if (dd.is_noexcept) {
+                if (!dd.noexcept_text.contains('@'))
+                    edits.push_back({sd.tail_insert, 0, " " + dd.noexcept_text});
+            } else {
                 std::size_t begin = sd.noexcept_begin;
                 // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
                 while (begin > sd.params_end && w[begin - 1] == ' ')
@@ -530,8 +610,17 @@ Patched patch(const ir::CodeText& synopsis, const ir::CodeText& declared) {
                 edits.push_back({begin, sd.noexcept_end - begin, {}});
             }
         }
-        unpatched.append_range(disagreements(sd, dd, true));
+    };
+
+    // substrate generic algorithm: each paired declaration contributes its edits.
+    for (const auto& [si, di] : pairing.pairs) {
+        write_specifiers(s[si], d[di]);
+        unpatched.append_range(disagreements(s[si], d[di], Compared::Unpatchable));
     }
+    // A declaration the class does not make -- a member it has from a base
+    // class -- takes them from the item that declares it (issue #329).
+    std::ranges::for_each(pair_elsewhere(s, pairing.only_synopsis, elsewhere),
+                          [&](const ElsewherePair& pair) { write_specifiers(s[pair.synopsis], pair.item); });
     // substrate generic algorithm: a cursor scan over the text; the position is the loop's state.
     for (const std::size_t i : pairing.only_synopsis)
         unpatched.push_back({s[i].text, "the synopsis declares this, and the code does not", Severity::Note});

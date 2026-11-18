@@ -43,8 +43,10 @@ bool has_unresolved(const ir::Document&);
 // A synopsis marked `\asdraft-synopsis` takes the baseline synopsis of the same
 // class and has the specifiers of its own `declared` text written into it
 // (synopsis_check.hpp), which is what lets a paper that only adds `constexpr`
-// say so without retyping the draft's class. What cannot be written is left for
-// `--validate`, which compares the result with those declarations.
+// say so without retyping the draft's class. A line for a member the class has
+// from a base class takes them from the item that declares it, looked for in
+// the sections around the synopsis, nearest first. What cannot be written is
+// left for `--validate`, which compares the result with those declarations.
 //
 // The resolved description is the baseline's, with each element the item
 // authors replacing the baseline element of its kind. A derived element (from

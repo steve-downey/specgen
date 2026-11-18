@@ -389,6 +389,22 @@ reports a declaration the synopsis has and the class does not as a note, not a w
 to say that a declaration the class does not make is made elsewhere, so the synopsis can still be
 inherited.
 
+Log:
+
+- 2026-11-17: the item says it (issue #329). A member a class has from a base class already has
+  a declaration in the document when it is described at all: its item, typed as a detached
+  `\verbatim-itemdecl`. A synopsis line the class's declarations have no pair for now pairs with
+  the item of the same name and takes `constexpr`, `explicit` and `noexcept` from it, so no new
+  marker is needed. The item is looked for nearest first: the section the synopsis is in, then
+  each enclosing section, as far as the top-level one. The first section with an item of that name
+  decides, so two classes in one clause that both have an `operator()` each read their own.
+  `static`, `friend`, `= default` and `= delete` are not compared with an item, since an itemdecl
+  does not have to repeat them. `--validate` makes the same pairing for a synopsis that is text
+  and warns where the line and the item disagree, which is what a `\verbatim-synopsis` gets in
+  place of the patch. The note that the class does not declare the member stays. With this,
+  constexpr_callables' two owning wrappers generate the same bytes from `\asdraft-synopsis` as
+  from their 37-line typed synopses.
+
 ### importer-vocabulary-gaps
 
 `\ref`, `\cvqual`, `\exposconcept`, `\newline` and `\opt` have no IR kind. The importer keeps

@@ -1900,6 +1900,42 @@ Diagnostics validate_with(const ir::Node& node, const std::set<std::string>& sec
     return beman::tree_algorithms::fold_with<Diagnostics>(validation_layer, ir::node_fmap, ir::node_project, node);
 }
 
+// A synopsis that is text, against the items that declare what its class does
+// not (synopsis_check.hpp, issue #329). A member a class has from a base class
+// is a line of its synopsis and has an item of its own: two declarations of it
+// in one document, which nothing else compares, so a paper that makes the item
+// `constexpr` could leave the synopsis saying otherwise with only a note that
+// the class does not declare it. Outside the fold: which items are near a
+// synopsis is a fact about where it sits in the document, and the fold's
+// algebra sees one node.
+void check_synopsis_items(const std::vector<ir::Node>&               nodes,
+                          const std::string&                         path,
+                          std::vector<const std::vector<ir::Node>*>& enclosing,
+                          Diagnostics&                               out) {
+    enclosing.push_back(&nodes);
+    std::ranges::for_each(nodes, [&](const ir::Node& node) {
+        if (const auto* section = std::get_if<ir::Section>(&node)) {
+            check_synopsis_items(section->children,
+                                 section->stable_name.empty() ? path : path + section->stable_name + "/",
+                                 enclosing,
+                                 out);
+            return;
+        }
+        const auto* synopsis = std::get_if<ir::Synopsis>(&node);
+        if (synopsis == nullptr || !synopsis->declared || synopsis->as_draft)
+            return;
+        const std::string context = path + (synopsis->name.empty() ? "synopsis" : synopsis->name + "/synopsis");
+        out.append_range(synopsis_check::compare_elsewhere(
+                             synopsis->code, *synopsis->declared, synopsis_check::declared_elsewhere(enclosing)) |
+                         std::views::transform([&](const synopsis_check::Finding& finding) {
+                             return Diagnostic{finding.severity,
+                                               context,
+                                               std::format("`{}`: {}", finding.declaration, finding.message)};
+                         }));
+    });
+    enclosing.pop_back();
+}
+
 } // namespace
 
 Diagnostics validate(const ir::Node& node) {
@@ -1967,6 +2003,8 @@ Diagnostics validate(const ir::Document& document, const std::set<std::string>& 
         document.nodes,
         [&](const ir::Node& node) { return validate_with(node, sections, visible); },
         diagnostics_monoid);
+    std::vector<const std::vector<ir::Node>*> enclosing;
+    check_synopsis_items(document.nodes, {}, enclosing, findings);
 
     // The one rule that runs *outside* the fold: what it reports
     // is a name in a body no node holds, so there is no node to report it

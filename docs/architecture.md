@@ -766,7 +766,10 @@ The markers are enumerated in a single registry shared by the grammar and the fr
   for `\verbatim-synopsis`; `synopsis_check` (Clang-free) pairs the two texts' member declarations
   by name and signature likeness, and `inherit::resolve` writes `constexpr`, `explicit` and
   `noexcept` into the inherited text, moving the spans with it, while `--validate` warns on any
-  remaining disagreement. A placeholder in a `noexcept` operand agrees with either.
+  remaining disagreement. A placeholder in a `noexcept` operand agrees with either. A line the
+  class's declarations have no pair for, which is a member it has from a base class, pairs with
+  the item of the same name in the sections around the synopsis, nearest first, and takes those
+  three specifiers from it; the validator makes the same pairing for a synopsis that is text.
 - `\at <anchor>` — explicit itemdescr placement for in-class-defined members, for a folded-in
   namespace entity, and — on a class *definition*'s own docblock — for that class's own
   wording, both nodes of it (§6, decision routed-wording-payload).

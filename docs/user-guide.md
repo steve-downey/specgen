@@ -1187,11 +1187,39 @@ the declaration, as is a class member the synopsis leaves out. A declaration the
 synopsis has and the class does not is a note: it is how a member inherited from
 a base class reads.
 
+Such a member has no declaration in the class to take specifiers from, and it
+may have an item of its own, typed as a detached `\verbatim-itemdecl`:
+
+```cpp
+//! \asdraft
+//! \asdraft-synopsis
+template <class Sig>
+class move_only_function<Sig> : public detail::call_base<move_only_function<Sig>, Sig> { /* ... */ };
+
+// \rSec4[func.wrap.move.inv]{Invocation}
+
+//! \asdraft
+//! \verbatim-itemdecl
+//! constexpr R operator()(ArgTypes... args) @\cv{}@ @\placeholder{ref}@ noexcept(@\placeholder{noex}@);
+```
+
+The synopsis line for `operator()` then takes `constexpr`, `explicit` and
+`noexcept` from that item, so the two declarations of the member agree. The item
+is looked for by name among the items of the section the synopsis is in, then of
+each enclosing section in turn, as far as the top-level one; a synopsis outside
+every section looks through the whole document. The nearest section with an item
+of that name decides, and overloads pair by how alike they read. A declaration
+the class makes is never taken from an item.
+
 Any synopsis that is text rather than extraction is checked the same way, under
 `--validate`: a `\verbatim-synopsis` is compared with the declarations of its
 class, and each disagreement on those specifiers is a warning, and a declaration
-only one side has is a warning or, for the synopsis's own, a note. `\asdraft-synopsis` and `\verbatim-synopsis` are exclusive,
-and `\asdraft-synopsis` applies only to a class definition.
+only one side has is a warning or, for the synopsis's own, a note. A declaration
+the synopsis has and the class does not is also compared with the item that
+declares it, found as above, and a disagreement on `constexpr`, `explicit` or
+`noexcept` is a warning: a typed synopsis is not patched, so this is what says
+its line and the item differ. `\asdraft-synopsis` and `\verbatim-synopsis` are
+exclusive, and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers
 

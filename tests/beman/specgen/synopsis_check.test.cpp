@@ -11,6 +11,7 @@
 
 #include <string>
 #include <utility>
+#include <vector>
 
 using namespace beman::specgen::ir;
 namespace check = beman::specgen::synopsis_check;
@@ -148,4 +149,89 @@ TEST_CASE("synopsis_check - a placeholder in the noexcept operand agrees with ei
 
     CHECK(check::compare(draft, plain).empty());
     CHECK(check::patch(draft, plain).code.text == draft.text);
+}
+
+TEST_CASE("synopsis_check - a declaration the class does not make takes its specifiers from its item") {
+    // `call` comes from a base class: the class's own declarations lack it,
+    // and the item that declares it is where the paper made it constexpr.
+    const auto draft    = code("class f {\n  void g();\n  R call(Args...) const;\n  explicit operator bool();\n};");
+    const auto declared = code("class f {\n  constexpr void g();\n};");
+    const check::Elsewhere items = {
+        {code("constexpr R call(Args... args) const noexcept;"), code("operator bool() const;")}};
+
+    const auto patched = check::patch(draft, declared, items);
+    CHECK(patched.code.text ==
+          "class f {\n  constexpr void g();\n  constexpr R call(Args...) const noexcept;\n  operator bool();\n};");
+    CHECK(check::compare_elsewhere(patched.code, declared, items).empty());
+
+    SECTION("with no item, the line stays as the draft has it") {
+        CHECK(check::patch(draft, declared).code.text ==
+              "class f {\n  constexpr void g();\n  R call(Args...) const;\n  explicit operator bool();\n};");
+    }
+    SECTION("a declaration the class makes is the class's to say, whatever an item has") {
+        const check::Elsewhere other = {{code("void g() noexcept;")}};
+        CHECK(check::patch(draft, declared, other).code.text.contains("  constexpr void g();\n"));
+        CHECK(check::compare_elsewhere(draft, declared, other).empty());
+    }
+}
+
+TEST_CASE("synopsis_check - a synopsis line that disagrees with its item is a finding") {
+    const auto             synopsis = code("class f {\n  R call(Args...) const;\n  static void make();\n};");
+    const auto             declared = code("class f {\n};");
+    const check::Elsewhere items    = {{code("constexpr R call(Args... args) const;"), code("void make();")}};
+
+    const auto findings = check::compare_elsewhere(synopsis, declared, items);
+    // `static` is not something an itemdecl has to repeat, so only the
+    // specifiers a patch writes are compared.
+    REQUIRE(findings.size() == 1);
+    CHECK(findings.front().declaration == "R call(Args...) const");
+    CHECK(findings.front().message == "the synopsis does not have `constexpr` and the item that declares this does");
+    CHECK(findings.front().severity == beman::specgen::Severity::Warning);
+}
+
+TEST_CASE("synopsis_check - the nearest level that declares a name is the one that speaks for it") {
+    const auto draft    = code("class f {\n  R call(Args...) const;\n  void other();\n};");
+    const auto declared = code("class f {\n};");
+    // Nearest first: the class's own subclauses say `call` is constexpr; a
+    // sibling class further out has a `call` that is not, and an `other`.
+    const check::Elsewhere levels = {{code("constexpr R call(Args... args) const;")},
+                                     {code("R call(Args... args) const;"), code("void other() noexcept;")}};
+
+    CHECK(check::patch(draft, declared, levels).code.text ==
+          "class f {\n  constexpr R call(Args...) const;\n  void other() noexcept;\n};");
+}
+
+TEST_CASE("synopsis_check - an item's specifier typed as an escape is not written into the synopsis") {
+    const auto             draft    = code("class f {\n  R call(Args...);\n};");
+    const auto             declared = code("class f {\n};");
+    const check::Elsewhere items    = {{code("constexpr R call(Args... args) noexcept(@\\exposid{nothrow}@<R>);")}};
+
+    CHECK(check::patch(draft, declared, items).code.text == "class f {\n  constexpr R call(Args...);\n};");
+}
+
+TEST_CASE("synopsis_check - a synopsis looks for items as far as its top-level section") {
+    const auto item = [](std::string signature) {
+        SpecItem it;
+        it.decl.signatures.push_back(code(std::move(signature)));
+        return Node{std::move(it)};
+    };
+    const std::vector<Node> inner    = {Node{Synopsis{}}};
+    const std::vector<Node> section  = {Node{Section{"s.class", "Class", inner}},
+                                        Node{Section{"s.inv", "Invocation", {item("void call();")}}}};
+    const std::vector<Node> document = {Node{Section{"s", "S", section}}, item("void elsewhere();")};
+
+    SECTION("in a section: its own list, then each enclosing one, and not the document's") {
+        const std::vector<const std::vector<Node>*> enclosing = {&document, &section, &inner};
+        const check::Elsewhere                      levels    = check::declared_elsewhere(enclosing);
+        REQUIRE(levels.size() == 2);
+        CHECK(levels[0].empty());
+        REQUIRE(levels[1].size() == 1);
+        CHECK(levels[1].front().text == "void call();");
+    }
+    SECTION("outside every section: the whole document") {
+        const std::vector<const std::vector<Node>*> enclosing = {&document};
+        const check::Elsewhere                      levels    = check::declared_elsewhere(enclosing);
+        REQUIRE(levels.size() == 1);
+        CHECK(levels[0].size() == 2);
+    }
 }

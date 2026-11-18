@@ -227,15 +227,25 @@ pair_synopsis(const ir::Synopsis& synopsis, const std::vector<ir::Node>& baselin
 // What cannot be patched is not reported here: `--validate` compares the
 // result with the class's own declarations and says so once, with the same
 // words it uses for an authored synopsis.
-void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from) {
-    synopsis.code     = synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared).code : from.code;
+//
+// A member the class has from a base class is not among its declarations. Its
+// line takes its specifiers from the item that declares it, so the synopsis
+// and that item, two declarations of one member, agree (issue #329).
+void resolve_synopsis(ir::Synopsis& synopsis, const ir::Synopsis& from, const synopsis_check::Elsewhere& elsewhere) {
+    synopsis.code =
+        synopsis.declared ? synopsis_check::patch(from.code, *synopsis.declared, elsewhere).code : from.code;
     synopsis.as_draft = false;
 }
 
-void resolve_nodes(std::vector<ir::Node>&       current,
-                   const std::vector<ir::Node>& baseline,
-                   const std::string&           where,
-                   std::vector<Diagnostic>&     out) {
+// `enclosing` is the node lists from the document's own down to `current`,
+// which is where a synopsis looks for the items that declare what its class
+// does not.
+void resolve_nodes(std::vector<ir::Node>&                     current,
+                   const std::vector<ir::Node>&               baseline,
+                   const std::string&                         where,
+                   std::vector<const std::vector<ir::Node>*>& enclosing,
+                   std::vector<Diagnostic>&                   out) {
+    enclosing.push_back(&current);
     std::vector<bool> claimed(baseline.size(), false);
     // The items that ask to inherit, noted before the walk clears the request.
     const std::vector<bool> asked = current | std::views::transform([](const ir::Node& node) {
@@ -250,12 +260,12 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                        [&](ir::Section& section) {
                            const ir::Section* paired = find_section(baseline, section.stable_name);
                            if (paired != nullptr) {
-                               resolve_nodes(section.children, paired->children, section.stable_name, out);
+                               resolve_nodes(section.children, paired->children, section.stable_name, enclosing, out);
                                return;
                            }
                            // A section the baseline lacks has nothing to inherit; an item in
                            // it that asks to is reported by the walk with an empty baseline.
-                           resolve_nodes(section.children, {}, section.stable_name, out);
+                           resolve_nodes(section.children, {}, section.stable_name, enclosing, out);
                        },
                        [&](ir::SpecItem& item) {
                            if (!item.as_draft)
@@ -286,7 +296,7 @@ void resolve_nodes(std::vector<ir::Node>&       current,
                                                 where)});
                                return;
                            }
-                           resolve_synopsis(synopsis, *from);
+                           resolve_synopsis(synopsis, *from, synopsis_check::declared_elsewhere(enclosing));
                        },
                        [](ir::FreeParagraph&) {},
                    },
@@ -302,6 +312,7 @@ void resolve_nodes(std::vector<ir::Node>&       current,
         if (const ir::SpecItem* from = pair_item(*item, baseline, claimed))
             take_declaration_form(*item, *from);
     });
+    enclosing.pop_back();
 }
 
 bool any_unresolved(const std::vector<ir::Node>& nodes) {
@@ -321,8 +332,9 @@ bool any_unresolved(const std::vector<ir::Node>& nodes) {
 bool has_unresolved(const ir::Document& document) { return any_unresolved(document.nodes); }
 
 std::vector<Diagnostic> resolve(ir::Document& current, const ir::Document& baseline) {
-    std::vector<Diagnostic> out;
-    resolve_nodes(current.nodes, baseline.nodes, {}, out);
+    std::vector<Diagnostic>                   out;
+    std::vector<const std::vector<ir::Node>*> enclosing;
+    resolve_nodes(current.nodes, baseline.nodes, {}, enclosing, out);
     return out;
 }
 
