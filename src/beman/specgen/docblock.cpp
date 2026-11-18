@@ -503,11 +503,15 @@ ParseResult parse_docblock(std::string_view raw) {
     ir::ElementKind last_kind = ir::ElementKind::Effects;
 
     auto current_element = [&]() -> Element* { return block.elements.empty() ? nullptr : &block.elements.back(); };
-    InformativeBody*         informative = nullptr;
-    std::string_view         informative_name;
-    int                      informative_line = 0;
-    bool                     in_code          = false;
-    int                      code_line        = 0;
+    InformativeBody* informative = nullptr;
+    std::string_view informative_name;
+    int              informative_line = 0;
+    bool             in_code          = false;
+    int              code_line        = 0;
+    // Whether the code block or list being read opens a numbered paragraph of
+    // its own (issue #340); read when the block is made.
+    bool                     code_opens = false;
+    bool                     item_opens = false;
     std::vector<std::string> code_lines;
 
     auto current_body = [&]() -> DescriptionBody& {
@@ -536,7 +540,8 @@ ParseResult parse_docblock(std::string_view raw) {
     };
     auto finish_code = [&] {
         append_block(
-            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}}});
+            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}},
+                         std::exchange(code_opens, false)});
         code_lines.clear();
         in_code           = false;
         continuation_next = true;
@@ -571,8 +576,8 @@ ParseResult parse_docblock(std::string_view raw) {
             std::get<Itemize>(informative->back()).items.push_back(std::move(parsed));
         } else {
             auto& body = current_body();
-            if (body.empty() || !std::holds_alternative<Itemize>(body.back()))
-                body.push_back(Itemize{});
+            if (body.empty() || !std::holds_alternative<Itemize>(body.back()) || item_opens)
+                body.push_back(Itemize{.items = {}, .opens_paragraph = std::exchange(item_opens, false)});
             std::get<Itemize>(body.back()).items.push_back(std::move(parsed));
         }
     };
@@ -746,7 +751,13 @@ ParseResult parse_docblock(std::string_view raw) {
             }
             continue;
         }
-        blank_lines = 0;
+        // Two blank decorated lines before a note, an example, a code block, a
+        // list or a table say it opens a numbered paragraph of its own, as
+        // they say it of prose after one (issue #340). Inside a note or an
+        // example nothing is numbered, and the first block of a body opens
+        // its paragraph regardless.
+        const bool opens_here =
+            std::exchange(blank_lines, 0) >= 2 && informative == nullptr && !current_body().empty();
 
         std::string_view stripped = trim(line);
         auto             tag      = parse::opt(tag_head())(parse::cursor{stripped});
@@ -915,10 +926,10 @@ ParseResult parse_docblock(std::string_view raw) {
                     continue;
                 }
                 if (name == "note") {
-                    append_block(Note{});
+                    append_block(Note{.body = {}, .opens_paragraph = opens_here});
                     informative = &std::get<Note>(current_body().back()).body;
                 } else {
-                    append_block(Example{});
+                    append_block(Example{.body = {}, .opens_paragraph = opens_here});
                     informative = &std::get<Example>(current_body().back()).body;
                 }
                 informative_name = name == "note" ? "note" : "example";
@@ -954,6 +965,7 @@ ParseResult parse_docblock(std::string_view raw) {
                 in_itemize = false;
                 in_code    = true;
                 code_line  = lineno;
+                code_opens = opens_here;
                 if (!trim(after).empty())
                     diags.push_back({Severity::Warning, lineno, "trailing text after \\codeblock ignored"});
                 continue;
@@ -1004,9 +1016,9 @@ ParseResult parse_docblock(std::string_view raw) {
                         {Severity::Error, lineno, std::format("\\{} requires a preceding element tag", open_tag)});
                 else {
                     if (kind == TableKind::TwoD)
-                        append_block(Table2D{.stable_name = head.stable_name});
+                        append_block(Table2D{.stable_name = head.stable_name, .opens_paragraph = opens_here});
                     else
-                        append_block(Table1D{.stable_name = head.stable_name});
+                        append_block(Table1D{.stable_name = head.stable_name, .opens_paragraph = opens_here});
                 }
                 in_table        = true;
                 table_kind      = kind;
@@ -1023,6 +1035,8 @@ ParseResult parse_docblock(std::string_view raw) {
             } else if (name == "item") {
                 flush_paragraph();
                 flush_item();
+                if (!in_itemize)
+                    item_opens = opens_here;
                 in_itemize                  = true;
                 item_open                   = true;
                 item_line                   = lineno;

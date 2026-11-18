@@ -918,6 +918,68 @@ TEST_CASE("docblock - doubled blanks within table cells and code stay literal") 
     CHECK(std::get<AuthoredCode>(body[3]).code.text == "first\n\n\nlast");
 }
 
+TEST_CASE("docblock - two blank lines before a block open a numbered paragraph with it") {
+    const auto opens = [](const BodyBlock& block) {
+        return std::visit(
+            [](const auto& b) {
+                if constexpr (requires { b.opens_paragraph; })
+                    return b.opens_paragraph;
+                else
+                    return false;
+            },
+            block);
+    };
+    const std::string_view blocks[] = {
+        "//! \\note A note.\n//! \\endnote\n",
+        "//! \\example An example.\n//! \\endexample\n",
+        "//! \\codeblock\n//! f();\n//! \\endcodeblock\n",
+        "//! \\item An entry.\n",
+        "//! \\libtab2[demo.table]{Caption}\n//! \\column First\n//! \\column Second\n//! \\row Row\n"
+        "//! \\cell Value\n//! \\endlibtab2\n",
+    };
+    for (const std::string_view prefix : {"", "\\returns "}) {
+        for (const auto block : blocks) {
+            // A table needs an element tag before it.
+            if (prefix.empty() && block.contains("libtab2"))
+                continue;
+            for (const int count : {0, 1, 2, 3}) {
+                CAPTURE(prefix, block, count);
+                std::string blanks;
+                for (int i = 0; i < count; ++i)
+                    blanks += "//!\n";
+                const auto parsed = parse_docblock(std::format("//! {}A sentence.\n{}{}", prefix, blanks, block));
+                REQUIRE(parsed.diags.empty());
+                const auto& body =
+                    parsed.block.elements.empty() ? parsed.block.leading : parsed.block.elements.front().body;
+                REQUIRE(body.size() == 2);
+                CHECK(opens(body[1]) == (count >= 2));
+            }
+        }
+    }
+}
+
+TEST_CASE("docblock - a block that cannot open a paragraph of its own is not marked") {
+    // The first block of a body opens its paragraph already, and nothing
+    // inside a note is numbered.
+    const auto parsed = parse_docblock("//! \\returns\n//!\n//!\n//! \\note First.\n//!\n//!\n//! \\codeblock\n"
+                                       "//! f();\n//! \\endcodeblock\n//! \\endnote\n");
+    REQUIRE(parsed.diags.empty());
+    const auto& body = parsed.block.elements.front().body;
+    REQUIRE(body.size() == 1);
+    const auto& note = std::get<Note>(body.front());
+    CHECK_FALSE(note.opens_paragraph);
+    REQUIRE(note.body.size() == 2);
+    CHECK_FALSE(std::get<AuthoredCode>(note.body[1]).opens_paragraph);
+}
+
+TEST_CASE("docblock - a list after two blank lines does not join the list before it") {
+    const auto parsed = parse_docblock("//! Choose:\n//! \\item One.\n//!\n//!\n//! \\item Two.\n");
+    REQUIRE(parsed.diags.empty());
+    REQUIRE(parsed.block.leading.size() == 3);
+    CHECK_FALSE(std::get<Itemize>(parsed.block.leading[1]).opens_paragraph);
+    CHECK(std::get<Itemize>(parsed.block.leading[2]).opens_paragraph);
+}
+
 TEST_CASE("docblock - coverage claims belong to normative constraint elements") {
     const auto valid = parse_docblock("\\constraints\n\\covers !detail::trait<T>\nThe specified condition holds.");
     CHECK(valid.ok());

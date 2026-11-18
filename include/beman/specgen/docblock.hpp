@@ -74,6 +74,9 @@ struct Table2D {
     ProseParagraph          column1 = {};
     ProseParagraph          column2 = {};
     std::vector<Table2DRow> rows    = {};
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 
 // A draft flat two-column table (\libtab2): one row per entry, no row-heading
@@ -91,6 +94,9 @@ struct Table1D {
     ProseParagraph          column1 = {};
     ProseParagraph          column2 = {};
     std::vector<Table1DRow> rows    = {};
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 
 struct BodyParagraph {
@@ -100,18 +106,30 @@ struct BodyParagraph {
 
 struct Itemize {
     std::vector<ProseParagraph> items;
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 
 struct AuthoredCode {
     ir::CodeText code;
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
 using InformativeBody  = std::vector<InformativeBlock>;
 struct Note {
     InformativeBody body;
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 struct Example {
     InformativeBody body;
+    // Set where the block opens a numbered paragraph of its own: two blank
+    // decorated lines before it (ir::opens_paragraph).
+    bool opens_paragraph = false;
 };
 using BodyBlock       = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode, Note, Example>;
 using DescriptionBody = std::vector<BodyBlock>;

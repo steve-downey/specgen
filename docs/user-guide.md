@@ -1031,6 +1031,26 @@ examples cannot nest. Their paragraphs do not advance the surrounding wording's
 paragraph counter. Prose after a closed block continues the enclosing paragraph;
 a subsequent blank decorated line starts a new paragraph.
 
+A note or an example is part of the paragraph before it, as the draft's
+`\begin{note}` is when no `\pnum` precedes it. Two consecutive blank decorated
+lines before it make it a numbered paragraph of its own, the rule that already
+starts a new paragraph after a list or a table:
+
+```cpp
+//! \returns A reference to the element.
+//!
+//!
+//! \note For the overload marked #1, ...
+//! \endnote
+```
+
+is the draft's `\pnum` `\returns` paragraph followed by a second `\pnum` and the
+note. The same two lines before a code block, a list, or a table do the same
+for it. A single blank line before a note keeps it in the paragraph before, so
+existing docblocks keep their meaning. The first block of a description or an
+element opens its paragraph anyway, and nothing inside a note or an example is
+numbered.
+
 `\codeblock` / `\endcodeblock` preserves the decorated payload lines,
 including indentation and blank lines. Tags inside the payload are literal;
 only a line containing `\endcodeblock` closes it. Authored code has no

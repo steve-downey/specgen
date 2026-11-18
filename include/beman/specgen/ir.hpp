@@ -559,9 +559,9 @@ Change block_change(const InformativeBlock&);
 //     \pnum
 //     \begin{note}
 //
-// Nothing generated sets it; the draft importer does, where the draft numbered
-// the block itself, so inherited wording keeps the draft's paragraph numbers
-// (issue #321).
+// The draft importer sets it where the draft numbered the block itself, so
+// inherited wording keeps the draft's paragraph numbers (issue #321), and a
+// docblock sets it with two blank lines before the block (issue #340).
 bool opens_paragraph(const BodyBlock&);
 
 struct DescriptionElement {
