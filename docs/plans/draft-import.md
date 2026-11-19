@@ -299,6 +299,13 @@ Which kinds land first and which wait for a paper that needs them. `PlaceholderI
   is `\impdef`, set in italic with no index, where `\impldef` is roman and indexes its argument,
   so the round trip needs the argument kept. `floattable` and a list item holding a code block
   are still raw.
+- 2026-11-19: both are read (issue #367). A list item is an `ir::ListItem`, its paragraph and an
+  informative body after it, which holds a code block and the prose after it; the item stays
+  the array of inlines it was in the IR unless it has blocks, and is an object then, which an
+  older renderer rejects. A docblock nests a `\codeblock` under an `\item` by indenting it. A
+  `floattable` in the cross-product shape is a `Table2D` with `floattable_columns` set, so the
+  LaTeX backend writes the `floattable` back; any other shape stays raw. A list nested in an
+  item is still raw.
 
 ### asdraft-default
 

@@ -550,8 +550,12 @@ ParseResult parse_docblock(std::string_view raw) {
     int              code_line        = 0;
     // Whether the code block or list being read opens a numbered paragraph of
     // its own (issue #340); read when the block is made.
-    bool                     code_opens = false;
-    bool                     item_opens = false;
+    bool code_opens = false;
+    bool item_opens = false;
+    // The indentation of the `\item` line being read, and whether the code
+    // block being read is under it (issue #367).
+    std::size_t              item_indent  = 0;
+    bool                     code_in_item = false;
     std::vector<std::string> code_lines;
 
     auto current_body = [&]() -> DescriptionBody& {
@@ -578,12 +582,24 @@ ParseResult parse_docblock(std::string_view raw) {
         auto& body = current_body();
         return body.empty() ? nullptr : std::get_if<Table1D>(&body.back());
     };
+    // The list the items being read go into, if there is one.
+    auto current_list = [&]() -> Itemize* {
+        if (informative != nullptr)
+            return informative->empty() ? nullptr : std::get_if<Itemize>(&informative->back());
+        auto& body = current_body();
+        return body.empty() ? nullptr : std::get_if<Itemize>(&body.back());
+    };
     auto finish_code = [&] {
-        append_block(
-            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}},
-                         std::exchange(code_opens, false)});
+        ir::CodeText code{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}};
         code_lines.clear();
-        in_code           = false;
+        in_code = false;
+        if (std::exchange(code_in_item, false)) {
+            // The list goes on: a following `\item` is the next of its items.
+            current_list()->items.back().code_blocks.push_back(std::move(code));
+            code_opens = false;
+            return;
+        }
+        append_block(AuthoredCode{std::move(code), std::exchange(code_opens, false)});
         continuation_next = true;
     };
 
@@ -609,7 +625,7 @@ ParseResult parse_docblock(std::string_view raw) {
             diags.push_back({Severity::Error, item_line, "\\item requires content"});
             return;
         }
-        ProseParagraph parsed = parse_inlines(content, item_line, diags);
+        ListItem parsed{parse_inlines(content, item_line, diags)};
         if (informative != nullptr) {
             if (informative->empty() || !std::holds_alternative<Itemize>(informative->back()))
                 informative->push_back(Itemize{});
@@ -1002,7 +1018,14 @@ ParseResult parse_docblock(std::string_view raw) {
             if (name == "codeblock") {
                 flush_item();
                 flush_paragraph();
-                in_itemize = false;
+                // Indented past the `\item` before it, the code block is that
+                // item's (issue #367), and the list is still open.
+                const auto indent = static_cast<std::size_t>(
+                    std::ranges::find_if_not(line, [](char c) { return c == ' '; }) - line.begin());
+                code_in_item =
+                    in_itemize && indent > item_indent && current_list() != nullptr && !current_list()->items.empty();
+                if (!code_in_item)
+                    in_itemize = false;
                 in_code    = true;
                 code_line  = lineno;
                 code_opens = opens_here;
@@ -1077,9 +1100,11 @@ ParseResult parse_docblock(std::string_view raw) {
                 flush_item();
                 if (!in_itemize)
                     item_opens = opens_here;
-                in_itemize                  = true;
-                item_open                   = true;
-                item_line                   = lineno;
+                in_itemize  = true;
+                item_open   = true;
+                item_line   = lineno;
+                item_indent = static_cast<std::size_t>(
+                    std::ranges::find_if_not(line, [](char c) { return c == ' '; }) - line.begin());
                 const std::string_view lead = trim(after);
                 if (!lead.empty())
                     item_lines.emplace_back(lead);

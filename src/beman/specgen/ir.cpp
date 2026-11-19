@@ -251,8 +251,17 @@ struct LeafParagraphs {
 
 std::vector<const Paragraph*> LeafParagraphs::operator()(const BodyParagraph& p) const { return {&p.text}; }
 
+// An item's own paragraph, then the leaves of the blocks after it.
 std::vector<const Paragraph*> LeafParagraphs::operator()(const Itemize& list) const {
-    return list.items | std::views::transform([](const Paragraph& p) { return &p; }) | std::ranges::to<std::vector>();
+    return list.items | std::views::transform([this](const ListItem& item) {
+               std::vector<const Paragraph*> leaves{&item.text};
+               leaves.append_range(item.blocks | std::views::transform([this](const InformativeBlock& block) {
+                                       return std::visit(*this, block);
+                                   }) |
+                                   std::views::join);
+               return leaves;
+           }) |
+           std::views::join | std::ranges::to<std::vector>();
 }
 
 std::vector<const Paragraph*> LeafParagraphs::operator()(const Table2D& t) const {

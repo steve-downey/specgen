@@ -289,8 +289,17 @@ Block ProseLeafRewriter<Block>::operator()(ir::BodyParagraph p) const {
 
 template <class Block>
 Block ProseLeafRewriter<Block>::operator()(ir::Itemize list) const {
-    list.items = std::move(list.items) | std::views::as_rvalue |
-                 std::views::transform([this](ir::Paragraph p) { return paragraph(std::move(p)); }) |
+    // An item's own paragraph, and the blocks after it (issue #367).
+    list.items = std::move(list.items) | std::views::as_rvalue | std::views::transform([this](ir::ListItem item) {
+                     item.text   = paragraph(std::move(item.text));
+                     item.blocks = std::move(item.blocks) | std::views::as_rvalue |
+                                   std::views::transform([this](ir::InformativeBlock block) {
+                                       return std::visit(ProseLeafRewriter<ir::InformativeBlock>{spellings, taken},
+                                                         std::move(block));
+                                   }) |
+                                   std::ranges::to<std::vector>();
+                     return item;
+                 }) |
                  std::ranges::to<std::vector>();
     return list;
 }

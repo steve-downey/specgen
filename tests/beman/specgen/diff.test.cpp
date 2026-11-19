@@ -830,3 +830,34 @@ TEST_CASE("diff - a block that opens a numbered paragraph in one revision and no
     CHECK(block_change(prose[2]) == Change::Removed);
     CHECK(block_change(prose[3]) == Change::Added);
 }
+
+TEST_CASE("diff - a list item's blocks diff as a body does, and an unpaired item takes its blocks with it") {
+    // Issue #367.
+    const auto with_items = [](std::vector<ListItem> items) {
+        Document doc;
+        doc.nodes.push_back(Section{
+            "s", "S", {item("void f();", {"f"}, {element(ElementKind::Effects, {Itemize{std::move(items)}})})}});
+        return doc;
+    };
+    const auto code_item = [](std::string lead, std::string code) {
+        return ListItem{text(std::move(lead)), InformativeBody{AuthoredCode{CodeText{std::move(code), {}}}}};
+    };
+    const auto list_of = [](const Document& doc) {
+        return std::get<Itemize>(std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front())
+                                     .descr.elements.front()
+                                     .body.front());
+    };
+
+    const Document before = with_items({code_item("If a, equivalent to:", "f(x);"), text("Otherwise, no effect.")});
+    const Document after  = with_items({code_item("If a, equivalent to:", "f(y);"), text("Otherwise, no effect.")});
+    const Itemize  edited = list_of(diff::compare(before, after, {.context = diff::Context::All}));
+    REQUIRE(edited.items.size() == 2);
+    const auto& code = std::get<AuthoredCode>(edited.items[0].blocks.at(0));
+    CHECK(code.change == Change::Same);
+    CHECK_FALSE(code.code.changes.empty());
+
+    const Document removed = with_items({text("Otherwise, no effect.")});
+    const Itemize  gone    = list_of(diff::compare(before, removed, {.context = diff::Context::All}));
+    REQUIRE(gone.items.size() == 2);
+    CHECK(std::get<AuthoredCode>(gone.items[0].blocks.at(0)).change == Change::Removed);
+}
