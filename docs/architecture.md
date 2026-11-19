@@ -1034,7 +1034,7 @@ have no independent item description.
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
   ref(stable-name), library-index(optional enclosing class), cvqual, opt,
-  math-variable, subscript, ellipsis, note, example.
+  math-variable, subscript, code-subscript, math, ordinal, ellipsis, note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1285,6 +1285,15 @@ There are exactly three backends, and **adding wording to one means adding it to
   the code the subscript is on, `$\tcode{T}_i$`. That is the draft's other spelling of `T$_i$`
   and prints the same, so it is typesetting and not a kind: the two are the same IR to the
   differ and to the other backends, and only `draft_code_inline` reads the hint.
+  `CodeSubscript` (`$i_\tcode{x}$`) is code as a subscript, upright. `Ordinal`
+  (`$i^\text{th}$`) is an ordinal suffix, a superscript in mpark (`^th^`) and org (`<sup>`),
+  and in LaTeX it closes the mathematics that the variable or code before it opened, as a
+  subscript does; a placeholder directly before a subscript opens it too. `Math` holds
+  mathematics with no other kind as its LaTeX, written back verbatim in LaTeX, as TeX between
+  dollars in mpark's `@...@`, and between `\(` and `\)` in org's HTML, outside the `<code>`,
+  which MathJax does not read. A `CodeInline` with `mathematics` set is the same code and spans
+  written in running text and not in a `\tcode` (`$\tcode{T}_i$` in prose): LaTeX leaves off
+  the `\tcode`, and mpark and org put only its code in the code font (issue #339).
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

@@ -378,7 +378,8 @@ struct json_descriptor<TextInline> {
 
 template <>
 struct json_descriptor<CodeInline> {
-    static constexpr auto members = std::tuple{field("code", &CodeInline::code)};
+    static constexpr auto members =
+        std::tuple{field("code", &CodeInline::code), defaulted_field("math", &CodeInline::mathematics)};
 };
 
 template <>

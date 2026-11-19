@@ -43,6 +43,10 @@ std::string bracket_escape(const Span& span, std::string_view spelling) {
         return "[ellipsis]";
     case SpanKind::CodeSubscript:
         return "[code-sub:" + span.payload + ']';
+    case SpanKind::Math:
+        return "[math:" + span.payload + ']';
+    case SpanKind::Ordinal:
+        return "[ordinal:" + span.payload + ']';
     }
     return {};
 }

@@ -761,6 +761,26 @@ TEST_CASE("ir_json - an ellipsis span and a math-open hint round-trip by name") 
     CHECK(emit_json(*back) == json);
 }
 
+TEST_CASE("ir_json - a math span, an ordinal span, and mathematics in running text round-trip") {
+    // Issue #339. The flag is written only when set, so a code inline that is
+    // not mathematics reads as it always did.
+    Document doc;
+    doc.nodes.push_back(FreeParagraph{
+        {CodeInline{CodeText{"a[\\rho]", {{2, 6, SpanKind::Math, "\\rho"}}}},
+         CodeInline{CodeText{"ith", {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::Ordinal, "th"}}}, true}}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find(R"({"begin":2,"end":6,"kind":"math","payload":"\\rho"})") != std::string::npos);
+    CHECK(json.find(R"({"begin":1,"end":3,"kind":"ordinal","payload":"th"})") != std::string::npos);
+    CHECK(json.find(R"("math":true)") != std::string::npos);
+    CHECK(json.find(R"("math":false)") == std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}
+
 TEST_CASE("ir_json - a synopsis's base-class declarations round-trip and are silent when there are none") {
     Document doc;
     Synopsis with;
