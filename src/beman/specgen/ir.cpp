@@ -75,6 +75,8 @@ inline constexpr auto kSpanKindNames =
                                 foundation::is<SpanKind::MathVariable>("math-variable"sv),
                                 foundation::is<SpanKind::Subscript>("subscript"sv),
                                 foundation::is<SpanKind::CodeSubscript>("code-subscript"sv),
+                                foundation::is<SpanKind::Math>("math"sv),
+                                foundation::is<SpanKind::Ordinal>("ordinal"sv),
                                 foundation::is<SpanKind::Ellipsis>("ellipsis"sv));
 
 inline constexpr auto kLayoutHintNames =

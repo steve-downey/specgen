@@ -1066,3 +1066,30 @@ TEST_CASE("mpark - an elided paragraph is the unnumbered ellipsis") {
     CHECK(mpark::render_to_string(doc) ==
           "::: wording\n\n## S [g.s]{- .sref} {-}\n\n[…]\n\n[#]{.pnum} Kept.\n\n:::\n");
 }
+
+// Issue #339: a math span is TeX, an ordinal a superscript, a subscript has
+// its letters italic and the rest upright, and mathematics in running text
+// puts only its code in the code font.
+TEST_CASE("mpark - a math span, an ordinal, an expression subscript, and mathematics in running text") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    beman::specgen::ir::CodeText math{"a[\\rho] + p_i-1",
+                                      {{2, 6, SpanKind::Math, "\\rho"},
+                                       {10, 11, SpanKind::MathVariable, "p"},
+                                       {11, 15, SpanKind::Subscript, "i-1"}}};
+    beman::specgen::ir::CodeText ordinal{"ith",
+                                         {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::Ordinal, "th"}}};
+    beman::specgen::ir::CodeText coded{"T_i", {{1, 3, SpanKind::Subscript, "i"}}};
+    coded.hints = {LayoutHint{0, LayoutHintKind::MathOpen, false}};
+    SpecItem item;
+    item.descr.leading = {BodyParagraph{{CodeInline{math},
+                                         TextInline{", the "},
+                                         CodeInline{ordinal, true},
+                                         TextInline{" of "},
+                                         CodeInline{coded, true},
+                                         TextInline{"."}}}};
+    item.decl.signatures.push_back(math);
+    const std::string out = mpark::render_to_string(item);
+    CHECK(out.contains("\na[@$\\rho$@] + $p$@~_i_-1~@\n"));
+    CHECK(out.contains("`a[@$\\rho$@] + $p$@~_i_-1~@`, the *i*^th^ of `T`~_i_~."));
+}

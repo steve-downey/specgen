@@ -1717,15 +1717,22 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
 | `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
 | `$i_\tcode{x}$` in a `\tcode` | a variable and code as its subscript | `$i$@~x~@` | `<var>i</var><sub>x</sub>` |
-| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i-1_~@` | `<var>p</var><sub><var>i-1</var></sub>` |
+| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i_-1~@` | `<var>p</var><sub><var>i</var>-1</sub>` |
+| `$\tcode{Ds}_{\tcode{T}}$` in a `\tcode` | code and code as its subscript | `Ds@~T~@` | `Ds<sub>T</sub>` |
+| `$\tcode{\placeholder{it}}_i$` in a `\tcode` | a placeholder and its subscript | `$it$@~_i_~@` | `<var>it</var><sub><var>i</var></sub>` |
+| `$\tcode{I}^\text{th}$`, `$i^\text{th}$` | an ordinal suffix | `I@^th^@` | `I<sup>th</sup>` |
+| `$\rho$`, `$a + 0$` in a `\tcode` | mathematics with no other kind | `@$\rho$@` | `\(\rho\)` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
 Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
 subscript (one letter or digit, or a group of them, which may hold `+` and
-`-`), a subscript on a variable or on code, code as the subscript of a
-variable, or `\dotsc`. The code's text has the variable as its name, the
+`-`), a subscript on a variable, on code or on a placeholder, code as the
+subscript of a variable or of code, any of those but a lone subscript followed
+by an ordinal suffix (`^\text{th}`, `st`, `nd` or `rd`), or `\dotsc`. In a
+subscript, letters are italic and digits and operators upright, as mathematics
+sets them. The code's text has the variable as its name, the
 subscript after an underscore and the ellipsis as three dots, so
 `\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
 and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
@@ -1738,10 +1745,19 @@ is the group the draft sometimes puts around a subscript of one character there
 (`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
 back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
 
-Any other mathematics there has no kind: an expression (`$i - 1$`), code as
-the subscript of code (`$\tcode{Ds}_{\tcode{T}}$`), a placeholder with a
-subscript, a Greek letter. The whole `\tcode` is kept as raw LaTeX and the
-command warns.
+Any other mathematics there, such as an expression (`$i - 1$`) or a Greek
+letter (`$\rho$`), is kept as the draft's own LaTeX in a span of its own, and
+the code around it is still read as code. The LaTeX backend writes it back as
+it was, mpark writes it as TeX mathematics (`@$\rho$@`), and org's HTML as
+`\(\rho\)` for MathJax.
+
+In running text, mathematics that reads as one of the shapes above is read the
+same way, as a code inline marked as mathematics (`"math": true` in the IR):
+`$i$`, `$\tcode{T}_i$`, `$r_K$` and `$i^\text{th}$`. The LaTeX backend writes
+it back without a `\tcode` around it, and mpark and org set the code in it in
+the code font and the rest as mathematics (`` `T`~_i_~ `` in mpark). Any other
+mathematics in running text, such as `$[0, N)$` or `$N \log N$`, is kept as raw
+LaTeX, and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1869,7 +1885,9 @@ with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
-unreadable rather than dropping the text. A block's `opens_paragraph` is an
+unreadable rather than dropping the text, and so does one holding a span of
+the kinds `math` or `ordinal`. A code inline's `math` flag is an added field:
+an older renderer skips it and writes the mathematics inside a `\tcode`. A block's `opens_paragraph` is an
 added field, which only the draft importer sets: an older renderer skips it and
 writes the block in the paragraph before it, so the words are all there and the
 paragraph numbers after it are one lower.

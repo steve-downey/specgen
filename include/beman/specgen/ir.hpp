@@ -37,8 +37,12 @@ enum class SpanKind {
     MathVariable,  // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
     Subscript,     // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
     Ellipsis,      // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
-    CodeSubscript, // payload = code subscripting the variable before it (the draft's $i_\tcode{x}$); the text is "_" +
-                   // payload
+    CodeSubscript, // payload = code subscripting the variable or code before it (the draft's $i_\tcode{x}$); the text
+                   // is "_" + payload
+    Math,          // payload = mathematics the IR has no other kind for, as LaTeX (the draft's $\rho$ in code); the
+                   // text is the payload
+    Ordinal,       // payload = "th", "st", "nd" or "rd", an ordinal suffix on what precedes it (the draft's
+                   // $i^\text{th}$); the text is the payload
 };
 
 } // namespace beman::specgen::ir
@@ -57,6 +61,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::Subscript,
     beman::specgen::ir::SpanKind::Ellipsis,
     beman::specgen::ir::SpanKind::CodeSubscript,
+    beman::specgen::ir::SpanKind::Math,
+    beman::specgen::ir::SpanKind::Ordinal,
 };
 
 namespace beman::specgen::ir {
@@ -286,6 +292,13 @@ TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end
 void append_text(TextInline& text, const TextInline& more);
 struct CodeInline {
     CodeText code;
+    // Mathematics in running text that reads as code and its subscripts, and
+    // not a `\tcode` at all: the draft's `$\tcode{T}_i$`, `$i$` or
+    // `$i^\text{th}$` in prose (issue #339). The code and spans are what a
+    // `\tcode` holding the same mathematics would have; a writer of draft
+    // LaTeX leaves off the `\tcode` around them, and the others set the code
+    // in the code font and the rest as mathematics.
+    bool mathematics = false;
 
     friend bool operator==(const CodeInline&, const CodeInline&) = default;
 }; // \tcode; spans allow exposid etc.

@@ -125,7 +125,13 @@ inline std::string draft_span_macro(const ir::Span& span, std::string_view spell
         // Code as a subscript, in the code font inside the mathematics:
         // `$i_\tcode{x}$` (issue #339).
         foundation::when<ir::SpanKind::CodeSubscript>(
-            [&] { return "$_\\tcode{" + draft_escape_code_text(span.payload) + "}$"; }));
+            [&] { return "$_\\tcode{" + draft_escape_code_text(span.payload) + "}$"; }),
+        // Mathematics with no other kind is the draft's own LaTeX, written
+        // back as it was: `$\rho$` (issue #339).
+        foundation::when<ir::SpanKind::Math>([&] { return '$' + span.payload + '$'; }),
+        // An ordinal suffix, `$i^\text{th}$`: the variable or code before it
+        // opens the mathematics, and this closes it.
+        foundation::when<ir::SpanKind::Ordinal>([&] { return "$^\\text{" + span.payload + "}$"; }));
 }
 
 // Outside a codeblock we are already in LaTeX, so the macro is written
@@ -351,7 +357,7 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
         return kind != ir::SpanKind::Placeholder && kind != ir::SpanKind::CvQualifier &&
                kind != ir::SpanKind::Optional && kind != ir::SpanKind::MathVariable &&
                kind != ir::SpanKind::Subscript && kind != ir::SpanKind::Ellipsis &&
-               kind != ir::SpanKind::CodeSubscript;
+               kind != ir::SpanKind::CodeSubscript && kind != ir::SpanKind::Math && kind != ir::SpanKind::Ordinal;
     };
     const bool whole_span = v.code.spans.size() == 1 && v.code.spans.front().begin == 0 &&
                             v.code.spans.front().end == v.code.text.size() &&
@@ -361,26 +367,52 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
     // would give `$r$$_K$`, and `$\tcode{T}_i$` where a `MathOpen` hint says
     // the draft put the code inside the mathematics too. What is open, if
     // anything, when the walk reaches a subscript.
+    //
+    // An ordinal suffix is the same as a subscript here (`$i^\text{th}$`), and
+    // a placeholder can be what a subscript is on (`$\placeholder{C}_i$`, or
+    // `$\tcode{\placeholder{it}}_i$` with a `MathOpen` hint where it begins).
     enum class Open { Nothing, Variable, Code };
-    Open       open                = Open::Nothing;
-    bool       grouped             = false; // the draft wrote a one-character subscript in a group
+    Open       open      = Open::Nothing;
+    bool       grouped   = false; // the draft wrote the subscript in a group
+    const auto is_suffix = [](ir::SpanKind kind) {
+        return kind == ir::SpanKind::Subscript || kind == ir::SpanKind::CodeSubscript || kind == ir::SpanKind::Ordinal;
+    };
     const auto subscript_begins_at = [&](std::size_t at) {
-        return std::ranges::any_of(v.code.spans, [&](const ir::Span& span) {
-            return span.begin == at &&
-                   (span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript);
+        return std::ranges::any_of(v.code.spans,
+                                   [&](const ir::Span& span) { return span.begin == at && is_suffix(span.kind); });
+    };
+    const auto math_opens_at = [&](std::size_t at) {
+        return std::ranges::any_of(v.code.hints, [&](const ir::LayoutHint& hint) {
+            return hint.at == at && hint.kind == ir::LayoutHintKind::MathOpen;
         });
     };
     const auto write_span = [&](const ir::Span& span, std::string_view spelling) {
         std::string macro = draft_span_prose(span, spelling);
-        if ((span.kind == ir::SpanKind::Subscript || span.kind == ir::SpanKind::CodeSubscript) &&
-            open != Open::Nothing) {
+        if (is_suffix(span.kind) && open != Open::Nothing) {
             // The mathematics is open: no `$` of its own, and the code's group closes first.
-            macro = open == Open::Code && grouped && span.payload.size() == 1
-                        ? "}_{" + span.payload + "}$"
-                        : (open == Open::Code ? "}" : "") + macro.substr(1);
-            open  = Open::Nothing;
-        } else if (span.kind == ir::SpanKind::MathVariable && subscript_begins_at(span.end)) {
+            if (open == Open::Code && grouped && span.kind == ir::SpanKind::Subscript && span.payload.size() == 1)
+                macro = "}_{" + span.payload + "}$";
+            else if (open == Open::Code && grouped && span.kind == ir::SpanKind::CodeSubscript)
+                macro = "}_{\\tcode{" + draft_escape_code_text(span.payload) + "}}$";
+            else
+                macro = (open == Open::Code ? "}" : "") + macro.substr(1);
+            open = Open::Nothing;
+        } else if ((span.kind == ir::SpanKind::MathVariable || span.kind == ir::SpanKind::Placeholder) &&
+                   subscript_begins_at(span.end)) {
+            const bool code = span.kind == ir::SpanKind::Placeholder && math_opens_at(span.begin);
+            if (span.kind == ir::SpanKind::Placeholder)
+                macro = (code ? "$\\tcode{" : "$") + macro + '$';
             macro.pop_back(); // the subscript that follows closes it
+            open = code ? Open::Code : Open::Variable;
+            if (code)
+                grouped = std::ranges::any_of(v.code.hints, [&](const ir::LayoutHint& hint) {
+                    return hint.at == span.begin && hint.kind == ir::LayoutHintKind::MathOpen && hint.braced;
+                });
+            return macro;
+        }
+        // A suffix followed by another, `$r_K^\text{th}$`, leaves it open.
+        if (is_suffix(span.kind) && subscript_begins_at(span.end)) {
+            macro.pop_back();
             open = Open::Variable;
         }
         return macro;
@@ -408,7 +440,7 @@ inline std::string draft_code_inline(const ir::CodeInline& v) {
         [](ir::Change, std::string_view text) { return std::string(text); },
         draft_escape_code_text,
         write_hint);
-    return whole_span ? code : "\\tcode{" + code + '}';
+    return whole_span || v.mathematics ? code : "\\tcode{" + code + '}';
 }
 
 // A term in prose (issue #355): the draft's macro for its role, around its

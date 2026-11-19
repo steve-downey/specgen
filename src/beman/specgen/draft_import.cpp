@@ -8,6 +8,7 @@
 #include <beman/specgen/ir.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
@@ -465,9 +466,16 @@ std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos,
 //   $r_K$           a variable and its subscript
 //   $\tcode{T}_i$   code and its subscript, which says what `T$_i$` says; the
 //                   hint keeps the draft's choice of where the mathematics opens
+//   $i_\tcode{x}$   code as the subscript of a variable, or of code
+//                   (`$\tcode{Ds}_{\tcode{T}}$`)
+//   $\placeholder{C}_i$, $\tcode{\placeholder{it}}_i$
+//                   a placeholder and its subscript
+//   $i^\text{th}$   any of the above but a lone subscript, and an ordinal
+//                   suffix: th, st, nd or rd
 //   $\dotsc$        the elements left out of a sequence
 //
-// Anything else has no kind (`$i - 1$`, `$i_\tcode{x}$`, `$\rho$`).
+// Anything else has no kind here (`$i - 1$`, `$\rho$`); inside a `\tcode` it
+// is a `Math` span, and in running text it stays raw LaTeX (issue #339).
 std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
     const auto  alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
     CodeBuilder out;
@@ -475,9 +483,44 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
         out.span(ir::SpanKind::Ellipsis, {}, "...");
         return out.code;
     }
-    // What the subscript, if there is one, is on: nothing here, a variable, or code.
-    std::size_t at = 0;
-    if (inner.starts_with("\\tcode{")) {
+    // An ordinal suffix closes the mathematics, and is read last.
+    constexpr std::array<std::string_view, 4> suffixes{"th", "st", "nd", "rd"};
+    const auto                 spelled = [](std::string_view suffix) { return std::format("^\\text{{{}}}", suffix); };
+    std::optional<std::string> ordinal;
+    if (const auto* it =
+            std::ranges::find_if(suffixes, [&](std::string_view suffix) { return inner.ends_with(spelled(suffix)); });
+        it != suffixes.end()) {
+        ordinal = std::string(*it);
+        inner.remove_suffix(spelled(*it).size());
+    }
+    const auto with_ordinal = [&](ir::CodeText code) -> std::optional<ir::CodeText> {
+        if (!ordinal)
+            return code;
+        CodeBuilder whole;
+        whole.code = std::move(code);
+        whole.span(ir::SpanKind::Ordinal, *ordinal, *ordinal);
+        return std::move(whole.code);
+    };
+    // What the subscript, if there is one, is on: nothing here, a variable, a
+    // placeholder, or code.
+    std::size_t at        = 0;
+    bool        code_base = false;
+    if (constexpr std::string_view placeholder = "\\placeholder{"; inner.starts_with(placeholder)) {
+        const std::size_t close = inner.find('}');
+        const std::string name(inner.substr(placeholder.size(), close - placeholder.size()));
+        if (close == std::string_view::npos || name.empty() || !std::ranges::all_of(name, is_letter))
+            return std::nullopt;
+        out.span(ir::SpanKind::Placeholder, name, name);
+        at = close + 1;
+    } else if (constexpr std::string_view coded = "\\tcode{\\placeholder{"; inner.starts_with(coded)) {
+        const std::size_t close = inner.find("}}");
+        const std::string name(inner.substr(coded.size(), close - coded.size()));
+        if (close == std::string_view::npos || name.empty() || !std::ranges::all_of(name, is_letter))
+            return std::nullopt;
+        out.hint(ir::LayoutHintKind::MathOpen, false);
+        out.span(ir::SpanKind::Placeholder, name, name);
+        at = close + 2;
+    } else if (inner.starts_with("\\tcode{")) {
         const std::size_t      close = inner.find('}');
         const std::string_view arg = close == std::string_view::npos ? std::string_view{} : inner.substr(7, close - 7);
         const std::optional<std::string> code = plain_code_argument(arg);
@@ -485,9 +528,8 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
             return std::nullopt;
         out.hint(ir::LayoutHintKind::MathOpen, false);
         out.text(*code);
-        at = close + 1;
-        if (at == inner.size())
-            return std::nullopt; // code alone in mathematics is not a shape the draft writes
+        at        = close + 1;
+        code_base = true;
     } else {
         const std::size_t end = std::min(inner.find('_'), inner.size());
         if (!std::ranges::all_of(inner.substr(0, end), is_letter))
@@ -496,18 +538,29 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
             out.span(ir::SpanKind::MathVariable, std::string(inner.substr(0, end)), inner.substr(0, end));
         at = end;
     }
-    if (at == inner.size())
-        return at == 0 ? std::nullopt : std::optional(out.code);
+    if (at == inner.size()) {
+        // Code or a placeholder alone in mathematics is not a shape the draft
+        // writes, but either before an ordinal is (`$\tcode{I}^\text{th}$`).
+        if (at == 0 || ((code_base || out.code.spans.front().kind == ir::SpanKind::Placeholder) && !ordinal))
+            return std::nullopt;
+        return with_ordinal(std::move(out.code));
+    }
     if (inner[at] != '_')
         return std::nullopt;
     std::string_view sub = inner.substr(at + 1);
-    // Code as the subscript of a variable, `$i_\tcode{x}$` (issue #339).
-    if (sub.starts_with("\\tcode{") && sub.ends_with('}') && at > 0 && out.code.hints.empty()) {
-        const std::optional<std::string> code = plain_code_argument(sub.substr(7, sub.size() - 8));
-        if (!code || code->empty())
+    // Code as the subscript of a variable or of code, `$i_\tcode{x}$` and
+    // `$\tcode{Ds}_{\tcode{T}}$` (issue #339).
+    const bool code_grouped = sub.starts_with("{\\tcode{") && sub.ends_with("}}");
+    if ((sub.starts_with("\\tcode{") && sub.ends_with('}')) || code_grouped) {
+        const std::string_view arg  = code_grouped ? sub.substr(8, sub.size() - 10) : sub.substr(7, sub.size() - 8);
+        const bool             base = at > 0 && (code_base || out.code.hints.empty());
+        const std::optional<std::string> code = plain_code_argument(arg);
+        if (!base || !code || code->empty() || (code_grouped && !code_base))
             return std::nullopt;
+        if (code_grouped)
+            out.code.hints.back().braced = true;
         out.span(ir::SpanKind::CodeSubscript, *code, '_' + *code);
-        return out.code;
+        return with_ordinal(std::move(out.code));
     }
     const bool grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
     if (grouped)
@@ -523,7 +576,10 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
     if (grouped && sub.size() == 1 && !out.code.hints.empty())
         out.code.hints.back().braced = true;
     out.span(ir::SpanKind::Subscript, std::string(sub), '_' + std::string(sub));
-    return out.code;
+    // An ordinal on a lone subscript has nothing to be the ordinal of.
+    if (ordinal && at == 0)
+        return std::nullopt;
+    return with_ordinal(std::move(out.code));
 }
 
 ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optional<std::size_t> source_at) {
@@ -604,6 +660,12 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                 close == std::string_view::npos ? std::nullopt : code_mathematics(raw.substr(i + 1, close - i - 1));
             if (math) {
                 out.append(*math);
+            } else if (close != std::string_view::npos && close > i + 1) {
+                // Mathematics with no other kind is kept as the draft's own
+                // LaTeX, in a span of its own, so the code around it is
+                // still code (issue #339).
+                const std::string latex(raw.substr(i + 1, close - i - 1));
+                out.span(ir::SpanKind::Math, latex, latex);
             } else {
                 met_unknown_macro = true;
                 report(Severity::Warning, "mathematics in \\tcode is kept as raw LaTeX");
@@ -736,7 +798,15 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
         if (c == '$') {
             const std::size_t close = text.find('$', i + 1);
             const std::size_t end   = close == std::string_view::npos ? text.size() : close + 1;
-            raw(text.substr(i, end - i), "mathematics is kept as raw LaTeX");
+            // Mathematics that reads as code and its subscripts is a code
+            // inline that says so (issue #339); anything else is raw LaTeX.
+            if (auto math = close == std::string_view::npos ? std::nullopt
+                                                            : code_mathematics(text.substr(i + 1, close - i - 1))) {
+                flush();
+                out.push_back(ir::CodeInline{std::move(*math), true});
+            } else {
+                raw(text.substr(i, end - i), "mathematics is kept as raw LaTeX");
+            }
             i = end;
             continue;
         }

@@ -541,6 +541,18 @@ Log:
   (`$\tcode{B}_{1}$`) is kept on the same hint, in its `braced`: the library clauses write a
   group of one 30 times, every one after a `\tcode` inside the mathematics, and [meta.logical]
   alone had 24 differences from the draft without it.
+- 2026-11-19: the rest is read (issue #339). In a `\tcode`, mathematics with no other kind is a
+  `Math` span holding its LaTeX, so a Greek letter or an expression no longer keeps the whole
+  `\tcode` raw; about 37 uses in the library clauses at 45b03900, and the warning "mathematics
+  in `\tcode` is kept as raw LaTeX" is left only for an unclosed `$`. A placeholder can carry a
+  subscript (`$\tcode{\placeholder{it}}_i$`, with the `MathOpen` hint), code can subscript code
+  (`$\tcode{Ds}_{\tcode{T}}$`, the group on the hint's `braced`), and an ordinal suffix is a
+  span kind, `Ordinal`. In running text, mathematics that `code_mathematics` reads is a
+  `CodeInline` with `mathematics` set, which the LaTeX backend writes without the `\tcode`:
+  `$\tcode{T}_i$` (223 uses), ordinals (about 140), and lone variables such as `$i$` and `$N$`,
+  which are most of it. A prose-level inline holding LaTeX mathematics for everything else was
+  weighed and not taken: what stays raw in running text is mathematics proper (`$[0, N)$`,
+  `$N \log N$`), which no backend but LaTeX can write as anything better than the LaTeX.
 - 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
   (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
   `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`
