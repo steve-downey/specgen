@@ -3219,30 +3219,30 @@ set_tests_properties(
 )
 
 # A warning from reading the draft fails the run under --warnings-as-errors too
-# (issue #372): the importer keeps [variant.dtor]'s `$\tcode{T}_i$` as raw
+# (issue #372): the importer keeps [vector.data]'s `\range` and `\keyword` as raw
 # LaTeX and says so, whether the draft is read for `\asdraft`
 # (--inherit-draft) or as the baseline (--baseline-draft). The wording is still
 # written, as for a header's own finding. Without the flag the run passes.
-set(_variant_dtor_header
-    "${PROJECT_SOURCE_DIR}/tests/corpus/diff/variant_dtor_asdraft.hpp"
+set(_vector_data_header
+    "${PROJECT_SOURCE_DIR}/tests/corpus/diff/vector_data_asdraft.hpp"
 )
-set(_variant_dtor_slice
-    "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/variant.dtor.slice"
+set(_vector_data_slice
+    "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/vector.data.slice"
 )
 configure_file(
-    "${_variant_dtor_slice}"
-    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit/utilities.tex"
+    "${_vector_data_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit/containers.tex"
     COPYONLY
 )
 configure_file(
-    "${_variant_dtor_slice}"
-    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline/variant.dtor.tex"
+    "${_vector_data_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline/vector.data.tex"
     COPYONLY
 )
 add_test(
     NAME golden.warnings_as_errors.inherit_draft_warning_fails
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
@@ -3255,7 +3255,7 @@ set_tests_properties(
 add_test(
     NAME golden.warnings_as_errors.inherit_draft_warning_says_so
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
@@ -3265,12 +3265,12 @@ set_tests_properties(
     golden.warnings_as_errors.inherit_draft_warning_says_so
     PROPERTIES
         PASS_REGULAR_EXPRESSION
-            "1 warning from reading the draft fails the run under --warnings-as-errors; the output is written"
+            "2 warnings from reading the draft fail the run under --warnings-as-errors; the output is written"
 )
 add_test(
     NAME golden.warnings_as_errors.baseline_draft_warning_fails
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --baseline-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline"
         --no-compile-commands -o
@@ -3283,7 +3283,7 @@ set_tests_properties(
 add_test(
     NAME golden.warnings_as_errors.draft_warning_without_flag_passes
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate --inherit-draft
+        specgen generate "${_vector_data_header}" --validate --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.draft_without_flag.tex"
