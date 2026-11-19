@@ -1795,6 +1795,7 @@ ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t
     const RSecHeader  head  = *parse_rsec(lines[header]);
     const std::string saved = std::exchange(section, head.stable);
     ir::Section       out{.stable_name = head.stable, .title = head.title, .children = {}};
+    out.origin = node_origin(lines, header, end);
 
     // The section's own lines between its subsections: always a run of the
     // given lines, which stay the file's own, so what is read from them can

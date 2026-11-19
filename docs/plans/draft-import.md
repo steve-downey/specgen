@@ -467,6 +467,17 @@ Log:
   paper puts before it, a removed one is deleted with its blank line. The granularity is the
   numbered paragraph and not the word: a paragraph the paper rewrites is a sentence to a line
   whatever the draft's lines were. constexpr_callables still gets its 66 edits and nothing else.
+- 2026-11-19: the rest of issue #346. Inside a numbered paragraph that changed, the draft's and the
+  paper's renderings are laid out a sentence to a line and compared by line; each line the paper
+  keeps is found in the draft's source by its text with whitespace folded, and stays byte for
+  byte, so only the sentences that changed are written. Where the draft's source does not fold
+  to the generator's text, the paragraph is replaced whole as before. A declaration joining an
+  item is written as lines of its `itemdecl` after the declaration it follows (the item's
+  declarations now pair most alike first, so a new one cannot take the draft's only one), and one
+  leaving takes its lines. A subclause records its range too (`Section::origin`), so one the paper
+  adds is written after its predecessor at the `\rSec` level read from the draft, and one it
+  removes is deleted. A removed node takes the `%` comment lines directly above it. Word-level
+  placement inside a line was weighed and not taken: the draft's diffs are read by line.
 
 ### importer-vocabulary-gaps
 
