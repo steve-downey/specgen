@@ -87,7 +87,12 @@ Block LeafBodyLowerer<Block>::operator()(const grammar::BodyParagraph& p) const 
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Itemize& list) const {
-    return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>(),
+    return ir::Itemize{list.items | std::views::transform([](const grammar::ListItem& item) {
+                           return ir::ListItem{lower_paragraph(item.text),
+                                               item.code_blocks | std::views::transform([](const ir::CodeText& code) {
+                                                   return ir::InformativeBlock{ir::AuthoredCode{code}};
+                                               }) | std::ranges::to<std::vector>()};
+                       }) | std::ranges::to<std::vector>(),
                        ir::Change::Same,
                        list.opens_paragraph};
 }

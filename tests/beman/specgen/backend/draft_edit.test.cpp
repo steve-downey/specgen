@@ -192,7 +192,10 @@ TEST_CASE("draft_edit - a change it cannot place is an error, and nothing is pla
     item.decl.signatures.push_back({"wrapper(int);", {}});
     children(paper).push_back(ir::Section{"w.new", "New", {}});
 
-    const draft_edit::Plan plan = draft_edit::plan(imported(), paper, read_draft);
+    // Without the draft's source neither can be placed: a declaration goes in
+    // beside the lines of its neighbour, and a subclause takes the level of
+    // the one it is in, both of which are read from it.
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
     CHECK(plan.files.empty());
     REQUIRE(plan.findings.size() == 2);
     CHECK(plan.findings[0].severity == beman::specgen::Severity::Error);
@@ -218,4 +221,144 @@ TEST_CASE("draft_edit - overlapping edits are refused") {
     CHECK_FALSE(draft_edit::apply("abcdefgh", edits).has_value());
     const std::vector<draft_edit::Edit> fine = {{6, 6, "Z"}, {0, 1, ""}};
     CHECK(draft_edit::apply("abcdefgh", fine) == "bcdefZgh");
+}
+
+namespace {
+
+// A second draft for the edits of issue #346: two subclauses, an item with
+// two declarations and a comment above it, and a paragraph of three
+// sentences, each on its own line as the draft writes them.
+constexpr std::string_view kVector = R"(\rSec2[v]{Vector}
+
+\rSec3[v.cons]{Constructors}
+
+% The constructors.
+\indexlibraryctor{v}%
+\begin{itemdecl}
+v() noexcept;
+v(int n);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs an empty vector.
+Its size is zero.
+The capacity is unspecified.
+\end{itemdescr}
+
+\rSec3[v.cap]{Capacity}
+
+\indexlibrarymember{size}{v}%
+\begin{itemdecl}
+int size() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+The size.
+\end{itemdescr}
+)";
+
+ir::Document vector_draft() { return import_sections(kVector, {.sections = {"v"}, .source_name = "v.tex"}).document; }
+
+std::optional<std::string> read_vector(const std::string& file) {
+    return file == "v.tex" ? std::optional<std::string>(kVector) : std::nullopt;
+}
+
+ir::Section& subclause(ir::Document& doc, std::size_t i) {
+    return std::get<ir::Section>(std::get<ir::Section>(doc.nodes.front()).children.at(i));
+}
+
+std::string applied_vector(const draft_edit::Plan& plan) {
+    CHECK(plan.findings.empty());
+    REQUIRE(plan.files.size() == 1);
+    const auto out = draft_edit::apply(kVector, plan.files.front().edits);
+    REQUIRE(out.has_value());
+    return *out;
+}
+
+} // namespace
+
+TEST_CASE("draft_edit - a changed sentence replaces its line, and the paragraph's other lines are the draft's") {
+    ir::Document paper               = vector_draft();
+    auto&        item                = std::get<ir::SpecItem>(subclause(paper, 0).children.front());
+    item.descr.elements.front().body = {ir::BodyParagraph{
+        {ir::TextInline{"Constructs an empty vector. Its size is 0. The capacity is unspecified."}}}};
+
+    const draft_edit::Plan plan = draft_edit::plan(vector_draft(), paper, read_vector);
+    REQUIRE(plan.files.size() == 1);
+    REQUIRE(plan.files.front().edits.size() == 1);
+    CHECK(plan.files.front().edits.front().text == "Its size is 0.");
+    CHECK(applied_vector(plan).contains(
+        "\\effects\nConstructs an empty vector.\nIts size is 0.\nThe capacity is unspecified.\n\\end{itemdescr}"));
+}
+
+TEST_CASE("draft_edit - a sentence added or removed is a line added or removed") {
+    ir::Document added               = vector_draft();
+    auto&        more                = std::get<ir::SpecItem>(subclause(added, 0).children.front());
+    more.descr.elements.front().body = {ir::BodyParagraph{{ir::TextInline{
+        "Constructs an empty vector. It allocates nothing. Its size is zero. The capacity is unspecified."}}}};
+    CHECK(applied_vector(draft_edit::plan(vector_draft(), added, read_vector))
+              .contains("Constructs an empty vector.\nIt allocates nothing.\nIts size is zero.\n"));
+
+    ir::Document removed              = vector_draft();
+    auto&        fewer                = std::get<ir::SpecItem>(subclause(removed, 0).children.front());
+    fewer.descr.elements.front().body = {
+        ir::BodyParagraph{{ir::TextInline{"Constructs an empty vector. The capacity is unspecified."}}}};
+    CHECK(applied_vector(draft_edit::plan(vector_draft(), removed, read_vector))
+              .contains("\\effects\nConstructs an empty vector.\nThe capacity is unspecified.\n\\end{itemdescr}"));
+}
+
+TEST_CASE("draft_edit - a declaration joining an item is a line after its neighbour, and one leaving takes its line") {
+    ir::Document joined = vector_draft();
+    auto&        more   = std::get<ir::SpecItem>(subclause(joined, 0).children.front());
+    more.decl.signatures.push_back(beman::specgen::draft_import::parse_listing("v(int n, int m);"));
+    CHECK(applied_vector(draft_edit::plan(vector_draft(), joined, read_vector))
+              .contains("\\begin{itemdecl}\nv() noexcept;\nv(int n);\nv(int n, int m);\n\\end{itemdecl}"));
+
+    ir::Document first = vector_draft();
+    auto&        ahead = std::get<ir::SpecItem>(subclause(first, 0).children.front());
+    ahead.decl.signatures.insert(ahead.decl.signatures.begin(),
+                                 beman::specgen::draft_import::parse_listing("explicit v(char c);"));
+    CHECK(applied_vector(draft_edit::plan(vector_draft(), first, read_vector))
+              .contains("\\begin{itemdecl}\nexplicit v(char c);\nv() noexcept;\n"));
+
+    ir::Document left  = vector_draft();
+    auto&        fewer = std::get<ir::SpecItem>(subclause(left, 0).children.front());
+    fewer.decl.signatures.pop_back();
+    CHECK(applied_vector(draft_edit::plan(vector_draft(), left, read_vector))
+              .contains("\\begin{itemdecl}\nv() noexcept;\n\\end{itemdecl}"));
+}
+
+TEST_CASE("draft_edit - a removed item takes the comment directly above it") {
+    ir::Document paper = vector_draft();
+    subclause(paper, 0).children.clear();
+    const std::string out = applied_vector(draft_edit::plan(vector_draft(), paper, read_vector));
+    CHECK_FALSE(out.contains("% The constructors."));
+    CHECK_FALSE(out.contains("\\indexlibraryctor{v}"));
+    CHECK(out.contains("\\rSec3[v.cons]{Constructors}\n\n\\rSec3[v.cap]{Capacity}"));
+}
+
+TEST_CASE("draft_edit - a subclause added goes after its predecessor at its level, and one removed goes") {
+    ir::Document paper = vector_draft();
+    ir::SpecItem clear;
+    clear.decl.signatures.push_back({"void clear();", {}});
+    ir::DescriptionElement effects;
+    effects.kind = ir::ElementKind::Effects;
+    effects.body = {ir::BodyParagraph{{ir::TextInline{"Removes every element."}}}};
+    clear.descr.elements.push_back(std::move(effects));
+    std::get<ir::Section>(paper.nodes.front()).children.push_back(ir::Section{"v.mod", "Modifiers", {clear}});
+    const std::string out = applied_vector(draft_edit::plan(vector_draft(), paper, read_vector));
+    CHECK(out.contains("The size.\n\\end{itemdescr}\n\n\\rSec3[v.mod]{Modifiers}\n"));
+    CHECK(out.contains("\\begin{itemdecl}\nvoid clear();\n\\end{itemdecl}"));
+
+    ir::Document fewer = vector_draft();
+    auto&        kids  = std::get<ir::Section>(fewer.nodes.front()).children;
+    kids.erase(kids.begin() + 1);
+    const std::string gone = applied_vector(draft_edit::plan(vector_draft(), fewer, read_vector));
+    CHECK_FALSE(gone.contains("\\rSec3[v.cap]"));
+    CHECK_FALSE(gone.contains("The size."));
+    CHECK(gone.contains("The capacity is unspecified.\n\\end{itemdescr}\n"));
 }

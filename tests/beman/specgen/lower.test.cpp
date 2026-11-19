@@ -131,14 +131,14 @@ TEST_CASE("lower - authored items and references become semantic IR") {
     CHECK(text_of(body_test::paragraph(constraints).front()) == "All of:");
     REQUIRE((body_test::first<beman::specgen::ir::Itemize>(constraints) != nullptr));
     REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.size() == 2);
-    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).at(0)) == "A");
-    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).back()) == ",");
-    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).size() == 4);
-    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(0)) == "B");
-    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(1)) == " follows ");
-    CHECK(std::get<ir::RefInline>(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(2))
+    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).text.at(0)) == "A");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(0).text.back()) == ",");
+    REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).text.size() == 4);
+    CHECK(code_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).text.at(0)) == "B");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).text.at(1)) == " follows ");
+    CHECK(std::get<ir::RefInline>(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).text.at(2))
               .stable_name == "external.requirements");
-    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).at(3)) == ".");
+    CHECK(text_of(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.at(1).text.at(3)) == ".");
 }
 
 TEST_CASE("lower - authored two-dimensional tables become semantic IR") {

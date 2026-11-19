@@ -1,0 +1,82 @@
+** Swap [expected.object.swap]
+:PROPERTIES:
+:CUSTOM_ID: expected.object.swap
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+constexpr void swap(expected& rhs) noexcept(@\seebelow@);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_swappable_v<T>~ is ~true~ and
+- ~is_swappable_v<E>~ is ~true~ and
+- ~is_move_constructible_v<T> && is_move_constructible_v<E>~ is ~true~, and
+- ~is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: See [[expected.object.swap][Table @@html:[expected.object.swap]@@@@latex:{[}expected.object.swap{]}@@]].
+
+#+name: expected.object.swap
+#+caption: ~swap(expected&)~ effects
+#+ATTR_WG21: :columns 18 36 36
+| | ~this->has_value()~ | ~!this->has_value()~ |
+|-
+| ~rhs.has_value()~ | equivalent to: @@latex:\tcode{using std::swap; swap(\exposid{val}, rhs.\exposid{val});}@@@@html:<code>using std::swap; swap(<var>val</var>, rhs.<var>val</var>);</code>@@ | calls ~rhs.swap(*this)~ |
+| ~!rhs.has_value()~ | @@latex:\seebelow@@@@html:<code><var>see below</var></code>@@ | equivalent to: @@latex:\tcode{using std::swap; swap(\exposid{unex}, rhs.\exposid{unex});}@@@@html:<code>using std::swap; swap(<var>unex</var>, rhs.<var>unex</var>);</code>@@ |
+
+For the case where ~rhs.has_value()~ is ~false~ and ~this->has_value()~ is ~true~, equivalent to:
+
+#+begin_codeblock
+if constexpr (is_nothrow_move_constructible_v<E>) {
+  E tmp(std::move(rhs.@\exposid{unex}@));
+  destroy_at(addressof(rhs.@\exposid{unex}@));
+  try {
+    construct_at(addressof(rhs.@\exposid{val}@), std::move(@\exposid{val}@));
+    destroy_at(addressof(@\exposid{val}@));
+    construct_at(addressof(@\exposid{unex}@), std::move(tmp));
+  } catch(...) {
+    construct_at(addressof(rhs.@\exposid{unex}@), std::move(tmp));
+    throw;
+  }
+} else {
+  remove_cv_t<T> tmp(std::move(@\exposid{val}@));
+  destroy_at(addressof(@\exposid{val}@));
+  try {
+    construct_at(addressof(@\exposid{unex}@), std::move(rhs.@\exposid{unex}@));
+    destroy_at(addressof(rhs.@\exposid{unex}@));
+    construct_at(addressof(rhs.@\exposid{val}@), std::move(tmp));
+  } catch (...) {
+    construct_at(addressof(@\exposid{val}@), std::move(tmp));
+    throw;
+  }
+}
+@\exposid{has_val}@ = false;
+rhs.@\exposid{has_val}@ = true;
+#+end_codeblock
+#+end_pnum
+
+#+begin_pnum
+/Throws/: Any exception thrown by the expressions in the @@latex:\Fundescx{Effects}@@@@html:<i>Effects</i>@@.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The exception specification is equivalent to:
+
+#+begin_codeblock
+is_nothrow_move_constructible_v<T> && is_nothrow_swappable_v<T> &&
+is_nothrow_move_constructible_v<E> && is_nothrow_swappable_v<E>
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+friend constexpr void swap(expected& x, expected& y) noexcept(noexcept(x.swap(y)));
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Equivalent to ~x.swap(y)~.
+#+end_pnum

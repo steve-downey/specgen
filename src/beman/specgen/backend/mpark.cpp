@@ -33,6 +33,7 @@
 
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/indent_lines.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/tied_text.hpp>
@@ -43,6 +44,7 @@
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <format>
 #include <optional>
@@ -62,11 +64,18 @@ using beman::specgen::foundation::overloaded;
 
 // --- span substitution: the shared substrate's escape hook ----------------
 
-// A subscript in Markdown: `~x~`, with a name in italics and a number upright,
-// which is how mathematics sets the two (`T$_i$`, `T$_1$`).
+// A subscript in Markdown: `~x~`, with letters in italics and digits and
+// operators upright, which is how mathematics sets them (`T$_i$`, `T$_1$`,
+// `$p_{i-1}$`, issue #339).
 std::string subscript(std::string_view payload) {
-    const bool number = std::ranges::all_of(payload, [](char c) { return c >= '0' && c <= '9'; });
-    return number ? std::format("~{}~", payload) : std::format("~_{}_~", payload);
+    const auto        letter = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+    const std::string body   = payload | std::views::chunk_by([&](char a, char b) { return letter(a) == letter(b); }) |
+                               std::views::transform([&](auto&& run) {
+                                 const std::string text(run.begin(), run.end());
+                                 return letter(text.front()) ? '_' + text + '_' : text;
+                               }) |
+                               std::views::join | std::ranges::to<std::string>();
+    return '~' + body + '~';
 }
 
 // mpark/wg21 turns on embedded Markdown for `cpp`, `default` and `diff` code
@@ -112,7 +121,12 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         // The dots of a sequence with elements left out are the dots.
         foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
         // Code as a subscript is upright, as code is (issue #339).
-        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("@~{}~@", span.payload); }));
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("@~{}~@", span.payload); }),
+        // Mathematics with no other kind is TeX, which pandoc reads between
+        // dollars once the `@...@` has left the code (issue #339).
+        foundation::when<ir::SpanKind::Math>([&] { return "@$" + span.payload + "$@"; }),
+        // An ordinal suffix is a superscript, Markdown's `^th^`.
+        foundation::when<ir::SpanKind::Ordinal>([&] { return "@^" + span.payload + "^@"; }));
 }
 
 // Code text is the author's own tokens; it is never re-escaped, and in this
@@ -145,7 +159,9 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::MathVariable>([&] { return '*' + span.payload + '*'; }),
         foundation::when<ir::SpanKind::Subscript>([&] { return subscript(span.payload); }),
         foundation::when<ir::SpanKind::Ellipsis>([&] { return std::string(spelling); }),
-        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("~{}~", span.payload); }));
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return std::format("~{}~", span.payload); }),
+        foundation::when<ir::SpanKind::Math>([&] { return '$' + span.payload + '$'; }),
+        foundation::when<ir::SpanKind::Ordinal>([&] { return '^' + span.payload + '^'; }));
 }
 
 // A changed run of code in the framework's embedded-Markdown form:
@@ -176,6 +192,15 @@ std::string wrap_div(ir::Change change, std::string text) {
                              foundation::when<ir::Change::Elided>([&] { return text; }));
 }
 
+// Mathematics in running text (issue #339) is Markdown and not code: the
+// code in it is backticked, and the rest takes the forms a span takes inside
+// an open `@...@`, which are plain Markdown.
+std::string render_mathematics(const ir::CodeText& code) {
+    return backend::render_code_spans(code, escape_span_in_run, [](std::string_view text) {
+        return text.empty() ? std::string{} : '`' + std::string(text) + '`';
+    });
+}
+
 std::string render_codeblock(const ir::CodeText& code) { return "```cpp\n" + render_code(code) + "\n```\n"; }
 
 // --- prose ------------------------------------------------------------------
@@ -196,7 +221,12 @@ struct PieceRenderer {
     // supply the code font that `\tcode` supplies there, and `$...$` adds
     // only the italics, so `` `$value$` `` is right for a whole-span exposid
     // and `` `x.$val$` `` for a partial one -- one rule, both cases.
-    std::string operator()(const ir::CodeInline& v) const { return '`' + render_code(v.code) + '`'; }
+    //
+    // Mathematics in running text is the one exception: its code is in the
+    // code font and the rest is not (`` `T`~_i_~ ``).
+    std::string operator()(const ir::CodeInline& v) const {
+        return v.mathematics ? render_mathematics(v.code) : '`' + render_code(v.code) + '`';
+    }
 
     // A cross-reference to another stable name. `\iref{x}` renders "([x])" in
     // the draft, so the parentheses belong to this rendering and not to the
@@ -340,10 +370,17 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
+std::string render_informative_body(const ir::InformativeBody& body);
+
+// An item's blocks (issue #367) are indented under it, after a blank line,
+// which is how Markdown puts a fenced block inside a list item.
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
-        list.items | std::views::transform([this](const ir::Paragraph& p) {
-            return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(p));
+        list.items | std::views::transform([this](const ir::ListItem& item) {
+            return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(item.text)) +
+                   (item.blocks.empty()
+                        ? std::string{}
+                        : "\n" + backend::indent_lines(render_informative_body(item.blocks), "  ") + "\n");
         }) |
         std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -372,7 +409,6 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
     return {std::format("{0}cpp\n{1}\n{0}\n", fence, text), code.opens_paragraph, false};
 }
 
-std::string render_informative_body(const ir::InformativeBody& body);
 std::string render_informative_body(const ir::InformativeBody& body) {
     return body | std::views::transform([](const ir::InformativeBlock& block) {
                return wrap_div(ir::block_change(block), std::visit(overloaded{LeafBodyRenderer{false}}, block).text);

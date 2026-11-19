@@ -115,10 +115,10 @@ TEST_CASE("conjuncts - beyond the threshold becomes an itemize") {
     CHECK((body_test::paragraph_count(four) == 0));
     REQUIRE((body_test::first<beman::specgen::ir::Itemize>(four) != nullptr));
     REQUIRE(body_test::first<beman::specgen::ir::Itemize>(four)->items.size() == 4);
-    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[0]) == "`T0` is `true`,");
-    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[1]) == "`T1` is `true`,");
-    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[2]) == "`T2` is `true`,");
-    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[3]) == "`T3` is `true`.");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[0].text) == "`T0` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[1].text) == "`T1` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[2].text) == "`T2` is `true`,");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(four)->items[3].text) == "`T3` is `true`.");
 }
 
 TEST_CASE("conjuncts - the threshold is configurable") {
@@ -152,9 +152,9 @@ TEST_CASE("conjuncts - join_sentence and as_itemize directly") {
 
     const auto list = as_itemize(traits(3));
     REQUIRE(list.items.size() == 3);
-    CHECK(std::get<TextInline>(list.items[0].back()).text == ",");
-    CHECK(std::get<TextInline>(list.items[1].back()).text == ",");
-    CHECK(std::get<TextInline>(list.items[2].back()).text == ".");
+    CHECK(std::get<TextInline>(list.items[0].text.back()).text == ",");
+    CHECK(std::get<TextInline>(list.items[1].text.back()).text == ",");
+    CHECK(std::get<TextInline>(list.items[2].text.back()).text == ".");
 }
 
 TEST_CASE("conjuncts - a lead-in paragraph is kept ahead of the list") {
@@ -170,5 +170,5 @@ TEST_CASE("conjuncts - a lead-in paragraph is kept ahead of the list") {
     CHECK(prose(body_test::paragraph(element, 0)) == "All of the following are true:");
     REQUIRE((body_test::first<beman::specgen::ir::Itemize>(element) != nullptr));
     REQUIRE(body_test::first<beman::specgen::ir::Itemize>(element)->items.size() == 2);
-    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(element)->items[1]) == "`T1` is `true`.");
+    CHECK(prose(body_test::first<beman::specgen::ir::Itemize>(element)->items[1].text) == "`T1` is `true`.");
 }

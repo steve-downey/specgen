@@ -891,6 +891,55 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_ref/expected.json"
 )
 
+# A list item holding a code block (issue #367): [expected.object.assign]
+# writes three `\item`s whose text ends "equivalent to:" and a codeblock. The
+# item is its paragraph and the code block after it, in every backend.
+specgen_add_golden(
+    draft_expected_object_assign
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/expected.object.assign.slice"
+    SECTION expected.object.assign
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+
+# A `floattable` with `\chdr`/`\rhdr`/`\lhdr` headings (issue #367), the
+# cross-product shape a `lib2dtab2` has: read as a two-dimensional table, and
+# written back by the LaTeX backend as the `floattable` it was, with its
+# column specification. mpark and org write it as any such table.
+specgen_add_golden(
+    draft_expected_object_swap
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/expected.object.swap.slice"
+    SECTION expected.object.swap
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+
 # A subclause with library tables and references to them, which the importer
 # reads into the two table kinds and TableRef.
 specgen_add_golden(

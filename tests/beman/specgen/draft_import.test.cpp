@@ -43,6 +43,19 @@ const ir::Section& only_section(const draft_import::Result& r) {
 
 const ir::SpecItem& item_at(const ir::Section& s, std::size_t i) { return std::get<ir::SpecItem>(s.children.at(i)); }
 
+// A paragraph's words, its code inlines as their text: enough to say which
+// paragraph it is.
+std::string prose_of(const ir::Paragraph& p) {
+    return p | std::views::transform([](const ir::Inline& piece) {
+               if (const auto* text = std::get_if<ir::TextInline>(&piece))
+                   return text->text;
+               if (const auto* code = std::get_if<ir::CodeInline>(&piece))
+                   return code->code.text;
+               return std::string{};
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
 std::string trim_copy(std::string_view s) {
     const auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
     while (!s.empty() && is_space(s.front()))
@@ -583,20 +596,22 @@ The element is \tcode{std::forward<T$_i$>(get<$i$>(u))}, for \tcode{T$_{10}$} an
         "The element is \\tcode{std::forward<T$_i$>(get<$i$>(u))}, for \\tcode{T$_{10}$} and \\tcode{T$_N$}."));
 }
 
-TEST_CASE("draft_import - other mathematics in a \\tcode keeps the \\tcode whole as raw LaTeX") {
-    // An expression has no span kind. The run is kept as the LaTeX it was and
-    // reported once, and the macros inside the mathematics are not read as code.
+TEST_CASE("draft_import - other mathematics in a \\tcode is a span holding its LaTeX") {
+    // An expression or a Greek letter has no kind of its own (issue #339). It
+    // is a `Math` span holding the LaTeX between the dollars, so the code
+    // around it is still code, and the LaTeX backend writes it back as it was.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 The range \tcode{a[$i - 1$]} through \tcode{a[$\rho$]}, and \tcode{b[$j$]}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    REQUIRE(r.diagnostics.size() == 1);
-    CHECK(r.diagnostics.front().message == "mathematics in \\tcode is kept as raw LaTeX");
+    CHECK(r.diagnostics.empty());
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
-    REQUIRE(std::holds_alternative<ir::RawInline>(para.at(1)));
-    CHECK(std::get<ir::RawInline>(para.at(1)).latex == "\\tcode{a[$i - 1$]}");
-    CHECK(std::holds_alternative<ir::RawInline>(para.at(3)));
+    const auto& expr = std::get<ir::CodeInline>(para.at(1)).code;
+    CHECK(expr.text == "a[i - 1]");
+    CHECK(expr.spans == std::vector<ir::Span>{{2, 7, ir::SpanKind::Math, "i - 1"}});
+    const auto& greek = std::get<ir::CodeInline>(para.at(3)).code;
+    CHECK(greek.spans == std::vector<ir::Span>{{2, 6, ir::SpanKind::Math, "\\rho"}});
     CHECK(std::holds_alternative<ir::CodeInline>(para.at(5)));
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains("The range \\tcode{a[$i - 1$]} through \\tcode{a[$\\rho$]}, and \\tcode{b[$j$]}."));
@@ -902,29 +917,105 @@ and the value \tcode{$r_K$}.
                             "\\tcode{T$_0$, $\\dotsc$, $\\tcode{T}_{N}$} and the value \\tcode{$r_K$}."));
 }
 
-TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes read stays raw") {
+TEST_CASE("draft_import - mathematics in a \\tcode that is not one of the shapes read is a math span") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 \tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i*1}$} \tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    // One report for the subclause, however many there are.
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto  math =
+        para | std::views::filter([](const ir::Inline& i) { return std::holds_alternative<ir::CodeInline>(i); }) |
+        std::views::transform([](const ir::Inline& i) {
+            const auto& code = std::get<ir::CodeInline>(i).code;
+            return code.spans.size() == 1 && code.spans.front().kind == ir::SpanKind::Math ? code.spans.front().payload
+                                                                                           : std::string{};
+        }) |
+        std::ranges::to<std::vector>();
+    CHECK(math == std::vector<std::string>{"\\tcode{T}", "\\tcode{\\exposid{t}}_i", "x_{i*1}", "\\ldots", "_", "1_i"});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(R"(\tcode{a$\tcode{T}$} \tcode{a$\tcode{\exposid{t}}_i$} \tcode{a$x_{i*1}$} )"
+                            R"(\tcode{a$\ldots$} \tcode{a$_$} \tcode{a$1_i$})"));
+}
+
+TEST_CASE("draft_import - an unclosed dollar in a \\tcode keeps the \\tcode whole as raw LaTeX") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+The value \tcode{a$b}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
     REQUIRE(r.diagnostics.size() == 1);
     CHECK(r.diagnostics.front().message == "mathematics in \\tcode is kept as raw LaTeX");
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
-    CHECK(std::ranges::count_if(para, [](const ir::Inline& i) { return std::holds_alternative<ir::RawInline>(i); }) ==
-          6);
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(1)));
+}
+
+TEST_CASE("draft_import - a placeholder with a subscript, and code as the subscript of code") {
+    // Issue #339: [alg.req.ind.cmp]'s `$\tcode{\placeholder{it}}_i$` and
+    // [exec.snd.expos]'s `$\tcode{Ds}_{\tcode{T}}$`.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\tcode{f($\tcode{\placeholder{it}}_i$)}, \tcode{$\placeholder{C}_i$}, and \tcode{$\tcode{Ds}_{\tcode{T}}$::x}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para  = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& coded = std::get<ir::CodeInline>(para.at(0)).code;
+    CHECK(coded.text == "f(it_i)");
+    CHECK(coded.spans ==
+          std::vector<ir::Span>{{2, 4, ir::SpanKind::Placeholder, "it"}, {4, 6, ir::SpanKind::Subscript, "i"}});
+    CHECK(coded.hints == std::vector<ir::LayoutHint>{{2, ir::LayoutHintKind::MathOpen, false}});
+    const auto& bare = std::get<ir::CodeInline>(para.at(2)).code;
+    CHECK(bare.hints.empty());
+    const auto& code_sub = std::get<ir::CodeInline>(para.at(4)).code;
+    CHECK(code_sub.text == "Ds_T::x");
+    CHECK(code_sub.spans == std::vector<ir::Span>{{2, 4, ir::SpanKind::CodeSubscript, "T"}});
+    CHECK(code_sub.hints == std::vector<ir::LayoutHint>{{0, ir::LayoutHintKind::MathOpen, true}});
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(R"(\tcode{f($\tcode{\placeholder{it}}_i$)}, \tcode{$\placeholder{C}_i$}, and )"
+                            R"(\tcode{$\tcode{Ds}_{\tcode{T}}$::x}.)"));
+}
+
+TEST_CASE("draft_import - mathematics in running text that reads as code is a code inline marked as mathematics") {
+    // Issue #339: `$\tcode{T}_i$`, a lone variable, a variable and its
+    // subscript, and an ordinal, in running text. Anything else stays raw.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+For $\tcode{T}_i$ and each $i$, $r_K$, the $i^\text{th}$ and $\tcode{I}^\text{nd}$ ones in $[0, N)$.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "mathematics is kept as raw LaTeX");
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto  math = [&](std::size_t at) {
+        const auto& inline_ = std::get<ir::CodeInline>(para.at(at));
+        CHECK(inline_.mathematics);
+        return inline_.code;
+    };
+    CHECK(math(1).text == "T_i");
+    CHECK(math(1).hints == std::vector<ir::LayoutHint>{{0, ir::LayoutHintKind::MathOpen, false}});
+    CHECK(math(3).spans == std::vector<ir::Span>{{0, 1, ir::SpanKind::MathVariable, "i"}});
+    CHECK(math(5).text == "r_K");
+    CHECK(math(7).text == "ith");
+    CHECK(math(7).spans ==
+          std::vector<ir::Span>{{0, 1, ir::SpanKind::MathVariable, "i"}, {1, 3, ir::SpanKind::Ordinal, "th"}});
+    CHECK(math(9).text == "Ind");
+    CHECK(std::holds_alternative<ir::RawInline>(para.at(11)));
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(R"(For $\tcode{T}_i$ and each $i$, $r_K$, the $i^\text{th}$ and $\tcode{I}^\text{nd}$ )"
+                            R"(ones in $[0, N)$.)"));
 }
 
 TEST_CASE("draft_import - code and an expression as a subscript in a \\tcode are spans") {
     // Issue #339: [range.zip.transform.iterator]'s `$i_\tcode{x}$`, and
-    // [inplace.vector]'s `$p_{i-1}$`. Code as the subscript of code is not read.
+    // [inplace.vector]'s `$p_{i-1}$`. Code as the subscript of code is read too.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 \tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and \tcode{$\tcode{Ds}_{\tcode{T}}$}.
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.empty());
     const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
     const auto& sub  = std::get<ir::CodeInline>(para.at(0)).code;
     CHECK(sub.text == "i_x + 1");
@@ -934,10 +1025,11 @@ TEST_CASE("draft_import - code and an expression as a subscript in a \\tcode are
     CHECK(expr.text == "a[p_i-1]");
     CHECK(expr.spans.at(1) == ir::Span{3, 7, ir::SpanKind::Subscript, "i-1"});
     CHECK(std::get<ir::CodeInline>(para.at(4)).code.spans.at(1).payload == "n+1");
-    CHECK(std::holds_alternative<ir::RawInline>(para.at(6)));
+    CHECK(std::get<ir::CodeInline>(para.at(6)).code.spans.at(0).kind == ir::SpanKind::CodeSubscript);
 
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
-    CHECK(rendered.contains(R"(\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and)"));
+    CHECK(rendered.contains(
+        R"(\tcode{$i_\tcode{x}$ + 1}, \tcode{a[$p_{i-1}$]}, \tcode{$elems_{n+1}$}, and \tcode{$\tcode{Ds}_{\tcode{T}}$}.)"));
 }
 
 TEST_CASE("draft_import - a listing records where each of its bytes was read from") {
@@ -980,4 +1072,91 @@ template<class T>
     ir::CodeText bare = item_at(section, 1).decl.signatures.front();
     bare.origin       = {};
     CHECK(bare == item_at(section, 1).decl.signatures.front());
+}
+
+TEST_CASE("draft_import - a list item holding a code block is the item's paragraph and the code after it") {
+    // Issue #367: [expected.object.assign]'s shape, and prose after the code
+    // inside the same item. A list nested in an item is still not read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{a}, equivalent to:
+\begin{codeblock}
+f();
+\end{codeblock}
+and then done.
+\item
+Otherwise, no effect.
+\end{itemize}
+
+\pnum
+\begin{itemize}
+\item
+One:
+\begin{itemize}
+\item two
+\end{itemize}
+\end{itemize}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "a nested list is kept as raw LaTeX");
+    const auto& item = item_at(only_section(r), 0);
+    const auto& list = std::get<ir::Itemize>(item.descr.elements.front().body.front());
+    REQUIRE(list.items.size() == 2);
+    CHECK(prose_of(list.items[0].text) == "If a, equivalent to:");
+    REQUIRE(list.items[0].blocks.size() == 2);
+    CHECK(std::get<ir::AuthoredCode>(list.items[0].blocks[0]).code.text == "f();");
+    CHECK(prose_of(std::get<ir::BodyParagraph>(list.items[0].blocks[1]).text) == "and then done.");
+    CHECK(list.items[1].blocks.empty());
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\item If \\tcode{a}, equivalent to:\n\\begin{codeblock}\nf();\n\\end{codeblock}\n"
+                            "and then done.\n\\item Otherwise, no effect.\n"));
+}
+
+TEST_CASE("draft_import - a floattable in the shape of a lib2dtab2 is a table, and keeps its form") {
+    // Issue #367: [expected.object.swap]'s table. One of any other shape stays raw.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+See \tref{x.t}.
+
+\begin{floattable}{\tcode{f} effects}{x.t}
+{lx{0.35\hsize}x{0.35\hsize}}
+\topline
+& \chdr{\tcode{a}} & \rhdr{\tcode{!a}} \\ \capsep
+\lhdr{\tcode{b}} &
+  one &
+  two \\
+\lhdr{\tcode{!b}} &
+  three &
+  four \\
+\end{floattable}
+
+\begin{floattable}{Other}{x.u}
+{ll}
+\topline
+\lhdr{A} & \rhdr{B} \\ \capsep
+a & b \\
+\end{floattable}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "the floattable environment is kept as raw LaTeX");
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto  table   = std::ranges::find_if(
+        leading, [](const ir::BodyBlock& block) { return std::holds_alternative<ir::Table2D>(block); });
+    REQUIRE(table != leading.end());
+    const auto& t = std::get<ir::Table2D>(*table);
+    CHECK(t.stable_name == "x.t");
+    CHECK(t.floattable_columns == "lx{0.35\\hsize}x{0.35\\hsize}");
+    REQUIRE(t.rows.size() == 2);
+    CHECK(prose_of(t.rows[1].header) == "!b");
+    CHECK(prose_of(t.rows[1].cell2) == "four");
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(
+        rendered.contains("\\begin{floattable}{\\tcode{f} effects}{x.t}\n{lx{0.35\\hsize}x{0.35\\hsize}}\n\\topline\n"
+                          "& \\chdr{\\tcode{a}} & \\rhdr{\\tcode{!a}} \\\\ \\capsep\n"
+                          "\\lhdr{\\tcode{b}} &\n  one &\n  two \\\\\n"));
 }

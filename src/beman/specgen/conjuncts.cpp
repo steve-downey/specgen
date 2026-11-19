@@ -59,7 +59,7 @@ ir::Itemize as_itemize(const std::vector<ir::Paragraph>& parts) {
                         const auto& [i, part] = indexed;
                         ir::Paragraph item    = part;
                         append_text(item, static_cast<std::size_t>(i) + 1 == total ? "." : ",");
-                        return item;
+                        return ir::ListItem{std::move(item)};
                     }) |
                     std::ranges::to<std::vector>();
     return itemize;

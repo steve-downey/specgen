@@ -984,6 +984,21 @@ line closes the item. Another `\item` then continues the list; prose resumes
 the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
+A code block indented past its `\item` line belongs to that item, and the list
+goes on after it, as the draft writes an item that ends "equivalent to:":
+
+```cpp
+//! \effects
+//! \item If `has_value()` is `true`, equivalent to:
+//!   \codeblock
+//!   val = rhs.val;
+//!   \endcodeblock
+//! \item Otherwise, no effect.
+```
+
+A `\codeblock` that is not indented past the `\item` ends the list and stands
+on its own.
+
 To start a new numbered paragraph directly after a list, write two consecutive
 blank decorated lines. This works in leading prose and within an element:
 
@@ -1212,20 +1227,29 @@ token: a token added, removed or replaced. Code is compared with its layout
 ignored, so a declaration the generator lays out differently from the draft is
 not a change, and an added `constexpr` is written into the draft's own line.
 
-A changed description replaces the numbered paragraphs that changed and leaves
-the others as the draft has them, line for line. The new paragraph is written
-as the LaTeX backend writes it, laid out as the draft's are, a sentence to a
-line. When the paper's description has more or fewer numbered paragraphs than
-the draft's, the description is replaced whole. An item, a synopsis or a
-paragraph the paper adds is written after the draft's node the paper puts
-before it, separated by a blank line. One the paper removes is taken out,
-together with the blank line after it.
+A changed description replaces only what changed. The draft's paragraph and
+the paper's are each laid out a sentence to a line, as the draft writes them,
+and compared line by line: a sentence the paper keeps stays as the draft's
+source has it, byte for byte, and a sentence it changes, adds or removes is a
+line replaced, added or removed. Where the draft's source does not say what the
+generator says, up to its line breaks (a `%` comment inside the paragraph, a
+macro spelled another way), the numbered paragraph that changed is replaced
+whole; when the paper's description has more or fewer numbered paragraphs than
+the draft's, the description is.
 
-Any other change is an error naming it and is not placed: a declaration added
-to or removed from an item, such as an overload joining an `\also` group, and a
-subclause added or removed. The other edits are still written, and the run
-exits 1. A declaration outside every subclause has no place in the draft, so it
-is left out with a warning.
+A declaration the paper adds to an item, such as an overload joining an `\also`
+group, is written as lines of the draft's `itemdecl`, after the declaration it
+follows; one the paper removes goes with its lines. An item, a synopsis, a
+paragraph or a subclause the paper adds is written after the draft's node the
+paper puts before it, separated by a blank line. A subclause takes the `\rSec`
+level of the subclauses beside it, or one below the subclause it is in. A node
+the paper removes is taken out, together with the blank line after it and any
+`%` comment lines directly above it, with no blank line between.
+
+Any other change is an error naming it and is not placed, such as a change
+that cuts an exposition-only name. The other edits are still written, and the
+run exits 1. A declaration outside every subclause has no place in the draft,
+so it is left out with a warning.
 
 The edited draft is the whole output, so the option takes no baseline, no
 `--inherit-draft`, and no `--split`, `--validate` or `--paper`.
@@ -1717,15 +1741,22 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
 | `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
 | `$i_\tcode{x}$` in a `\tcode` | a variable and code as its subscript | `$i$@~x~@` | `<var>i</var><sub>x</sub>` |
-| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i-1_~@` | `<var>p</var><sub><var>i-1</var></sub>` |
+| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i_-1~@` | `<var>p</var><sub><var>i</var>-1</sub>` |
+| `$\tcode{Ds}_{\tcode{T}}$` in a `\tcode` | code and code as its subscript | `Ds@~T~@` | `Ds<sub>T</sub>` |
+| `$\tcode{\placeholder{it}}_i$` in a `\tcode` | a placeholder and its subscript | `$it$@~_i_~@` | `<var>it</var><sub><var>i</var></sub>` |
+| `$\tcode{I}^\text{th}$`, `$i^\text{th}$` | an ordinal suffix | `I@^th^@` | `I<sup>th</sup>` |
+| `$\rho$`, `$a + 0$` in a `\tcode` | mathematics with no other kind | `@$\rho$@` | `\(\rho\)` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
 Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
 subscript (one letter or digit, or a group of them, which may hold `+` and
-`-`), a subscript on a variable or on code, code as the subscript of a
-variable, or `\dotsc`. The code's text has the variable as its name, the
+`-`), a subscript on a variable, on code or on a placeholder, code as the
+subscript of a variable or of code, any of those but a lone subscript followed
+by an ordinal suffix (`^\text{th}`, `st`, `nd` or `rd`), or `\dotsc`. In a
+subscript, letters are italic and digits and operators upright, as mathematics
+sets them. The code's text has the variable as its name, the
 subscript after an underscore and the ellipsis as three dots, so
 `\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
 and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
@@ -1738,10 +1769,19 @@ is the group the draft sometimes puts around a subscript of one character there
 (`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
 back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
 
-Any other mathematics there has no kind: an expression (`$i - 1$`), code as
-the subscript of code (`$\tcode{Ds}_{\tcode{T}}$`), a placeholder with a
-subscript, a Greek letter. The whole `\tcode` is kept as raw LaTeX and the
-command warns.
+Any other mathematics there, such as an expression (`$i - 1$`) or a Greek
+letter (`$\rho$`), is kept as the draft's own LaTeX in a span of its own, and
+the code around it is still read as code. The LaTeX backend writes it back as
+it was, mpark writes it as TeX mathematics (`@$\rho$@`), and org's HTML as
+`\(\rho\)` for MathJax.
+
+In running text, mathematics that reads as one of the shapes above is read the
+same way, as a code inline marked as mathematics (`"math": true` in the IR):
+`$i$`, `$\tcode{T}_i$`, `$r_K$` and `$i^\text{th}$`. The LaTeX backend writes
+it back without a `\tcode` around it, and mpark and org set the code in it in
+the code font and the rest as mathematics (`` `T`~_i_~ `` in mpark). Any other
+mathematics in running text, such as `$[0, N)$` or `$N \log N$`, is kept as raw
+LaTeX, and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1802,6 +1842,15 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
+A list item can hold a code block, and prose after it, inside the item; mpark
+and org indent them under the item. A list nested in an item is still kept as
+raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
+and two data columns, `\chdr` and `\rhdr` over them and `\lhdr` on each row,
+as [expected.object.swap] has) is read as the same two-dimensional table, and
+the LaTeX backend writes it back as the `floattable` it was, with its column
+specification; mpark and org write it as any such table. A `floattable` of
+another shape is kept as raw LaTeX.
+
 The wording diff compares this too. A block that opens a numbered paragraph in
 one revision and belongs to the paragraph before it in the other is marked
 removed where the baseline had it and added where the current revision has it,
@@ -1857,7 +1906,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.47.2 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.50.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1869,7 +1918,14 @@ with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
-unreadable rather than dropping the text. A block's `opens_paragraph` is an
+unreadable rather than dropping the text, and so does one holding a span of
+the kinds `math` or `ordinal`. A code inline's `math` flag is an added field:
+an older renderer skips it and writes the mathematics inside a `\tcode`. A
+list item that holds blocks after its paragraph is written as an object
+(`{"text": [...], "blocks": [...]}`) where every other item is the array of
+inlines it always was, and an older renderer rejects it. A table's
+`floattable` field is added: an older renderer skips it and writes a
+`lib2dtab2`. A block's `opens_paragraph` is an
 added field, which only the draft importer sets: an older renderer skips it and
 writes the block in the paragraph before it, so the words are all there and the
 paragraph numbers after it are one lower.

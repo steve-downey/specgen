@@ -938,3 +938,48 @@ TEST_CASE("latex - a numbered top-level section is preceded by the guarded claus
               doc, {.base_section_depth = 3, .section_numbers = {{"func.wrap.move.general", "22.10.17.4.1"}}})
               .find("clausenumber") == std::string::npos);
 }
+
+// The rest of the mathematics the importer reads (issue #339): a math span
+// is its LaTeX, an ordinal closes the mathematics the variable or code
+// before it opened, a placeholder can carry a subscript, and a code inline
+// marked as mathematics is running text and takes no `\tcode`.
+TEST_CASE("latex - a math span, an ordinal, a subscripted placeholder, and mathematics in running text") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    beman::specgen::ir::CodeText math{"a[\\rho]", {{2, 6, SpanKind::Math, "\\rho"}}};
+    beman::specgen::ir::CodeText ordinal{"ith",
+                                         {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::Ordinal, "th"}}};
+    beman::specgen::ir::CodeText coded{"Ith", {{1, 3, SpanKind::Ordinal, "th"}}, {}, {}, {}};
+    coded.hints = {LayoutHint{0, LayoutHintKind::MathOpen, false}};
+    beman::specgen::ir::CodeText placeholder{"it_i",
+                                             {{0, 2, SpanKind::Placeholder, "it"}, {2, 4, SpanKind::Subscript, "i"}}};
+    beman::specgen::ir::CodeText coded_placeholder = placeholder;
+    coded_placeholder.hints                        = {LayoutHint{0, LayoutHintKind::MathOpen, false}};
+    beman::specgen::ir::CodeText code_sub{"Ds_T", {{2, 4, SpanKind::CodeSubscript, "T"}}};
+    code_sub.hints = {LayoutHint{0, LayoutHintKind::MathOpen, true}};
+
+    SpecItem           item;
+    DescriptionElement remarks;
+    remarks.kind = ElementKind::Remarks;
+    remarks.body.push_back(
+        beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{CodeInline{math},
+                                                                        TextInline{", the "},
+                                                                        CodeInline{ordinal, true},
+                                                                        TextInline{" and "},
+                                                                        CodeInline{coded, true},
+                                                                        TextInline{", "},
+                                                                        CodeInline{placeholder},
+                                                                        TextInline{", "},
+                                                                        CodeInline{coded_placeholder},
+                                                                        TextInline{", "},
+                                                                        CodeInline{code_sub},
+                                                                        TextInline{"."}}});
+    item.descr.elements.push_back(std::move(remarks));
+    item.decl.signatures.push_back(math);
+
+    const std::string out = latex::render_to_string(item);
+    CHECK(out.contains("a[@$\\rho$@]\n"));
+    CHECK(out.contains(
+        R"(\tcode{a[$\rho$]}, the $i^\text{th}$ and $\tcode{I}^\text{th}$, \tcode{$\placeholder{it}_i$}, )"
+        R"(\tcode{$\tcode{\placeholder{it}}_i$}, \tcode{$\tcode{Ds}_{\tcode{T}}$}.)"));
+}

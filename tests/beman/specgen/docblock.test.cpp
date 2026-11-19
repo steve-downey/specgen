@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 #include <format>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -20,9 +21,9 @@ namespace ir = beman::specgen::ir;
 
 namespace {
 
-std::size_t                        paragraph_count(const Element& e);
-const ProseParagraph&              paragraph(const Element& e, std::size_t n = 0);
-const std::vector<ProseParagraph>& items(const Element& e);
+std::size_t                 paragraph_count(const Element& e);
+const ProseParagraph&       paragraph(const Element& e, std::size_t n = 0);
+std::vector<ProseParagraph> items(const Element& e);
 template <class T>
 const T* first(const Element& e);
 
@@ -36,7 +37,9 @@ const ProseParagraph& paragraph(const Element& e, std::size_t n) {
             return p->text;
     throw std::out_of_range("paragraph");
 }
-const std::vector<ProseParagraph>& items(const Element& e) { return first<Itemize>(e)->items; }
+std::vector<ProseParagraph> items(const Element& e) {
+    return first<Itemize>(e)->items | std::views::transform(&ListItem::text) | std::ranges::to<std::vector>();
+}
 template <class T>
 const T* first(const Element& e) {
     for (const auto& block : e.body)
@@ -162,7 +165,7 @@ TEST_CASE("docblock - macro-led leading prose and list continuations stay in the
     REQUIRE(list.block.elements.size() == 1);
     const auto& element = list.block.elements.front();
     REQUIRE(items(element).size() == 1);
-    const auto& item = items(element).front();
+    const auto item = items(element).front();
     REQUIRE(item.size() == 3);
     CHECK(std::get<InlineText>(item.front()).text == "Meets ");
     CHECK(std::get<InlineOldConcept>(item[1]).name == "CopyConstructible");
@@ -1124,4 +1127,28 @@ TEST_CASE("docblock - synopsis-here records how many leading blocks come before 
     CHECK(*twice.block.markers.synopsis_here == 1);
     REQUIRE(twice.diags.size() == 1);
     CHECK(twice.diags.front().severity == beman::specgen::Severity::Warning);
+}
+
+TEST_CASE("docblock - a code block indented under an item is the item's, and the list goes on") {
+    // Issue #367: a `\codeblock` indented past the `\item` line before it
+    // belongs to that item. One that is not indented ends the list.
+    auto r = parse_docblock("//! \\effects\n"
+                            "//! \\item If `a`, equivalent to:\n"
+                            "//!   \\codeblock\n"
+                            "//!   f();\n"
+                            "//!   \\endcodeblock\n"
+                            "//! \\item Otherwise, no effect.\n"
+                            "//! \\codeblock\n"
+                            "//! g();\n"
+                            "//! \\endcodeblock\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const auto& body = r.block.elements.front().body;
+    REQUIRE(body.size() == 2);
+    const auto& list = std::get<Itemize>(body[0]);
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items[0].code_blocks.size() == 1);
+    CHECK(list.items[0].code_blocks[0].text == "  f();");
+    CHECK(list.items[1].code_blocks.empty());
+    CHECK(std::get<AuthoredCode>(body[1]).code.text == "g();");
 }

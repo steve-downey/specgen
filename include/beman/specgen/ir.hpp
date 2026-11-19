@@ -12,6 +12,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -37,8 +38,12 @@ enum class SpanKind {
     MathVariable,  // payload = a variable of the surrounding mathematics, in math italic (the draft's $i$ in code)
     Subscript,     // payload = a subscript on what precedes it (the draft's $_i$ in code); the text is "_" + payload
     Ellipsis,      // the elements left out of a sequence (the draft's $\dotsc$ in code); the text is "..."
-    CodeSubscript, // payload = code subscripting the variable before it (the draft's $i_\tcode{x}$); the text is "_" +
-                   // payload
+    CodeSubscript, // payload = code subscripting the variable or code before it (the draft's $i_\tcode{x}$); the text
+                   // is "_" + payload
+    Math,          // payload = mathematics the IR has no other kind for, as LaTeX (the draft's $\rho$ in code); the
+                   // text is the payload
+    Ordinal,       // payload = "th", "st", "nd" or "rd", an ordinal suffix on what precedes it (the draft's
+                   // $i^\text{th}$); the text is the payload
 };
 
 } // namespace beman::specgen::ir
@@ -57,6 +62,8 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::ir
     beman::specgen::ir::SpanKind::Subscript,
     beman::specgen::ir::SpanKind::Ellipsis,
     beman::specgen::ir::SpanKind::CodeSubscript,
+    beman::specgen::ir::SpanKind::Math,
+    beman::specgen::ir::SpanKind::Ordinal,
 };
 
 namespace beman::specgen::ir {
@@ -286,6 +293,13 @@ TextInline text_piece(const TextInline& text, std::size_t begin, std::size_t end
 void append_text(TextInline& text, const TextInline& more);
 struct CodeInline {
     CodeText code;
+    // Mathematics in running text that reads as code and its subscripts, and
+    // not a `\tcode` at all: the draft's `$\tcode{T}_i$`, `$i$` or
+    // `$i^\text{th}$` in prose (issue #339). The code and spans are what a
+    // `\tcode` holding the same mathematics would have; a writer of draft
+    // LaTeX leaves off the `\tcode` around them, and the others set the code
+    // in the code font and the rest as mathematics.
+    bool mathematics = false;
 
     friend bool operator==(const CodeInline&, const CodeInline&) = default;
 }; // \tcode; spans allow exposid etc.
@@ -523,11 +537,25 @@ struct EquivalentTo {
     friend bool operator==(const EquivalentTo&, const EquivalentTo&) = default;
 };
 
+// One item of a bulleted list: a paragraph, and the blocks the item goes on
+// with after it (issue #367), which the draft writes as a code block inside
+// an `\item`:
+//
+//     \item
+//     If \tcode{has_value()} is \tcode{true}, equivalent to:
+//     \begin{codeblock}
+//     ...
+//     \end{codeblock}
+//
+// Defined below, once the blocks it can hold are. Converts from a paragraph,
+// since almost every item is one and nothing more.
+struct ListItem;
+
 // A bulleted list. Conjunctions past the sentence threshold render this way,
 // and the draft uses it widely wherever a description enumerates conditions.
 struct Itemize {
-    std::vector<Paragraph> items;
-    Change                 change = Change::Same;
+    std::vector<ListItem> items;
+    Change                change = Change::Same;
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
@@ -556,6 +584,12 @@ struct Table2D {
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
+    // The column specification of a table the draft wrote as a `floattable`
+    // with `\chdr`/`\rhdr`/`\lhdr` headings (`lx{0.35\hsize}x{0.35\hsize}`),
+    // kept so the LaTeX backend writes that form back; unset for a
+    // `lib2dtab2` (issue #367). The two say the same thing, so the other
+    // backends and the differ ignore it.
+    std::optional<std::string> floattable_columns = std::nullopt;
 
     friend bool operator==(const Table2D&, const Table2D&) = default;
 };
@@ -610,6 +644,20 @@ struct AuthoredCode {
 // examples contain prose, code, lists, and tables, but cannot nest each other.
 using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
 using InformativeBody  = std::vector<InformativeBlock>;
+
+// A list item's blocks are an informative body's: prose, a code block, a
+// list, a table. The importer reads a code block and the prose after it.
+struct ListItem {
+    Paragraph       text;
+    InformativeBody blocks = {};
+
+    ListItem() = default;
+    ListItem(Paragraph text_, InformativeBody blocks_ = {}) // NOLINT(google-explicit-constructor)
+        : text(std::move(text_)), blocks(std::move(blocks_)) {}
+    ListItem(std::initializer_list<Inline> inlines) : text(inlines) {} // NOLINT(google-explicit-constructor)
+
+    friend bool operator==(const ListItem&, const ListItem&) = default;
+};
 struct Note {
     InformativeBody body;
     Change          change = Change::Same;
@@ -924,6 +972,9 @@ struct Section {
     std::string       title;       // e.g. "Constructors"
     std::vector<Node> children;
     Change            change = Change::Same; // the wording diff's mark on the whole subtree
+    // Where the importer read the subclause from, its `\rSec` line through
+    // its last subsection (issue #346). Not compared, and not saved in the IR.
+    NodeOrigin origin = {};
 
     // Declared here and defined below the class rather than defaulted in it:
     // a defaulted comparison makes clang resolve `children == children`
