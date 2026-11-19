@@ -12,6 +12,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -536,11 +537,25 @@ struct EquivalentTo {
     friend bool operator==(const EquivalentTo&, const EquivalentTo&) = default;
 };
 
+// One item of a bulleted list: a paragraph, and the blocks the item goes on
+// with after it (issue #367), which the draft writes as a code block inside
+// an `\item`:
+//
+//     \item
+//     If \tcode{has_value()} is \tcode{true}, equivalent to:
+//     \begin{codeblock}
+//     ...
+//     \end{codeblock}
+//
+// Defined below, once the blocks it can hold are. Converts from a paragraph,
+// since almost every item is one and nothing more.
+struct ListItem;
+
 // A bulleted list. Conjunctions past the sentence threshold render this way,
 // and the draft uses it widely wherever a description enumerates conditions.
 struct Itemize {
-    std::vector<Paragraph> items;
-    Change                 change = Change::Same;
+    std::vector<ListItem> items;
+    Change                change = Change::Same;
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
@@ -569,6 +584,12 @@ struct Table2D {
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
+    // The column specification of a table the draft wrote as a `floattable`
+    // with `\chdr`/`\rhdr`/`\lhdr` headings (`lx{0.35\hsize}x{0.35\hsize}`),
+    // kept so the LaTeX backend writes that form back; unset for a
+    // `lib2dtab2` (issue #367). The two say the same thing, so the other
+    // backends and the differ ignore it.
+    std::optional<std::string> floattable_columns = std::nullopt;
 
     friend bool operator==(const Table2D&, const Table2D&) = default;
 };
@@ -623,6 +644,20 @@ struct AuthoredCode {
 // examples contain prose, code, lists, and tables, but cannot nest each other.
 using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
 using InformativeBody  = std::vector<InformativeBlock>;
+
+// A list item's blocks are an informative body's: prose, a code block, a
+// list, a table. The importer reads a code block and the prose after it.
+struct ListItem {
+    Paragraph       text;
+    InformativeBody blocks = {};
+
+    ListItem() = default;
+    ListItem(Paragraph text_, InformativeBody blocks_ = {}) // NOLINT(google-explicit-constructor)
+        : text(std::move(text_)), blocks(std::move(blocks_)) {}
+    ListItem(std::initializer_list<Inline> inlines) : text(inlines) {} // NOLINT(google-explicit-constructor)
+
+    friend bool operator==(const ListItem&, const ListItem&) = default;
+};
 struct Note {
     InformativeBody body;
     Change          change = Change::Same;

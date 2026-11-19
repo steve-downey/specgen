@@ -10,6 +10,7 @@ target_sources(
                 draft_edit.hpp
                 draft_spans.hpp
                 element_label.hpp
+                indent_lines.hpp
                 render_fold.hpp
                 section_title.hpp
                 tied_text.hpp

@@ -984,6 +984,21 @@ line closes the item. Another `\item` then continues the list; prose resumes
 the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
+A code block indented past its `\item` line belongs to that item, and the list
+goes on after it, as the draft writes an item that ends "equivalent to:":
+
+```cpp
+//! \effects
+//! \item If `has_value()` is `true`, equivalent to:
+//!   \codeblock
+//!   val = rhs.val;
+//!   \endcodeblock
+//! \item Otherwise, no effect.
+```
+
+A `\codeblock` that is not indented past the `\item` ends the list and stands
+on its own.
+
 To start a new numbered paragraph directly after a list, write two consecutive
 blank decorated lines. This works in leading prose and within an element:
 
@@ -1818,6 +1833,15 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
+A list item can hold a code block, and prose after it, inside the item; mpark
+and org indent them under the item. A list nested in an item is still kept as
+raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
+and two data columns, `\chdr` and `\rhdr` over them and `\lhdr` on each row,
+as [expected.object.swap] has) is read as the same two-dimensional table, and
+the LaTeX backend writes it back as the `floattable` it was, with its column
+specification; mpark and org write it as any such table. A `floattable` of
+another shape is kept as raw LaTeX.
+
 The wording diff compares this too. A block that opens a numbered paragraph in
 one revision and belongs to the paragraph before it in the other is marked
 removed where the baseline had it and added where the current revision has it,
@@ -1887,7 +1911,12 @@ when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
 unreadable rather than dropping the text, and so does one holding a span of
 the kinds `math` or `ordinal`. A code inline's `math` flag is an added field:
-an older renderer skips it and writes the mathematics inside a `\tcode`. A block's `opens_paragraph` is an
+an older renderer skips it and writes the mathematics inside a `\tcode`. A
+list item that holds blocks after its paragraph is written as an object
+(`{"text": [...], "blocks": [...]}`) where every other item is the array of
+inlines it always was, and an older renderer rejects it. A table's
+`floattable` field is added: an older renderer skips it and writes a
+`lib2dtab2`. A block's `opens_paragraph` is an
 added field, which only the draft importer sets: an older renderer skips it and
 writes the block in the paragraph before it, so the words are all there and the
 paragraph numbers after it are one lower.

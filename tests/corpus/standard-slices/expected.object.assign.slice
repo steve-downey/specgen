@@ -1,0 +1,295 @@
+% Slice of the C++ working draft, source/utilities.tex, lines 8945-9237,
+% at cplusplus/draft commit 45b03900. Copied unchanged; see README.md.
+\rSec3[expected.object.assign]{Assignment}
+
+\pnum
+This subclause makes use of the following exposition-only function template:
+\begin{codeblock}
+template<class T, class U, class... Args>
+constexpr void @\exposid{reinit-expected}@(T& newval, U& oldval, Args&&... args) {  // \expos
+  if constexpr (is_nothrow_constructible_v<T, Args...>) {
+    destroy_at(addressof(oldval));
+    construct_at(addressof(newval), std::forward<Args>(args)...);
+  } else if constexpr (is_nothrow_move_constructible_v<T>) {
+    T tmp(std::forward<Args>(args)...);
+    destroy_at(addressof(oldval));
+    construct_at(addressof(newval), std::move(tmp));
+  } else {
+    U tmp(std::move(oldval));
+    destroy_at(addressof(oldval));
+    try {
+      construct_at(addressof(newval), std::forward<Args>(args)...);
+    } catch (...) {
+      construct_at(addressof(oldval), std::move(tmp));
+      throw;
+    }
+  }
+}
+\end{codeblock}
+
+\indexlibrarymember{operator=}{expected}%
+\begin{itemdecl}
+constexpr expected& operator=(const expected& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{this->has_value() \&\& rhs.has_value()} is \tcode{true},
+equivalent to \tcode{\exposid{val} = *rhs}.
+\item
+Otherwise, if \tcode{this->has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, rhs.error())
+\end{codeblock}
+\item
+Otherwise, if \tcode{rhs.has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, *rhs)
+\end{codeblock}
+\item
+Otherwise, equivalent to \tcode{\exposid{unex} = rhs.error()}.
+\end{itemize}
+Then, if no exception was thrown,
+equivalent to: \tcode{\exposid{has_val} = rhs.has_value(); return *this;}
+
+\pnum
+\returns
+\tcode{*this}.
+
+\pnum
+\remarks
+This operator is defined as deleted unless:
+\begin{itemize}
+\item
+\tcode{is_copy_assignable_v<T>} is \tcode{true} and
+\item
+\tcode{is_copy_constructible_v<T>} is \tcode{true} and
+\item
+\tcode{is_copy_assignable_v<E>} is \tcode{true} and
+\item
+\tcode{is_copy_constructible_v<E>} is \tcode{true} and
+\item
+\tcode{is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>}
+is \tcode{true}.
+\end{itemize}
+
+\pnum
+This operator is trivial if:
+\begin{itemize}
+\item \tcode{is_trivially_copy_constructible_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_copy_assignable_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_destructible_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_copy_constructible_v<E>} is \tcode{true}, and
+\item \tcode{is_trivially_copy_assignable_v<E>} is \tcode{true}, and
+\item \tcode{is_trivially_destructible_v<E>} is \tcode{true}.
+\end{itemize}
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{expected}%
+\begin{itemdecl}
+constexpr expected& operator=(expected&& rhs) noexcept(@\seebelow@);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item
+\tcode{is_move_constructible_v<T>} is \tcode{true} and
+\item
+\tcode{is_move_assignable_v<T>} is \tcode{true} and
+\item
+\tcode{is_move_constructible_v<E>} is \tcode{true} and
+\item
+\tcode{is_move_assignable_v<E>} is \tcode{true} and
+\item
+\tcode{is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>}
+is \tcode{true}.
+\end{itemize}
+
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{this->has_value() \&\& rhs.has_value()} is \tcode{true},
+equivalent to \tcode{\exposid{val} = std::move(*rhs)}.
+\item
+Otherwise, if \tcode{this->has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, std::move(rhs.error()))
+\end{codeblock}
+\item
+Otherwise, if \tcode{rhs.has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, std::move(*rhs))
+\end{codeblock}
+\item
+Otherwise, equivalent to \tcode{\exposid{unex} = std::move(rhs.error())}.
+\end{itemize}
+Then, if no exception was thrown,
+equivalent to: \tcode{has_val = rhs.has_value(); return *this;}
+
+\pnum
+\returns
+\tcode{*this}.
+
+\pnum
+\remarks
+The exception specification is equivalent to:
+\begin{codeblock}
+is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T> &&
+is_nothrow_move_assignable_v<E> && is_nothrow_move_constructible_v<E>
+\end{codeblock}
+
+\pnum
+This operator is trivial if:
+\begin{itemize}
+\item \tcode{is_trivially_move_constructible_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_move_assignable_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_destructible_v<T>} is \tcode{true}, and
+\item \tcode{is_trivially_move_constructible_v<E>} is \tcode{true}, and
+\item \tcode{is_trivially_move_assignable_v<E>} is \tcode{true}, and
+\item \tcode{is_trivially_destructible_v<E>} is \tcode{true}.
+\end{itemize}
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{expected}%
+\begin{itemdecl}
+template<class U = remove_cv_t<T>>
+  constexpr expected& operator=(U&& v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item
+\tcode{is_same_v<expected, remove_cvref_t<U>>} is \tcode{false}; and
+\item
+\tcode{remove_cvref_t<U>} is not a specialization of \tcode{unexpected}; and
+\item
+\tcode{is_constructible_v<T, U>} is \tcode{true}; and
+\item
+\tcode{is_assignable_v<T\&, U>} is \tcode{true}; and
+\item
+\tcode{is_nothrow_constructible_v<T, U> || is_nothrow_move_constructible_v<T> ||\newline
+is_nothrow_move_constructible_v<E>}
+is \tcode{true}.
+\end{itemize}
+
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{has_value()} is \tcode{true},
+equivalent to: \tcode{\exposid{val} = std::forward<U>(v);}
+\item
+Otherwise, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, std::forward<U>(v));
+@\exposid{has_val}@ = true;
+\end{codeblock}
+\end{itemize}
+
+\pnum
+\returns
+\tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{operator=}{expected}%
+\begin{itemdecl}
+template<class G>
+  constexpr expected& operator=(const unexpected<G>& e);
+template<class G>
+  constexpr expected& operator=(unexpected<G>&& e);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{GF} be \tcode{const G\&} for the first overload and
+\tcode{G} for the second overload.
+
+\pnum
+\constraints
+\begin{itemize}
+\item
+\tcode{is_constructible_v<E, GF>} is \tcode{true}; and
+\item
+\tcode{is_assignable_v<E\&, GF>} is \tcode{true}; and
+\item
+\tcode{is_nothrow_constructible_v<E, GF> || is_nothrow_move_constructible_v<T> ||\newline
+is_nothrow_move_constructible_v<E>} is \tcode{true}.
+\end{itemize}
+
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+@\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, std::forward<GF>(e.error()));
+@\exposid{has_val}@ = false;
+\end{codeblock}
+\item
+Otherwise, equivalent to:
+\tcode{\exposid{unex} = std::forward<GF>(e.error());}
+\end{itemize}
+
+\pnum
+\returns
+\tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{emplace}{expected}%
+\begin{itemdecl}
+template<class... Args>
+  constexpr T& emplace(Args&&... args) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_nothrow_constructible_v<T, Args...>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+if (has_value()) {
+  destroy_at(addressof(@\exposid{val}@));
+} else {
+  destroy_at(addressof(@\exposid{unex}@));
+  @\exposid{has_val}@ = true;
+}
+return *construct_at(addressof(@\exposid{val}@), std::forward<Args>(args)...);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{emplace}{expected}%
+\begin{itemdecl}
+template<class U, class... Args>
+  constexpr T& emplace(initializer_list<U> il, Args&&... args) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{is_nothrow_constructible_v<T, initializer_list<U>\&, Args...>}
+is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+if (has_value()) {
+  destroy_at(addressof(@\exposid{val}@));
+} else {
+  destroy_at(addressof(@\exposid{unex}@));
+  @\exposid{has_val}@ = true;
+}
+return *construct_at(addressof(@\exposid{val}@), il, std::forward<Args>(args)...);
+\end{codeblock}
+\end{itemdescr}

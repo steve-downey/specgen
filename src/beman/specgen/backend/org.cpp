@@ -47,6 +47,7 @@
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/indent_lines.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/tied_text.hpp>
@@ -517,9 +518,14 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
     return {render_paragraph(p.text, new_roots) + '\n', !p.continuation, true};
 }
 
+std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
+
+// An item's blocks (issue #367) are indented under it, which is how org puts
+// a block inside a list item.
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
-    const std::string items = list.items | std::views::transform([this](const ir::Paragraph& p) {
-                                  return "- " + render_paragraph(p, new_roots) + '\n';
+    const std::string items = list.items | std::views::transform([this](const ir::ListItem& item) {
+                                  return "- " + render_paragraph(item.text, new_roots) + '\n' +
+                                         backend::indent_lines(render_informative_body(item.blocks, new_roots), "  ");
                               }) |
                               std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -541,7 +547,6 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
     return {render_block("codeblock", code.code), code.opens_paragraph, false};
 }
 
-std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots) {
     return body | std::views::transform([new_roots](const ir::InformativeBlock& block) {
                return wrap_block(ir::block_change(block),

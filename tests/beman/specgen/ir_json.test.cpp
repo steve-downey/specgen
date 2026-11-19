@@ -840,3 +840,29 @@ TEST_CASE("ir_json - an inherited item round-trips and is silent at its default"
     CHECK(*back == doc);
     CHECK(emit_json(*back) == json);
 }
+
+TEST_CASE("ir_json - a list item with blocks is an object, one without is the array it always was") {
+    // Issue #367. A reader that knows only the array rejects the object,
+    // rather than dropping the code it holds.
+    Document doc;
+    Itemize  list;
+    list.items.push_back(ListItem{{TextInline{"plain"}}});
+    list.items.push_back(ListItem{Paragraph{TextInline{"equivalent to:"}},
+                                  InformativeBody{beman::specgen::ir::AuthoredCode{CodeText{"f();", {}}}}});
+    Table2D table;
+    table.stable_name        = "x.t";
+    table.floattable_columns = "lx{0.35\\hsize}x{0.35\\hsize}";
+    SpecItem item;
+    item.descr.leading = {list, table};
+    doc.nodes.push_back(Section{"x", "X", {item}});
+
+    const std::string json = emit_json(doc);
+    CHECK(json.find(R"("items":[[{"t":"text","text":"plain"}],{"text":[{"t":"text","text":"equivalent to:"}],)"
+                    R"("blocks":[{"block":"code","code":{"text":"f();","spans":[]}}]}])") != std::string::npos);
+    CHECK(json.find(R"("floattable":"lx{0.35\\hsize}x{0.35\\hsize}")") != std::string::npos);
+
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+    CHECK(emit_json(*back) == json);
+}

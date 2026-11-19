@@ -43,6 +43,19 @@ const ir::Section& only_section(const draft_import::Result& r) {
 
 const ir::SpecItem& item_at(const ir::Section& s, std::size_t i) { return std::get<ir::SpecItem>(s.children.at(i)); }
 
+// A paragraph's words, its code inlines as their text: enough to say which
+// paragraph it is.
+std::string prose_of(const ir::Paragraph& p) {
+    return p | std::views::transform([](const ir::Inline& piece) {
+               if (const auto* text = std::get_if<ir::TextInline>(&piece))
+                   return text->text;
+               if (const auto* code = std::get_if<ir::CodeInline>(&piece))
+                   return code->code.text;
+               return std::string{};
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
 std::string trim_copy(std::string_view s) {
     const auto is_space = [](unsigned char c) { return std::isspace(c) != 0; };
     while (!s.empty() && is_space(s.front()))
@@ -1059,4 +1072,91 @@ template<class T>
     ir::CodeText bare = item_at(section, 1).decl.signatures.front();
     bare.origin       = {};
     CHECK(bare == item_at(section, 1).decl.signatures.front());
+}
+
+TEST_CASE("draft_import - a list item holding a code block is the item's paragraph and the code after it") {
+    // Issue #367: [expected.object.assign]'s shape, and prose after the code
+    // inside the same item. A list nested in an item is still not read.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\effects
+\begin{itemize}
+\item
+If \tcode{a}, equivalent to:
+\begin{codeblock}
+f();
+\end{codeblock}
+and then done.
+\item
+Otherwise, no effect.
+\end{itemize}
+
+\pnum
+\begin{itemize}
+\item
+One:
+\begin{itemize}
+\item two
+\end{itemize}
+\end{itemize}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "a nested list is kept as raw LaTeX");
+    const auto& item = item_at(only_section(r), 0);
+    const auto& list = std::get<ir::Itemize>(item.descr.elements.front().body.front());
+    REQUIRE(list.items.size() == 2);
+    CHECK(prose_of(list.items[0].text) == "If a, equivalent to:");
+    REQUIRE(list.items[0].blocks.size() == 2);
+    CHECK(std::get<ir::AuthoredCode>(list.items[0].blocks[0]).code.text == "f();");
+    CHECK(prose_of(std::get<ir::BodyParagraph>(list.items[0].blocks[1]).text) == "and then done.");
+    CHECK(list.items[1].blocks.empty());
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\item If \\tcode{a}, equivalent to:\n\\begin{codeblock}\nf();\n\\end{codeblock}\n"
+                            "and then done.\n\\item Otherwise, no effect.\n"));
+}
+
+TEST_CASE("draft_import - a floattable in the shape of a lib2dtab2 is a table, and keeps its form") {
+    // Issue #367: [expected.object.swap]'s table. One of any other shape stays raw.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+See \tref{x.t}.
+
+\begin{floattable}{\tcode{f} effects}{x.t}
+{lx{0.35\hsize}x{0.35\hsize}}
+\topline
+& \chdr{\tcode{a}} & \rhdr{\tcode{!a}} \\ \capsep
+\lhdr{\tcode{b}} &
+  one &
+  two \\
+\lhdr{\tcode{!b}} &
+  three &
+  four \\
+\end{floattable}
+
+\begin{floattable}{Other}{x.u}
+{ll}
+\topline
+\lhdr{A} & \rhdr{B} \\ \capsep
+a & b \\
+\end{floattable}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 1);
+    CHECK(r.diagnostics.front().message == "the floattable environment is kept as raw LaTeX");
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto  table   = std::ranges::find_if(
+        leading, [](const ir::BodyBlock& block) { return std::holds_alternative<ir::Table2D>(block); });
+    REQUIRE(table != leading.end());
+    const auto& t = std::get<ir::Table2D>(*table);
+    CHECK(t.stable_name == "x.t");
+    CHECK(t.floattable_columns == "lx{0.35\\hsize}x{0.35\\hsize}");
+    REQUIRE(t.rows.size() == 2);
+    CHECK(prose_of(t.rows[1].header) == "!b");
+    CHECK(prose_of(t.rows[1].cell2) == "four");
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(
+        rendered.contains("\\begin{floattable}{\\tcode{f} effects}{x.t}\n{lx{0.35\\hsize}x{0.35\\hsize}}\n\\topline\n"
+                          "& \\chdr{\\tcode{a}} & \\rhdr{\\tcode{!a}} \\\\ \\capsep\n"
+                          "\\lhdr{\\tcode{b}} &\n  one &\n  two \\\\\n"));
 }

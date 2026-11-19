@@ -33,6 +33,7 @@
 
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/indent_lines.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/tied_text.hpp>
@@ -369,10 +370,17 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
+std::string render_informative_body(const ir::InformativeBody& body);
+
+// An item's blocks (issue #367) are indented under it, after a blank line,
+// which is how Markdown puts a fenced block inside a list item.
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
-        list.items | std::views::transform([this](const ir::Paragraph& p) {
-            return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(p));
+        list.items | std::views::transform([this](const ir::ListItem& item) {
+            return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(item.text)) +
+                   (item.blocks.empty()
+                        ? std::string{}
+                        : "\n" + backend::indent_lines(render_informative_body(item.blocks), "  ") + "\n");
         }) |
         std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -401,7 +409,6 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
     return {std::format("{0}cpp\n{1}\n{0}\n", fence, text), code.opens_paragraph, false};
 }
 
-std::string render_informative_body(const ir::InformativeBody& body);
 std::string render_informative_body(const ir::InformativeBody& body) {
     return body | std::views::transform([](const ir::InformativeBlock& block) {
                return wrap_div(ir::block_change(block), std::visit(overloaded{LeafBodyRenderer{false}}, block).text);

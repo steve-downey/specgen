@@ -27,6 +27,7 @@
 #include <beman/specgen/json/writer.hpp>
 
 #include <algorithm>
+#include <concepts>
 #include <span>
 #include <cstddef>
 #include <format>
@@ -182,6 +183,17 @@ constexpr Alternatives<Ts...> alternatives(std::string_view tag_key, std::string
 template <typename T>
 concept HasAlts = requires { json_descriptor<T>::alts; };
 
+/// A type whose JSON has more than one shape, chosen by the value: its
+/// descriptor supplies `emit(value, out)` and `parse(reader, value)` itself.
+/// For a schema that grew a richer form while the plain one stays byte for
+/// byte what it was, and must be rejected by a reader that knows only the
+/// plain one.
+template <typename T>
+concept HasCustomCodec = requires(const T& value, T& out, std::string& text, Reader& r) {
+    json_descriptor<T>::emit(value, text);
+    { json_descriptor<T>::parse(r, out) } -> std::same_as<bool>;
+};
+
 /// The tag @p T serializes under. Carries the same tripwire as the
 /// `overloaded` visitor (decision visitation-rules): an alternative added to
 /// the variant but not to its `alternatives(...)` table would otherwise pick
@@ -294,6 +306,8 @@ void emit_value(const T& value, std::string& out) {
         std::format_to(std::back_inserter(out), "{}", value);
     } else if constexpr (std::is_same_v<T, bool>) {
         out += value ? "true" : "false";
+    } else if constexpr (HasCustomCodec<T>) {
+        json_descriptor<T>::emit(value, out);
     } else if constexpr (requires { typename json_descriptor<T>::representation; }) {
         emit_value(json_descriptor<T>::to_representation(value), out);
     } else if constexpr (HasAlts<T>) {
@@ -444,6 +458,8 @@ bool parse_value(Reader& r, T& out) {
         return r.parse_uint(out);
     } else if constexpr (std::is_same_v<T, bool>) {
         return r.parse_bool(out);
+    } else if constexpr (HasCustomCodec<T>) {
+        return json_descriptor<T>::parse(r, out);
     } else if constexpr (requires { typename json_descriptor<T>::representation; }) {
         typename json_descriptor<T>::representation wire;
         return parse_value(r, wire) && json_descriptor<T>::from_representation(r, std::move(wire), out);

@@ -175,6 +175,7 @@ struct json_descriptor<Table2D> {
         field("column2", &Table2D::column2),
         field("rows", &Table2D::rows),
         defaulted_field("opens_paragraph", &Table2D::opens_paragraph),
+        optional_field("floattable", &Table2D::floattable_columns),
         defaulted_enum_field("change", &Table2D::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -209,6 +210,21 @@ struct json_descriptor<ir::BodyParagraph> {
         defaulted_enum_field(
             "change", &ir::BodyParagraph::change, Change::Same, change_name, change_from_name, "change"),
     };
+};
+
+// A list item is its paragraph, an array of inlines as it always was, and an
+// object only when it has blocks after the paragraph (issue #367). A reader
+// that knows only the array then rejects the document, rather than dropping
+// the blocks as it would an unknown field.
+template <>
+struct json_descriptor<ir::ListItem> {
+    static constexpr auto members = std::tuple{
+        field("text", &ir::ListItem::text),
+        field("blocks", &ir::ListItem::blocks),
+    };
+    // Defined once the blocks' own descriptor is, below.
+    static void emit(const ir::ListItem& item, std::string& out);
+    static bool parse(Reader& r, ir::ListItem& item);
 };
 
 template <>
@@ -248,6 +264,21 @@ struct json_descriptor<ir::InformativeBlock> {
                                               alt<Table1D>("flat-table"),
                                               alt<ir::AuthoredCode>("code"));
 };
+
+void json_descriptor<ir::ListItem>::emit(const ir::ListItem& item, std::string& out) {
+    if (item.blocks.empty())
+        emit_value(item.text, out);
+    else
+        emit_json_described(item, out, members);
+}
+
+bool json_descriptor<ir::ListItem>::parse(Reader& r, ir::ListItem& item) {
+    if (r.peek('[')) {
+        item = ir::ListItem{};
+        return parse_value(r, item.text);
+    }
+    return parse_json_described(r, item, members);
+}
 
 template <>
 struct json_descriptor<ir::Note> {
