@@ -3218,6 +3218,77 @@ set_tests_properties(
     PROPERTIES PASS_REGULAR_EXPRESSION "applies only with --validate"
 )
 
+# A warning from reading the draft fails the run under --warnings-as-errors too
+# (issue #372): the importer keeps [variant.dtor]'s `$\tcode{T}_i$` as raw
+# LaTeX and says so, whether the draft is read for `\asdraft`
+# (--inherit-draft) or as the baseline (--baseline-draft). The wording is still
+# written, as for a header's own finding. Without the flag the run passes.
+set(_variant_dtor_header
+    "${PROJECT_SOURCE_DIR}/tests/corpus/diff/variant_dtor_asdraft.hpp"
+)
+set(_variant_dtor_slice
+    "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/variant.dtor.slice"
+)
+configure_file(
+    "${_variant_dtor_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit/utilities.tex"
+    COPYONLY
+)
+configure_file(
+    "${_variant_dtor_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline/variant.dtor.tex"
+    COPYONLY
+)
+add_test(
+    NAME golden.warnings_as_errors.inherit_draft_warning_fails
+    COMMAND
+        specgen generate "${_variant_dtor_header}" --validate
+        --warnings-as-errors --inherit-draft
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit_draft.tex"
+)
+set_tests_properties(
+    golden.warnings_as_errors.inherit_draft_warning_fails
+    PROPERTIES WILL_FAIL TRUE
+)
+add_test(
+    NAME golden.warnings_as_errors.inherit_draft_warning_says_so
+    COMMAND
+        specgen generate "${_variant_dtor_header}" --validate
+        --warnings-as-errors --inherit-draft
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit_draft.tex"
+)
+set_tests_properties(
+    golden.warnings_as_errors.inherit_draft_warning_says_so
+    PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "1 warning from reading the draft fails the run under --warnings-as-errors; the output is written"
+)
+add_test(
+    NAME golden.warnings_as_errors.baseline_draft_warning_fails
+    COMMAND
+        specgen generate "${_variant_dtor_header}" --validate
+        --warnings-as-errors --baseline-draft
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline_draft.tex"
+)
+set_tests_properties(
+    golden.warnings_as_errors.baseline_draft_warning_fails
+    PROPERTIES WILL_FAIL TRUE
+)
+add_test(
+    NAME golden.warnings_as_errors.draft_warning_without_flag_passes
+    COMMAND
+        specgen generate "${_variant_dtor_header}" --validate --inherit-draft
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
+        --no-compile-commands -o
+        "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.draft_without_flag.tex"
+)
+
 # Regeneration is wholesale and lands in the diff, never silent.
 add_custom_target(
     goldens

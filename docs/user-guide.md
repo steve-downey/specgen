@@ -1568,6 +1568,13 @@ is answered with `\covers`, and an answered one is quiet.
 and exit with status 1, as an error does. A note never fails a run, so a
 build can require a run with no warnings and still read the notes.
 
+The option covers every warning a run prints, including those from reading
+the draft under `--inherit-draft`, `--baseline-draft` or `--apply-to-draft`,
+such as a construct the importer keeps as raw LaTeX, and those from resolving
+`\asdraft`. A warning from the importer does not stop the render: the
+wording is written, `generate` says how many such warnings fail the run, and
+it exits with status 1.
+
 ## Debugging aids
 
 ### The declaration interleave
@@ -1795,6 +1802,11 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
+The wording diff compares this too. A block that opens a numbered paragraph in
+one revision and belongs to the paragraph before it in the other is marked
+removed where the baseline had it and added where the current revision has it,
+so a paper whose paragraph numbers diverge from the draft's shows where.
+
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
 macro and the subclause:
@@ -1831,7 +1843,8 @@ specgen generate include/beman/example/example.hpp \
   failure, a fragment error, or an error-severity validation finding.
 - Under `--warnings-as-errors`, a warning-severity validation finding exits
   with status 1 from either command, and so does a warning-severity docblock
-  finding from `generate`. Without `--validate` the option is a
+  finding from `generate`, a warning from reading the draft, or one from
+  resolving `\asdraft`. Without `--validate` the option is a
   usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already
@@ -1844,7 +1857,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.47.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.47.2 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

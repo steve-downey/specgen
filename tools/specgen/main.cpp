@@ -1219,7 +1219,8 @@ std::expected<std::vector<ir::Document>, std::string> read_documents(const std::
 // its description is what the marker exists to prevent.
 std::expected<void, std::string> resolve_inherited(std::span<ir::Document>       documents,
                                                    std::span<const ir::Document> baselines,
-                                                   std::span<const std::string>  labels) {
+                                                   std::span<const std::string>  labels,
+                                                   bool                          warnings_as_errors) {
     namespace inherit = beman::specgen::inherit;
     if (baselines.empty()) {
         auto waiting = std::views::zip(labels, documents) |
@@ -1243,9 +1244,10 @@ std::expected<void, std::string> resolve_inherited(std::span<ir::Document>      
                                            finding.where,
                                            finding.where.empty() ? "" : ": ",
                                            finding.message);
-            // Only an error fails the run; a warning or a note about a patched
+            // An error fails the run, and so does a warning under
+            // --warnings-as-errors (issue #372); a note about a patched
             // synopsis is the author's to read, like any validation finding.
-            if (finding.severity == beman::specgen::Severity::Error)
+            if (fails_run(finding.severity, warnings_as_errors))
                 errors.push_back(std::move(line));
             else
                 std::println(stderr, "{}", line);
@@ -1366,7 +1368,8 @@ int render_command(const std::vector<std::string>& args) {
         return 1;
     }
     settle_baseline(wording);
-    if (const auto resolved = resolve_inherited(*documents, *baselines, inputs); !resolved) {
+    if (const auto resolved = resolve_inherited(*documents, *baselines, inputs, wording.warnings_as_errors);
+        !resolved) {
         std::println(stderr, "{}", resolved.error());
         return 1;
     }
@@ -1844,7 +1847,15 @@ int generate_command(const std::vector<std::string>& args) {
     // the draft's LaTeX by stable name. A section the draft lacks is new
     // wording and diffs as all added, noted on stderr. The files read join the
     // prerequisites, since unlike a revision the checkout can change.
-    const auto build_draft_baselines =
+    //
+    // The importer's own findings that fail the run under
+    // --warnings-as-errors: a construct kept as raw LaTeX is a warning, which
+    // is something specgen verified like any other (issue #372). Counted and
+    // not stopped on, as the headers' findings are: the draft was read, and
+    // the wording is written before the run exits 1. An Error is the draft
+    // not being readable at all, which does stop it.
+    std::size_t draft_failures = 0;
+    const auto  build_draft_baselines =
         [&](const std::string&                          directory,
             const std::vector<frontend::DocumentBuild>& built) -> std::expected<Baselines, std::string> {
         return beman::specgen::foundation::fold_left_short(
@@ -1862,13 +1873,16 @@ int generate_command(const std::vector<std::string>& args) {
                 beman::specgen::draft_import::TreeResult imported =
                     beman::specgen::draft_import::import_from_directory(directory, names);
                 // substrate generic algorithm: formatted output, not a fold.
-                for (const auto& diagnostic : imported.diagnostics)
+                for (const auto& diagnostic : imported.diagnostics) {
                     std::println(stderr,
                                  "specgen: {}: {}{}{}",
                                  beman::specgen::severity_label(diagnostic.severity),
                                  diagnostic.section,
                                  diagnostic.section.empty() ? "" : ": ",
                                  diagnostic.message);
+                    if (diagnostic.severity == beman::specgen::Severity::Warning && wording.warnings_as_errors)
+                        ++draft_failures;
+                }
                 if (std::ranges::any_of(imported.diagnostics, [](const auto& diagnostic) {
                         return diagnostic.severity == beman::specgen::Severity::Error;
                     }))
@@ -1989,9 +2003,10 @@ int generate_command(const std::vector<std::string>& args) {
                                                            std::ranges::to<std::vector<ir::Document>>();
                         // `--emit-ir` with no baseline stops at the seam: the IR keeps the
                         // `\asdraft` marks, and `render --baseline-ir` resolves them.
-                        const auto resolved = emit_ir && inherit_documents.empty()
-                                                  ? std::expected<void, std::string>{}
-                                                  : resolve_inherited(parsed, inherit_documents, headers);
+                        const auto resolved =
+                            emit_ir && inherit_documents.empty()
+                                ? std::expected<void, std::string>{}
+                                : resolve_inherited(parsed, inherit_documents, headers, wording.warnings_as_errors);
                         // substrate generic algorithm: puts the documents back, a move
                         // in step with `built` rather than a fold.
                         for (auto&& [one, document] : std::views::zip(built, parsed))
@@ -2137,16 +2152,23 @@ int generate_command(const std::vector<std::string>& args) {
         std::println(stderr, "{}", result.error());
         return 1;
     }
-    if (*result == 0 && build_failures > 0) {
+    if (*result != 0)
+        return *result;
+    if (build_failures > 0)
         std::println(stderr,
                      "specgen: {} finding{} in the documented header{} fail{} the run; the output is written",
                      build_failures,
                      build_failures == 1 ? "" : "s",
                      headers.size() == 1 ? "" : "s",
                      build_failures == 1 ? "s" : "");
-        return 1;
-    }
-    return *result;
+    if (draft_failures > 0)
+        std::println(stderr,
+                     "specgen: {} warning{} from reading the draft fail{} the run under --warnings-as-errors; "
+                     "the output is written",
+                     draft_failures,
+                     draft_failures == 1 ? "" : "s",
+                     draft_failures == 1 ? "s" : "");
+    return build_failures > 0 || draft_failures > 0 ? 1 : 0;
 }
 
 // Debug output is one line per item, so a multi-line raw comment
