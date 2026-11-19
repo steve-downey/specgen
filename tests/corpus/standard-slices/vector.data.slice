@@ -1,0 +1,20 @@
+% Slice of the C++ working draft, source/containers.tex, lines 10352-10369,
+% at cplusplus/draft commit 45b03900. Copied unchanged; see README.md.
+\rSec3[vector.data]{Data}
+
+\indexlibrarymember{data}{vector}%
+\begin{itemdecl}
+constexpr T*       data() noexcept;
+constexpr const T* data() const noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+A pointer such that \range{data()}{data() + size()} is a valid range. For a
+non-empty vector, \tcode{data() == addressof(front())} is \keyword{true}.
+
+\pnum
+\complexity
+Constant time.
+\end{itemdescr}
