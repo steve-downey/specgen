@@ -1227,20 +1227,29 @@ token: a token added, removed or replaced. Code is compared with its layout
 ignored, so a declaration the generator lays out differently from the draft is
 not a change, and an added `constexpr` is written into the draft's own line.
 
-A changed description replaces the numbered paragraphs that changed and leaves
-the others as the draft has them, line for line. The new paragraph is written
-as the LaTeX backend writes it, laid out as the draft's are, a sentence to a
-line. When the paper's description has more or fewer numbered paragraphs than
-the draft's, the description is replaced whole. An item, a synopsis or a
-paragraph the paper adds is written after the draft's node the paper puts
-before it, separated by a blank line. One the paper removes is taken out,
-together with the blank line after it.
+A changed description replaces only what changed. The draft's paragraph and
+the paper's are each laid out a sentence to a line, as the draft writes them,
+and compared line by line: a sentence the paper keeps stays as the draft's
+source has it, byte for byte, and a sentence it changes, adds or removes is a
+line replaced, added or removed. Where the draft's source does not say what the
+generator says, up to its line breaks (a `%` comment inside the paragraph, a
+macro spelled another way), the numbered paragraph that changed is replaced
+whole; when the paper's description has more or fewer numbered paragraphs than
+the draft's, the description is.
 
-Any other change is an error naming it and is not placed: a declaration added
-to or removed from an item, such as an overload joining an `\also` group, and a
-subclause added or removed. The other edits are still written, and the run
-exits 1. A declaration outside every subclause has no place in the draft, so it
-is left out with a warning.
+A declaration the paper adds to an item, such as an overload joining an `\also`
+group, is written as lines of the draft's `itemdecl`, after the declaration it
+follows; one the paper removes goes with its lines. An item, a synopsis, a
+paragraph or a subclause the paper adds is written after the draft's node the
+paper puts before it, separated by a blank line. A subclause takes the `\rSec`
+level of the subclauses beside it, or one below the subclause it is in. A node
+the paper removes is taken out, together with the blank line after it and any
+`%` comment lines directly above it, with no blank line between.
+
+Any other change is an error naming it and is not placed, such as a change
+that cuts an exposition-only name. The other edits are still written, and the
+run exits 1. A declaration outside every subclause has no place in the draft,
+so it is left out with a warning.
 
 The edited draft is the whole output, so the option takes no baseline, no
 `--inherit-draft`, and no `--split`, `--validate` or `--paper`.

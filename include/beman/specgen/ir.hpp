@@ -972,6 +972,9 @@ struct Section {
     std::string       title;       // e.g. "Constructors"
     std::vector<Node> children;
     Change            change = Change::Same; // the wording diff's mark on the whole subtree
+    // Where the importer read the subclause from, its `\rSec` line through
+    // its last subsection (issue #346). Not compared, and not saved in the IR.
+    NodeOrigin origin = {};
 
     // Declared here and defined below the class rather than defaulted in it:
     // a defaulted comparison makes clang resolve `children == children`
