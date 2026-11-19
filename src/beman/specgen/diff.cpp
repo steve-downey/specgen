@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <iterator>
@@ -839,9 +840,26 @@ std::vector<Block> diff_blocks(const std::vector<Block>& a, const std::vector<Bl
     // A lone block replaced by a lone block of its kind is that block edited,
     // however thorough the edit: the alternative strands an element's label
     // on a struck paragraph and leaves the new one unlabelled.
-    const bool              lone_pair = a.size() == 1 && b.size() == 1 && a.front().index() == b.front().index();
+    const bool lone_pair = a.size() == 1 && b.size() == 1 && a.front().index() == b.front().index();
+    // In a description, a block that opens a numbered paragraph in one
+    // revision and belongs to the paragraph before it in the other is not the
+    // same block (issue #365): pairing it would mark nothing while every
+    // paragraph number after it moved. Unpaired, it shows as removed and
+    // added, which a reader sees as a change. The first block of a body opens
+    // a paragraph whatever its flag says. Inside a note or an example there
+    // are no numbered paragraphs, so the question does not arise.
+    const auto opens = [](const std::vector<Block>& body, std::size_t index) {
+        if constexpr (std::same_as<Block, ir::BodyBlock>)
+            return index == 0 || ir::opens_paragraph(body[index]);
+        else
+            return false;
+    };
     const std::vector<Edit> script =
-        edit_script(a, b, [&](const Block& x, const Block& y) { return lone_pair || pairable(x, y, options); });
+        edit_script(std::views::iota(std::size_t{0}, a.size()),
+                    std::views::iota(std::size_t{0}, b.size()),
+                    [&](std::size_t i, std::size_t j) {
+                        return lone_pair || (opens(a, i) == opens(b, j) && pairable(a[i], b[j], options));
+                    });
     return script | std::views::transform([&](const Edit& e) {
                if (e.op == Op::Keep)
                    return std::visit(overloaded{BlockDiffer<Block>{b[e.b], options}}, a[e.a]);

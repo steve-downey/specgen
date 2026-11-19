@@ -1802,6 +1802,11 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
+The wording diff compares this too. A block that opens a numbered paragraph in
+one revision and belongs to the paragraph before it in the other is marked
+removed where the baseline had it and added where the current revision has it,
+so a paper whose paragraph numbers diverge from the draft's shows where.
+
 A macro or environment the IR has no kind for is kept as raw LaTeX, which the
 mpark and org backends write as a raw inline, and the command warns, naming the
 macro and the subclause:

@@ -775,7 +775,7 @@ TEST_CASE("diff - decls preserves whole added and removed sections and items") {
     CHECK(has_description(std::get<SpecItem>(changed.children.back()).descr));
 }
 
-TEST_CASE("diff - whether a note opens a paragraph is the current document's to say, and is not a change") {
+TEST_CASE("diff - a block that opens a numbered paragraph in one revision and not the other is a change") {
     const auto with_note = [](bool opens) {
         Document doc;
         doc.nodes.push_back(
@@ -790,19 +790,43 @@ TEST_CASE("diff - whether a note opens a paragraph is the current document's to 
     };
     const Document drafted  = with_note(true);
     const Document authored = with_note(false);
-    const auto     note_of  = [](const Document& doc) {
-        const auto& body =
-            std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front()).descr.elements.front().body;
-        return std::get<Note>(body[1]);
+    const auto     body_of  = [](const Document& doc) {
+        return std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front()).descr.elements.front().body;
     };
 
-    // Nothing to show: the default context keeps only what changed.
-    CHECK(diff::compare(drafted, authored).nodes.empty());
-    CHECK(diff::compare(authored, drafted).nodes.empty());
+    // The same flag is no change; a different one is shown, even in the
+    // default context, which keeps only what changed (issue #365).
+    CHECK(diff::compare(drafted, drafted).nodes.empty());
+    REQUIRE_FALSE(diff::compare(drafted, authored).nodes.empty());
+    REQUIRE_FALSE(diff::compare(authored, drafted).nodes.empty());
 
-    const Document forward = diff::compare(drafted, authored, {.context = diff::Context::All});
-    CHECK_FALSE(note_of(forward).opens_paragraph);
-    CHECK(note_of(forward).change == Change::Same);
-    const Document back = diff::compare(authored, drafted, {.context = diff::Context::All});
-    CHECK(note_of(back).opens_paragraph);
+    // The note is removed as the baseline numbered it and added as the
+    // current revision does; the prose before it is untouched.
+    const DescriptionBody forward = body_of(diff::compare(drafted, authored, {.context = diff::Context::All}));
+    REQUIRE(forward.size() == 3);
+    CHECK(block_change(forward[0]) == Change::Same);
+    CHECK(std::get<Note>(forward[1]).change == Change::Removed);
+    CHECK(std::get<Note>(forward[1]).opens_paragraph);
+    CHECK(std::get<Note>(forward[2]).change == Change::Added);
+    CHECK_FALSE(std::get<Note>(forward[2]).opens_paragraph);
+
+    // A paragraph that continues the one before it in one revision and opens
+    // its own in the other is the same case for prose.
+    const auto with_prose = [](bool continuation) {
+        Document doc;
+        doc.nodes.push_back(Section{"s",
+                                    "S",
+                                    {item("void f();",
+                                          {"f"},
+                                          {element(ElementKind::Returns,
+                                                   {BodyParagraph{text("A reference.")},
+                                                    Itemize{{text("one"), text("two")}},
+                                                    BodyParagraph{text("Then more."), continuation}})})}});
+        return doc;
+    };
+    const DescriptionBody prose =
+        body_of(diff::compare(with_prose(true), with_prose(false), {.context = diff::Context::All}));
+    REQUIRE(prose.size() == 4);
+    CHECK(block_change(prose[2]) == Change::Removed);
+    CHECK(block_change(prose[3]) == Change::Added);
 }

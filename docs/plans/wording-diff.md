@@ -123,7 +123,11 @@ each level uses structure before it uses a sequence algorithm:
   words, each carrying the whitespace after it, which is what `wdiff` and `git diff --word-diff`
   do; a `CodeInline`, `RefInline` or `ConceptRef` is one token. A `\tcode{...}` is therefore
   atomic: the diff never marks half of one. Table rows pair by their heading cell (`Table2D`) or
-  first cell (`Table1D`), and the cells then pair as paragraphs.
+  first cell (`Table1D`), and the cells then pair as paragraphs. Two blocks of a description
+  pair only if both open a numbered paragraph or neither does (`ir::opens_paragraph`, issue
+  #365): a note that the baseline numbers by itself and the current revision folds into the
+  paragraph before it is removed and added, since pairing it would mark nothing while every
+  paragraph number after it moved.
 - **Code** (a synopsis, a signature, an *Equivalent to* body) diffs by line first. A removed line
   adjacent to an added one, or a pair past the same similarity threshold, diffs again inside the
   line over C++-ish tokens: identifiers, numbers and punctuation each one token, whitespace
