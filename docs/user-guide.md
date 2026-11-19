@@ -1568,6 +1568,13 @@ is answered with `\covers`, and an answered one is quiet.
 and exit with status 1, as an error does. A note never fails a run, so a
 build can require a run with no warnings and still read the notes.
 
+The option covers every warning a run prints, including those from reading
+the draft under `--inherit-draft`, `--baseline-draft` or `--apply-to-draft`,
+such as a construct the importer keeps as raw LaTeX, and those from resolving
+`\asdraft`. A warning from the importer does not stop the render: the
+wording is written, `generate` says how many such warnings fail the run, and
+it exits with status 1.
+
 ## Debugging aids
 
 ### The declaration interleave
@@ -1831,7 +1838,8 @@ specgen generate include/beman/example/example.hpp \
   failure, a fragment error, or an error-severity validation finding.
 - Under `--warnings-as-errors`, a warning-severity validation finding exits
   with status 1 from either command, and so does a warning-severity docblock
-  finding from `generate`. Without `--validate` the option is a
+  finding from `generate`, a warning from reading the draft, or one from
+  resolving `\asdraft`. Without `--validate` the option is a
   usage error and exits with status 2.
 - A `--depfile` that cannot be written causes exit status 1. It is written
   after every output it names, so a run that reaches that point has already
