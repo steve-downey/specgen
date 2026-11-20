@@ -16,7 +16,9 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <variant>
+#include <vector>
 
 namespace frontend = beman::specgen::frontend;
 namespace ir       = beman::specgen::ir;
@@ -27,6 +29,7 @@ const std::string kCorpusHeader           = std::string(BEMAN_SPECGEN_CORPUS_DIR
 const std::string kSentinelRecoveryHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_sentinel_recovery.hpp";
 const std::string kEmptyRefGroupHeader    = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_empty_ref_group.hpp";
 const std::string kSynopsisCommentsHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_synopsis_comments.hpp";
+const std::string kParameterNamesHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_synopsis_parameter_names.hpp";
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
@@ -95,6 +98,46 @@ TEST_CASE("build_document - keep_synopsis_comments is the earlier rule, under wh
     // Docblocks and Doxygen were never synopsis text.
     CHECK_FALSE(contains(text, "omit"));
     CHECK_FALSE(contains(text, "Doxygen"));
+}
+
+// Issue #385: the draft's synopses mostly declare parameters unnamed.
+TEST_CASE("build_document - drop_synopsis_parameter_names leaves names out of synopses and in item declarations") {
+    const auto synopses_and_items = [](bool drop) {
+        const auto built = frontend::build_document(kParameterNamesHeader,
+                                                    frontend::ParseOptions{.extra_args                    = {},
+                                                                           .compile_commands_dir          = {},
+                                                                           .probe_compile_commands        = false,
+                                                                           .keep_synopsis_comments        = false,
+                                                                           .drop_synopsis_parameter_names = drop});
+        REQUIRE(built.has_value());
+        std::string synopses;
+        std::string items;
+        // substrate generic algorithm: a walk of the tree collecting two kinds of text.
+        const auto walk = [&](this const auto& self, const std::vector<ir::Node>& nodes) -> void {
+            for (const ir::Node& node : nodes) {
+                if (const auto* section = std::get_if<ir::Section>(&node))
+                    self(section->children);
+                else if (const auto* synopsis = std::get_if<ir::Synopsis>(&node))
+                    synopses += synopsis->code.text + "\n";
+                else if (const auto* item = std::get_if<ir::SpecItem>(&node))
+                    for (const ir::CodeText& signature : item->decl.signatures)
+                        items += signature.text + "\n";
+            }
+        };
+        walk(built->document.nodes);
+        return std::pair{synopses, items};
+    };
+    const auto [kept, kept_items] = synopses_and_items(false);
+    CHECK(contains(kept, "constexpr int identity(int n);"));
+    CHECK(contains(kept, "box(const T& value, int count = 1);"));
+
+    const auto [dropped, items] = synopses_and_items(true);
+    CHECK(contains(dropped, "constexpr int identity(int);"));
+    CHECK(contains(dropped, "box(const T&, int = 1);"));
+    // Used again in the noexcept, so the name stays.
+    CHECK(contains(dropped, "box(U&& u) noexcept(noexcept(T(u)));"));
+    CHECK(items == kept_items);
+    CHECK(contains(items, "box(const T& value, int count = 1);"));
 }
 
 TEST_CASE("build_document - empty ref groups are removed without touching live or nested groups") {

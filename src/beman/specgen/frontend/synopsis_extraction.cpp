@@ -150,10 +150,11 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
                                               const clang::LangOptions&                        lang_opts,
                                               const std::set<const clang::Decl*>&              omit_set,
                                               const std::map<const clang::Decl*, std::string>& expos_set,
-                                              const SeeBelowMap&                               seebelow_map,
+                                              const DeclarationMaskMap&                        mask_map,
                                               const FreestandingMap&                           freestanding_map,
                                               const ConstraintsStated&                         constraints_stated,
                                               bool                                             keep_comments,
+                                              bool                                             drop_parameter_names,
                                               const std::set<std::string>&                     ns_drop_set,
                                               const clang::Decl*                               head_decl) {
     const clang::Decl*    head   = head_decl != nullptr ? head_decl : record;
@@ -675,8 +676,19 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // Bare \seebelow replaces the return type. The named
         // targets replace only the operand of noexcept(...) / explicit(...),
         // leaving the keyword and parentheses in authored source.
-        if (const auto marked = seebelow_map.find(fn->getCanonicalDecl()); marked != seebelow_map.end()) {
-            if (const auto range = seebelow_source_range(fn, marked->second)) {
+        // `--synopsis-parameter-names drop` (issue #385): the draft's synopses
+        // mostly declare parameters unnamed, and the item declaration names them.
+        if (drop_parameter_names)
+            std::ranges::for_each(parameter_name_ranges(fn, sm, lang_opts), [&](const auto& name) {
+                edits.push_back(SynopsisEdit{name.first, name.second, ""});
+            });
+        const auto marked = mask_map.find(fn->getCanonicalDecl());
+        // A targeted `\omit` leaves its part of the declaration out (issue #385).
+        if (marked != mask_map.end() && marked->second.omit)
+            if (const auto omitted = omit_byte_range(fn, *marked->second.omit, sm, lang_opts))
+                seebelow_edits.push_back(SynopsisEdit{omitted->first, omitted->second, ""});
+        if (marked != mask_map.end() && marked->second.seebelow) {
+            if (const auto range = seebelow_source_range(fn, *marked->second.seebelow)) {
                 const unsigned begin = sm.getDecomposedLoc(range->getBegin()).second;
                 const unsigned end =
                     sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(range->getEnd(), 0, sm, lang_opts)).second;

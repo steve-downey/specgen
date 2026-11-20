@@ -709,6 +709,7 @@ ParseResult parse_docblock(std::string_view raw) {
     auto handle_marker = [&](const MarkerInfo& info, std::string_view after, int lineno) {
         const std::string name{info.spelling};
         bool              arg_replaced_value = false;
+        bool              targeted           = false;
 
         // Each case answers whether the marker is well formed enough to go on
         // to the checks below; false is a marker already reported.
@@ -747,6 +748,14 @@ ParseResult parse_docblock(std::string_view raw) {
                             {Severity::Error,
                              lineno,
                              std::format("unknown \\seebelow target '{}'; expected 'noexcept' or 'explicit'", arg)});
+                    if (name == "omit" && arg != "noexcept" && arg != "default")
+                        diags.push_back(
+                            {Severity::Error,
+                             lineno,
+                             std::format("unknown \\omit target '{}'; expected 'noexcept' or 'default'", arg)});
+                    // A targeted `\omit` leaves a part of the declaration out and
+                    // keeps the declaration (issue #385), so it is not the flag.
+                    targeted = name == "omit";
                 }
                 after = {};
                 return true;
@@ -763,7 +772,7 @@ ParseResult parse_docblock(std::string_view raw) {
 
         if (!trim(after).empty())
             diags.push_back({Severity::Warning, lineno, "trailing text after \\" + name + " ignored"});
-        if (info.flag != nullptr) {
+        if (info.flag != nullptr && !targeted) {
             if (block.markers.*(info.flag))
                 diags.push_back({Severity::Warning, lineno, "duplicate \\" + name + " marker"});
             block.markers.*(info.flag) = true;

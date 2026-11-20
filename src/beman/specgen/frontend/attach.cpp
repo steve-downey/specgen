@@ -669,6 +669,7 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                                                                  expos_set,
                                                                  friend_begin,
                                                                  seebelow_target(attached.directives),
+                                                                 omit_target(attached.directives),
                                                                  declarator_qualifier));
     }
     // A constructor's or destructor's name is its class's, without the template

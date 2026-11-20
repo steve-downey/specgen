@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 #include <format>
+#include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
@@ -831,7 +832,8 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
             input += " x";
             break;
         case MarkerArity::RestOptional:
-            // The only RestOptional marker has a closed target vocabulary.
+            // Each RestOptional marker takes `noexcept`: a \seebelow and an
+            // \omit target, and an \also group id.
             input += " noexcept";
             break;
         }
@@ -843,7 +845,9 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
         CHECK(!has_diag(r, Severity::Error, "unknown tag"));
         CHECK(r.ok());
 
-        if (entry.flag != nullptr)
+        // A targeted \omit keeps the declaration, so it is not the flag
+        // (issue #385).
+        if (entry.flag != nullptr && entry.spelling != "omit")
             CHECK(r.block.markers.*(entry.flag));
 
         if (entry.set_arg != nullptr)
@@ -1060,6 +1064,24 @@ TEST_CASE("docblock - malformed inline macros report diagnostics and keep their 
     REQUIRE(nested.diags.empty());
     REQUIRE(nested.block.elements.size() == 1);
     CHECK(std::get<InlinePlaceholder>(paragraph(nested.block.elements.front())[1]).text == "a{b}c");
+}
+
+// Issue #385: a targeted `\omit` names a part of the declaration and keeps it.
+TEST_CASE("docblock - omit takes an optional target, which keeps the declaration") {
+    const auto noexcept_target = parse_docblock("\\omit noexcept\n\\effects Nothing.");
+    REQUIRE(noexcept_target.ok());
+    CHECK_FALSE(noexcept_target.block.markers.omit);
+    CHECK(noexcept_target.block.markers.omit_target == std::optional<std::string>{"noexcept"});
+    const auto default_target = parse_docblock("\\omit default");
+    REQUIRE(default_target.ok());
+    CHECK(default_target.block.markers.omit_target == std::optional<std::string>{"default"});
+    const auto bare = parse_docblock("\\omit");
+    REQUIRE(bare.ok());
+    CHECK(bare.block.markers.omit);
+    CHECK_FALSE(bare.block.markers.omit_target.has_value());
+    const auto unknown = parse_docblock("\\omit explicit");
+    REQUIRE(unknown.diags.size() == 1);
+    CHECK(unknown.diags.front().message == "unknown \\omit target 'explicit'; expected 'noexcept' or 'default'");
 }
 
 TEST_CASE("docblock - asdraft is a marker, and covers may name the element it is about") {

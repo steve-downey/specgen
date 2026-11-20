@@ -304,22 +304,22 @@ std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& 
     return paths | std::views::filter(std::not_fn(nested_in_another)) | std::ranges::to<std::set<std::string>>();
 }
 
-SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm) {
+DeclarationMaskMap build_mask_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm) {
     const auto marked_target = [&sm](const clang::FunctionDecl* fn) {
-        return seebelow_target(docblock_directives(fn, sm));
+        return declaration_mask(docblock_directives(fn, sm));
     };
 
     // Out-of-line function definitions, keyed to their in-class declaration.
-    SeeBelowMap result =
+    DeclarationMaskMap result =
         decls | std::views::transform(as_out_of_line_function) | std::views::filter([](const clang::FunctionDecl* fn) {
             return fn != nullptr && fn->isThisDeclarationADefinition() && fn->isOutOfLine();
         }) |
         std::views::filter([&](const clang::FunctionDecl* fn) { return marked_target(fn).has_value(); }) |
         std::views::transform([&](const clang::FunctionDecl* fn) {
-            return std::pair<const clang::Decl*, SeeBelowTarget>{fn->getFirstDecl()->getCanonicalDecl(),
-                                                                 *marked_target(fn)};
+            return std::pair<const clang::Decl*, DeclarationMask>{fn->getFirstDecl()->getCanonicalDecl(),
+                                                                  *marked_target(fn)};
         }) |
-        std::ranges::to<SeeBelowMap>();
+        std::ranges::to<DeclarationMaskMap>();
 
     // In-class members of a class or class template: member_as_function_or_friend's
     // FunctionDecl-or-FriendDecl unwrap, plus (unlike build_omit_set) a plain
@@ -339,9 +339,9 @@ SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const cla
                std::views::filter([](const clang::FunctionDecl* fn) { return fn != nullptr; }) |
                std::views::filter([&](const clang::FunctionDecl* fn) { return marked_target(fn).has_value(); }) |
                std::views::transform([&](const clang::FunctionDecl* fn) {
-                   return std::pair<const clang::Decl*, SeeBelowTarget>{fn->getCanonicalDecl(), *marked_target(fn)};
+                   return std::pair<const clang::Decl*, DeclarationMask>{fn->getCanonicalDecl(), *marked_target(fn)};
                }) |
-               std::ranges::to<std::vector<std::pair<const clang::Decl*, SeeBelowTarget>>>();
+               std::ranges::to<std::vector<std::pair<const clang::Decl*, DeclarationMask>>>();
     };
     result.insert_range(decls | std::views::transform(as_record_decl) |
                         std::views::filter([](const clang::CXXRecordDecl* record) {

@@ -1208,6 +1208,18 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/item_covers/expected.json"
 )
 
+# A targeted `\omit` leaves a strengthened noexcept, or `= default`, out of
+# the synopsis and the item declaration (issue #385).
+specgen_add_golden(
+    omit_targets
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_omit_targets.hpp"
+)
+specgen_add_golden(
+    omit_targets_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/omit_targets/expected.json"
+)
+
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
 specgen_add_golden(

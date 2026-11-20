@@ -11,6 +11,7 @@
 #include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
+#include <clang/AST/Stmt.h>
 #include <clang/AST/TypeBase.h>
 #include <clang/AST/TypeLoc.h>
 #include <clang/Basic/LangOptions.h>
@@ -19,9 +20,15 @@
 #include <clang/Basic/TokenKinds.h>
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/Token.h>
+#include <llvm/ADT/StringRef.h>
 #include <llvm/Support/Casting.h>
 
+#include <cctype>
+#include <cstddef>
 #include <optional>
+#include <ranges>
+#include <utility>
+#include <vector>
 
 namespace beman::specgen::frontend {
 
@@ -99,6 +106,103 @@ std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers) {
     if (*markers.seebelow_target == "explicit")
         return SeeBelowTarget::Explicit;
     return std::nullopt; // parse_docblock has already diagnosed the unknown target
+}
+
+std::optional<OmitTarget> omit_target(const grammar::Markers& markers) {
+    if (!markers.omit_target)
+        return std::nullopt;
+    if (*markers.omit_target == "noexcept")
+        return OmitTarget::Noexcept;
+    if (*markers.omit_target == "default")
+        return OmitTarget::Default;
+    return std::nullopt; // parse_docblock has already diagnosed the unknown target
+}
+
+std::optional<DeclarationMask> declaration_mask(const grammar::Markers& markers) {
+    const DeclarationMask mask{seebelow_target(markers), omit_target(markers)};
+    if (mask == DeclarationMask{})
+        return std::nullopt;
+    return mask;
+}
+
+std::optional<std::pair<unsigned, unsigned>> omit_byte_range(const clang::FunctionDecl*  fn,
+                                                             OmitTarget                  target,
+                                                             const clang::SourceManager& sm,
+                                                             const clang::LangOptions&   lang_opts) {
+    bool                  invalid = false;
+    const clang::FileID   file    = sm.getFileID(sm.getFileLoc(fn->getLocation()));
+    const llvm::StringRef buffer  = sm.getBufferData(file, &invalid);
+    if (invalid)
+        return std::nullopt;
+    const auto offset    = [&](clang::SourceLocation loc) { return sm.getDecomposedLoc(sm.getFileLoc(loc)).second; };
+    const auto token_end = [&](clang::SourceLocation loc) {
+        return offset(clang::Lexer::getLocForEndOfToken(sm.getFileLoc(loc), 0, sm, lang_opts));
+    };
+    const std::optional<std::pair<unsigned, unsigned>> part = foundation::match(
+        target,
+        foundation::when<OmitTarget::Noexcept>([&]() -> std::optional<std::pair<unsigned, unsigned>> {
+            const clang::SourceRange range = fn->getExceptionSpecSourceRange();
+            if (range.isInvalid())
+                return std::nullopt;
+            return std::pair{offset(range.getBegin()), token_end(range.getEnd())};
+        }),
+        foundation::when<OmitTarget::Default>([&]() -> std::optional<std::pair<unsigned, unsigned>> {
+            const clang::SourceLocation keyword = fn->getDefaultLoc();
+            if (keyword.isInvalid())
+                return std::nullopt;
+            // The `=` before the keyword, across blanks.
+            const std::size_t equal = buffer.find_last_not_of(" \t\n", offset(keyword) - 1);
+            if (equal == llvm::StringRef::npos || buffer[equal] != '=')
+                return std::nullopt;
+            return std::pair{static_cast<unsigned>(equal), token_end(keyword)};
+        }));
+    if (!part || part->second <= part->first)
+        return std::nullopt;
+    // The blanks before the part on its line go with it.
+    const std::size_t kept = buffer.find_last_not_of(" \t", part->first - 1);
+    return std::pair{kept == llvm::StringRef::npos ? 0U : static_cast<unsigned>(kept + 1), part->second};
+}
+
+std::vector<std::pair<unsigned, unsigned>> parameter_name_ranges(const clang::FunctionDecl*  fn,
+                                                                 const clang::SourceManager& sm,
+                                                                 const clang::LangOptions&   lang_opts) {
+    if (fn->getLocation().isMacroID() || fn->getEndLoc().isMacroID())
+        return {};
+    bool                  invalid = false;
+    const llvm::StringRef buffer  = sm.getBufferData(sm.getFileID(fn->getLocation()), &invalid);
+    if (invalid)
+        return {};
+    const unsigned decl_begin = sm.getDecomposedLoc(fn->getBeginLoc()).second;
+    // Through the declarator, not into a body: a use there is not the
+    // declaration's.
+    const clang::Stmt* body = fn->doesThisDeclarationHaveABody() && !fn->isDefaulted() ? fn->getBody() : nullptr;
+    const unsigned     decl_end =
+        body != nullptr && body->getBeginLoc().isFileID()
+            ? sm.getDecomposedLoc(body->getBeginLoc()).second
+            : sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(fn->getEndLoc(), 0, sm, lang_opts)).second;
+    const llvm::StringRef declaration = buffer.substr(decl_begin, decl_end - decl_begin);
+    const auto is_word = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_'; };
+    // How often `name` stands as a whole word in the declaration.
+    const auto uses = [&](llvm::StringRef name) {
+        std::size_t count = 0;
+        // substrate generic algorithm: a cursor scan over the text for whole-word matches.
+        for (std::size_t at = declaration.find(name); at != llvm::StringRef::npos; at = declaration.find(name, at + 1))
+            if ((at == 0 || !is_word(declaration[at - 1])) &&
+                (at + name.size() == declaration.size() || !is_word(declaration[at + name.size()])))
+                ++count;
+        return count;
+    };
+    return fn->parameters() | std::views::filter([&](const clang::ParmVarDecl* parameter) {
+               return parameter->getIdentifier() != nullptr && parameter->getLocation().isFileID() &&
+                      uses(parameter->getName()) == 1;
+           }) |
+           std::views::transform([&](const clang::ParmVarDecl* parameter) {
+               const unsigned    name_begin = sm.getDecomposedLoc(parameter->getLocation()).second;
+               const unsigned    name_end   = name_begin + static_cast<unsigned>(parameter->getName().size());
+               const std::size_t kept       = buffer.find_last_not_of(" \t", name_begin - 1);
+               return std::pair{kept == llvm::StringRef::npos ? 0U : static_cast<unsigned>(kept + 1), name_end};
+           }) |
+           std::ranges::to<std::vector>();
 }
 
 std::optional<clang::SourceRange> seebelow_source_range(const clang::FunctionDecl* fn, SeeBelowTarget target) {

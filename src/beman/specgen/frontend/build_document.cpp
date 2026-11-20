@@ -172,7 +172,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     std::set<const clang::Decl*>                    omit_set           = build_omit_set(decls, sm);
     const std::map<const clang::Decl*, std::string> expos_set          = build_expos_set(expos_decls, sm);
     const std::optional<std::vector<std::string>>   paper_entities     = collect_paper_entities(decls, sm);
-    SeeBelowMap                                     seebelow_map       = build_seebelow_map(decls, sm);
+    DeclarationMaskMap                              mask_map           = build_mask_map(decls, sm);
     FreestandingMap                                 freestanding_map   = build_freestanding_map(decls, sm);
     ConstraintsStated                               constraints_stated = build_constraints_stated(decls, sm);
     const std::set<std::string>                     ns_drop_set        = build_namespace_drop_set(decls);
@@ -216,8 +216,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         const auto& [decl, markup] = entry;
         if (suppresses_generated_entity(markup->attached.directives))
             omit_set.insert(decl);
-        if (const std::optional<SeeBelowTarget> target = seebelow_target(markup->attached.directives))
-            seebelow_map.emplace(decl, *target);
+        if (const std::optional<DeclarationMask> mask = declaration_mask(markup->attached.directives))
+            mask_map.emplace(decl, *mask);
         if (markup->attached.directives.freestanding_deleted)
             freestanding_map.emplace(decl, FreestandingKind::Deleted);
         else if (markup->attached.directives.freestanding)
@@ -333,10 +333,11 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         lang_opts,
                         omit_set,
                         expos_set,
-                        seebelow_map,
+                        mask_map,
                         freestanding_map,
                         constraints_stated,
                         options.keep_synopsis_comments,
+                        options.drop_synopsis_parameter_names,
                         ns_drop_set,
                         specified_set,
                         skipped,
@@ -371,7 +372,17 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         std::ranges::for_each(std::ranges::subrange(after.begin(), run), [&](const RawItem& item) {
             if (item.decl != nullptr && !suppresses_generated_entity(docblock_directives(item.decl, sm)))
                 append_synopsis_code(synopsis->synopsis.code,
-                                     extract_header_declaration(item.decl, sm, lang_opts, ns_drop_set, expos_set));
+                                     extract_header_declaration(item.decl,
+                                                                sm,
+                                                                lang_opts,
+                                                                ns_drop_set,
+                                                                expos_set,
+                                                                nullptr,
+                                                                std::nullopt,
+                                                                kNamespaceIndent,
+                                                                {},
+                                                                std::nullopt,
+                                                                options.drop_synopsis_parameter_names));
         });
     };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
@@ -644,7 +655,9 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                                        mask.unspecified,
                                                        see_below,
                                                        nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent,
-                                                       constraints_stated),
+                                                       constraints_stated,
+                                                       omit_target(marked.directives),
+                                                       options.drop_synopsis_parameter_names),
                             nested);
                     }
                 }

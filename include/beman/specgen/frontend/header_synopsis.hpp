@@ -107,7 +107,9 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const clang::VarDecl*             unspecified = nullptr,
                                                         std::optional<clang::SourceRange> see_below   = std::nullopt,
                                                         unsigned                          indent = kNamespaceIndent,
-                                                        const ConstraintsStated&          constraints_stated = {});
+                                                        const ConstraintsStated&          constraints_stated = {},
+                                                        std::optional<OmitTarget>         omit = std::nullopt,
+                                                        bool drop_parameter_names              = false);
 
 beman::specgen::ir::CodeText header_comment_code(std::string text);
 

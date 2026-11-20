@@ -701,6 +701,14 @@ every plain comment of a class body stays in the synopsis. A `\syn` comment is
 printed without its marker under either setting, so a header can be marked
 first and give the option up afterwards.
 
+`generate --synopsis-parameter-names drop` declares a function's parameters
+without their names in a synopsis, class or header, as the draft's synopses
+mostly do: `constexpr explicit bad_expected_access(E);`, where the item
+declaration says `(E e)`. The item declaration keeps the names. A name the
+declaration uses again, in a `noexcept` or a requires-clause, stays, since the
+declaration would not read without it. The default, `keep`, writes the names
+as the header does.
+
 Clang treats an unbroken run of comment lines as one comment, so a plain
 line in the same run as a Doxygen line or a docblock, and after it, is removed
 with it. A blank line between the two separates them.
@@ -1370,6 +1378,16 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
 - `\omit` excludes a declaration entirely. On a deduction guide written right
   after its class template, which the class's synopsis otherwise ends with as
   the draft has it, `\omit` leaves the guide out of that synopsis.
+- `\omit noexcept` and `\omit default` leave a part of a function's
+  declaration out of the wording and keep the declaration: what an
+  implementation declares beyond the standard. `\omit noexcept` drops a
+  strengthened exception specification, which [res.on.exception.handling]
+  allows, so `constexpr expected() noexcept(is_nothrow_default_constructible_v<T>)`
+  reads the draft's `constexpr expected();`. `\omit default` drops `= default`
+  from a special member the standard declares and does not define. Either
+  applies to the synopsis, class or header, and to the item declaration alike,
+  and is written where `\seebelow` would be: on the definition's docblock, or
+  on the declaration's in the class.
 - `\elsewhere` excludes a declaration from generated wording and records that
   the paper declares the name by hand elsewhere. When several headers are
   rendered together, the name is visible to validation in the sibling

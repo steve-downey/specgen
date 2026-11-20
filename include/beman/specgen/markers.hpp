@@ -60,7 +60,11 @@ struct Markers {
     bool                       constraints_in_decl = false;
     bool                       seebelow            = false;
     std::optional<std::string> seebelow_target; // optional \seebelow argument
-    bool                       impdef = false;  // alias RHS only
+    // `\omit noexcept` or `\omit default` (issue #385): what an implementation
+    // declares beyond the standard, left out of the synopsis and the item
+    // declaration. A targeted `\omit` keeps the declaration; `omit` is unset.
+    std::optional<std::string> omit_target;
+    bool                       impdef = false; // alias RHS only
 
     // Explicit itemdescr placement for in-class-defined members.
     std::optional<std::string> at_anchor; // \at <anchor>
@@ -115,6 +119,7 @@ namespace detail {
 bool set_expos_name(Markers& markers, std::string arg);
 bool set_at_anchor(Markers& markers, std::string arg);
 bool set_seebelow_target(Markers& markers, std::string arg);
+bool set_omit_target(Markers& markers, std::string arg);
 bool set_group_id(Markers& markers, std::string arg);
 bool set_also_target(Markers& markers, std::string arg);
 } // namespace detail
@@ -134,7 +139,10 @@ inline constexpr MarkerInfo kMarkers[] = {
      .set_arg  = &detail::set_expos_name,
      .arity    = MarkerArity::ParenOptional},
     {.spelling = "merge",               .flag = &Markers::merge},
-    {.spelling = "omit",                .flag = &Markers::omit},
+    {.spelling = "omit",
+     .flag     = &Markers::omit,
+     .set_arg  = &detail::set_omit_target,
+     .arity    = MarkerArity::RestOptional},
     {.spelling = "asdraft",             .flag = &Markers::asdraft},
     {.spelling = "asdraft-synopsis",    .flag = &Markers::asdraft_synopsis},
     {.spelling = "elsewhere",           .flag = &Markers::elsewhere},

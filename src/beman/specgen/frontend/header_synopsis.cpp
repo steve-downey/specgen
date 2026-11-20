@@ -10,6 +10,7 @@
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/directive_sets.hpp>
+#include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/draft_format.hpp>
 #include <beman/specgen/frontend/expos_spellings.hpp>
 #include <beman/specgen/frontend/file_views.hpp>
@@ -210,7 +211,9 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
                                                         const clang::VarDecl*                            unspecified,
                                                         std::optional<clang::SourceRange>                see_below,
                                                         unsigned                                         indent,
-                                                        const ConstraintsStated& constraints_stated) {
+                                                        const ConstraintsStated&  constraints_stated,
+                                                        std::optional<OmitTarget> omit,
+                                                        bool                      drop_parameter_names) {
     const unsigned decl_begin = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
     // Through the `;`, which for a deleted or defaulted function is past a
     // tail the declaration's recorded end does not reach (issue #282): the
@@ -300,6 +303,17 @@ beman::specgen::ir::CodeText extract_header_declaration(clang::Decl*            
     // token for that angle-bracketed label (issue #22). A guide renders
     // verbatim and unindexed, as the draft's header synopses show them.
     const bool is_guide = named_fn != nullptr && llvm::isa<clang::CXXDeductionGuideDecl>(named_fn);
+    // A targeted `\omit` (issue #385), as in a class synopsis.
+    if (omit && named_fn != nullptr)
+        if (const auto omitted = omit_byte_range(named_fn, *omit, sm, lang_opts);
+            omitted && omitted->first >= decl_begin && omitted->second <= decl_end)
+            add_dominant_edit(edits, SynopsisEdit{omitted->first, omitted->second, ""});
+    // `--synopsis-parameter-names drop` (issue #385), as in a class synopsis.
+    if (drop_parameter_names && named_fn != nullptr)
+        std::ranges::for_each(parameter_name_ranges(named_fn, sm, lang_opts), [&](const auto& name) {
+            if (name.first >= decl_begin && name.second <= decl_end)
+                edits.push_back(SynopsisEdit{name.first, name.second, ""});
+        });
     if (named != nullptr && !is_guide && !named->getNameAsString().empty() && named->getLocation().isValid()) {
         clang::SourceRange name_range{named->getLocation(), named->getLocation()};
         if (named_fn != nullptr)

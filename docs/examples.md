@@ -119,6 +119,12 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --synopsis-parameter-names keep|drop
+                             with drop, a synopsis declares a function's
+                             parameters without their names, as the draft's
+                             synopses mostly do; an item declaration keeps
+                             them. A name the declaration uses again, in a
+                             noexcept or a requires-clause, stays. Default keep
   --keep-synopsis-comments  keep every plain comment of a class body in its
                              synopsis. By default a synopsis keeps a
                              `// \ref{x}, title` group header and a comment
