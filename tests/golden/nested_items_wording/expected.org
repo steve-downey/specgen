@@ -1,0 +1,22 @@
+** Waiting [demo.wait]
+:PROPERTIES:
+:CUSTOM_ID: demo.wait
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+inline void wait();
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Blocks until one of:
+
+- a value is ready, and then either
+  - it is returned, or
+  - it is discarded, equivalent to:
+    #+begin_codeblock
+    discard();
+    #+end_codeblock
+- the timeout expires.
+#+end_pnum

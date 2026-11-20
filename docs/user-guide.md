@@ -1005,7 +1005,24 @@ goes on after it, as the draft writes an item that ends "equivalent to:":
 ```
 
 A `\codeblock` that is not indented past the `\item` ends the list and stands
-on its own.
+on its own. The indentation a code block's lines share with its `\codeblock`
+line is the docblock's layout, and is not part of the code.
+
+An `\item` indented past the `\item` before it opens a list inside that item,
+the way the draft nests one, and an `\item` indented as the outer items are
+goes back to their list. A code block goes to the deepest item it is indented
+past:
+
+```cpp
+//! \effects Blocks until one of:
+//! \item a value is ready, and then either
+//!   \item it is returned, or
+//!   \item it is discarded, equivalent to:
+//!     \codeblock
+//!     discard();
+//!     \endcodeblock
+//! \item the timeout expires.
+```
 
 To start a new numbered paragraph directly after a list, write two consecutive
 blank decorated lines. This works in leading prose and within an element:

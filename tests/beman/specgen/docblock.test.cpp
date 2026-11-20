@@ -1170,8 +1170,40 @@ TEST_CASE("docblock - a code block indented under an item is the item's, and the
     REQUIRE(body.size() == 2);
     const auto& list = std::get<Itemize>(body[0]);
     REQUIRE(list.items.size() == 2);
-    REQUIRE(list.items[0].code_blocks.size() == 1);
-    CHECK(list.items[0].code_blocks[0].text == "  f();");
-    CHECK(list.items[1].code_blocks.empty());
+    REQUIRE(list.items[0].blocks.size() == 1);
+    // The indentation the code shares with its `\codeblock` line is the
+    // docblock's layout, not the code's.
+    CHECK(std::get<beman::specgen::ir::CodeText>(list.items[0].blocks[0]).text == "f();");
+    CHECK(list.items[1].blocks.empty());
     CHECK(std::get<AuthoredCode>(body[1]).code.text == "g();");
+}
+
+TEST_CASE("docblock - an item indented past the item before it opens a list inside that item") {
+    // Issue #390: as a `\codeblock` belongs to the item it is indented under,
+    // so does an `\item`, which opens a list inside it. One indented as the
+    // outer items are goes back to their list, and a code block goes to the
+    // deepest item it is indented past.
+    auto r = parse_docblock("//! \\effects\n"
+                            "//! \\item One of:\n"
+                            "//!   \\item `a`, equivalent to:\n"
+                            "//!     \\codeblock\n"
+                            "//!     f();\n"
+                            "//!     \\endcodeblock\n"
+                            "//!   \\item `b`, and then:\n"
+                            "//!     \\item `c`\n"
+                            "//! \\item Otherwise, no effect.\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const auto& body = r.block.elements.front().body;
+    REQUIRE(body.size() == 1);
+    const auto& list = std::get<Itemize>(body[0]);
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items[0].blocks.size() == 1);
+    const auto& inner = std::get<Itemize>(list.items[0].blocks[0]);
+    REQUIRE(inner.items.size() == 2);
+    REQUIRE(inner.items[0].blocks.size() == 1);
+    CHECK(std::holds_alternative<beman::specgen::ir::CodeText>(inner.items[0].blocks[0]));
+    REQUIRE(inner.items[1].blocks.size() == 1);
+    CHECK(std::get<Itemize>(inner.items[1].blocks[0]).items.size() == 1);
+    CHECK(list.items[1].blocks.empty());
 }

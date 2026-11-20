@@ -1,0 +1,23 @@
+\rSec3[demo.wait]{Waiting}
+
+\indexlibraryglobal{wait}%
+\begin{itemdecl}
+inline void wait();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Blocks until one of:
+\begin{itemize}
+\item a value is ready, and then either
+\begin{itemize}
+\item it is returned, or
+\item it is discarded, equivalent to:
+\begin{codeblock}
+discard();
+\end{codeblock}
+\end{itemize}
+\item the timeout expires.
+\end{itemize}
+\end{itemdescr}

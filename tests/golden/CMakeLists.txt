@@ -1220,6 +1220,22 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/omit_targets/expected.json"
 )
 
+# A list inside a list item, written in a docblock by indenting its `\item`s
+# (issue #390), through every backend.
+specgen_add_golden(
+    nested_items
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_items.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        nested_items_wording
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_items/expected.json"
+    )
+endforeach()
+
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
 specgen_add_golden(

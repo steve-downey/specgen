@@ -590,6 +590,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.
+  An `\item` indented past the one before it opens a list inside that item
+  (issue #390), and a `\codeblock` goes to the deepest item it is indented past
+  (issue #367); the grammar's `ListItem::blocks` holds both, in order.
   Two consecutive blank decorated lines after the list start a new numbered
   paragraph when prose follows. A further blank in resumed prose also starts
   a new numbered paragraph.

@@ -119,18 +119,24 @@ struct BodyParagraph {
     bool           continuation = false;
 };
 
-// One `\item`: its prose, and the code blocks written under it, a
-// `\codeblock` indented past the `\item` line (issue #367).
-struct ListItem {
-    ProseParagraph            text;
-    std::vector<ir::CodeText> code_blocks = {};
-};
+struct ListItem;
 
 struct Itemize {
     std::vector<ListItem> items;
     // Set where the block opens a numbered paragraph of its own: two blank
     // decorated lines before it (ir::opens_paragraph).
     bool opens_paragraph = false;
+};
+
+// What an `\item` holds after its prose, written under it: a `\codeblock`
+// (issue #367) or a list of `\item`s (issue #390), each indented past the
+// `\item` line.
+using ItemBlock = std::variant<ir::CodeText, Itemize>;
+
+// One `\item`: its prose, and the blocks written under it, in order.
+struct ListItem {
+    ProseParagraph         text;
+    std::vector<ItemBlock> blocks = {};
 };
 
 struct AuthoredCode {
