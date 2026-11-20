@@ -23,6 +23,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <ranges>
 #include <span>
 #include <string>
 #include <variant>
@@ -719,6 +720,42 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
     CHECK(std::get<ir::TextInline>(std::get<ir::BodyParagraph>(prose.descr.leading[1]).text.front()).text ==
           "Second paragraph.");
     CHECK(std::get<ir::SpecItem>(children[2]).decl.signatures.front().text == "after();");
+}
+
+// An item's placement key is where its member is declared in the class, ahead
+// of the section an out-of-line definition documents it in; prose is keyed by
+// its own offset. Each stands where it is written all the same (issue #383):
+// prose ahead of the section's first item leads it, ahead of an in-class
+// member injected from the class too, prose between two items stays between
+// them, and prose after the last item stays last.
+TEST_CASE("build_tree - section prose stands where it is written among out-of-line items") {
+    const auto prose = [](unsigned offset, std::string text) {
+        return db::SectionProse{offset, {ir::BodyParagraph{{ir::TextInline{std::move(text)}}}}, {}, 1, "part.hpp"};
+    };
+    db::SynopsisDecl syn;
+    syn.offset  = 1;
+    syn.pending = {db::PendingItem{"demo.assign", 25, make_item("inline_member();", true)}};
+    std::vector<db::DocEvent> events;
+    events.emplace_back(std::move(syn));
+    events.emplace_back(db::SectionOpen{100, 3, "demo.assign", "Assignment"});
+    events.emplace_back(prose(110, "Leading."));
+    events.emplace_back(db::ItemDecl{20, false, make_item("first();", true)});
+    events.emplace_back(prose(130, "Between."));
+    events.emplace_back(db::ItemDecl{30, false, make_item("second();", true)});
+    events.emplace_back(prose(150, "Trailing."));
+    const auto result = db::build_tree(events);
+    CHECK(result.diagnostics.empty());
+    REQUIRE(result.document.nodes.size() == 1);
+    const auto& children = std::get<ir::Section>(result.document.nodes.front()).children;
+    const auto  label    = [](const ir::Node& node) {
+        const auto& item = std::get<ir::SpecItem>(node);
+        if (!item.decl.signatures.empty())
+            return item.decl.signatures.front().text;
+        return std::get<ir::TextInline>(std::get<ir::BodyParagraph>(item.descr.leading.front()).text.front()).text;
+    };
+    const std::vector<std::string> order = children | std::views::transform(label) | std::ranges::to<std::vector>();
+    CHECK(order ==
+          std::vector<std::string>{"Leading.", "first();", "inline_member();", "Between.", "second();", "Trailing."});
 }
 
 TEST_CASE("build_tree - detached prose after a section fence reports its source") {

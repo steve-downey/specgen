@@ -1,0 +1,47 @@
+** Class template ~holder~ [demo.holder]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class I>
+  class holder {
+  public:
+    // \ref{demo.holder.cons}, constructors
+    constexpr explicit holder(I ptr);
+    constexpr holder(I ptr, int count);
+
+  private:
+    I @\exposid{ptr}@; // exposition only
+  };
+
+  template<class I> holder(I) -> holder<I>;
+
+  template<class I> holder(I, int) -> holder<I>;
+}
+#+end_codeblock
+
+*** Constructors [demo.holder.cons]
+:PROPERTIES:
+:CUSTOM_ID: demo.holder.cons
+:UNNUMBERED: t
+:END:
+
+#+begin_itemdecl
+constexpr explicit holder(I ptr);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Initializes ~ptr~ with ~ptr~.
+#+end_pnum
+
+#+begin_itemdecl
+constexpr holder(I ptr, int count);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/: Initializes ~ptr~ with ~ptr~.
+#+end_pnum

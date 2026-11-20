@@ -701,6 +701,14 @@ every plain comment of a class body stays in the synopsis. A `\syn` comment is
 printed without its marker under either setting, so a header can be marked
 first and give the option up afterwards.
 
+`generate --synopsis-parameter-names drop` declares a function's parameters
+without their names in a synopsis, class or header, as the draft's synopses
+mostly do: `constexpr explicit bad_expected_access(E);`, where the item
+declaration says `(E e)`. The item declaration keeps the names. A name the
+declaration uses again, in a `noexcept` or a requires-clause, stays, since the
+declaration would not read without it. The default, `keep`, writes the names
+as the header does.
+
 Clang treats an unbroken run of comment lines as one comment, so a plain
 line in the same run as a Doxygen line or a docblock, and after it, is removed
 with it. A blank line between the two separates them.
@@ -984,6 +992,38 @@ line closes the item. Another `\item` then continues the list; prose resumes
 the current body in the same numbered paragraph. A later `\item` starts a new list.
 A further blank within resumed prose starts a new numbered paragraph.
 
+A code block indented past its `\item` line belongs to that item, and the list
+goes on after it, as the draft writes an item that ends "equivalent to:":
+
+```cpp
+//! \effects
+//! \item If `has_value()` is `true`, equivalent to:
+//!   \codeblock
+//!   val = rhs.val;
+//!   \endcodeblock
+//! \item Otherwise, no effect.
+```
+
+A `\codeblock` that is not indented past the `\item` ends the list and stands
+on its own. The indentation a code block's lines share with its `\codeblock`
+line is the docblock's layout, and is not part of the code.
+
+An `\item` indented past the `\item` before it opens a list inside that item,
+the way the draft nests one, and an `\item` indented as the outer items are
+goes back to their list. A code block goes to the deepest item it is indented
+past:
+
+```cpp
+//! \effects Blocks until one of:
+//! \item a value is ready, and then either
+//!   \item it is returned, or
+//!   \item it is discarded, equivalent to:
+//!     \codeblock
+//!     discard();
+//!     \endcodeblock
+//! \item the timeout expires.
+```
+
 To start a new numbered paragraph directly after a list, write two consecutive
 blank decorated lines. This works in leading prose and within an element:
 
@@ -1109,7 +1149,30 @@ since nothing else would state it. A leading run of body-local type aliases
 followed by `static_assert`s produces derived *Mandates*; the aliases remain in
 an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
-wording, and the derivation is retained as evidence for the drift checks.
+wording, and the derivation is retained as evidence for the drift checks. An
+empty one, the marker with nothing after it, removes the derived element and
+writes nothing in its place; each derived conjunct is then a note unless other
+wording in the item reads as it.
+
+The draft often states a condition outside *Constraints*: a copy constructor's
+*Remarks* says "This constructor is defined as deleted unless
+`is_copy_constructible_v<T>` is `true`", and the item has no *Constraints*.
+`\covers constraints P` (or `\covers mandates P`) says that the item's other
+wording states the derived conjunct `P`, so it leaves the derived element:
+
+```cpp
+//! \covers constraints is_copy_constructible_v<T>
+//! \covers constraints !(is_trivially_copy_constructible_v<T>)
+//! \effects Initializes `val` with `rhs.val`.
+//! \remarks This constructor is defined as deleted unless
+//! `is_copy_constructible_v<T>` is `true`. ...
+```
+
+Once every conjunct is claimed the derived element is gone; a conjunct no claim
+names is still rendered under *Constraints*. A claimed conjunct gives no note.
+The claims are checked as `\covers` always is (see [Explicit constraint
+coverage](#explicit-constraint-coverage)), and one naming an element the item
+does not derive is an Error.
 
 ## Inheriting a description
 
@@ -1210,22 +1273,34 @@ together.
 A change to the code of a declaration or of a synopsis is placed token by
 token: a token added, removed or replaced. Code is compared with its layout
 ignored, so a declaration the generator lays out differently from the draft is
-not a change, and an added `constexpr` is written into the draft's own line.
+not a change, and an added `constexpr` is written into the draft's own line,
+with the space the paper has beside it. Tokens the paper writes on lines of
+their own, ahead of a line of the draft's, such as an access specifier and the
+member under it, are added as those lines, laid out as the paper has them.
 
-A changed description replaces the numbered paragraphs that changed and leaves
-the others as the draft has them, line for line. The new paragraph is written
-as the LaTeX backend writes it, laid out as the draft's are, a sentence to a
-line. When the paper's description has more or fewer numbered paragraphs than
-the draft's, the description is replaced whole. An item, a synopsis or a
-paragraph the paper adds is written after the draft's node the paper puts
-before it, separated by a blank line. One the paper removes is taken out,
-together with the blank line after it.
+A changed description replaces only what changed. The draft's paragraph and
+the paper's are each laid out a sentence to a line, as the draft writes them,
+and compared line by line: a sentence the paper keeps stays as the draft's
+source has it, byte for byte, and a sentence it changes, adds or removes is a
+line replaced, added or removed. Where the draft's source does not say what the
+generator says, up to its line breaks (a `%` comment inside the paragraph, a
+macro spelled another way), the numbered paragraph that changed is replaced
+whole; when the paper's description has more or fewer numbered paragraphs than
+the draft's, the description is.
 
-Any other change is an error naming it and is not placed: a declaration added
-to or removed from an item, such as an overload joining an `\also` group, and a
-subclause added or removed. The other edits are still written, and the run
-exits 1. A declaration outside every subclause has no place in the draft, so it
-is left out with a warning.
+A declaration the paper adds to an item, such as an overload joining an `\also`
+group, is written as lines of the draft's `itemdecl`, after the declaration it
+follows; one the paper removes goes with its lines. An item, a synopsis, a
+paragraph or a subclause the paper adds is written after the draft's node the
+paper puts before it, separated by a blank line. A subclause takes the `\rSec`
+level of the subclauses beside it, or one below the subclause it is in. A node
+the paper removes is taken out, together with the blank line after it and any
+`%` comment lines directly above it, with no blank line between.
+
+Any other change is an error naming it and is not placed, such as a change
+that cuts an exposition-only name. The other edits are still written, and the
+run exits 1. A declaration outside every subclause has no place in the draft,
+so it is left out with a warning.
 
 The edited draft is the whole output, so the option takes no baseline, no
 `--inherit-draft`, and no `--split`, `--validate` or `--paper`.
@@ -1317,7 +1392,19 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers
 
-- `\omit` excludes a declaration entirely.
+- `\omit` excludes a declaration entirely. On a deduction guide written right
+  after its class template, which the class's synopsis otherwise ends with as
+  the draft has it, `\omit` leaves the guide out of that synopsis.
+- `\omit noexcept` and `\omit default` leave a part of a function's
+  declaration out of the wording and keep the declaration: what an
+  implementation declares beyond the standard. `\omit noexcept` drops a
+  strengthened exception specification, which [res.on.exception.handling]
+  allows, so `constexpr expected() noexcept(is_nothrow_default_constructible_v<T>)`
+  reads the draft's `constexpr expected();`. `\omit default` drops `= default`
+  from a special member the standard declares and does not define. Either
+  applies to the synopsis, class or header, and to the item declaration alike,
+  and is written where `\seebelow` would be: on the definition's docblock, or
+  on the declaration's in the class.
 - `\elsewhere` excludes a declaration from generated wording and records that
   the paper declares the name by hand elsewhere. When several headers are
   rendered together, the name is visible to validation in the sibling
@@ -1351,8 +1438,11 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
   with the space beside it. This covers an object-like macro whose expansion is
   keywords alone, or nothing, or another such macro. A function-like macro, or
   one whose expansion holds a number, a name that is not such a macro, or an
-  attribute, is left as written. Whether the expansion is the one the wording wants is settled with
-  a `-D` after the `--`. A declaration or a definition whose first token comes
+  attribute, is left as written. The expansion is the one in effect where the
+  macro is used, so a header that `#undef`s its macro at the end, so as not to
+  leak it, reads the same; a macro whose uses expanded different definitions is
+  left as written. Whether the expansion is the one the wording wants is
+  settled with a `-D` after the `--`. A declaration or a definition whose first token comes
   from a macro is where it is written, so its docblock attaches to it and its
   item is placed with its class's other members. A declaration that a
   function-like macro stamps out, its name and all, is the macro's, and
@@ -1717,15 +1807,22 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `$\tcode{T}_i$` in a `\tcode` | a subscript on code, as `T$_i$` is | `T@~_i_~@` | `T<sub><var>i</var></sub>` |
 | `$\dotsc$` in a `\tcode` | the elements left out of a sequence | `...` | `...` |
 | `$i_\tcode{x}$` in a `\tcode` | a variable and code as its subscript | `$i$@~x~@` | `<var>i</var><sub>x</sub>` |
-| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i-1_~@` | `<var>p</var><sub><var>i-1</var></sub>` |
+| `$p_{i-1}$` in a `\tcode` | a variable and an expression as its subscript | `$p$@~_i_-1~@` | `<var>p</var><sub><var>i</var>-1</sub>` |
+| `$\tcode{Ds}_{\tcode{T}}$` in a `\tcode` | code and code as its subscript | `Ds@~T~@` | `Ds<sub>T</sub>` |
+| `$\tcode{\placeholder{it}}_i$` in a `\tcode` | a placeholder and its subscript | `$it$@~_i_~@` | `<var>it</var><sub><var>i</var></sub>` |
+| `$\tcode{I}^\text{th}$`, `$i^\text{th}$` | an ordinal suffix | `I@^th^@` | `I<sup>th</sup>` |
+| `$\rho$`, `$a + 0$` in a `\tcode` | mathematics with no other kind | `@$\rho$@` | `\(\rho\)` |
 
 The argument of `\opt` has to be code and nothing else: an `\opt` around
 another macro, as the format grammar writes, is not read.
 
 Mathematics inside a `\tcode` is read when it is a variable (letters alone), a
 subscript (one letter or digit, or a group of them, which may hold `+` and
-`-`), a subscript on a variable or on code, code as the subscript of a
-variable, or `\dotsc`. The code's text has the variable as its name, the
+`-`), a subscript on a variable, on code or on a placeholder, code as the
+subscript of a variable or of code, any of those but a lone subscript followed
+by an ordinal suffix (`^\text{th}`, `st`, `nd` or `rd`), or `\dotsc`. In a
+subscript, letters are italic and digits and operators upright, as mathematics
+sets them. The code's text has the variable as its name, the
 subscript after an underscore and the ellipsis as three dots, so
 `\tcode{std::forward<T$_i$>(get<$i$>(u))}` reads `std::forward<T_i>(get<i>(u))`
 and `\tcode{T$_0$, $\dotsc$, T$_n$}` reads `T_0, ..., T_n`.
@@ -1738,10 +1835,19 @@ is the group the draft sometimes puts around a subscript of one character there
 (`$\tcode{B}_{1}$`). A subscript with no code before it in the mathematics comes
 back without such a group (`$_{N}$` as `$_N$`), which the draft does not write.
 
-Any other mathematics there has no kind: an expression (`$i - 1$`), code as
-the subscript of code (`$\tcode{Ds}_{\tcode{T}}$`), a placeholder with a
-subscript, a Greek letter. The whole `\tcode` is kept as raw LaTeX and the
-command warns.
+Any other mathematics there, such as an expression (`$i - 1$`) or a Greek
+letter (`$\rho$`), is kept as the draft's own LaTeX in a span of its own, and
+the code around it is still read as code. The LaTeX backend writes it back as
+it was, mpark writes it as TeX mathematics (`@$\rho$@`), and org's HTML as
+`\(\rho\)` for MathJax.
+
+In running text, mathematics that reads as one of the shapes above is read the
+same way, as a code inline marked as mathematics (`"math": true` in the IR):
+`$i$`, `$\tcode{T}_i$`, `$r_K$` and `$i^\text{th}$`. The LaTeX backend writes
+it back without a `\tcode` around it, and mpark and org set the code in it in
+the code font and the rest as mathematics (`` `T`~_i_~ `` in mpark). Any other
+mathematics in running text, such as `$[0, N)$` or `$N \log N$`, is kept as raw
+LaTeX, and the command warns.
 
 The LaTeX backend writes each back as the macro it was read from. That
 includes the choice between a macro and its no-italic-correction twin
@@ -1802,6 +1908,16 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
+A list item can hold a code block, a nested list, a note, an example, and prose
+after any of them, inside the item; mpark and org indent them under the item.
+A list item holding a footnote, a `tailnote` or a numbered (`enumerate`) list
+is still kept as raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
+and two data columns, `\chdr` and `\rhdr` over them and `\lhdr` on each row,
+as [expected.object.swap] has) is read as the same two-dimensional table, and
+the LaTeX backend writes it back as the `floattable` it was, with its column
+specification; mpark and org write it as any such table. A `floattable` of
+another shape is kept as raw LaTeX.
+
 The wording diff compares this too. A block that opens a numbered paragraph in
 one revision and belongs to the paragraph before it in the other is marked
 removed where the baseline had it and added where the current revision has it,
@@ -1857,7 +1973,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.47.2 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.55.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 
@@ -1869,7 +1985,14 @@ with paragraph/list/table slots. Older renderers reject `item-v4`, so saved
 wording cannot disappear through unknown-field skipping. Regenerate saved IR
 when moving to the new writer. The prose inline tags `placeholder`,
 `oldconcept` and `raw` are new; an older renderer reports a document containing one as
-unreadable rather than dropping the text. A block's `opens_paragraph` is an
+unreadable rather than dropping the text, and so does one holding a span of
+the kinds `math` or `ordinal`. A code inline's `math` flag is an added field:
+an older renderer skips it and writes the mathematics inside a `\tcode`. A
+list item that holds blocks after its paragraph is written as an object
+(`{"text": [...], "blocks": [...]}`) where every other item is the array of
+inlines it always was, and an older renderer rejects it. A table's
+`floattable` field is added: an older renderer skips it and writes a
+`lib2dtab2`. A block's `opens_paragraph` is an
 added field, which only the draft importer sets: an older renderer skips it and
 writes the block in the paragraph before it, so the words are all there and the
 paragraph numbers after it are one lower.
@@ -1878,7 +2001,10 @@ paragraph numbers after it are one lower.
 
 A prose-only `//!` or `/*! */` block separated from declarations belongs to
 the current section. It can contain authored `\item` lists, followed by resumed
-prose. Blank decorated lines separate its numbered paragraphs.
+prose. Blank decorated lines separate its numbered paragraphs. It stands
+where it is written among the section's items: a paragraph between the
+`\rSec` and the first item opens the section, even when the items are
+out-of-line members, which otherwise take their order from the class.
 A detached block outside every section reports an error. Inside a bounded
 header synopsis, detached prose follows the assembled synopsis alongside the
 classes' own descriptions. Labelled description elements require a declaration.
@@ -1895,11 +2021,12 @@ prose, acknowledge its correspondence on the authored element:
 //! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
 ```
 
-`\covers` belongs to the current normative Constraints or Mandates element, or,
-beside `\asdraft`, names the element it is about (`\covers constraints P`). On
-a class definition, `\covers mandates P` needs no `\asdraft`: it says that the
-class's leading prose stands for the paragraph derived from its
-`static_assert`s.
+`\covers` belongs to the current normative Constraints or Mandates element, or
+names the element it is about (`\covers constraints P`). Beside `\asdraft` that
+element is the inherited one. On an item without it, the claim says the item's
+other wording states a derived conjunct, which then leaves the derived element.
+On a class definition, `\covers mandates P` says that the class's leading
+prose stands for the paragraph derived from its `static_assert`s.
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

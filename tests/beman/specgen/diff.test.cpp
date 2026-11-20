@@ -4,6 +4,7 @@
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/diff.hpp> // Re-inclusion verification
 
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -15,7 +16,8 @@
 #include <vector>
 
 using namespace beman::specgen::ir;
-namespace diff = beman::specgen::diff;
+namespace diff         = beman::specgen::diff;
+namespace draft_import = beman::specgen::draft_import;
 
 namespace {
 
@@ -342,6 +344,19 @@ TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {
     // No run crosses a line end.
     for (const ChangeRun& run : code.changes)
         CHECK(code.text.substr(run.begin, run.end - run.begin).find('\n') == std::string::npos);
+}
+
+// A `\verbatim-synopsis` keeps its text as typed, `// \ref{x}` in a comment
+// included, where the importer reads the draft's comment as a reference span.
+// The same bytes are the same wording (issue #392).
+TEST_CASE("diff - a reference in an authored listing's comment is the draft's reference span") {
+    const std::string typed = "namespace std {\n  // \\ref{demo.thing}, class \\tcode{thing}\n  class thing;\n}";
+    Document          before;
+    before.nodes.push_back(Synopsis{.name = "thing", .code = draft_import::parse_listing(typed), .roster = {}});
+    REQUIRE(!std::get<Synopsis>(before.nodes[0]).code.spans.empty());
+    Document after;
+    after.nodes.push_back(Synopsis{.name = "", .code = {typed, {}}, .roster = {}});
+    CHECK(!diff::has_marks(diff::compare(before, after, {.context = diff::Context::All})));
 }
 
 // Which of a macro's two forms the draft wrote is typesetting (issue #306). A
@@ -829,4 +844,35 @@ TEST_CASE("diff - a block that opens a numbered paragraph in one revision and no
     REQUIRE(prose.size() == 4);
     CHECK(block_change(prose[2]) == Change::Removed);
     CHECK(block_change(prose[3]) == Change::Added);
+}
+
+TEST_CASE("diff - a list item's blocks diff as a body does, and an unpaired item takes its blocks with it") {
+    // Issue #367.
+    const auto with_items = [](std::vector<ListItem> items) {
+        Document doc;
+        doc.nodes.push_back(Section{
+            "s", "S", {item("void f();", {"f"}, {element(ElementKind::Effects, {Itemize{std::move(items)}})})}});
+        return doc;
+    };
+    const auto code_item = [](std::string lead, std::string code) {
+        return ListItem{text(std::move(lead)), DescriptionBody{AuthoredCode{CodeText{std::move(code), {}}}}};
+    };
+    const auto list_of = [](const Document& doc) {
+        return std::get<Itemize>(std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front())
+                                     .descr.elements.front()
+                                     .body.front());
+    };
+
+    const Document before = with_items({code_item("If a, equivalent to:", "f(x);"), text("Otherwise, no effect.")});
+    const Document after  = with_items({code_item("If a, equivalent to:", "f(y);"), text("Otherwise, no effect.")});
+    const Itemize  edited = list_of(diff::compare(before, after, {.context = diff::Context::All}));
+    REQUIRE(edited.items.size() == 2);
+    const auto& code = std::get<AuthoredCode>(edited.items[0].blocks.at(0));
+    CHECK(code.change == Change::Same);
+    CHECK_FALSE(code.code.changes.empty());
+
+    const Document removed = with_items({text("Otherwise, no effect.")});
+    const Itemize  gone    = list_of(diff::compare(before, removed, {.context = diff::Context::All}));
+    REQUIRE(gone.items.size() == 2);
+    CHECK(std::get<AuthoredCode>(gone.items[0].blocks.at(0)).change == Change::Removed);
 }

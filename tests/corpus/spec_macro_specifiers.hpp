@@ -8,6 +8,10 @@
 // declaration, or in its definition, leaves the item where the declaration is
 // written (issue #348), and so does one last. A declaration a function-like
 // macro stamps out, its name and all, is the macro's, and no wording.
+//
+// The expansion written is the one in effect where the macro is used (issue
+// #377): the header ends by undefining its macros, so as not to leak them, and
+// by defining one again as something else, and neither changes the wording.
 
 #define DEMO_CONSTEXPR constexpr
 #define DEMO_NOTHING
@@ -51,3 +55,9 @@ struct box {};
 
 DEMO_SPECIALIZE(int);
 } // namespace demo
+
+#undef DEMO_CONSTEXPR
+#undef DEMO_NOTHING
+#undef DEMO_INDIRECT
+#undef DEMO_NOEXCEPT
+#define DEMO_CONSTEXPR consteval

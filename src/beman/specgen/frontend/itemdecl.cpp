@@ -57,6 +57,7 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               clang::SourceLocation                            friend_begin,
                                               std::optional<SeeBelowTarget>                    seebelow,
+                                              std::optional<OmitTarget>                        omit,
                                               std::string_view                                 declarator_qualifier) {
     // A member template's own `template <...>` head is part of its itemdecl
     // (the draft shows it), but a bare FunctionDecl's range starts at the
@@ -193,6 +194,11 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
     }
     if (seebelow_edit)
         add_dominant_edit(edits, std::move(*seebelow_edit));
+    // A targeted `\omit` leaves its part out, as the synopsis does (issue #385).
+    if (omit)
+        if (const auto omitted = omit_byte_range(in_class, *omit, sm, lang_opts);
+            omitted && omitted->first >= decl_begin)
+            add_dominant_edit(edits, SynopsisEdit{omitted->first, omitted->second, ""});
     // A kept trailing clause says only what a pair of merged twins shares.
     if (!strip_requires_clause) {
         // substrate generic algorithm: each dominant edit erases the nested

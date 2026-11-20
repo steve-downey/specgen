@@ -129,6 +129,12 @@ generate options:
                              of them one paper, in the order named; with none,
                              parse a stock snippet as a link-proving smoke
                              check
+  --synopsis-parameter-names keep|drop
+                             with drop, a synopsis declares a function's
+                             parameters without their names, as the draft's
+                             synopses mostly do; an item declaration keeps
+                             them. A name the declaration uses again, in a
+                             noexcept or a requires-clause, stays. Default keep
   --keep-synopsis-comments  keep every plain comment of a class body in its
                              synopsis. By default a synopsis keeps a
                              `// \ref{x}, title` group header and a comment
@@ -1451,6 +1457,8 @@ int generate_command(const std::vector<std::string>& args) {
     // --keep-synopsis-comments: a front-end option, so it applies to
     // `--emit-ir` as well as to a render (issue #280).
     bool keep_synopsis_comments = false;
+    // --synopsis-parameter-names: a front-end option too (issue #385).
+    bool drop_synopsis_parameter_names = false;
     // The first wording-only option seen, for the `--emit-ir` conflict below:
     // naming the one the user actually typed beats listing all five. -o is not
     // one of them -- it names where either mode's single output goes.
@@ -1630,6 +1638,15 @@ int generate_command(const std::vector<std::string>& args) {
             no_compile_commands = true;
         } else if (arg == "--keep-synopsis-comments") {
             keep_synopsis_comments = true;
+        } else if (arg == "--synopsis-parameter-names") {
+            std::string value;
+            if (!next(value))
+                return 2;
+            if (value != "keep" && value != "drop") {
+                std::println(stderr, "specgen: --synopsis-parameter-names takes 'keep' or 'drop', not '{}'", value);
+                return 2;
+            }
+            drop_synopsis_parameter_names = value == "drop";
         } else if (arg == "--source") {
             std::string source;
             if (!next(source))
@@ -1740,10 +1757,11 @@ int generate_command(const std::vector<std::string>& args) {
     // diagnostic and the actual parse read the identical answer: passing
     // the resolved args back in as `extra_args` (top precedence) means
     // build_document performs no second filesystem probe.
-    const frontend::ParseOptions raw_options{.extra_args             = tail,
-                                             .compile_commands_dir   = compile_commands_dir,
-                                             .probe_compile_commands = !no_compile_commands,
-                                             .keep_synopsis_comments = keep_synopsis_comments};
+    const frontend::ParseOptions raw_options{.extra_args                    = tail,
+                                             .compile_commands_dir          = compile_commands_dir,
+                                             .probe_compile_commands        = !no_compile_commands,
+                                             .keep_synopsis_comments        = keep_synopsis_comments,
+                                             .drop_synopsis_parameter_names = drop_synopsis_parameter_names};
     // Resolved per header, not once for the paper: a compilation database
     // answers about a file, and two headers of one paper can perfectly well
     // have been compiled with different flags. Papers whose headers share a
@@ -1756,10 +1774,11 @@ int generate_command(const std::vector<std::string>& args) {
                          "specgen: using compile flags for '{}' from the database entry in '{}'",
                          header,
                          resolved.source);
-        return frontend::ParseOptions{.extra_args             = resolved.args,
-                                      .compile_commands_dir   = {},
-                                      .probe_compile_commands = false,
-                                      .keep_synopsis_comments = keep_synopsis_comments};
+        return frontend::ParseOptions{.extra_args                    = resolved.args,
+                                      .compile_commands_dir          = {},
+                                      .probe_compile_commands        = false,
+                                      .keep_synopsis_comments        = keep_synopsis_comments,
+                                      .drop_synopsis_parameter_names = drop_synopsis_parameter_names};
     };
 
     // Build, then emit, as one and_then pipeline (decision

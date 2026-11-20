@@ -59,6 +59,10 @@ struct ParseOptions {
     // is parsed, but it is the one options value the front end is handed, and
     // it is the front end that extracts synopses.
     bool keep_synopsis_comments = false;
+    // `--synopsis-parameter-names drop`: a synopsis declares parameters
+    // without their names, as the draft's mostly do, and the item
+    // declaration keeps them (issue #385).
+    bool drop_synopsis_parameter_names = false;
 };
 
 // One entry of a compilation database's CompileCommand::CommandLine, filtered

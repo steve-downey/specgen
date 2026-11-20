@@ -78,6 +78,7 @@
 #include <optional>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -171,7 +172,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
     std::set<const clang::Decl*>                    omit_set           = build_omit_set(decls, sm);
     const std::map<const clang::Decl*, std::string> expos_set          = build_expos_set(expos_decls, sm);
     const std::optional<std::vector<std::string>>   paper_entities     = collect_paper_entities(decls, sm);
-    SeeBelowMap                                     seebelow_map       = build_seebelow_map(decls, sm);
+    DeclarationMaskMap                              mask_map           = build_mask_map(decls, sm);
     FreestandingMap                                 freestanding_map   = build_freestanding_map(decls, sm);
     ConstraintsStated                               constraints_stated = build_constraints_stated(decls, sm);
     const std::set<std::string>                     ns_drop_set        = build_namespace_drop_set(decls);
@@ -215,8 +216,8 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
         const auto& [decl, markup] = entry;
         if (suppresses_generated_entity(markup->attached.directives))
             omit_set.insert(decl);
-        if (const std::optional<SeeBelowTarget> target = seebelow_target(markup->attached.directives))
-            seebelow_map.emplace(decl, *target);
+        if (const std::optional<DeclarationMask> mask = declaration_mask(markup->attached.directives))
+            mask_map.emplace(decl, *mask);
         if (markup->attached.directives.freestanding_deleted)
             freestanding_map.emplace(decl, FreestandingKind::Deleted);
         else if (markup->attached.directives.freestanding)
@@ -332,15 +333,57 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         lang_opts,
                         omit_set,
                         expos_set,
-                        seebelow_map,
+                        mask_map,
                         freestanding_map,
                         constraints_stated,
                         options.keep_synopsis_comments,
+                        options.drop_synopsis_parameter_names,
                         ns_drop_set,
                         specified_set,
                         skipped,
                         attached_comments,
                         source_markup);
+    };
+    // The draft writes a class template's deduction guides in the class's
+    // synopsis, after the class and inside the same namespace (issue #384):
+    // the guides declared right after a class template, before the next
+    // declaration of anything else or the next structure comment, join its
+    // extracted synopsis. A gathered header synopsis writes them as its own
+    // declarations instead, and an authored synopsis is left as written.
+    const auto append_deduction_guides = [&](db::DocEvent& event, const clang::Decl* decl, std::span<RawItem> after) {
+        auto*       synopsis = std::get_if<db::SynopsisDecl>(&event);
+        const auto* tmpl     = llvm::dyn_cast_if_present<clang::ClassTemplateDecl>(decl);
+        if (synopsis == nullptr || synopsis->exact || synopsis->synopsis.code.text.empty() || tmpl == nullptr ||
+            synopsis->synopsis.declared)
+            return;
+        const auto guide_of = [&](const RawItem& item) {
+            const clang::Decl* candidate = item.decl;
+            if (const auto* fn_tmpl = llvm::dyn_cast_if_present<clang::FunctionTemplateDecl>(candidate))
+                candidate = fn_tmpl->getTemplatedDecl();
+            const auto* guide = llvm::dyn_cast_if_present<clang::CXXDeductionGuideDecl>(candidate);
+            return guide != nullptr && guide->getDeducedTemplate()->getCanonicalDecl() == tmpl->getCanonicalDecl();
+        };
+        const auto structure = [](const RawItem& item) {
+            return item.decl == nullptr &&
+                   (parse_rsec(item.comment_text).has_value() || section_end_fence(item.comment_text).has_value());
+        };
+        const auto run = std::ranges::find_if(
+            after, [&](const RawItem& item) { return item.decl != nullptr ? !guide_of(item) : structure(item); });
+        std::ranges::for_each(std::ranges::subrange(after.begin(), run), [&](const RawItem& item) {
+            if (item.decl != nullptr && !suppresses_generated_entity(docblock_directives(item.decl, sm)))
+                append_synopsis_code(synopsis->synopsis.code,
+                                     extract_header_declaration(item.decl,
+                                                                sm,
+                                                                lang_opts,
+                                                                ns_drop_set,
+                                                                expos_set,
+                                                                nullptr,
+                                                                std::nullopt,
+                                                                kNamespaceIndent,
+                                                                {},
+                                                                std::nullopt,
+                                                                options.drop_synopsis_parameter_names));
+        });
     };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
         const auto [file, local] = doc.locate(opener.offset);
@@ -360,6 +403,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 header = parsed_header->value;
         if (!header || !std::string_view(header->stable).ends_with(".syn")) {
             events.push_back(classify_one(opener));
+            append_deduction_guides(events.back(), opener.decl, std::span(raw_items).subspan(i + 1));
             ++i;
             continue;
         }
@@ -611,7 +655,9 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                                                        mask.unspecified,
                                                        see_below,
                                                        nested.empty() ? kNamespaceIndent : 2 * kNamespaceIndent,
-                                                       constraints_stated),
+                                                       constraints_stated,
+                                                       omit_target(marked.directives),
+                                                       options.drop_synopsis_parameter_names),
                             nested);
                     }
                 }

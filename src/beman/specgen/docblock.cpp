@@ -550,8 +550,19 @@ ParseResult parse_docblock(std::string_view raw) {
     int              code_line        = 0;
     // Whether the code block or list being read opens a numbered paragraph of
     // its own (issue #340); read when the block is made.
-    bool                     code_opens = false;
-    bool                     item_opens = false;
+    bool code_opens = false;
+    bool item_opens = false;
+    // The indentation of each open list's `\item` lines, the outermost first:
+    // an `\item` indented past the last opens a list inside the item before it
+    // (issue #390). The depth of the `\item` being read, and of the item the
+    // code block being read is under, if it is (issue #367).
+    std::vector<std::size_t> item_indents;
+    std::size_t              item_depth   = 0;
+    std::size_t              code_depth   = 0;
+    bool                     code_in_item = false;
+    // The indentation of the `\codeblock` line, which its lines share and
+    // which is the docblock's layout, not the code's.
+    std::size_t              code_indent = 0;
     std::vector<std::string> code_lines;
 
     auto current_body = [&]() -> DescriptionBody& {
@@ -578,12 +589,44 @@ ParseResult parse_docblock(std::string_view raw) {
         auto& body = current_body();
         return body.empty() ? nullptr : std::get_if<Table1D>(&body.back());
     };
+    // The list the items being read go into, if there is one.
+    auto current_list = [&]() -> Itemize* {
+        if (informative != nullptr)
+            return informative->empty() ? nullptr : std::get_if<Itemize>(&informative->back());
+        auto& body = current_body();
+        return body.empty() ? nullptr : std::get_if<Itemize>(&body.back());
+    };
+    // The open list at `depth`: the outermost, or one inside the last item of
+    // the list around it.
+    auto list_at = [&](std::size_t depth) -> Itemize* {
+        Itemize* list = current_list();
+        // substrate generic algorithm: a descent through the last item of each level.
+        for (std::size_t d = 0; d < depth && list != nullptr; ++d)
+            list = list->items.empty() || list->items.back().blocks.empty()
+                       ? nullptr
+                       : std::get_if<Itemize>(&list->items.back().blocks.back());
+        return list;
+    };
     auto finish_code = [&] {
-        append_block(
-            AuthoredCode{ir::CodeText{code_lines | std::views::join_with('\n') | std::ranges::to<std::string>(), {}},
-                         std::exchange(code_opens, false)});
+        const auto dedent = [&](const std::string& code_line) {
+            const std::size_t blanks =
+                std::min(code_indent,
+                         code_line.find_first_not_of(' ') == std::string::npos ? code_line.size()
+                                                                               : code_line.find_first_not_of(' '));
+            return code_line.substr(blanks);
+        };
+        ir::CodeText code{code_lines | std::views::transform(dedent) | std::views::join_with('\n') |
+                              std::ranges::to<std::string>(),
+                          {}};
         code_lines.clear();
-        in_code           = false;
+        in_code = false;
+        if (std::exchange(code_in_item, false)) {
+            // The list goes on: a following `\item` is the next of its items.
+            list_at(code_depth)->items.back().blocks.emplace_back(std::move(code));
+            code_opens = false;
+            return;
+        }
+        append_block(AuthoredCode{std::move(code), std::exchange(code_opens, false)});
         continuation_next = true;
     };
 
@@ -609,7 +652,13 @@ ParseResult parse_docblock(std::string_view raw) {
             diags.push_back({Severity::Error, item_line, "\\item requires content"});
             return;
         }
-        ProseParagraph parsed = parse_inlines(content, item_line, diags);
+        ListItem parsed{parse_inlines(content, item_line, diags)};
+        if (item_depth > 0) {
+            if (Itemize* nested = list_at(item_depth)) {
+                nested->items.push_back(std::move(parsed));
+                return;
+            }
+        }
         if (informative != nullptr) {
             if (informative->empty() || !std::holds_alternative<Itemize>(informative->back()))
                 informative->push_back(Itemize{});
@@ -693,6 +742,7 @@ ParseResult parse_docblock(std::string_view raw) {
     auto handle_marker = [&](const MarkerInfo& info, std::string_view after, int lineno) {
         const std::string name{info.spelling};
         bool              arg_replaced_value = false;
+        bool              targeted           = false;
 
         // Each case answers whether the marker is well formed enough to go on
         // to the checks below; false is a marker already reported.
@@ -731,6 +781,14 @@ ParseResult parse_docblock(std::string_view raw) {
                             {Severity::Error,
                              lineno,
                              std::format("unknown \\seebelow target '{}'; expected 'noexcept' or 'explicit'", arg)});
+                    if (name == "omit" && arg != "noexcept" && arg != "default")
+                        diags.push_back(
+                            {Severity::Error,
+                             lineno,
+                             std::format("unknown \\omit target '{}'; expected 'noexcept' or 'default'", arg)});
+                    // A targeted `\omit` leaves a part of the declaration out and
+                    // keeps the declaration (issue #385), so it is not the flag.
+                    targeted = name == "omit";
                 }
                 after = {};
                 return true;
@@ -747,7 +805,7 @@ ParseResult parse_docblock(std::string_view raw) {
 
         if (!trim(after).empty())
             diags.push_back({Severity::Warning, lineno, "trailing text after \\" + name + " ignored"});
-        if (info.flag != nullptr) {
+        if (info.flag != nullptr && !targeted) {
             if (block.markers.*(info.flag))
                 diags.push_back({Severity::Warning, lineno, "duplicate \\" + name + " marker"});
             block.markers.*(info.flag) = true;
@@ -1002,10 +1060,26 @@ ParseResult parse_docblock(std::string_view raw) {
             if (name == "codeblock") {
                 flush_item();
                 flush_paragraph();
-                in_itemize = false;
-                in_code    = true;
-                code_line  = lineno;
-                code_opens = opens_here;
+                // Indented past the `\item` before it, the code block is that
+                // item's (issue #367), and the list is still open.
+                const auto indent = static_cast<std::size_t>(
+                    std::ranges::find_if_not(line, [](char c) { return c == ' '; }) - line.begin());
+                // The deepest open item it is indented past.
+                const auto under = std::ranges::find_last_if(
+                    std::views::iota(std::size_t{0}, item_indents.size()), [&](std::size_t d) {
+                        return item_indents[d] < indent && list_at(d) != nullptr && !list_at(d)->items.empty();
+                    });
+                code_in_item = in_itemize && !under.empty();
+                if (code_in_item) {
+                    code_depth = *under.begin();
+                    item_indents.resize(code_depth + 1);
+                } else {
+                    in_itemize = false;
+                }
+                in_code     = true;
+                code_line   = lineno;
+                code_opens  = opens_here;
+                code_indent = indent;
                 if (!trim(after).empty())
                     diags.push_back({Severity::Warning, lineno, "trailing text after \\codeblock ignored"});
                 continue;
@@ -1075,8 +1149,23 @@ ParseResult parse_docblock(std::string_view raw) {
             } else if (name == "item") {
                 flush_paragraph();
                 flush_item();
-                if (!in_itemize)
-                    item_opens = opens_here;
+                const auto indent = static_cast<std::size_t>(
+                    std::ranges::find_if_not(line, [](char c) { return c == ' '; }) - line.begin());
+                if (!in_itemize) {
+                    item_opens   = opens_here;
+                    item_indents = {indent};
+                } else if (Itemize* list = list_at(item_indents.size() - 1);
+                           indent > item_indents.back() && list != nullptr && !list->items.empty()) {
+                    // Indented past the items of the list it is in, it opens a
+                    // list inside the last of them (issue #390).
+                    list->items.back().blocks.emplace_back(Itemize{});
+                    item_indents.push_back(indent);
+                } else {
+                    // substrate generic algorithm: closes the lists it is not indented as deep as.
+                    while (item_indents.size() > 1 && indent < item_indents.back())
+                        item_indents.pop_back();
+                }
+                item_depth                  = item_indents.size() - 1;
                 in_itemize                  = true;
                 item_open                   = true;
                 item_line                   = lineno;
@@ -1189,8 +1278,6 @@ ParseResult parse_docblock(std::string_view raw) {
         diags.push_back({Severity::Error,
                          0,
                          "\\asdraft-synopsis takes the baseline's synopsis, so it cannot be \\verbatim-synopsis"});
-    if (!block.kind_covers.empty() && !block.markers.asdraft)
-        diags.push_back({Severity::Error, block.kind_covers.front().line, std::string(kCoversNeedsAsdraft)});
     if (block.markers.elsewhere && block.markers.omit)
         diags.push_back({Severity::Error, 0, "\\elsewhere and \\omit are mutually exclusive"});
     if (block.markers.elsewhere && block.markers.merge)

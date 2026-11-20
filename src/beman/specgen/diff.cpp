@@ -319,25 +319,6 @@ ir::Paragraph marked_paragraph(const ir::Paragraph& paragraph, ir::Change change
     return settle_whitespace({ir::ChangedInline{change, std::move(run)}});
 }
 
-// Paragraph lists (list items, table rows' cells by row): paired by
-// similarity through the sequence diff, pairs diffed word by word, the rest
-// marked whole.
-std::vector<ir::Paragraph>
-diff_paragraph_list(const std::vector<ir::Paragraph>& a, const std::vector<ir::Paragraph>& b, const Options& options) {
-    if (a == b)
-        return b;
-    const auto script = edit_script(
-        a, b, [&](const ir::Paragraph& x, const ir::Paragraph& y) { return similar_paragraphs(x, y, options); });
-    return script | std::views::transform([&](const Edit& e) {
-               if (e.op == Op::Keep)
-                   return diff_paragraph(a[e.a], b[e.b], options);
-               if (e.op == Op::Delete)
-                   return marked_paragraph(a[e.a], ir::Change::Removed);
-               return marked_paragraph(b[e.b], ir::Change::Added);
-           }) |
-           std::ranges::to<std::vector>();
-}
-
 // --- code tokens --------------------------------------------------------------
 
 // Two spans that say the same thing: the same range, kind and payload. Which
@@ -714,6 +695,36 @@ diff_code_list(const std::vector<ir::CodeText>& a, const std::vector<ir::CodeTex
 template <class Block>
 std::vector<Block> diff_blocks(const std::vector<Block>& a, const std::vector<Block>& b, const Options& options);
 
+template <class Block>
+Block with_block_change(Block block, ir::Change change);
+
+// A list's items pair as paragraphs do, by their own paragraph (issue #367):
+// a paired item diffs its paragraph word by word and its blocks as a body
+// does, and an unpaired one is marked whole, its blocks with it.
+std::vector<ir::ListItem>
+diff_list_items(const std::vector<ir::ListItem>& a, const std::vector<ir::ListItem>& b, const Options& options) {
+    if (a == b)
+        return b;
+    const auto marked = [](const ir::ListItem& item, ir::Change change) {
+        return ir::ListItem{marked_paragraph(item.text, change),
+                            item.blocks | std::views::transform([&](const ir::BodyBlock& block) {
+                                return with_block_change(block, change);
+                            }) | std::ranges::to<std::vector>()};
+    };
+    const auto script = edit_script(a, b, [&](const ir::ListItem& x, const ir::ListItem& y) {
+        return similar_paragraphs(x.text, y.text, options);
+    });
+    return script | std::views::transform([&](const Edit& e) {
+               if (e.op == Op::Keep)
+                   return ir::ListItem{diff_paragraph(a[e.a].text, b[e.b].text, options),
+                                       diff_blocks(a[e.a].blocks, b[e.b].blocks, options)};
+               if (e.op == Op::Delete)
+                   return marked(a[e.a], ir::Change::Removed);
+               return marked(b[e.b], ir::Change::Added);
+           }) |
+           std::ranges::to<std::vector>();
+}
+
 // Whether two blocks of one kind are the same block edited. A visitor over
 // the first with the second in hand; a class template so that the five-kind
 // informative variant instantiates only the cases it has.
@@ -752,7 +763,7 @@ struct BlockDiffer {
     }
     Block operator()(const ir::Itemize& x) const {
         const auto& y = std::get<ir::Itemize>(other);
-        return ir::Itemize{diff_paragraph_list(x.items, y.items, options), ir::Change::Same, y.opens_paragraph};
+        return ir::Itemize{diff_list_items(x.items, y.items, options), ir::Change::Same, y.opens_paragraph};
     }
     Block operator()(const ir::Table2D& x) const {
         const auto& y     = std::get<ir::Table2D>(other);
@@ -1081,7 +1092,9 @@ struct BlockChanged {
         return b.change != ir::Change::Same || paragraph_changed(b.text);
     }
     bool operator()(const ir::Itemize& b) const {
-        return b.change != ir::Change::Same || std::ranges::any_of(b.items, paragraph_changed);
+        return b.change != ir::Change::Same || std::ranges::any_of(b.items, [](const ir::ListItem& item) {
+                   return paragraph_changed(item.text) || blocks_changed(item.blocks);
+               });
     }
     bool operator()(const ir::Table2D& b) const {
         return b.change != ir::Change::Same || paragraph_changed(b.caption) || paragraph_changed(b.column1) ||
@@ -1236,9 +1249,10 @@ namespace {
 // contract of verbatim text. The draft's own listings, read by the importer,
 // have the same escapes as spans. For the comparison the authored text is read
 // the way the importer reads a listing, so the same wording is the same IR and
-// a paper that retypes a placeholder is not shown as having changed it.
+// a paper that retypes a placeholder is not shown as having changed it. A
+// comment's `\ref{x}` has no escape and is read as one too (issue #392).
 void read_escapes(ir::CodeText& code) {
-    if (code.spans.empty() && code.text.contains('@'))
+    if (code.spans.empty() && (code.text.contains('@') || code.text.contains('\\')))
         code = draft_import::parse_listing(code.text);
 }
 

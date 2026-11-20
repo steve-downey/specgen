@@ -1,0 +1,244 @@
+** Assignment [expected.object.assign]
+:PROPERTIES:
+:CUSTOM_ID: expected.object.assign
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_pnum
+This subclause makes use of the following exposition-only function template:
+
+#+begin_codeblock
+template<class T, class U, class... Args>
+constexpr void @\exposid{reinit-expected}@(T& newval, U& oldval, Args&&... args) {  // exposition only
+  if constexpr (is_nothrow_constructible_v<T, Args...>) {
+    destroy_at(addressof(oldval));
+    construct_at(addressof(newval), std::forward<Args>(args)...);
+  } else if constexpr (is_nothrow_move_constructible_v<T>) {
+    T tmp(std::forward<Args>(args)...);
+    destroy_at(addressof(oldval));
+    construct_at(addressof(newval), std::move(tmp));
+  } else {
+    U tmp(std::move(oldval));
+    destroy_at(addressof(oldval));
+    try {
+      construct_at(addressof(newval), std::forward<Args>(args)...);
+    } catch (...) {
+      construct_at(addressof(oldval), std::move(tmp));
+      throw;
+    }
+  }
+}
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+constexpr expected& operator=(const expected& rhs);
+#+end_itemdecl
+
+#+begin_pnum
+/Effects/:
+
+- If ~this->has_value() && rhs.has_value()~ is ~true~, equivalent to @@latex:\tcode{\exposid{val} = *rhs}@@@@html:<code><var>val</var> = *rhs</code>@@.
+- Otherwise, if ~this->has_value()~ is ~true~, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, rhs.error())
+  #+end_codeblock
+- Otherwise, if ~rhs.has_value()~ is ~true~, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, *rhs)
+  #+end_codeblock
+- Otherwise, equivalent to @@latex:\tcode{\exposid{unex} = rhs.error()}@@@@html:<code><var>unex</var> = rhs.error()</code>@@.
+
+Then, if no exception was thrown, equivalent to: @@latex:\tcode{\exposid{has_val} = rhs.has_value(); return *this;}@@@@html:<code><var>has_val</var> = rhs.has_value(); return *this;</code>@@
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: This operator is defined as deleted unless:
+
+- ~is_copy_assignable_v<T>~ is ~true~ and
+- ~is_copy_constructible_v<T>~ is ~true~ and
+- ~is_copy_assignable_v<E>~ is ~true~ and
+- ~is_copy_constructible_v<E>~ is ~true~ and
+- ~is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+This operator is trivial if:
+
+- ~is_trivially_copy_constructible_v<T>~ is ~true~, and
+- ~is_trivially_copy_assignable_v<T>~ is ~true~, and
+- ~is_trivially_destructible_v<T>~ is ~true~, and
+- ~is_trivially_copy_constructible_v<E>~ is ~true~, and
+- ~is_trivially_copy_assignable_v<E>~ is ~true~, and
+- ~is_trivially_destructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_itemdecl
+constexpr expected& operator=(expected&& rhs) noexcept(@\seebelow@);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_move_constructible_v<T>~ is ~true~ and
+- ~is_move_assignable_v<T>~ is ~true~ and
+- ~is_move_constructible_v<E>~ is ~true~ and
+- ~is_move_assignable_v<E>~ is ~true~ and
+- ~is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/:
+
+- If ~this->has_value() && rhs.has_value()~ is ~true~, equivalent to @@latex:\tcode{\exposid{val} = std::move(*rhs)}@@@@html:<code><var>val</var> = std::move(*rhs)</code>@@.
+- Otherwise, if ~this->has_value()~ is ~true~, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, std::move(rhs.error()))
+  #+end_codeblock
+- Otherwise, if ~rhs.has_value()~ is ~true~, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, std::move(*rhs))
+  #+end_codeblock
+- Otherwise, equivalent to @@latex:\tcode{\exposid{unex} = std::move(rhs.error())}@@@@html:<code><var>unex</var> = std::move(rhs.error())</code>@@.
+
+Then, if no exception was thrown, equivalent to: ~has_val = rhs.has_value(); return *this;~
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_pnum
+/Remarks/: The exception specification is equivalent to:
+
+#+begin_codeblock
+is_nothrow_move_assignable_v<T> && is_nothrow_move_constructible_v<T> &&
+is_nothrow_move_assignable_v<E> && is_nothrow_move_constructible_v<E>
+#+end_codeblock
+#+end_pnum
+
+#+begin_pnum
+This operator is trivial if:
+
+- ~is_trivially_move_constructible_v<T>~ is ~true~, and
+- ~is_trivially_move_assignable_v<T>~ is ~true~, and
+- ~is_trivially_destructible_v<T>~ is ~true~, and
+- ~is_trivially_move_constructible_v<E>~ is ~true~, and
+- ~is_trivially_move_assignable_v<E>~ is ~true~, and
+- ~is_trivially_destructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class U = remove_cv_t<T>>
+  constexpr expected& operator=(U&& v);
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_same_v<expected, remove_cvref_t<U>>~ is ~false~; and
+- ~remove_cvref_t<U>~ is not a specialization of ~unexpected~; and
+- ~is_constructible_v<T, U>~ is ~true~; and
+- ~is_assignable_v<T&, U>~ is ~true~; and
+- ~is_nothrow_constructible_v<T, U> || is_nothrow_move_constructible_v<T> ||is_nothrow_move_constructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/:
+
+- If ~has_value()~ is ~true~, equivalent to: @@latex:\tcode{\exposid{val} = std::forward<U>(v);}@@@@html:<code><var>val</var> = std::forward&lt;U&gt;(v);</code>@@
+- Otherwise, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{val}@, @\exposid{unex}@, std::forward<U>(v));
+  @\exposid{has_val}@ = true;
+  #+end_codeblock
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class G>
+  constexpr expected& operator=(const unexpected<G>& e);
+template<class G>
+  constexpr expected& operator=(unexpected<G>&& e);
+#+end_itemdecl
+
+#+begin_pnum
+Let ~GF~ be ~const G&~ for the first overload and ~G~ for the second overload.
+#+end_pnum
+
+#+begin_pnum
+/Constraints/:
+
+- ~is_constructible_v<E, GF>~ is ~true~; and
+- ~is_assignable_v<E&, GF>~ is ~true~; and
+- ~is_nothrow_constructible_v<E, GF> || is_nothrow_move_constructible_v<T> ||is_nothrow_move_constructible_v<E>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/:
+
+- If ~has_value()~ is ~true~, equivalent to:
+  #+begin_codeblock
+  @\exposid{reinit-expected}@(@\exposid{unex}@, @\exposid{val}@, std::forward<GF>(e.error()));
+  @\exposid{has_val}@ = false;
+  #+end_codeblock
+- Otherwise, equivalent to: @@latex:\tcode{\exposid{unex} = std::forward<GF>(e.error());}@@@@html:<code><var>unex</var> = std::forward&lt;GF&gt;(e.error());</code>@@
+#+end_pnum
+
+#+begin_pnum
+/Returns/: ~*this~.
+#+end_pnum
+
+#+begin_itemdecl
+template<class... Args>
+  constexpr T& emplace(Args&&... args) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_nothrow_constructible_v<T, Args...>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+if (has_value()) {
+  destroy_at(addressof(@\exposid{val}@));
+} else {
+  destroy_at(addressof(@\exposid{unex}@));
+  @\exposid{has_val}@ = true;
+}
+return *construct_at(addressof(@\exposid{val}@), std::forward<Args>(args)...);
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class U, class... Args>
+  constexpr T& emplace(initializer_list<U> il, Args&&... args) noexcept;
+#+end_itemdecl
+
+#+begin_pnum
+/Constraints/: ~is_nothrow_constructible_v<T, initializer_list<U>&, Args...>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+if (has_value()) {
+  destroy_at(addressof(@\exposid{val}@));
+} else {
+  destroy_at(addressof(@\exposid{unex}@));
+  @\exposid{has_val}@ = true;
+}
+return *construct_at(addressof(@\exposid{val}@), il, std::forward<Args>(args)...);
+#+end_codeblock
+#+end_pnum

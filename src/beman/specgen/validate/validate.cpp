@@ -1362,12 +1362,16 @@ CoverageAudit audit_coverage(const ir::ItemDescr& description, const Bindings& b
         result.diagnostics.push_back({Severity::Error, std::string(ir::element_name(kind)), std::move(message)});
     };
     // A claim needs wording to be about. Ordinarily that is its own element's.
-    // An element with no body at all is the stand-in a class's leading prose
-    // leaves behind (issue #283): the unlabelled paragraphs state what the
-    // derived conjuncts require, so the claims are about those.
-    const bool has_leading_prose = !ir::body_paragraphs(description.leading, false).empty();
-    const auto has_wording       = [&](const ir::DescriptionElement& element) {
-        return !element_paragraphs(element).empty() || (element.body.empty() && has_leading_prose);
+    // An element with no body at all is a stand-in: the one a class's leading
+    // prose leaves behind (issue #283), whose unlabelled paragraphs state what
+    // the derived conjuncts require, or the one `\covers` on an item leaves
+    // when another element, a *Remarks*, states them (issue #386). Its claims
+    // are about the rest of the item's wording.
+    const bool has_other_wording =
+        !ir::body_paragraphs(description.leading, false).empty() ||
+        std::ranges::any_of(description.elements, [](const auto& e) { return !element_paragraphs(e).empty(); });
+    const auto has_wording = [&](const ir::DescriptionElement& element) {
+        return !element_paragraphs(element).empty() || (element.body.empty() && has_other_wording);
     };
     // substrate generic algorithm: scatter claim state and validated targets into per-kind sets.
     for (const auto& element : description.elements) {

@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <vector>
 #include <format>
+#include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -20,9 +22,9 @@ namespace ir = beman::specgen::ir;
 
 namespace {
 
-std::size_t                        paragraph_count(const Element& e);
-const ProseParagraph&              paragraph(const Element& e, std::size_t n = 0);
-const std::vector<ProseParagraph>& items(const Element& e);
+std::size_t                 paragraph_count(const Element& e);
+const ProseParagraph&       paragraph(const Element& e, std::size_t n = 0);
+std::vector<ProseParagraph> items(const Element& e);
 template <class T>
 const T* first(const Element& e);
 
@@ -36,7 +38,9 @@ const ProseParagraph& paragraph(const Element& e, std::size_t n) {
             return p->text;
     throw std::out_of_range("paragraph");
 }
-const std::vector<ProseParagraph>& items(const Element& e) { return first<Itemize>(e)->items; }
+std::vector<ProseParagraph> items(const Element& e) {
+    return first<Itemize>(e)->items | std::views::transform(&ListItem::text) | std::ranges::to<std::vector>();
+}
 template <class T>
 const T* first(const Element& e) {
     for (const auto& block : e.body)
@@ -162,7 +166,7 @@ TEST_CASE("docblock - macro-led leading prose and list continuations stay in the
     REQUIRE(list.block.elements.size() == 1);
     const auto& element = list.block.elements.front();
     REQUIRE(items(element).size() == 1);
-    const auto& item = items(element).front();
+    const auto item = items(element).front();
     REQUIRE(item.size() == 3);
     CHECK(std::get<InlineText>(item.front()).text == "Meets ");
     CHECK(std::get<InlineOldConcept>(item[1]).name == "CopyConstructible");
@@ -828,7 +832,8 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
             input += " x";
             break;
         case MarkerArity::RestOptional:
-            // The only RestOptional marker has a closed target vocabulary.
+            // Each RestOptional marker takes `noexcept`: a \seebelow and an
+            // \omit target, and an \also group id.
             input += " noexcept";
             break;
         }
@@ -840,7 +845,9 @@ TEST_CASE("docblock - marker registry: every entry parses and round-trips") {
         CHECK(!has_diag(r, Severity::Error, "unknown tag"));
         CHECK(r.ok());
 
-        if (entry.flag != nullptr)
+        // A targeted \omit keeps the declaration, so it is not the flag
+        // (issue #385).
+        if (entry.flag != nullptr && entry.spelling != "omit")
             CHECK(r.block.markers.*(entry.flag));
 
         if (entry.set_arg != nullptr)
@@ -1059,6 +1066,24 @@ TEST_CASE("docblock - malformed inline macros report diagnostics and keep their 
     CHECK(std::get<InlinePlaceholder>(paragraph(nested.block.elements.front())[1]).text == "a{b}c");
 }
 
+// Issue #385: a targeted `\omit` names a part of the declaration and keeps it.
+TEST_CASE("docblock - omit takes an optional target, which keeps the declaration") {
+    const auto noexcept_target = parse_docblock("\\omit noexcept\n\\effects Nothing.");
+    REQUIRE(noexcept_target.ok());
+    CHECK_FALSE(noexcept_target.block.markers.omit);
+    CHECK(noexcept_target.block.markers.omit_target == std::optional<std::string>{"noexcept"});
+    const auto default_target = parse_docblock("\\omit default");
+    REQUIRE(default_target.ok());
+    CHECK(default_target.block.markers.omit_target == std::optional<std::string>{"default"});
+    const auto bare = parse_docblock("\\omit");
+    REQUIRE(bare.ok());
+    CHECK(bare.block.markers.omit);
+    CHECK_FALSE(bare.block.markers.omit_target.has_value());
+    const auto unknown = parse_docblock("\\omit explicit");
+    REQUIRE(unknown.diags.size() == 1);
+    CHECK(unknown.diags.front().message == "unknown \\omit target 'explicit'; expected 'noexcept' or 'default'");
+}
+
 TEST_CASE("docblock - asdraft is a marker, and covers may name the element it is about") {
     const auto bare = parse_docblock("\\asdraft");
     CHECK(bare.ok());
@@ -1075,8 +1100,9 @@ TEST_CASE("docblock - asdraft is a marker, and covers may name the element it is
     REQUIRE(mandates.ok());
     CHECK(mandates.block.kind_covers.front().kind == ir::ElementKind::Mandates);
 
-    // The element-scoped form claims wording that is inherited, so it needs the marker.
-    CHECK_FALSE(parse_docblock("\\covers constraints trait<T>").ok());
+    // The element-scoped form needs no marker: without one it names a derived
+    // element the item's other wording states (issue #386).
+    CHECK(parse_docblock("\\covers constraints trait<T>").ok());
     // Authored wording beside the marker keeps the unscoped form working.
     const auto authored = parse_docblock("\\asdraft\n\\constraints\n\\covers !detail::trait<T>\nThe condition holds.");
     REQUIRE(authored.ok());
@@ -1124,4 +1150,60 @@ TEST_CASE("docblock - synopsis-here records how many leading blocks come before 
     CHECK(*twice.block.markers.synopsis_here == 1);
     REQUIRE(twice.diags.size() == 1);
     CHECK(twice.diags.front().severity == beman::specgen::Severity::Warning);
+}
+
+TEST_CASE("docblock - a code block indented under an item is the item's, and the list goes on") {
+    // Issue #367: a `\codeblock` indented past the `\item` line before it
+    // belongs to that item. One that is not indented ends the list.
+    auto r = parse_docblock("//! \\effects\n"
+                            "//! \\item If `a`, equivalent to:\n"
+                            "//!   \\codeblock\n"
+                            "//!   f();\n"
+                            "//!   \\endcodeblock\n"
+                            "//! \\item Otherwise, no effect.\n"
+                            "//! \\codeblock\n"
+                            "//! g();\n"
+                            "//! \\endcodeblock\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const auto& body = r.block.elements.front().body;
+    REQUIRE(body.size() == 2);
+    const auto& list = std::get<Itemize>(body[0]);
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items[0].blocks.size() == 1);
+    // The indentation the code shares with its `\codeblock` line is the
+    // docblock's layout, not the code's.
+    CHECK(std::get<beman::specgen::ir::CodeText>(list.items[0].blocks[0]).text == "f();");
+    CHECK(list.items[1].blocks.empty());
+    CHECK(std::get<AuthoredCode>(body[1]).code.text == "g();");
+}
+
+TEST_CASE("docblock - an item indented past the item before it opens a list inside that item") {
+    // Issue #390: as a `\codeblock` belongs to the item it is indented under,
+    // so does an `\item`, which opens a list inside it. One indented as the
+    // outer items are goes back to their list, and a code block goes to the
+    // deepest item it is indented past.
+    auto r = parse_docblock("//! \\effects\n"
+                            "//! \\item One of:\n"
+                            "//!   \\item `a`, equivalent to:\n"
+                            "//!     \\codeblock\n"
+                            "//!     f();\n"
+                            "//!     \\endcodeblock\n"
+                            "//!   \\item `b`, and then:\n"
+                            "//!     \\item `c`\n"
+                            "//! \\item Otherwise, no effect.\n");
+    CHECK(r.ok());
+    REQUIRE(r.block.elements.size() == 1);
+    const auto& body = r.block.elements.front().body;
+    REQUIRE(body.size() == 1);
+    const auto& list = std::get<Itemize>(body[0]);
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items[0].blocks.size() == 1);
+    const auto& inner = std::get<Itemize>(list.items[0].blocks[0]);
+    REQUIRE(inner.items.size() == 2);
+    REQUIRE(inner.items[0].blocks.size() == 1);
+    CHECK(std::holds_alternative<beman::specgen::ir::CodeText>(inner.items[0].blocks[0]));
+    REQUIRE(inner.items[1].blocks.size() == 1);
+    CHECK(std::get<Itemize>(inner.items[1].blocks[0]).items.size() == 1);
+    CHECK(list.items[1].blocks.empty());
 }

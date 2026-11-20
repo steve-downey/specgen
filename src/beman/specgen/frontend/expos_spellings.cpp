@@ -281,6 +281,11 @@ ir::Paragraph ProseLeafRewriter<Block>::paragraph(ir::Paragraph p) const {
            std::ranges::to<ir::Paragraph>();
 }
 
+// A list item's blocks, a note or an example among them (issue #389).
+ir::DescriptionBody rewrite_item_blocks(ir::DescriptionBody                       blocks,
+                                        const std::map<std::string, std::string>& spellings,
+                                        const std::set<std::string>&              taken);
+
 template <class Block>
 Block ProseLeafRewriter<Block>::operator()(ir::BodyParagraph p) const {
     p.text = paragraph(std::move(p.text));
@@ -289,8 +294,12 @@ Block ProseLeafRewriter<Block>::operator()(ir::BodyParagraph p) const {
 
 template <class Block>
 Block ProseLeafRewriter<Block>::operator()(ir::Itemize list) const {
-    list.items = std::move(list.items) | std::views::as_rvalue |
-                 std::views::transform([this](ir::Paragraph p) { return paragraph(std::move(p)); }) |
+    // An item's own paragraph, and the blocks after it (issue #367).
+    list.items = std::move(list.items) | std::views::as_rvalue | std::views::transform([this](ir::ListItem item) {
+                     item.text   = paragraph(std::move(item.text));
+                     item.blocks = rewrite_item_blocks(std::move(item.blocks), spellings, taken);
+                     return item;
+                 }) |
                  std::ranges::to<std::vector>();
     return list;
 }
@@ -357,6 +366,16 @@ ir::BodyBlock ProseExposRewriter::operator()(ir::Note note) const {
 ir::BodyBlock ProseExposRewriter::operator()(ir::Example example) const {
     example.body = rewrite_informative(std::move(example.body), spellings, taken);
     return example;
+}
+
+ir::DescriptionBody rewrite_item_blocks(ir::DescriptionBody                       blocks,
+                                        const std::map<std::string, std::string>& spellings,
+                                        const std::set<std::string>&              taken) {
+    const ProseExposRewriter rewrite{{spellings, taken}};
+    return std::move(blocks) | std::views::as_rvalue | std::views::transform([&](ir::BodyBlock b) {
+               return std::visit(foundation::overloaded{rewrite}, std::move(b));
+           }) |
+           std::ranges::to<ir::DescriptionBody>();
 }
 } // namespace
 
