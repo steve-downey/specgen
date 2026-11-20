@@ -42,3 +42,9 @@ scratchpad/
 
 # the standalone install-test consumer's build tree
 /installtest/.build/
+
+# docs/optional-ref-monadic: the typeset pages render.sh builds, and the
+# document's own export, are built locally like docs/examples.html.
+/docs/optional-ref-monadic/rendered/
+/docs/optional-ref-monadic/optional-ref-monadic.html
+/docs/optional-ref-monadic/optional-ref-monadic.html.deps

@@ -27,9 +27,20 @@ These are the same files as below, typeset by the framework they are written for
 
 | Backend | Typeset by | The wording | Marked against the draft |
 |---------+------------+-------------+--------------------------|
-| =latex= | the working draft's macros | [[file:rendered/wording.pdf][wording.pdf]] | [[file:rendered/diff.pdf][diff.pdf]] |
+| =latex= | wg21-latex, the working draft's macros | [[file:rendered/wording.pdf][wording.pdf]] | [[file:rendered/diff.pdf][diff.pdf]] |
 | =mpark= | mpark/wg21 | [[file:rendered/wording.mpark.html][wording.mpark.html]] | [[file:rendered/diff.mpark.html][diff.mpark.html]] |
 | =org= | wg21org | [[file:rendered/wording.org.html][wording.org.html]] | [[file:rendered/diff.org.html][diff.org.html]] |
+
+=render.sh= builds them into =rendered/=, which is not committed, and records each framework's revision there in =frameworks.txt=.
+Each framework is a checkout named by an environment variable, and one that is not named is skipped; the script is [[#typesetting-the-wording][below]].
+
+Two of the six need one change to what specgen wrote before their framework will typeset them at all.
+=render.sh= makes each change and says so when it does:
+
+- =diff.pdf=: a changed run of code is not escaped for LaTeX, and the =&= in =using U = invoke_result_t<F, T&>;= stops the build, so =render.sh= escapes it ([[https://github.com/steve-downey/specgen/issues/410][#410]]).
+- =wording.mpark.html=: the authored code block names the exposition-only member as =@\exposid{val}@=, the one spelling every backend currently passes through, and that stops mpark/wg21's filter, so =render.sh= writes it as mpark's =$val$= ([[https://github.com/steve-downey/specgen/issues/406][#406]]).
+
+Everything else on the six pages is specgen's output as written.
 
 * The source
 :PROPERTIES:
@@ -69,6 +80,15 @@ It reports nothing, so this file is empty:
 The version of specgen that wrote the files:
 
 #+transclude: [[file:output/specgen-version.txt]] :src text
+
+** Typesetting the wording
+:PROPERTIES:
+:CUSTOM_ID: typesetting-the-wording
+:END:
+
+=render.sh= typesets the files above into the [[#rendered-output][rendered pages]]:
+
+#+transclude: [[file:render.sh]] :src sh
 
 * The wording
 :PROPERTIES:
@@ -170,8 +190,23 @@ specgen writes something differently from the draft:
 - The removed closing =>= in the declaration of =transform= is placed after the space that follows it ([[https://github.com/steve-downey/specgen/issues/409][#409]]).
 
 Two more show in the wording itself and not as marks.
-The code block inside /Mandates/ for =transform= names the exposition-only member with a LaTeX escape, which the mpark output prints as typed ([[https://github.com/steve-downey/specgen/issues/406][#406]]).
+The code block inside /Mandates/ for =transform= can name the exposition-only member only with a LaTeX escape, which mpark/wg21 cannot typeset ([[https://github.com/steve-downey/specgen/issues/406][#406]]).
 The mpark and org outputs put no space before the parenthesized reference in the note ([[https://github.com/steve-downey/specgen/issues/408][#408]]).
+
+** What typesetting shows
+:PROPERTIES:
+:CUSTOM_ID: what-typesetting-shows
+:END:
+
+The [[#rendered-output][typeset pages]] show defects that the files alone do not:
+
+- In =diff.pdf=, a changed code span in prose is written =\removed{\tcode{...}}=, and under wg21-latex it loses the code font and drops characters: the struck /Let/ of =transform= has one closing =>= where the source has two ([[https://github.com/steve-downey/specgen/issues/411][#411]]).
+- In both mpark pages, the subclause heading reads "Monadic operations Monadic operations", in the contents too, and the note's reference reads "(General [dcl.init.general])".
+  The synopsis comment reads "// Monadic operations [optional.ref.monadic], monadic operations".
+  The current mpark/wg21 prints the draft's title beside every stable name written the way specgen writes it ([[https://github.com/steve-downey/specgen/issues/412][#412]]).
+- In =diff.org.html=, the removed =*val= in the /Effects/ of =or_else= prints as the literal =\exposid{val}= ([[https://github.com/steve-downey/specgen/issues/413][#413]]).
+- In both PDFs, the subclause number prints as a =?= glyph for each part, which is how wg21-latex's =wording= environment shows a number it was not given.
+  =specgen generate --section-number= would give it, through wg21-latex's =\clausenumber=, once that macro is merged ([[https://github.com/steve-downey/wg21-latex/pull/2][steve-downey/wg21-latex#2]]).
 
 * Questions for reviewers
 :PROPERTIES:
