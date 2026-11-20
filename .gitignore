@@ -42,3 +42,9 @@ scratchpad/
 
 # the standalone install-test consumer's build tree
 /installtest/.build/
+
+# docs/optional-ref-monadic: the document's own export is built locally like
+# docs/examples.html. The typeset pages under rendered/ are committed, so they
+# can be opened on GitHub.
+/docs/optional-ref-monadic/optional-ref-monadic.html
+/docs/optional-ref-monadic/optional-ref-monadic.html.deps

@@ -57,10 +57,10 @@ repos:
         # for byte, and its shape is dictated by the mpark/wg21 framework's
         # syntax rather than by prose style -- so a prose linter has no
         # standing over it, and an autofix would silently break every case it
-        # touched. examples/cli/output/ and docs/examples.md are the same kind
-        # of thing: captured renderer output compared byte for byte, and the
-        # org export built from it.
-        exclude: ^(vendor|infra|tests/golden|examples/cli/output)/|^docs/examples\.md$
+        # touched. examples/cli/output/, docs/optional-ref-monadic/output/ and
+        # docs/examples.md are the same kind of thing: captured renderer output,
+        # and the org export built from it.
+        exclude: ^(vendor|infra|tests/golden|examples/cli/output|docs/optional-ref-monadic/output)/|^docs/examples\.md$
 
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
@@ -73,4 +73,6 @@ repos:
     hooks:
     - id: beman-tidy
 
-exclude: 'infra/|port/|vendor/'
+# docs/optional-ref-monadic/rendered/ holds pages typeset by paper frameworks,
+# committed as they were written, so no hook may rewrite them.
+exclude: 'infra/|port/|vendor/|docs/optional-ref-monadic/rendered/'

@@ -1,0 +1,945 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+<!-- 2026-11-20 Fri 13:35 -->
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[optional.ref.monadic]: generated wording, marked against the working draft</title>
+<meta name="author" content="Steve Downey" />
+<meta name="generator" content="Org Mode" />
+<style>
+/* wg21org.css */
+/* wg21org.css --- page style for WG21 papers exported by ox-wg21html.el
+ *
+ * The exporter embeds this file, and the code face stylesheets, in
+ * every paper, so it must not load anything: no imported sheets, web
+ * fonts, or images.  `make check' enforces that.  Code colours come
+ * from the face stylesheet; this file only lays code out.
+ */
+
+/** Tokens *******************************************************************/
+
+:root {
+    color-scheme: light dark;
+
+    --bg: #fcfcfa;
+    --text: #1b1b1b;
+    --muted: #5d6166;
+    --rule: #d6d5cf;
+    --subtle-bg: #f3f2ed;
+    --link: #0b57d0;
+    --link-visited: #6b3fa0;
+    --code-bg: #f3f2ed;
+    --ins-text: #0d5c20;
+    --ins-bg: #e2f4e4;
+    --del-text: #9f1a1f;
+    --del-bg: #fbe3e3;
+    --mark-bg: #fff29a;
+    --sidebar-bg: #f5f4ef;
+
+    --serif: "Iowan Old Style", "Charter", "Bitstream Charter", "Sitka Text",
+             Cambria, "Source Serif Pro", "Source Serif 4", Georgia, serif;
+    --sans: system-ui, -apple-system, "Segoe UI", "Source Sans Pro",
+            "Noto Sans", "DejaVu Sans", sans-serif;
+    --mono: ui-monospace, "Source Code Pro", "Cascadia Mono", Menlo, Consolas,
+            "DejaVu Sans Mono", monospace;
+}
+
+/* Dark colours apply when the reader picks Dark in the page's Theme
+   switch, or when the system is dark and the reader has not picked
+   Light.  The switch is a set of radio buttons the exporter adds to the
+   metadata; :has() reads them, so it needs no script.  Screens only:
+   a printed page is light. */
+@media screen and (prefers-color-scheme: dark) {
+    :root:not(:has(#wg21-mode-light:checked)) {
+        --bg: #16171d;
+        --text: #e4e4e0;
+        --muted: #a2a4a8;
+        --rule: #3a3c46;
+        --subtle-bg: #1e2028;
+        --link: #8ab4f8;
+        --link-visited: #c3a6f0;
+        --code-bg: #1f2129;
+        --ins-text: #a3e6ad;
+        --ins-bg: #1b3322;
+        --del-text: #ffa4a4;
+        --del-bg: #3d1e21;
+        --mark-bg: #665b00;
+        --sidebar-bg: #1b1c23;
+    }
+}
+@media screen {
+    :root:has(#wg21-mode-dark:checked) {
+        --bg: #16171d;
+        --text: #e4e4e0;
+        --muted: #a2a4a8;
+        --rule: #3a3c46;
+        --subtle-bg: #1e2028;
+        --link: #8ab4f8;
+        --link-visited: #c3a6f0;
+        --code-bg: #1f2129;
+        --ins-text: #a3e6ad;
+        --ins-bg: #1b3322;
+        --del-text: #ffa4a4;
+        --del-bg: #3d1e21;
+        --mark-bg: #665b00;
+        --sidebar-bg: #1b1c23;
+    }
+}
+@media screen {
+    :root:has(#wg21-mode-light:checked) {
+        color-scheme: light;
+    }
+    :root:has(#wg21-mode-dark:checked) {
+        color-scheme: dark;
+    }
+}
+@media print {
+    :root {
+        color-scheme: light;
+    }
+}
+
+/** Page *********************************************************************/
+
+html {
+    background: var(--bg);
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--serif);
+    font-size: 1.0625rem;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+}
+
+#content {
+    max-width: 50rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+}
+
+a {
+    color: var(--link);
+    text-decoration-thickness: 1px;
+    text-underline-offset: .15em;
+}
+a:visited {
+    color: var(--link-visited);
+}
+
+mark {
+    color: inherit;
+    background: var(--mark-bg);
+    padding: 0 .08em;
+}
+
+p, ul, ol, dl, blockquote, figure {
+    margin: 0 0 1em;
+}
+
+ul, ol {
+    padding-left: 1.75em;
+}
+li > ul, li > ol, li > p {
+    margin-bottom: 0;
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 2em 0;
+}
+
+/** Title and metadata *******************************************************/
+
+h1.title {
+    font-family: var(--sans);
+    font-size: 2rem;
+    line-height: 1.2;
+    font-weight: 700;
+    margin: 0 0 1rem;
+}
+
+.subtitle {
+    font-family: var(--sans);
+    color: var(--muted);
+    margin: -.5rem 0 1rem;
+}
+
+div[data-fill-with="spec-metadata"] dl {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 1.25em;
+    row-gap: .15em;
+    margin: 0 0 2rem;
+    font-family: var(--sans);
+    font-size: .9rem;
+}
+div[data-fill-with="spec-metadata"] dt {
+    grid-column: 1;
+    color: var(--muted);
+}
+div[data-fill-with="spec-metadata"] dd {
+    grid-column: 2;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.abstract {
+    margin: 0 0 2rem;
+    padding: .75em 1em;
+    background: var(--subtle-bg);
+    border-left: 3px solid var(--rule);
+}
+.abstract > :last-child {
+    margin-bottom: 0;
+}
+
+/** Table of contents ********************************************************/
+
+#toc {
+    margin: 0 0 2.5rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--sans);
+    font-size: .95rem;
+}
+#toc h2 {
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 .5rem;
+}
+ul.toc {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+ul.toc ul.toc {
+    padding-left: 2.25em;
+}
+ul.toc li {
+    margin: .15em 0;
+}
+ul.toc a {
+    color: var(--text);
+    text-decoration: none;
+    display: flex;
+    gap: .5em;
+}
+ul.toc a:hover .content {
+    text-decoration: underline;
+}
+ul.toc .secno {
+    min-width: 1.75em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Sidebar table of contents, when a paper includes toc-sidebar.html. */
+
+#toc-nav {
+    position: fixed;
+    z-index: 3;
+    bottom: 0;
+    left: 0;
+    margin: 0;
+    font-family: var(--sans);
+    font-size: .8rem;
+}
+#toc-nav > a {
+    display: block;
+    padding: .3em .6em;
+    background: var(--sidebar-bg);
+    color: var(--muted);
+    border: 1px solid var(--rule);
+    border-bottom: 0;
+    text-decoration: none;
+}
+#toc-nav > a:hover,
+#toc-nav > a:focus {
+    color: var(--text);
+}
+body.toc-sidebar #toc {
+    position: fixed;
+    z-index: 2;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 22rem;
+    max-width: 85vw;
+    margin: 0;
+    padding: 1.5rem 1.25rem 4rem;
+    overflow: auto;
+    background: var(--sidebar-bg);
+    border: 0;
+    border-right: 1px solid var(--rule);
+    font-size: .875rem;
+}
+body.toc-sidebar #toc-jump:not(:focus) {
+    display: none;
+}
+@media screen and (min-width: 78em) {
+    body.toc-sidebar {
+        padding-left: 22rem;
+        --cmptbl-width: min(100vw - 24rem, 72rem);
+    }
+}
+
+/** Sections *****************************************************************/
+
+h2, h3, h4, h5, h6 {
+    font-family: var(--sans);
+    font-weight: 650;
+    line-height: 1.3;
+    margin: 2em 0 .6em;
+}
+h2 { font-size: 1.5rem; }
+h3 { font-size: 1.2rem; }
+h4 { font-size: 1.05rem; }
+h5, h6 { font-size: 1rem; }
+
+.outline-2 {
+    margin-top: 2.5rem;
+}
+
+/* Generated wording uses explicit range and paragraph markers.  Counters
+   reset for every subclause, matching the working draft's paragraph numbers. */
+.wg21-wording,
+.wg21-wording [class^="outline-"] {
+    counter-reset: wg21-pnum wg21-note wg21-example;
+}
+.pnum {
+    position: relative;
+    counter-increment: wg21-pnum;
+}
+li:has(> .pnum-number) {
+    position: relative;
+}
+.pnum-number::before {
+    content: "[" attr(data-pnum) "]";
+    position: absolute;
+    right: calc(100% + .4em);
+    color: var(--muted);
+    font-size: .72em;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+}
+.pnum-explicit {
+    counter-increment: none;
+}
+
+.wg21-note, .wg21-example, .wg21-ednote, .wg21-draftnote {
+    display: block;
+    margin: .8em 1.5em;
+    font-size: .95em;
+}
+.wg21-wording .wg21-note:not(.unnumbered) { counter-increment: wg21-note; }
+.wg21-wording .wg21-example:not(.unnumbered) { counter-increment: wg21-example; }
+.wg21-note::before { content: "[ Note: "; font-style: italic; }
+.wg21-example::before { content: "[ Example: "; font-style: italic; }
+.wg21-wording .wg21-note:not(.unnumbered)::before {
+    content: "[ Note " counter(wg21-note) ": ";
+}
+.wg21-wording .wg21-example:not(.unnumbered)::before {
+    content: "[ Example " counter(wg21-example) ": ";
+}
+.wg21-note::after { content: " — end note ]"; font-style: italic; }
+.wg21-example::after { content: " — end example ]"; font-style: italic; }
+.wg21-ednote, .wg21-draftnote { color: #2456b3; }
+.wg21-ednote::before { content: "[ Editor's note: "; font-style: italic; }
+.wg21-draftnote::before { content: "[ Drafting note: "; font-style: italic; }
+.wg21-draftnote[data-audience]::before {
+    content: "[ Drafting note for " attr(data-audience) ": ";
+}
+.wg21-ednote::after, .wg21-draftnote::after { content: " ]"; }
+
+pre.grammar {
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-style: italic;
+    white-space: pre-wrap;
+}
+pre.grammar code { font-style: normal; }
+pre.grammar .descr { font-family: var(--serif); font-style: normal; }
+pre.grammar sub.opt { font-size: 70%; }
+
+.heading [class^="section-number-"] {
+    margin-right: .35em;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The section's own link and its link to the Org source show on hover
+   or focus, and stay faintly visible where there is no hover. */
+
+.heading .self-link,
+.heading .source-link {
+    margin-left: .5em;
+    color: var(--muted);
+    text-decoration: none;
+    font-weight: 400;
+    opacity: 0;
+    transition: opacity .15s;
+}
+.heading .self-link::before {
+    content: "§";
+}
+.heading .source-link {
+    font-size: .65em;
+    vertical-align: .15em;
+}
+.heading:hover .self-link,
+.heading:hover .source-link,
+.heading .self-link:focus,
+.heading .source-link:focus {
+    opacity: 1;
+}
+.heading .self-link:hover,
+.heading .source-link:hover {
+    color: var(--link);
+}
+@media (hover: none) {
+    .heading .self-link,
+    .heading .source-link {
+        opacity: .6;
+    }
+}
+
+/** Code *********************************************************************/
+
+code, kbd, samp, pre {
+    font-family: var(--mono);
+    font-size: .875em;
+    font-variant-ligatures: none;
+    hyphens: none;
+}
+
+code {
+    padding: .1em .3em;
+    border-radius: 3px;
+    background: var(--code-bg);
+}
+
+.org-src-container {
+    margin: 1em 0;
+}
+
+pre {
+    margin: 1em 0;
+    padding: .8em 1em;
+    overflow-x: auto;
+    line-height: 1.45;
+    background: var(--code-bg);
+    border: 1px solid var(--rule);
+    border-radius: 4px;
+    tab-size: 4;
+}
+.org-src-container > pre {
+    margin: 0;
+}
+
+/* Org 9.8 wraps each code block as <pre><code>; the inline code look
+   above must not apply there, or every block collapses onto one line. */
+pre code {
+    white-space: inherit;
+    font-size: inherit;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+}
+
+.linenr {
+    color: var(--muted);
+    user-select: none;
+}
+
+/** Wording changes **********************************************************/
+
+/* Org's _underline_ has long meant inserted text in these papers. */
+ins, .underline, .addedblock {
+    color: var(--ins-text);
+    background: var(--ins-bg);
+    text-decoration: underline;
+}
+del, .removedblock {
+    color: var(--del-text);
+    background: var(--del-bg);
+    text-decoration: line-through;
+}
+ins code, del code, .underline code {
+    background: none;
+    color: inherit;
+}
+.addedblock, .removedblock {
+    display: block;
+    margin: 1em 0;
+    padding: .25em .75em;
+}
+.addedblock {
+    border-left: 3px solid var(--ins-text);
+}
+.wg21-addition {
+    color: var(--ins-text);
+    border-left: 3px solid var(--ins-text);
+    padding-left: .75em;
+}
+.removedblock {
+    border-left: 3px solid var(--del-text);
+}
+.addedblock > :last-child,
+.removedblock > :last-child {
+    margin-bottom: 0;
+}
+
+/* The Theme switch and the Hide deleted text checkbox, in the metadata. */
+.mode-toggle label + label {
+    margin-left: .75em;
+}
+.mode-toggle label,
+.diff-toggle label {
+    cursor: pointer;
+}
+
+/* Hide deleted text, from the checkbox the exporter adds to the
+   metadata of a paper that has some.  What is left reads as the final
+   wording, so insertions lose their marking too. */
+body:has(#wg21-hide-deleted:checked) :is(del, .removedblock) {
+    display: none;
+}
+body:has(#wg21-hide-deleted:checked) :is(ins, .underline, .addedblock) {
+    color: inherit;
+    background: none;
+    text-decoration: none;
+}
+body:has(#wg21-hide-deleted:checked) .addedblock {
+    border-left: 0;
+    padding-left: 0;
+}
+blockquote {
+    margin-left: 0;
+    padding-left: 1em;
+    border-left: 3px solid var(--rule);
+    color: var(--muted);
+}
+
+/** Tables *******************************************************************/
+
+table {
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: .95em;
+}
+
+table.wg21-spec-table {
+    table-layout: fixed;
+    width: 100%;
+}
+caption {
+    caption-side: top;
+    text-align: left;
+    color: var(--muted);
+    margin-bottom: .5em;
+}
+th, td {
+    padding: .35em .75em;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+    text-align: left;
+}
+thead th {
+    border-bottom: 2px solid var(--rule);
+    font-family: var(--sans);
+    font-weight: 600;
+}
+.org-left   { text-align: left; }
+.org-right  { text-align: right; }
+.org-center { text-align: center; }
+
+/* Comparison tables: before and after columns of equal width.  Code
+   is what they are for, so it gets the room: each block fills its cell
+   with no frame of its own, and on wide screens the table grows past
+   the text column, centred, up to --cmptbl-width.  The fixed layout
+   keeps a line too long even for that scrolling inside its cell
+   instead of widening the table past the page. */
+:root {
+    --cmptbl-width: min(100vw - 2rem, 72rem);
+}
+table.cmptbl {
+    width: max(100%, var(--cmptbl-width));
+    margin: 1.5em calc((100% - max(100%, var(--cmptbl-width))) / 2);
+    table-layout: fixed;
+    border-collapse: collapse;
+    font-size: inherit;
+}
+table.cmptbl tr > td,
+table.cmptbl tr > th {
+    padding: .5em 0;
+    border: 0;
+    border-top: 1px solid var(--rule);
+    vertical-align: top;
+    background: none;
+}
+table.cmptbl tr > td + td,
+table.cmptbl tr > th + th {
+    border-left: 1px solid var(--rule);
+}
+table.cmptbl thead tr > th {
+    border-top: 0;
+    border-bottom: 2px solid var(--rule);
+    padding: .3em .6em;
+    text-align: center;
+    font-family: var(--sans);
+}
+table.cmptbl th p {
+    margin: 0;
+}
+table.cmptbl td > :not(.org-src-container) {
+    margin: .5em .6em;
+}
+table.cmptbl .org-src-container {
+    margin: 0;
+}
+table.cmptbl pre {
+    margin: 0;
+    padding: .5em .6em;
+    border: 0;
+    border-radius: 0;
+}
+
+/** Figures, notes, references ***********************************************/
+
+figure {
+    text-align: center;
+}
+figcaption, .figure-number, .table-number, .listing-number {
+    font-family: var(--sans);
+    font-size: .9em;
+    color: var(--muted);
+}
+
+#footnotes {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-size: .9em;
+}
+#footnotes h2 {
+    font-size: 1rem;
+    margin-top: 0;
+}
+.footdef {
+    display: flex;
+    gap: .5em;
+    margin-bottom: .5em;
+}
+.footpara {
+    margin: 0;
+}
+
+.csl-bib-body {
+    font-size: .95em;
+}
+.csl-entry {
+    margin: 0 0 .5em 1.5em;
+    text-indent: -1.5em;
+    overflow-wrap: anywhere;
+}
+
+.todo, .done, .tag, .timestamp {
+    font-family: var(--mono);
+    font-size: .85em;
+}
+.todo { color: var(--del-text); }
+.done { color: var(--ins-text); }
+.tag  { color: var(--muted); }
+
+#postamble {
+    max-width: 50rem;
+    margin: 0 auto;
+    padding: 1rem 1.25rem 2rem;
+    color: var(--muted);
+    font-family: var(--sans);
+    font-size: .85rem;
+}
+
+/** Narrow screens ***********************************************************/
+
+@media screen and (max-width: 40em) {
+    body {
+        font-size: 1rem;
+    }
+    #content {
+        padding: 1.25rem 1rem 3rem;
+    }
+    h1.title {
+        font-size: 1.6rem;
+    }
+    div[data-fill-with="spec-metadata"] dl {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    div[data-fill-with="spec-metadata"] dt,
+    div[data-fill-with="spec-metadata"] dd {
+        grid-column: 1;
+    }
+    div[data-fill-with="spec-metadata"] dd {
+        margin-left: 1em;
+    }
+}
+
+/** Print ********************************************************************/
+
+@media print {
+    :root {
+        --bg: #fff;
+        --text: #000;
+        --link: #000;
+        --link-visited: #000;
+    }
+    body {
+        font-size: 10.5pt;
+    }
+    #content {
+        max-width: none;
+        padding: 0;
+    }
+    a {
+        text-decoration: none;
+    }
+    #toc-nav,
+    .mode-toggle,
+    .diff-toggle,
+    .heading .self-link,
+    .heading .source-link {
+        display: none;
+    }
+    body.toc-sidebar {
+        padding-left: 0;
+    }
+    body.toc-sidebar #toc {
+        position: static;
+        width: auto;
+        max-width: none;
+        background: none;
+        border: 0;
+        padding: 0;
+    }
+    pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+    h2, h3, h4, h5, h6 {
+        break-after: avoid;
+    }
+    pre, figure, table.cmptbl tr, .footdef {
+        break-inside: avoid;
+    }
+    table.cmptbl {
+        width: 100%;
+        margin: 1.5em 0;
+    }
+}
+
+</style>
+<style>
+/* modus-vivendi-tinted.css */
+pre.src {
+        color: #ffffff;
+        background-color: #0d0e1c;
+      }
+pre.src a {
+        color: inherit;
+        background-color: inherit;
+        font: inherit;
+        text-decoration: inherit;
+      }
+pre.src a:hover {
+        text-decoration: underline;
+      }
+pre.src code { color: inherit; background: transparent; }
+</style>
+<style>
+/* modus-operandi-tinted.css */
+@media print {
+pre.src {
+        color: #000000;
+        background-color: #fbf7f0;
+      }
+pre.src a {
+        color: inherit;
+        background-color: inherit;
+        font: inherit;
+        text-decoration: inherit;
+      }
+pre.src a:hover {
+        text-decoration: underline;
+      }
+pre.src code { color: inherit; background: transparent; }
+}
+@media screen and (prefers-color-scheme: dark) {
+:root:not(:has(#wg21-mode-light:checked)) pre.src {
+        color: #000000;
+        background-color: #fbf7f0;
+      }
+:root:not(:has(#wg21-mode-light:checked)) pre.src a {
+        color: inherit;
+        background-color: inherit;
+        font: inherit;
+        text-decoration: inherit;
+      }
+:root:not(:has(#wg21-mode-light:checked)) pre.src a:hover {
+        text-decoration: underline;
+      }
+:root:not(:has(#wg21-mode-light:checked)) pre.src code { color: inherit; background: transparent; }
+}
+@media screen {
+:root:has(#wg21-mode-dark:checked) pre.src {
+        color: #000000;
+        background-color: #fbf7f0;
+      }
+:root:has(#wg21-mode-dark:checked) pre.src a {
+        color: inherit;
+        background-color: inherit;
+        font: inherit;
+        text-decoration: inherit;
+      }
+:root:has(#wg21-mode-dark:checked) pre.src a:hover {
+        text-decoration: underline;
+      }
+:root:has(#wg21-mode-dark:checked) pre.src code { color: inherit; background: transparent; }
+}
+</style>
+</head>
+<body>
+<div id="content">
+<h1 class="title">[optional.ref.monadic]: generated wording, marked against the working draft</h1>
+<div data-fill-with="spec-metadata">
+<dl>
+<dt>Document #:</dt><dd>specgen example</dd>
+<dt>Date:</dt><dd></dd>
+<dt>Project:</dt><dd>Programming Language C++</dd>
+<dt>Audience:</dt><dd>LWG</dd>
+<dt>Reply-to:</dt><dd>Steve Downey</dd>
+<dt class="mode-toggle">Theme:</dt><dd class="mode-toggle"><label><input type="radio" name="wg21-mode" id="wg21-mode-light"> Light</label><label><input type="radio" name="wg21-mode" id="wg21-mode-dark"> Dark</label><label><input type="radio" name="wg21-mode" id="wg21-mode-system" checked> System</label></dd>
+<dt class="diff-toggle">Wording:</dt><dd class="diff-toggle"><label><input type="checkbox" id="wg21-hide-deleted"> Hide deleted text</label></dd>
+</dl>
+</div>
+<div id="outline-container-wording" class="outline-2">
+<h2 class="heading" id="wording"><span class="content">Wording</span><a class="self-link" href="#wording" aria-label="Link to this section"></a></h2>
+<div class="outline-text-2" id="text-wording">
+</div>
+<div id="outline-container-optional.ref.monadic" class="outline-3 wg21-wording">
+<h3 class="heading" id="optional.ref.monadic"><span class="content">Monadic operations [optional.ref.monadic]</span><a class="self-link" href="#optional.ref.monadic" aria-label="Link to this section"></a></h3>
+<div class="outline-text-3" id="text-optional.ref.monadic">
+<div class="itemdecl"><pre class="src src-C++">template&lt;class F&gt;
+  constexpr auto and_then(F&amp;&amp; f) const;
+</pre></div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-1" href="#optional.ref.monadic-1" data-pnum="1" aria-label="Paragraph 1"></a><p>
+Let <code>U</code> be <code>invoke_result_t&lt;F, T&amp;&gt;</code>.
+</p>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-2" href="#optional.ref.monadic-2" data-pnum="2" aria-label="Paragraph 2"></a><p>
+<i>Mandates</i>: <del><code>remove_cvref_t&lt;U&gt;</code></del><ins><code>U</code></ins> is a specialization of <code>optional</code>.
+</p>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-3" href="#optional.ref.monadic-3" data-pnum="3" aria-label="Paragraph 3"></a><p>
+<i>Effects</i>: Equivalent to:
+</p>
+
+<div class="codeblock"><pre class="src src-C++"><ins>using U = invoke_result_t&lt;F, T&amp;&gt;;</ins>
+
+if (has_value()) {
+  return invoke(<del>std::</del>forward&lt;F&gt;(f), *<var>val</var>);
+} else {
+  return remove_cvref_t&lt;U&gt;();
+}
+</pre></div>
+</div>
+
+<div class="itemdecl"><pre class="src src-C++">template&lt;class F&gt;
+  constexpr optional&lt;<del>remove_cv_t&lt;</del>invoke_result_t&lt;F, T&amp;&gt;&gt; <del>&gt;</del> transform(F&amp;&amp; f) const;
+</pre></div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-4" href="#optional.ref.monadic-4" data-pnum="4" aria-label="Paragraph 4"></a><p>
+Let <code>U</code> be <del><code>remove_cv_t&lt;invoke_result_t&lt;F, T&amp;&gt;&gt;</code></del><ins><code>invoke_result_t&lt;F, T&amp;&gt;</code></ins>.
+</p>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-5" href="#optional.ref.monadic-5" data-pnum="5" aria-label="Paragraph 5"></a><p>
+<i>Mandates</i>: <code>U</code> is a valid contained type for <code>optional</code>. The declaration
+</p>
+
+<div class="codeblock"><pre class="src src-C++">U u(invoke(std::forward&lt;F&gt;(f), *<var>val</var>));
+</pre></div>
+
+<p>
+is well-formed for some invented variable <code>u</code>.
+</p>
+
+<div class="wg21-note"><p>
+There is no requirement that <code>U</code> is movable(<a href="https://eel.is/c++draft/dcl.init.general">[dcl.init.general]</a>).
+</p>
+</div>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-6" href="#optional.ref.monadic-6" data-pnum="6" aria-label="Paragraph 6"></a><p>
+<i>Returns</i>: If <code>*this</code> contains a value, an <code>optional&lt;U&gt;</code> object whose contained value is direct-non-list-initialized with <code>invoke(std::forward&lt;F&gt;(f), *<var>val</var>)</code>; otherwise, <code>optional&lt;U&gt;()</code>.
+</p>
+</div>
+
+<div class="itemdecl"><pre class="src src-C++">template&lt;class F&gt;
+  constexpr optional or_else(F&amp;&amp; f) const;
+</pre></div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-7" href="#optional.ref.monadic-7" data-pnum="7" aria-label="Paragraph 7"></a><p>
+<i>Constraints</i>: <code>F</code> models <del></del><ins><code>invocable</code></ins>.
+</p>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-8" href="#optional.ref.monadic-8" data-pnum="8" aria-label="Paragraph 8"></a><p>
+<i>Mandates</i>: <code>is_same_v&lt;remove_cvref_t&lt;invoke_result_t&lt;F&gt;&gt;, optional&gt;</code> is <code>true</code>.
+</p>
+</div>
+
+<div class="pnum pnum-explicit"><a class="pnum-number" id="optional.ref.monadic-9" href="#optional.ref.monadic-9" data-pnum="9" aria-label="Paragraph 9"></a><p>
+<i>Effects</i>: Equivalent to:
+</p>
+
+<div class="codeblock"><pre class="src src-C++">if (has_value()) {
+  return *<del>\exposid{val}</del><ins>this</ins>;
+} else {
+  return <del>std::</del>forward&lt;F&gt;(f)();
+}
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="postamble" class="status">
+<p class="author">Author: Steve Downey</p>
+<p class="date">Created: 2026-11-20 Fri 13:35</p>
+<p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
+</div>
+</body>
+</html>
