@@ -1377,8 +1377,11 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
   with the space beside it. This covers an object-like macro whose expansion is
   keywords alone, or nothing, or another such macro. A function-like macro, or
   one whose expansion holds a number, a name that is not such a macro, or an
-  attribute, is left as written. Whether the expansion is the one the wording wants is settled with
-  a `-D` after the `--`. A declaration or a definition whose first token comes
+  attribute, is left as written. The expansion is the one in effect where the
+  macro is used, so a header that `#undef`s its macro at the end, so as not to
+  leak it, reads the same; a macro whose uses expanded different definitions is
+  left as written. Whether the expansion is the one the wording wants is
+  settled with a `-D` after the `--`. A declaration or a definition whose first token comes
   from a macro is where it is written, so its docblock attaches to it and its
   item is placed with its class's other members. A declaration that a
   function-like macro stamps out, its name and all, is the macro's, and

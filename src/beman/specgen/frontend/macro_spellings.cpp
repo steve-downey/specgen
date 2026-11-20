@@ -7,15 +7,20 @@
 #include <beman/specgen/ir.hpp>
 
 #include <clang/Basic/IdentifierTable.h>
+#include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/TokenKinds.h>
 #include <clang/Lex/MacroInfo.h>
+#include <clang/Lex/PreprocessingRecord.h>
 #include <clang/Lex/Preprocessor.h>
 #include <clang/Lex/Token.h>
+
+#include <llvm/Support/Casting.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
 #include <map>
+#include <set>
 #include <optional>
 #include <ranges>
 #include <string>
@@ -36,6 +41,8 @@ bool is_blank(char c) { return c == ' ' || c == '\t'; }
 struct BodyToken {
     std::string spelling;
     bool        keyword = false;
+
+    bool operator==(const BodyToken&) const = default;
 };
 using Body = std::vector<BodyToken>;
 
@@ -141,15 +148,44 @@ std::size_t moved(std::size_t at, const Edit& edit) {
 } // namespace
 
 std::map<std::string, std::string> specifier_macros(const clang::Preprocessor& pp) {
+    // Where each definition a use expanded stands, by name (issue #377): the
+    // expansion written is the one in effect where the macro was used, so a
+    // later `#undef`, or a later redefinition, does not change it.
+    std::map<const clang::IdentifierInfo*, std::set<clang::SourceLocation>> used;
+    if (clang::PreprocessingRecord* record = pp.getPreprocessingRecord())
+        // substrate generic algorithm: a filter over the record's entities into a map of sets.
+        for (const clang::PreprocessedEntity* entity : *record)
+            if (const auto* expansion = llvm::dyn_cast_if_present<clang::MacroExpansion>(entity);
+                expansion != nullptr && !expansion->isBuiltinMacro() && expansion->getDefinition() != nullptr)
+                used[expansion->getName()].insert(expansion->getDefinition()->getLocation());
+
     std::map<std::string, Body> bodies;
     // substrate generic algorithm: a filter-map over the preprocessor's macro
     // table into a map keyed by name.
     for (const auto& [identifier, state] : pp.macros(false)) {
-        const clang::MacroInfo* info = pp.getMacroInfo(identifier);
-        if (info == nullptr)
+        // Every definition the name has had, latest first.
+        std::vector<const clang::MacroInfo*> definitions;
+        // substrate generic algorithm: a walk down a linked history.
+        for (const clang::MacroDirective* directive = pp.getLocalMacroDirectiveHistory(identifier);
+             directive != nullptr;
+             directive = directive->getPrevious())
+            if (const auto* def = llvm::dyn_cast<clang::DefMacroDirective>(directive))
+                definitions.push_back(def->getInfo());
+        const auto uses = used.find(identifier);
+        // The definitions the uses expanded; with no use recorded, the latest.
+        std::vector<std::optional<Body>> chosen =
+            definitions | std::views::filter([&](const clang::MacroInfo* info) {
+                return uses == used.end() || uses->second.contains(info->getDefinitionLoc());
+            }) |
+            std::views::take(uses == used.end() ? 1 : definitions.size()) |
+            std::views::transform([&](const clang::MacroInfo* info) { return keyword_body(pp, *info); }) |
+            std::ranges::to<std::vector>();
+        // Uses that expanded different definitions have no one spelling for
+        // the text to take, so the name is left as the header writes it.
+        if (chosen.empty() || !chosen.front() ||
+            !std::ranges::all_of(chosen, [&](const std::optional<Body>& body) { return body == chosen.front(); }))
             continue;
-        if (std::optional<Body> body = keyword_body(pp, *info))
-            bodies.emplace(identifier->getName().str(), std::move(*body));
+        bodies.emplace(identifier->getName().str(), std::move(*chosen.front()));
     }
     // A name in a body is another macro's; it stands for that one's
     // expansion, if that is keywords too. A cycle, or a name that is no such
