@@ -309,6 +309,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     ((only_asdraft.asdraft = true), parsed.block.markers == only_asdraft)) {
                     return db::SectionProse{ev.offset, {}, std::move(diagnostics), first_line, diagnostic_file, true};
                 }
+                if (!parsed.block.kind_covers.empty() && !parsed.block.markers.asdraft)
+                    diagnostics.push_back(
+                        {beman::specgen::Severity::Error,
+                         first_line + static_cast<unsigned>(parsed.block.kind_covers.front().line) - 1,
+                         "\\covers naming an element answers a derived element, and detached "
+                         "prose has none",
+                         diagnostic_file});
                 if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
                     parsed.block.markers == grammar::Markers{}) {
                     auto lowered = lowering::lower(parsed.block);

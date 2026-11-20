@@ -1124,7 +1124,30 @@ since nothing else would state it. A leading run of body-local type aliases
 followed by `static_assert`s produces derived *Mandates*; the aliases remain in
 an extracted equivalent-to body, and the consumed assertions do not. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
-wording, and the derivation is retained as evidence for the drift checks.
+wording, and the derivation is retained as evidence for the drift checks. An
+empty one, the marker with nothing after it, removes the derived element and
+writes nothing in its place; each derived conjunct is then a note unless other
+wording in the item reads as it.
+
+The draft often states a condition outside *Constraints*: a copy constructor's
+*Remarks* says "This constructor is defined as deleted unless
+`is_copy_constructible_v<T>` is `true`", and the item has no *Constraints*.
+`\covers constraints P` (or `\covers mandates P`) says that the item's other
+wording states the derived conjunct `P`, so it leaves the derived element:
+
+```cpp
+//! \covers constraints is_copy_constructible_v<T>
+//! \covers constraints !(is_trivially_copy_constructible_v<T>)
+//! \effects Initializes `val` with `rhs.val`.
+//! \remarks This constructor is defined as deleted unless
+//! `is_copy_constructible_v<T>` is `true`. ...
+```
+
+Once every conjunct is claimed the derived element is gone; a conjunct no claim
+names is still rendered under *Constraints*. A claimed conjunct gives no note.
+The claims are checked as `\covers` always is (see [Explicit constraint
+coverage](#explicit-constraint-coverage)), and one naming an element the item
+does not derive is an Error.
 
 ## Inheriting a description
 
@@ -1963,11 +1986,12 @@ prose, acknowledge its correspondence on the authored element:
 //! \item `remove_cvref_t<F>` is not a specialization of `in_place_type_t`.
 ```
 
-`\covers` belongs to the current normative Constraints or Mandates element, or,
-beside `\asdraft`, names the element it is about (`\covers constraints P`). On
-a class definition, `\covers mandates P` needs no `\asdraft`: it says that the
-class's leading prose stands for the paragraph derived from its
-`static_assert`s.
+`\covers` belongs to the current normative Constraints or Mandates element, or
+names the element it is about (`\covers constraints P`). Beside `\asdraft` that
+element is the inherited one. On an item without it, the claim says the item's
+other wording states a derived conjunct, which then leaves the derived element.
+On a class definition, `\covers mandates P` says that the class's leading
+prose stands for the paragraph derived from its `static_assert`s.
 Its argument names one derived predicate; a leading `!` claims negative
 polarity. It does not render. Each claim must match exactly one derived
 conjunct, and typos, duplicate or ambiguous targets, and wrong polarities are

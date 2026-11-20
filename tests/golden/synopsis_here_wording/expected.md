@@ -13,7 +13,6 @@ namespace std {
 
 [#]{.pnum} A program that instantiates the definition of `holder` for a non-object type is ill-formed.
 
-
 :::
 
 ::: wording

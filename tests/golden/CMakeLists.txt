@@ -1196,6 +1196,18 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_deduction_guide/expected.json"
 )
 
+# `\covers constraints P` on an item without `\asdraft`, and an empty
+# `\constraints` (issue #386).
+specgen_add_golden(
+    item_covers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_item_covers.hpp"
+)
+specgen_add_golden(
+    item_covers_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/item_covers/expected.json"
+)
+
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
 specgen_add_golden(

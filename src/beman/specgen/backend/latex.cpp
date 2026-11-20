@@ -424,7 +424,10 @@ std::string render_item(const ir::SpecItem& item) {
                             return wrap_block(std::ranges::begin(group)->change,
                                               element_group_blocks(group) | std::views::join_with('\n') |
                                                   std::ranges::to<std::string>());
-                        }));
+                        }) |
+                        // An element with no body, the stand-in that an empty `\constraints` or a
+                        // `\covers` leaves (issue #386), writes nothing, and no separator either.
+                        std::views::filter([](const std::string& group) { return !group.empty(); }));
 
     if (!out.empty())
         out += '\n';

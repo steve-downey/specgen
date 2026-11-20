@@ -1078,8 +1078,9 @@ TEST_CASE("docblock - asdraft is a marker, and covers may name the element it is
     REQUIRE(mandates.ok());
     CHECK(mandates.block.kind_covers.front().kind == ir::ElementKind::Mandates);
 
-    // The element-scoped form claims wording that is inherited, so it needs the marker.
-    CHECK_FALSE(parse_docblock("\\covers constraints trait<T>").ok());
+    // The element-scoped form needs no marker: without one it names a derived
+    // element the item's other wording states (issue #386).
+    CHECK(parse_docblock("\\covers constraints trait<T>").ok());
     // Authored wording beside the marker keeps the unscoped form working.
     const auto authored = parse_docblock("\\asdraft\n\\constraints\n\\covers !detail::trait<T>\nThe condition holds.");
     REQUIRE(authored.ok());

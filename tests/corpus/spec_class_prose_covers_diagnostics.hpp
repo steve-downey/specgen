@@ -7,7 +7,8 @@
 // drop: a class with no static_assert has no such paragraph, a docblock with
 // no leading prose has nothing to stand for it, and a class derives no
 // Constraints for `\covers constraints` to be about. On a function the scoped
-// form still needs `\asdraft`, as before.
+// form names a derived element, and one with no static_assert has none
+// (issue #386).
 //
 // Self-contained (no #includes) and built from bool/int only, so it parses
 // standalone under -std=c++2c.
@@ -43,7 +44,7 @@ class unconstrained {
 
 //! \effects Nothing.
 //! \covers mandates is_object_like<int>
-inline void on_a_function() { static_assert(is_object_like<int>); }
+inline void on_a_function() {}
 
 } // namespace demo
 
