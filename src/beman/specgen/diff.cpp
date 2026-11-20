@@ -707,7 +707,7 @@ diff_list_items(const std::vector<ir::ListItem>& a, const std::vector<ir::ListIt
         return b;
     const auto marked = [](const ir::ListItem& item, ir::Change change) {
         return ir::ListItem{marked_paragraph(item.text, change),
-                            item.blocks | std::views::transform([&](const ir::InformativeBlock& block) {
+                            item.blocks | std::views::transform([&](const ir::BodyBlock& block) {
                                 return with_block_change(block, change);
                             }) | std::ranges::to<std::vector>()};
     };

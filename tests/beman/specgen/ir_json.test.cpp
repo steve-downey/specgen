@@ -847,8 +847,9 @@ TEST_CASE("ir_json - a list item with blocks is an object, one without is the ar
     Document doc;
     Itemize  list;
     list.items.push_back(ListItem{{TextInline{"plain"}}});
-    list.items.push_back(ListItem{Paragraph{TextInline{"equivalent to:"}},
-                                  InformativeBody{beman::specgen::ir::AuthoredCode{CodeText{"f();", {}}}}});
+    list.items.push_back(
+        ListItem{Paragraph{TextInline{"equivalent to:"}},
+                 beman::specgen::ir::DescriptionBody{beman::specgen::ir::AuthoredCode{CodeText{"f();", {}}}}});
     Table2D table;
     table.stable_name        = "x.t";
     table.floattable_columns = "lx{0.35\\hsize}x{0.35\\hsize}";

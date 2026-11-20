@@ -1160,18 +1160,46 @@ Otherwise, no effect.
                             "whichever comes first.\n\\item Otherwise, no effect.\n"));
 }
 
-TEST_CASE("draft_import - a list item holding a note, an example or a numbered list is kept as raw LaTeX") {
-    // Issue #381: none is one of an informative body's blocks.
+// Issue #389: a note or an example inside an item is one of the item's
+// blocks, as a code block and a nested list are (issues #367, #381).
+TEST_CASE("draft_import - a note or an example in a list item is one of its blocks") {
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
+\effects
 \begin{itemize}
 \item
 One.
 \begin{note}
 Two.
 \end{note}
+\item
+Three.
+\begin{example}
+Four.
+\end{example}
+and five.
 \end{itemize}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& item = item_at(only_section(r), 0);
+    const auto& list = std::get<ir::Itemize>(item.descr.elements.front().body.front());
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items[0].blocks.size() == 1);
+    const auto& note = std::get<ir::Note>(list.items[0].blocks[0]);
+    CHECK(prose_of(std::get<ir::BodyParagraph>(note.body.front()).text) == "Two.");
+    REQUIRE(list.items[1].blocks.size() == 2);
+    CHECK(std::holds_alternative<ir::Example>(list.items[1].blocks[0]));
+    CHECK(prose_of(std::get<ir::BodyParagraph>(list.items[1].blocks[1]).text) == "and five.");
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\item One.\n\\begin{note}\nTwo.\n\\end{note}\n\\item Three.\n\\begin{example}\nFour.\n"
+                            "\\end{example}\nand five.\n\\end{itemize}\n"));
+}
 
+TEST_CASE("draft_import - a list item holding a numbered list or a footnote is kept as raw LaTeX") {
+    // Neither is a block an item holds: the IR has no numbered list, and a
+    // footnote is part of the running text.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 \begin{itemize}
 \item
@@ -1185,16 +1213,15 @@ One:
 \begin{itemize}
 \item
 One.
-\begin{example}
+\begin{footnote}
 Two.
-\end{example}
+\end{footnote}
 \end{itemize}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    REQUIRE(r.diagnostics.size() == 3);
-    CHECK(r.diagnostics[0].message == "a list item holding a note is kept as raw LaTeX");
-    CHECK(r.diagnostics[1].message == "a nested numbered list is kept as raw LaTeX");
-    CHECK(r.diagnostics[2].message == "a list item holding an example is kept as raw LaTeX");
+    REQUIRE(r.diagnostics.size() == 2);
+    CHECK(r.diagnostics[0].message == "a nested numbered list is kept as raw LaTeX");
+    CHECK(r.diagnostics[1].message == "a list item holding a footnote is kept as raw LaTeX");
 }
 
 TEST_CASE("draft_import - a floattable in the shape of a lib2dtab2 is a table, and keeps its form") {

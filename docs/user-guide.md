@@ -1891,10 +1891,10 @@ opens the element's paragraph and says nothing, as generated wording has it. A
 docblock writes this with two blank decorated lines before the block (see
 [Notes, examples, and authored code](#notes-examples-and-authored-code)).
 
-A list item can hold a code block, a nested list, and prose after either,
-inside the item; mpark and org indent them under the item. A list item holding
-a note, an example, a footnote or a numbered (`enumerate`) list is still kept
-as raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
+A list item can hold a code block, a nested list, a note, an example, and prose
+after any of them, inside the item; mpark and org indent them under the item.
+A list item holding a footnote, a `tailnote` or a numbered (`enumerate`) list
+is still kept as raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
 and two data columns, `\chdr` and `\rhdr` over them and `\lhdr` on each row,
 as [expected.object.swap] has) is read as the same two-dimensional table, and
 the LaTeX backend writes it back as the `floattable` it was, with its column

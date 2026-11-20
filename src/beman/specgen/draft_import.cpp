@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <concepts>
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
@@ -203,9 +204,13 @@ struct Importer {
     // Set by parse_code when it met a macro the span vocabulary lacks: the text
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
-    bool                      met_unknown_macro = false;
-    ir::Paragraph             parse_prose(std::string_view text);
-    ir::InformativeBody       parse_informative(Lines lines);
+    bool                met_unknown_macro = false;
+    ir::Paragraph       parse_prose(std::string_view text);
+    ir::InformativeBody parse_informative(Lines lines);
+    // An informative body, or a list item's blocks, which hold a note or an
+    // example too (issue #389).
+    template <class Body>
+    Body                      parse_body(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
     std::vector<ir::Node>     parse_region(Lines lines);
     ir::Section               parse_section(Lines lines, std::size_t header, std::size_t end);
@@ -1024,12 +1029,14 @@ std::optional<std::string> begin_name(std::string_view line) {
 
 ir::ListItem Importer::parse_item(const EvItem& item) {
     // The item's own text runs to its first environment; what follows, a code
-    // block, a nested list or more prose, is read as an informative body.
+    // block, a nested list, a note, an example or more prose, is read as the
+    // item's blocks.
     const Lines lines(item.lines);
     const auto  first =
         std::ranges::find_if(lines, [](const std::string& line) { return begin_name(line).has_value(); });
     const auto split = static_cast<std::size_t>(first - lines.begin());
-    return ir::ListItem{parse_prose(join_prose(lines.first(split))), parse_informative(lines.subspan(split))};
+    return ir::ListItem{parse_prose(join_prose(lines.first(split))),
+                        parse_body<ir::DescriptionBody>(lines.subspan(split))};
 }
 
 // The index of the line closing the environment `name` opened at `open`.
@@ -1374,8 +1381,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             } else if (*name == "itemize") {
                 std::vector<EvItem> items;
                 // The first environment that a list item cannot hold: one
-                // before any `\item`, or anything but a code block or a
-                // nested list (issues #367, #381).
+                // before any `\item`, or anything but a code block, a nested
+                // list, a note or an example (issues #367, #381, #389).
                 std::optional<std::string> nested;
                 const Lines                item_lines(body);
                 std::size_t                k = 0;
@@ -1389,7 +1396,11 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                     } else if (const auto env = begin_name(item_line)) {
                         const std::size_t close =
                             std::min(environment_end(item_lines, k, *env), item_lines.size() - 1);
-                        if (!nested && (items.empty() || (*env != "codeblock" && *env != "itemize")))
+                        constexpr std::array kHeld{std::string_view{"codeblock"},
+                                                   std::string_view{"itemize"},
+                                                   std::string_view{"note"},
+                                                   std::string_view{"example"}};
+                        if (!nested && (items.empty() || !std::ranges::contains(kHeld, *env)))
                             nested = env;
                         if (!items.empty())
                             items.back().lines.append_range(item_lines.subspan(k, close + 1 - k));
@@ -1458,10 +1469,13 @@ ir::Table1D Importer::make_table1d(const EvTable& table) {
     return out;
 }
 
-ir::InformativeBody Importer::parse_informative(Lines lines) {
+ir::InformativeBody Importer::parse_informative(Lines lines) { return parse_body<ir::InformativeBody>(lines); }
+
+template <class Body>
+Body Importer::parse_body(Lines lines) {
     std::vector<Event> events;
     scan_events(*this, lines, events);
-    ir::InformativeBody body;
+    Body body;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const Event& event : events) {
         std::visit(
@@ -1476,7 +1490,16 @@ ir::InformativeBody Importer::parse_informative(Lines lines) {
                            body.push_back(std::move(list));
                        },
                        [&](const EvCode& e) { body.push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
-                       [&](const EvNote&) { report(Severity::Warning, "a note inside a note is dropped"); },
+                       [&](const EvNote& e) {
+                           if constexpr (std::same_as<Body, ir::DescriptionBody>) {
+                               if (e.example)
+                                   body.push_back(ir::Example{parse_informative(e.inner)});
+                               else
+                                   body.push_back(ir::Note{parse_informative(e.inner)});
+                           } else {
+                               report(Severity::Warning, "a note inside a note is dropped");
+                           }
+                       },
                        [&](const EvTable& e) {
                            if (e.flat)
                                body.push_back(make_table1d(e));

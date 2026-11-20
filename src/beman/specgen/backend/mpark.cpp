@@ -371,6 +371,8 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
 }
 
 std::string render_informative_body(const ir::InformativeBody& body);
+// A list item's blocks, a note or an example among them (issue #389).
+std::string render_item_blocks(const ir::DescriptionBody& blocks);
 
 // An item's blocks (issue #367) are indented under it, after a blank line,
 // which is how Markdown puts a fenced block inside a list item.
@@ -378,9 +380,8 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
         list.items | std::views::transform([this](const ir::ListItem& item) {
             return std::format("- {}{}\n", numbered_lists ? "[#.#]{.pnum} " : "", render_paragraph(item.text)) +
-                   (item.blocks.empty()
-                        ? std::string{}
-                        : "\n" + backend::indent_lines(render_informative_body(item.blocks), "  ") + "\n");
+                   (item.blocks.empty() ? std::string{}
+                                        : "\n" + backend::indent_lines(render_item_blocks(item.blocks), "  ") + "\n");
         }) |
         std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -430,6 +431,14 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("::: example\n\n{}\n:::\n", render_informative_body(example.body)),
             example.opens_paragraph,
             false};
+}
+
+std::string render_item_blocks(const ir::DescriptionBody& blocks) {
+    return blocks | std::views::transform([](const ir::BodyBlock& block) {
+               return wrap_div(ir::block_change(block),
+                               std::visit(overloaded{BodyRenderer{LeafBodyRenderer{false}}}, block).text);
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);

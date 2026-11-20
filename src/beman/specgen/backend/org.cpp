@@ -519,13 +519,15 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
 }
 
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
+// A list item's blocks, a note or an example among them (issue #389).
+std::string render_item_blocks(const ir::DescriptionBody& blocks, std::span<const std::string> new_roots);
 
 // An item's blocks (issue #367) are indented under it, which is how org puts
 // a block inside a list item.
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items = list.items | std::views::transform([this](const ir::ListItem& item) {
                                   return "- " + render_paragraph(item.text, new_roots) + '\n' +
-                                         backend::indent_lines(render_informative_body(item.blocks, new_roots), "  ");
+                                         backend::indent_lines(render_item_blocks(item.blocks, new_roots), "  ");
                               }) |
                               std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -571,6 +573,14 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("#+begin_wgexample\n{}#+end_wgexample\n", render_informative_body(example.body, new_roots)),
             example.opens_paragraph,
             false};
+}
+
+std::string render_item_blocks(const ir::DescriptionBody& blocks, std::span<const std::string> new_roots) {
+    return blocks | std::views::transform([new_roots](const ir::BodyBlock& block) {
+               return wrap_block(ir::block_change(block),
+                                 std::visit(overloaded{BodyRenderer{{new_roots}}}, block).text);
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,

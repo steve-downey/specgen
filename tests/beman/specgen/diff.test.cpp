@@ -855,7 +855,7 @@ TEST_CASE("diff - a list item's blocks diff as a body does, and an unpaired item
         return doc;
     };
     const auto code_item = [](std::string lead, std::string code) {
-        return ListItem{text(std::move(lead)), InformativeBody{AuthoredCode{CodeText{std::move(code), {}}}}};
+        return ListItem{text(std::move(lead)), DescriptionBody{AuthoredCode{CodeText{std::move(code), {}}}}};
     };
     const auto list_of = [](const Document& doc) {
         return std::get<Itemize>(std::get<SpecItem>(std::get<Section>(doc.nodes.front()).children.front())

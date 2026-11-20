@@ -313,6 +313,11 @@ Which kinds land first and which wait for a paper that needs them. `PlaceholderI
   an informative body's block. At draft 45b03900 the library clauses give no nested-list
   warning, down from 79; 48 lists stay raw for a note, some of them lists that the nested-list
   warning used to name first. A docblock cannot yet write a nested list.
+- 2026-11-19: a note or an example in an item is read (issue #389). `ir::ListItem::blocks` is a
+  description body, not an informative one, which is the body that holds a `Note` and an
+  `Example`; making them informative blocks instead would have let a note hold a note. The
+  saved IR is unchanged for an item without them. At draft 45b03900 the library clauses keep no
+  list raw for a note or an example (48 and 6 before); a footnote keeps 10 and a `tailnote` 2.
 
 ### asdraft-default
 

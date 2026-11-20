@@ -286,18 +286,16 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
 }
 
 std::string render_informative_body(const ir::InformativeBody& body);
+// A list item's blocks, a note or an example among them (issue #389), each
+// directly after the one before, as the draft writes them inside an `\item`.
+std::string render_item_blocks(const ir::DescriptionBody& blocks);
 
 // An item's blocks follow its paragraph with no blank line between them, as
 // the draft writes a code block inside an `\item` (issue #367).
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
         list.items | std::views::transform([](const ir::ListItem& item) {
-            return "\\item " + render_paragraph(item.text) + '\n' +
-                   (item.blocks | std::views::transform([](const ir::InformativeBlock& block) {
-                        return wrap_block(ir::block_change(block),
-                                          std::visit(overloaded{LeafBodyRenderer{}}, block).text);
-                    }) |
-                    std::views::join | std::ranges::to<std::string>());
+            return "\\item " + render_paragraph(item.text) + '\n' + render_item_blocks(item.blocks);
         }) |
         std::views::join | std::ranges::to<std::string>();
     return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", list.opens_paragraph, false};
@@ -342,6 +340,13 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)),
             example.opens_paragraph,
             false};
+}
+
+std::string render_item_blocks(const ir::DescriptionBody& blocks) {
+    return blocks | std::views::transform([](const ir::BodyBlock& block) {
+               return wrap_block(ir::block_change(block), std::visit(overloaded{BodyRenderer{}}, block).text);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);

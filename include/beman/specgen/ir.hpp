@@ -645,19 +645,6 @@ struct AuthoredCode {
 using InformativeBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, AuthoredCode>;
 using InformativeBody  = std::vector<InformativeBlock>;
 
-// A list item's blocks are an informative body's: prose, a code block, a
-// list, a table. The importer reads a code block and the prose after it.
-struct ListItem {
-    Paragraph       text;
-    InformativeBody blocks = {};
-
-    ListItem() = default;
-    ListItem(Paragraph text_, InformativeBody blocks_ = {}) // NOLINT(google-explicit-constructor)
-        : text(std::move(text_)), blocks(std::move(blocks_)) {}
-    ListItem(std::initializer_list<Inline> inlines) : text(inlines) {} // NOLINT(google-explicit-constructor)
-
-    friend bool operator==(const ListItem&, const ListItem&) = default;
-};
 struct Note {
     InformativeBody body;
     Change          change = Change::Same;
@@ -679,6 +666,21 @@ struct Example {
 
 using BodyBlock = std::variant<BodyParagraph, Itemize, Table2D, Table1D, EquivalentTo, AuthoredCode, Note, Example>;
 using DescriptionBody = std::vector<BodyBlock>;
+
+// A list item's blocks, after its paragraph: prose, a code block, a list, a
+// table, and a note or an example (issue #389), which an informative body
+// cannot hold. The importer reads each of those.
+struct ListItem {
+    Paragraph       text;
+    DescriptionBody blocks = {};
+
+    ListItem() = default;
+    ListItem(Paragraph text_, DescriptionBody blocks_ = {}) // NOLINT(google-explicit-constructor)
+        : text(std::move(text_)), blocks(std::move(blocks_)) {}
+    ListItem(std::initializer_list<Inline> inlines) : text(inlines) {} // NOLINT(google-explicit-constructor)
+
+    friend bool operator==(const ListItem&, const ListItem&) = default;
+};
 
 // The wording diff's mark on a block of either body, whichever kind it is.
 Change block_change(const BodyBlock&);

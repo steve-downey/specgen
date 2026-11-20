@@ -247,6 +247,15 @@ struct LeafParagraphs {
     std::vector<const Paragraph*> operator()(const Table2D& t) const;
     std::vector<const Paragraph*> operator()(const Table1D& t) const;
     std::vector<const Paragraph*> operator()(const AuthoredCode&) const;
+    // A list item's blocks are a description body's (issue #389).
+    std::vector<const Paragraph*> operator()(const EquivalentTo&) const { return {}; }
+    std::vector<const Paragraph*> operator()(const Note& note) const { return body_leaves(note.body); }
+    std::vector<const Paragraph*> operator()(const Example& example) const { return body_leaves(example.body); }
+    std::vector<const Paragraph*> body_leaves(const InformativeBody& body) const {
+        return body |
+               std::views::transform([this](const InformativeBlock& block) { return std::visit(*this, block); }) |
+               std::views::join | std::ranges::to<std::vector>();
+    }
 };
 
 std::vector<const Paragraph*> LeafParagraphs::operator()(const BodyParagraph& p) const { return {&p.text}; }
@@ -255,7 +264,7 @@ std::vector<const Paragraph*> LeafParagraphs::operator()(const BodyParagraph& p)
 std::vector<const Paragraph*> LeafParagraphs::operator()(const Itemize& list) const {
     return list.items | std::views::transform([this](const ListItem& item) {
                std::vector<const Paragraph*> leaves{&item.text};
-               leaves.append_range(item.blocks | std::views::transform([this](const InformativeBlock& block) {
+               leaves.append_range(item.blocks | std::views::transform([this](const BodyBlock& block) {
                                        return std::visit(*this, block);
                                    }) |
                                    std::views::join);
