@@ -1,0 +1,82 @@
+\rSec3[optional.ref.monadic]{Monadic operations}
+
+\indexlibrarymember{and_then}{optional}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto and_then(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>}.
+
+\pnum
+\mandates
+\removed{\tcode{remove_cvref_t<U>}}\added{\tcode{U}} is a specialization of \tcode{optional}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+@\added{using U = invoke_result_t<F, T&>;}@
+
+if (has_value()) {
+  return invoke(@\removed{std::}@forward<F>(f), *@\exposid{val}@);
+} else {
+  return remove_cvref_t<U>();
+}
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{transform}{optional}%
+\begin{itemdecl}
+template<class F>
+  constexpr optional<@\removed{remove_cv_t<}@invoke_result_t<F, T&>> @\removed{>}@ transform(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \removed{\tcode{remove_cv_t<invoke_result_t<F, T\&>>}}\added{\tcode{invoke_result_t<F, T\&>}}.
+
+\pnum
+\mandates
+\tcode{U} is a valid contained type for \tcode{optional}. The declaration
+\begin{codeblock}
+U u(invoke(std::forward<F>(f), *@\exposid{val}@));
+\end{codeblock}
+is well-formed for some invented variable \tcode{u}.
+\begin{note}
+There is no requirement that \tcode{U} is movable\iref{dcl.init.general}.
+\end{note}
+
+\pnum
+\returns
+If \tcode{*this} contains a value, an \tcode{optional<U>} object whose contained value is direct-non-list-initialized with \tcode{invoke(std::forward<F>(f), *\exposid{val})}; otherwise, \tcode{optional<U>()}.
+\end{itemdescr}
+
+\indexlibrarymember{or_else}{optional}%
+\begin{itemdecl}
+template<class F>
+  constexpr optional or_else(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{F} models \removed{\tcode{\libconcept{invocable}}}\added{\libconcept{invocable}}.
+
+\pnum
+\mandates
+\tcode{is_same_v<remove_cvref_t<invoke_result_t<F>>, optional>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+if (has_value()) {
+  return *@\removed{\exposid{val}}@@\added{this}@;
+} else {
+  return @\removed{std::}@forward<F>(f)();
+}
+\end{codeblock}
+\end{itemdescr}
