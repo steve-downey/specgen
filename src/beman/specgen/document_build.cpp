@@ -161,6 +161,27 @@ struct Frame {
     unsigned                    open_offset = 0; // source offset of this frame's \rSec, its key in the parent
 };
 
+// Section prose stands where it was written among the frame's items (issue
+// #383). An item's key is where its declaration stands in its class, which
+// is ahead of the section an out-of-line definition documents it in, so
+// prose keyed by its own offset sorted after every item. Prose ahead of
+// everything else the frame holds leads it, ahead of the in-class members
+// injected later too; prose after an item takes the key of what follows it
+// in the header, so it stays before that, and keeps its own offset at the end.
+void place_prose(std::vector<GroupCandidate>& pushed) {
+    const auto first = std::ranges::find_if(pushed, [](const GroupCandidate& c) { return !c.prose; });
+    std::ranges::for_each(pushed.begin(), first, [](GroupCandidate& c) { c.key = 0; });
+    std::optional<unsigned> next;
+    // substrate generic algorithm: a backward scan carrying the key of the
+    // next non-prose candidate; that key is the loop's state.
+    for (GroupCandidate& c : std::ranges::subrange(first, pushed.end()) | std::views::reverse) {
+        if (c.prose)
+            c.key = next.value_or(c.key);
+        else
+            next = c.key;
+    }
+}
+
 // Reorder a frame's already-grouped children into placement-key order
 // (design §3.3). Stable, so equal keys keep push order.
 void sort_frame(Frame& f) {
@@ -203,6 +224,7 @@ BuildResult build_tree(std::span<DocEvent> events) {
         // pending-member injection and placement-key sort below, neither of
         // which grouping may ever see.
         closed.pushed = group_items(std::move(closed.pushed), &diagnostics);
+        place_prose(closed.pushed);
 
         if (auto it = pending.find(closed.stable); it != pending.end()) {
             // Pending items join the frame ungrouped (`wants_join` false is
@@ -352,7 +374,9 @@ BuildResult build_tree(std::span<DocEvent> events) {
                     description.leading = std::move(prose.body);
                     ir::SpecItem own{{}, std::move(description)};
                     own.as_draft = prose.as_draft;
-                    stack.back().pushed.push_back(GroupCandidate{prose.offset, std::move(own), false});
+                    GroupCandidate candidate{prose.offset, std::move(own), false};
+                    candidate.prose = true;
+                    stack.back().pushed.push_back(std::move(candidate));
                 },
                 [&](Ignored& ig) {
                     // \ref group headers, license/SPDX text, trailing

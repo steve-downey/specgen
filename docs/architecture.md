@@ -543,7 +543,10 @@ by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
 descriptions require a declaration or a verbatim item declaration.
 Detached prose-only docblocks become signatureless `SpecItem` nodes in the open
-section, at the block's source position (issue #217). Outside a section they
+section, at the block's source position (issue #217). An item is keyed by its
+class-body position, which is ahead of the section an out-of-line definition
+sits in, so prose takes the key of the item written after it, or leads the
+section when no item precedes it (issue #383). Outside a section they
 report an Error. Labelled descriptions still require a declaration. Inside a
 bounded header synopsis, detached prose follows the assembled code, alongside
 class wording, preserving source order among wording nodes. Prose retains

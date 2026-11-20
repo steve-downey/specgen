@@ -1935,7 +1935,10 @@ paragraph numbers after it are one lower.
 
 A prose-only `//!` or `/*! */` block separated from declarations belongs to
 the current section. It can contain authored `\item` lists, followed by resumed
-prose. Blank decorated lines separate its numbered paragraphs.
+prose. Blank decorated lines separate its numbered paragraphs. It stands
+where it is written among the section's items: a paragraph between the
+`\rSec` and the first item opens the section, even when the items are
+out-of-line members, which otherwise take their order from the class.
 A detached block outside every section reports an error. Inside a bounded
 header synopsis, detached prose follows the assembled synopsis alongside the
 classes' own descriptions. Labelled description elements require a declaration.
