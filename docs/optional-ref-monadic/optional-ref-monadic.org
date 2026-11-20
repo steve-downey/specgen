@@ -31,7 +31,7 @@ These are the same files as below, typeset by the framework they are written for
 | =mpark= | mpark/wg21 | [[file:rendered/wording.mpark.html][wording.mpark.html]] | [[file:rendered/diff.mpark.html][diff.mpark.html]] |
 | =org= | wg21org | [[file:rendered/wording.org.html][wording.org.html]] | [[file:rendered/diff.org.html][diff.org.html]] |
 
-=render.sh= builds them into =rendered/=, which is not committed, and records each framework's revision there in =frameworks.txt=.
+=render.sh= builds them into =rendered/=, which is committed so the pages can be opened on GitHub, and records each framework's revision there in =frameworks.txt=.
 Each framework is a checkout named by an environment variable, and one that is not named is skipped; the script is [[#typesetting-the-wording][below]].
 
 Two of the six need one change to what specgen wrote before their framework will typeset them at all.

@@ -73,4 +73,6 @@ repos:
     hooks:
     - id: beman-tidy
 
-exclude: 'infra/|port/|vendor/'
+# docs/optional-ref-monadic/rendered/ holds pages typeset by paper frameworks,
+# committed as they were written, so no hook may rewrite them.
+exclude: 'infra/|port/|vendor/|docs/optional-ref-monadic/rendered/'

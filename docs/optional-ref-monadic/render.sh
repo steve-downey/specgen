@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # Typeset the files generate.sh wrote, each with the paper framework its
-# backend is written for, into rendered/ (which is not committed):
+# backend is written for, into rendered/, which is committed so the pages
+# can be opened on GitHub:
 #
 #   wording.pdf, diff.pdf               latex, with wg21-latex's draft macros
 #   wording.mpark.html, diff.mpark.html mpark, with mpark/wg21
