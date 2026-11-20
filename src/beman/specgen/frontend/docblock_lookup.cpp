@@ -207,16 +207,8 @@ RecordDocblock record_docblock(const clang::Decl* decl, const clang::SourceManag
     if (!start)
         return {};
 
-    grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
-    // On a class definition `\covers mandates P` needs no `\asdraft`: it says
-    // the class's leading prose stands for the paragraph its static_asserts
-    // derive (issue #283, attach_class_description). The grammar reports the
-    // scoped form without `\asdraft` wherever it is written, so the finding
-    // is taken back here, the one place that knows the docblock is a class's.
-    std::erase_if(parsed.diags,
-                  [](const grammar::Diagnostic& d) { return d.message == grammar::kCoversNeedsAsdraft; });
-
-    RecordDocblock out;
+    const grammar::ParseResult parsed = grammar::parse_docblock(raw.substr(*start).str());
+    RecordDocblock             out;
     out.diagnostics = docblock_diagnostics(rc, *start, parsed.diags, sm);
     {
         lowering::Lowered lowered = lowering::lower(parsed.block);

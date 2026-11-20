@@ -242,10 +242,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                       const clang::LangOptions&                        lang_opts,
                       const std::set<const clang::Decl*>&              omit_set,
                       const std::map<const clang::Decl*, std::string>& expos_set,
-                      const SeeBelowMap&                               seebelow_map,
+                      const DeclarationMaskMap&                        mask_map,
                       const FreestandingMap&                           freestanding_map,
                       const ConstraintsStated&                         constraints_stated,
                       bool                                             keep_comments,
+                      bool                                             drop_parameter_names,
                       const std::set<std::string>&                     ns_drop_set,
                       const std::set<std::string>&                     specified_set,
                       const SkippedRanges&                             skipped,
@@ -309,6 +310,13 @@ db::DocEvent classify(const RawItem&                                   ev,
                     ((only_asdraft.asdraft = true), parsed.block.markers == only_asdraft)) {
                     return db::SectionProse{ev.offset, {}, std::move(diagnostics), first_line, diagnostic_file, true};
                 }
+                if (!parsed.block.kind_covers.empty() && !parsed.block.markers.asdraft)
+                    diagnostics.push_back(
+                        {beman::specgen::Severity::Error,
+                         first_line + static_cast<unsigned>(parsed.block.kind_covers.front().line) - 1,
+                         "\\covers naming an element answers a derived element, and detached "
+                         "prose has none",
+                         diagnostic_file});
                 if (!parsed.block.leading.empty() && parsed.block.elements.empty() &&
                     parsed.block.markers == grammar::Markers{}) {
                     auto lowered = lowering::lower(parsed.block);
@@ -487,10 +495,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                   lang_opts,
                                                   omit_set,
                                                   expos_set,
-                                                  seebelow_map,
+                                                  mask_map,
                                                   freestanding_map,
                                                   constraints_stated,
                                                   keep_comments,
+                                                  drop_parameter_names,
                                                   ns_drop_set);
         out.synopsis.as_draft  = block.synopsis_as_draft;
         // An authored or inherited synopsis is text nothing ties to the
@@ -535,10 +544,11 @@ db::DocEvent classify(const RawItem&                                   ev,
                                                   lang_opts,
                                                   omit_set,
                                                   expos_set,
-                                                  seebelow_map,
+                                                  mask_map,
                                                   freestanding_map,
                                                   constraints_stated,
                                                   keep_comments,
+                                                  drop_parameter_names,
                                                   ns_drop_set,
                                                   tmpl);
         out.synopsis.as_draft  = block.synopsis_as_draft;

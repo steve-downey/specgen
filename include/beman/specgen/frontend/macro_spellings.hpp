@@ -22,7 +22,10 @@ namespace beman::specgen::frontend {
 // another such macro is mapped to that one's. Anything else -- a function-like
 // macro, or one whose expansion holds a number, a name that is not such a
 // macro, or an attribute -- is not a specifier, and is left as the header
-// writes it.
+// writes it. The expansion is the definition the macro's uses expanded, which
+// the preprocessing record says, so a later `#undef` or redefinition does not
+// change it; uses that expanded different definitions leave the macro out
+// (issue #377). A macro never used is mapped by its latest definition.
 std::map<std::string, std::string> specifier_macros(const clang::Preprocessor& pp);
 
 // `code` with each identifier `macros` maps written as its expansion. The text

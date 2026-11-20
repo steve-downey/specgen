@@ -172,7 +172,31 @@ std::string render_table_field(const ir::Paragraph& paragraph) {
     return render_paragraph(paragraph);
 }
 
+// A table the draft wrote as a `floattable` (issue #367) is written back in
+// that form: the column specification it had, `\chdr`/`\rhdr` over the two
+// columns, and `\lhdr` on each row.
+std::string render_floattable(const ir::Table2D& table) {
+    std::string out =
+        std::format("\\begin{{floattable}}{{{}}}{{{}}}\n{{{}}}\n\\topline\n& \\chdr{{{}}} & \\rhdr{{{}}} "
+                    "\\\\ \\capsep\n",
+                    render_table_field(table.caption),
+                    table.stable_name,
+                    *table.floattable_columns,
+                    render_table_field(table.column1),
+                    render_table_field(table.column2));
+    out += table.rows | std::views::transform([](const ir::Table2DRow& row) {
+               return std::format("\\lhdr{{{}}} &\n  {} &\n  {} \\\\\n",
+                                  render_table_field(row.header),
+                                  render_table_field(row.cell1),
+                                  render_table_field(row.cell2));
+           }) |
+           std::views::join | std::ranges::to<std::string>();
+    return out + "\\end{floattable}\n";
+}
+
 std::string render_table(const ir::Table2D& table) {
+    if (table.floattable_columns)
+        return render_floattable(table);
     std::string       out  = std::format("\\begin{{lib2dtab2}}{{{}}}{{{}}}\n{{{}}}\n{{{}}}\n",
                                          render_table_field(table.caption),
                                          table.stable_name,
@@ -261,10 +285,18 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
     return {render_paragraph(p.text) + '\n', !p.continuation, true};
 }
 
+std::string render_informative_body(const ir::InformativeBody& body);
+// A list item's blocks, a note or an example among them (issue #389), each
+// directly after the one before, as the draft writes them inside an `\item`.
+std::string render_item_blocks(const ir::DescriptionBody& blocks);
+
+// An item's blocks follow its paragraph with no blank line between them, as
+// the draft writes a code block inside an `\item` (issue #367).
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
     const std::string items =
-        list.items |
-        std::views::transform([](const ir::Paragraph& p) { return "\\item " + render_paragraph(p) + '\n'; }) |
+        list.items | std::views::transform([](const ir::ListItem& item) {
+            return "\\item " + render_paragraph(item.text) + '\n' + render_item_blocks(item.blocks);
+        }) |
         std::views::join | std::ranges::to<std::string>();
     return {"\\begin{itemize}\n" + items + "\\end{itemize}\n", list.opens_paragraph, false};
 }
@@ -285,7 +317,6 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
     return {render_codeblock(code.code), code.opens_paragraph, false};
 }
 
-std::string render_informative_body(const ir::InformativeBody& body);
 std::string render_informative_body(const ir::InformativeBody& body) {
     return body | std::views::transform([](const ir::InformativeBlock& block) {
                return wrap_block(ir::block_change(block), std::visit(overloaded{LeafBodyRenderer{}}, block).text);
@@ -309,6 +340,13 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)),
             example.opens_paragraph,
             false};
+}
+
+std::string render_item_blocks(const ir::DescriptionBody& blocks) {
+    return blocks | std::views::transform([](const ir::BodyBlock& block) {
+               return wrap_block(ir::block_change(block), std::visit(overloaded{BodyRenderer{}}, block).text);
+           }) |
+           std::views::join | std::ranges::to<std::string>();
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody& body, std::optional<ir::ElementKind> kind);
@@ -391,7 +429,10 @@ std::string render_item(const ir::SpecItem& item) {
                             return wrap_block(std::ranges::begin(group)->change,
                                               element_group_blocks(group) | std::views::join_with('\n') |
                                                   std::ranges::to<std::string>());
-                        }));
+                        }) |
+                        // An element with no body, the stand-in that an empty `\constraints` or a
+                        // `\covers` leaves (issue #386), writes nothing, and no separator either.
+                        std::views::filter([](const std::string& group) { return !group.empty(); }));
 
     if (!out.empty())
         out += '\n';

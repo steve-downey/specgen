@@ -87,9 +87,20 @@ Block LeafBodyLowerer<Block>::operator()(const grammar::BodyParagraph& p) const 
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Itemize& list) const {
-    return ir::Itemize{list.items | std::views::transform(lower_paragraph) | std::ranges::to<std::vector>(),
-                       ir::Change::Same,
-                       list.opens_paragraph};
+    return ir::Itemize{
+        list.items | std::views::transform([](const grammar::ListItem& item) {
+            return ir::ListItem{
+                lower_paragraph(item.text),
+                item.blocks | std::views::transform([](const grammar::ItemBlock& block) {
+                    return std::visit(
+                        foundation::overloaded{
+                            [](const ir::CodeText& code) { return ir::BodyBlock{ir::AuthoredCode{code}}; },
+                            [](const grammar::Itemize& nested) { return LeafBodyLowerer<ir::BodyBlock>{}(nested); }},
+                        block);
+                }) | std::ranges::to<std::vector>()};
+        }) | std::ranges::to<std::vector>(),
+        ir::Change::Same,
+        list.opens_paragraph};
 }
 template <class Block>
 Block LeafBodyLowerer<Block>::operator()(const grammar::Table2D& table) const {

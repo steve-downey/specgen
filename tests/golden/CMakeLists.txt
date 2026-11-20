@@ -891,6 +891,55 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_func_wrap_ref/expected.json"
 )
 
+# A list item holding a code block (issue #367): [expected.object.assign]
+# writes three `\item`s whose text ends "equivalent to:" and a codeblock. The
+# item is its paragraph and the code block after it, in every backend.
+specgen_add_golden(
+    draft_expected_object_assign
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/expected.object.assign.slice"
+    SECTION expected.object.assign
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_assign_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_assign/expected.json"
+)
+
+# A `floattable` with `\chdr`/`\rhdr`/`\lhdr` headings (issue #367), the
+# cross-product shape a `lib2dtab2` has: read as a two-dimensional table, and
+# written back by the LaTeX backend as the `floattable` it was, with its
+# column specification. mpark and org write it as any such table.
+specgen_add_golden(
+    draft_expected_object_swap
+    MODE import
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/expected.object.swap.slice"
+    SECTION expected.object.swap
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+specgen_add_golden(
+    draft_expected_object_swap_wording
+    BACKEND org
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/draft_expected_object_swap/expected.json"
+)
+
 # A subclause with library tables and references to them, which the importer
 # reads into the two table kinds and TableRef.
 specgen_add_golden(
@@ -1134,6 +1183,58 @@ specgen_add_golden(
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_verbatim_attached.hpp"
 )
+
+# A class template's deduction guide after the class is written in the
+# class's synopsis, and an `\omit`ted one is not (issue #384).
+specgen_add_golden(
+    class_deduction_guide
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_deduction_guide.hpp"
+)
+specgen_add_golden(
+    class_deduction_guide_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_deduction_guide/expected.json"
+)
+
+# `\covers constraints P` on an item without `\asdraft`, and an empty
+# `\constraints` (issue #386).
+specgen_add_golden(
+    item_covers
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_item_covers.hpp"
+)
+specgen_add_golden(
+    item_covers_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/item_covers/expected.json"
+)
+
+# A targeted `\omit` leaves a strengthened noexcept, or `= default`, out of
+# the synopsis and the item declaration (issue #385).
+specgen_add_golden(
+    omit_targets
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_omit_targets.hpp"
+)
+specgen_add_golden(
+    omit_targets_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/omit_targets/expected.json"
+)
+
+# A list inside a list item, written in a docblock by indenting its `\item`s
+# (issue #390), through every backend.
+specgen_add_golden(
+    nested_items
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_nested_items.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        nested_items_wording
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/nested_items/expected.json"
+    )
+endforeach()
 
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
@@ -3219,30 +3320,30 @@ set_tests_properties(
 )
 
 # A warning from reading the draft fails the run under --warnings-as-errors too
-# (issue #372): the importer keeps [variant.dtor]'s `$\tcode{T}_i$` as raw
+# (issue #372): the importer keeps [vector.data]'s `\range` and `\keyword` as raw
 # LaTeX and says so, whether the draft is read for `\asdraft`
 # (--inherit-draft) or as the baseline (--baseline-draft). The wording is still
 # written, as for a header's own finding. Without the flag the run passes.
-set(_variant_dtor_header
-    "${PROJECT_SOURCE_DIR}/tests/corpus/diff/variant_dtor_asdraft.hpp"
+set(_vector_data_header
+    "${PROJECT_SOURCE_DIR}/tests/corpus/diff/vector_data_asdraft.hpp"
 )
-set(_variant_dtor_slice
-    "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/variant.dtor.slice"
+set(_vector_data_slice
+    "${PROJECT_SOURCE_DIR}/tests/corpus/standard-slices/vector.data.slice"
 )
 configure_file(
-    "${_variant_dtor_slice}"
-    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit/utilities.tex"
+    "${_vector_data_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit/containers.tex"
     COPYONLY
 )
 configure_file(
-    "${_variant_dtor_slice}"
-    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline/variant.dtor.tex"
+    "${_vector_data_slice}"
+    "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline/vector.data.tex"
     COPYONLY
 )
 add_test(
     NAME golden.warnings_as_errors.inherit_draft_warning_fails
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
@@ -3255,7 +3356,7 @@ set_tests_properties(
 add_test(
     NAME golden.warnings_as_errors.inherit_draft_warning_says_so
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
@@ -3265,12 +3366,12 @@ set_tests_properties(
     golden.warnings_as_errors.inherit_draft_warning_says_so
     PROPERTIES
         PASS_REGULAR_EXPRESSION
-            "1 warning from reading the draft fails the run under --warnings-as-errors; the output is written"
+            "2 warnings from reading the draft fail the run under --warnings-as-errors; the output is written"
 )
 add_test(
     NAME golden.warnings_as_errors.baseline_draft_warning_fails
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate
+        specgen generate "${_vector_data_header}" --validate
         --warnings-as-errors --baseline-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.baseline"
         --no-compile-commands -o
@@ -3283,7 +3384,7 @@ set_tests_properties(
 add_test(
     NAME golden.warnings_as_errors.draft_warning_without_flag_passes
     COMMAND
-        specgen generate "${_variant_dtor_header}" --validate --inherit-draft
+        specgen generate "${_vector_data_header}" --validate --inherit-draft
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.inherit"
         --no-compile-commands -o
         "${CMAKE_CURRENT_BINARY_DIR}/warnings_as_errors.draft_without_flag.tex"

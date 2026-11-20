@@ -65,6 +65,7 @@ beman::specgen::ir::CodeText extract_itemdecl(const clang::FunctionDecl*        
                                               const std::map<const clang::Decl*, std::string>& expos_set,
                                               clang::SourceLocation                            friend_begin = {},
                                               std::optional<SeeBelowTarget>                    seebelow = std::nullopt,
+                                              std::optional<OmitTarget>                        omit     = std::nullopt,
                                               std::string_view declarator_qualifier                     = {});
 
 // A documented type alias is an ordinary itemdecl. The declaration

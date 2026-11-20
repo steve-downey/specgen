@@ -173,13 +173,13 @@ TEST_CASE("build_document - spec_constraints.hpp derives Constraints from a trai
     REQUIRE(body_test::first<beman::specgen::ir::Itemize>(constraints)->items.size() == 4);
 
     const std::string concept_item =
-        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[0]);
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[0].text);
     const std::string trait_item =
-        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[1]);
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[1].text);
     const std::string negation_item =
-        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[2]);
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[2].text);
     const std::string trait2_item =
-        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[3]);
+        paragraph_text(body_test::first<beman::specgen::ir::Itemize>(constraints)->items[3].text);
 
     // Concept-id uses the WG21 "`X` models C" form (the concept name renders
     // as a ConceptRef → \libconcept{}), not "`C<X>` is satisfied".

@@ -67,15 +67,16 @@ beman::specgen::document_build::DocEvent classify(const RawItem&                
                                                   const clang::LangOptions&                        lang_opts,
                                                   const std::set<const clang::Decl*>&              omit_set,
                                                   const std::map<const clang::Decl*, std::string>& expos_set,
-                                                  const SeeBelowMap&                               seebelow_map,
+                                                  const DeclarationMaskMap&                        mask_map,
                                                   const FreestandingMap&                           freestanding_map,
                                                   const ConstraintsStated&                         constraints_stated,
                                                   bool                                             keep_comments,
-                                                  const std::set<std::string>&                     ns_drop_set,
-                                                  const std::set<std::string>&                     specified_set,
-                                                  const SkippedRanges&                             skipped,
-                                                  const AttachedCommentRanges&                     attached_comments,
-                                                  const SourceMarkupMap&                           source_markup);
+                                                  bool                         drop_parameter_names,
+                                                  const std::set<std::string>& ns_drop_set,
+                                                  const std::set<std::string>& specified_set,
+                                                  const SkippedRanges&         skipped,
+                                                  const AttachedCommentRanges& attached_comments,
+                                                  const SourceMarkupMap&       source_markup);
 
 } // namespace beman::specgen::frontend
 

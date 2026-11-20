@@ -951,3 +951,30 @@ TEST_CASE("org - an elided paragraph is the ellipsis outside any pnum") {
           "** S [g.s]\n:PROPERTIES:\n:CUSTOM_ID: g.s\n:UNNUMBERED: t\n:WG21_WORDING: t\n:END:\n\n"
           "[…]\n\n#+begin_pnum\nKept.\n#+end_pnum\n");
 }
+
+// Issue #339: in HTML a math span is MathJax's, outside the `<code>`, an
+// ordinal is a superscript, a subscript has its letters italic, and
+// mathematics in running text puts only its code in `<code>`.
+TEST_CASE("org - a math span, an ordinal, an expression subscript, and mathematics in running text") {
+    using beman::specgen::ir::LayoutHint;
+    using beman::specgen::ir::LayoutHintKind;
+    beman::specgen::ir::CodeText math{"a[\\rho] + p_i-1",
+                                      {{2, 6, SpanKind::Math, "\\rho"},
+                                       {10, 11, SpanKind::MathVariable, "p"},
+                                       {11, 15, SpanKind::Subscript, "i-1"}}};
+    beman::specgen::ir::CodeText ordinal{"ith",
+                                         {{0, 1, SpanKind::MathVariable, "i"}, {1, 3, SpanKind::Ordinal, "th"}}};
+    beman::specgen::ir::CodeText coded{"T_i", {{1, 3, SpanKind::Subscript, "i"}}};
+    coded.hints = {LayoutHint{0, LayoutHintKind::MathOpen, false}};
+    SpecItem item;
+    item.descr.leading    = {BodyParagraph{{CodeInline{math},
+                                            TextInline{", the "},
+                                            CodeInline{ordinal, true},
+                                            TextInline{" of "},
+                                            CodeInline{coded, true},
+                                            TextInline{"."}}}};
+    const std::string out = org::render_to_string(item);
+    CHECK(out.contains("@@html:<code>a[</code>\\(\\rho\\)<code>] + <var>p</var><sub><var>i</var>-1</sub></code>@@"));
+    CHECK(out.contains("the @@latex:$i^\\text{th}$@@@@html:<var>i</var><sup>th</sup>@@ of "
+                       "@@latex:$\\tcode{T}_i$@@@@html:<code>T</code><sub><var>i</var></sub>@@."));
+}

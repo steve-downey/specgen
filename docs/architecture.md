@@ -248,6 +248,11 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
 
 From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
 
+- A class template's deduction guides declared right after it, before any other declaration
+  or structure comment, follow the class in its synopsis, as the draft writes them (issue
+  #384); `\omit` leaves one out. A gathered header synopsis writes its guides as its own
+  declarations, and an authored synopsis is left as written.
+
 - Splice out bodies (body range → `;`), keeping `= default` / `= delete`. **The splice starts
   at the `:` of a written ctor-initializer list** when the definition is a constructor's: a
   mem-initializer list is implementation, never interface, and leaving it in place also leaked
@@ -543,7 +548,10 @@ by a declaration reports through that declaration exactly once; otherwise its
 parser findings retain the block's physical file and line. Detached labelled
 descriptions require a declaration or a verbatim item declaration.
 Detached prose-only docblocks become signatureless `SpecItem` nodes in the open
-section, at the block's source position (issue #217). Outside a section they
+section, at the block's source position (issue #217). An item is keyed by its
+class-body position, which is ahead of the section an out-of-line definition
+sits in, so prose takes the key of the item written after it, or leads the
+section when no item precedes it (issue #383). Outside a section they
 report an Error. Labelled descriptions still require a declaration. Inside a
 bounded header synopsis, detached prose follows the assembled code, alongside
 class wording, preserving source order among wording nodes. Prose retains
@@ -582,6 +590,9 @@ Tags mirror the std macros: `\constraints`, `\mandates`, `\expects`, `\hardexpec
   lines continue it, and its punctuation is preserved. A blank ends the item.
   Another `\item` after the blank continues that list; prose after the blank
   resumes the same numbered paragraph. A later `\item` starts another list.
+  An `\item` indented past the one before it opens a list inside that item
+  (issue #390), and a `\codeblock` goes to the deepest item it is indented past
+  (issue #367); the grammar's `ListItem::blocks` holds both, in order.
   Two consecutive blank decorated lines after the list start a new numbered
   paragraph when prose follows. A further blank in resumed prose also starts
   a new numbered paragraph.
@@ -1034,7 +1045,7 @@ have no independent item description.
   Synopsis, ItemDecl, ItemDescr (typed description elements), WordingUnit;
   inline spans: tcode, exposid, placeholder, seebelow, impl-defined,
   ref(stable-name), library-index(optional enclosing class), cvqual, opt,
-  math-variable, subscript, ellipsis, note, example.
+  math-variable, subscript, code-subscript, math, ordinal, ellipsis, note, example.
 - **Code nodes are `{text, span table}`.**
 - No typography, no paragraph numbers, no per-backend escapes.
 - Concretely (`include/beman/specgen/ir.hpp`): `SpanKind`/`Span`/`CodeText`;
@@ -1237,8 +1248,12 @@ There are exactly three backends, and **adding wording to one means adding it to
   span says the draft wrote the no-correction twin (`Span::no_correction`, §7);
   `\ref`/`\iref`; `\tcode`, `\libconcept` (`\exposconcept` for an exposition-only concept),
   `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
-  cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables; all eight `\indexlibrary…` itemdecl forms and the
-  `\libglobal`/`\libmember` synopsis spans.
+  cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables, and a `Table2D` read from
+  a `floattable` written back as one, with its column specification (`floattable_columns`); a
+  list item's blocks (`ir::ListItem::blocks`, a description body, so a nested list, a note
+  and an example among them) directly after its
+  `\item` line; all eight
+  `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
   as `@\added{...}@` with the spans inside it in their escaped form (`\exposid{x}`,
@@ -1285,6 +1300,15 @@ There are exactly three backends, and **adding wording to one means adding it to
   the code the subscript is on, `$\tcode{T}_i$`. That is the draft's other spelling of `T$_i$`
   and prints the same, so it is typesetting and not a kind: the two are the same IR to the
   differ and to the other backends, and only `draft_code_inline` reads the hint.
+  `CodeSubscript` (`$i_\tcode{x}$`) is code as a subscript, upright. `Ordinal`
+  (`$i^\text{th}$`) is an ordinal suffix, a superscript in mpark (`^th^`) and org (`<sup>`),
+  and in LaTeX it closes the mathematics that the variable or code before it opened, as a
+  subscript does; a placeholder directly before a subscript opens it too. `Math` holds
+  mathematics with no other kind as its LaTeX, written back verbatim in LaTeX, as TeX between
+  dollars in mpark's `@...@`, and between `\(` and `\)` in org's HTML, outside the `<code>`,
+  which MathJax does not read. A `CodeInline` with `mathematics` set is the same code and spans
+  written in running text and not in a `\tcode` (`$\tcode{T}_i$` in prose): LaTeX leaves off
+  the `\tcode`, and mpark and org put only its code in the code font (issue #339).
   The same rule places the three inlines that differ from a relative by one flag. A `ConceptRef`
   that is `exposition` (the draft's `\exposconcept`) is italic in the code font, as an
   exposition-only identifier is: `` `$x$` `` in mpark, an export snippet in org. A

@@ -3,6 +3,7 @@
 
 #include <beman/specgen/frontend/attach.hpp>
 
+#include <beman/specgen/conjuncts.hpp>
 #include <beman/specgen/diagnostic.hpp>
 #include <beman/specgen/docblock.hpp>
 #include <beman/specgen/document_build.hpp>
@@ -46,6 +47,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <expected>
+#include <format>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -64,6 +66,78 @@ using synopsis_edits::sort_back_to_front;
 using synopsis_edits::SynopsisEdit;
 
 namespace {
+
+// A derived conjunct `P is true`, or a claim of the same shape, as the
+// predicate's code without its spaces and the polarity: what `\covers` names
+// it by.
+std::optional<std::pair<std::string, std::string>> conjunct_key(const ir::Paragraph& paragraph) {
+    const auto* subject  = paragraph.size() == 3 ? std::get_if<ir::CodeInline>(&paragraph[0]) : nullptr;
+    const auto* is       = paragraph.size() == 3 ? std::get_if<ir::TextInline>(&paragraph[1]) : nullptr;
+    const auto* polarity = paragraph.size() == 3 ? std::get_if<ir::CodeInline>(&paragraph[2]) : nullptr;
+    if (subject == nullptr || is == nullptr || polarity == nullptr || is->text != " is ")
+        return std::nullopt;
+    return std::pair{subject->code.text | std::views::filter([](char c) { return c != ' ' && c != '\n'; }) |
+                         std::ranges::to<std::string>(),
+                     polarity->code.text};
+}
+
+// `\covers constraints P` on an item without `\asdraft` (issue #386): the item's
+// other wording, a *Remarks* that says "defined as deleted unless P", states
+// the derived conjunct P, so it leaves the derived element, which renders the
+// rest and is gone once nothing is left. The conjuncts it covers, and the
+// claims, ride on an authored element with no body, which renders nothing and
+// is what the validator checks the claims against, as a class's
+// `\covers mandates` leaves (issue #283). Beside an authored element of that
+// kind, the claims are that element's.
+void cover_derivations(AttachedItem& attached) {
+    if (attached.item.as_draft || attached.item.covers.empty())
+        return;
+    auto& elements = attached.item.descr.elements;
+    // substrate generic algorithm: one pass per element kind the claims name.
+    for (const ir::ElementKind kind : {ir::ElementKind::Constraints, ir::ElementKind::Mandates}) {
+        std::vector<ir::Paragraph> claims =
+            attached.item.covers | std::views::filter([&](const ir::InheritedCover& c) { return c.kind == kind; }) |
+            std::views::transform(&ir::InheritedCover::claim) | std::ranges::to<std::vector>();
+        if (claims.empty())
+            continue;
+        const auto authored =
+            std::ranges::find_if(elements, [&](const auto& e) { return e.kind == kind && !e.derived; });
+        if (authored != elements.end()) {
+            authored->coverage.append_range(std::move(claims));
+            continue;
+        }
+        const auto derived =
+            std::ranges::find_if(elements, [&](const auto& e) { return e.kind == kind && e.derived; });
+        if (derived == elements.end()) {
+            attached.diagnostics.push_back(
+                {beman::specgen::Severity::Error,
+                 attached.grouping_line,
+                 std::format("\\covers names the {} element, and this item derives none", ir::element_name(kind))});
+            continue;
+        }
+        const auto keys            = claims | std::views::transform(conjunct_key) | std::ranges::to<std::vector>();
+        const auto [covered, kept] = std::ranges::fold_left(
+            derived->conjuncts,
+            std::pair<std::vector<ir::Paragraph>, std::vector<ir::Paragraph>>{},
+            [&](auto acc, const ir::Paragraph& conjunct) {
+                const auto key = conjunct_key(conjunct);
+                (key && std::ranges::contains(keys, key) ? acc.first : acc.second).push_back(conjunct);
+                return acc;
+            });
+        ir::DescriptionElement stand_in{
+            .kind = kind, .body = {}, .derived = false, .conjuncts = covered, .coverage = std::move(claims)};
+        if (kept.empty()) {
+            *derived = std::move(stand_in);
+        } else {
+            derived->conjuncts = kept;
+            derived->body.clear();
+            beman::specgen::conjuncts::render_into(kept, *derived);
+            elements.push_back(std::move(stand_in));
+        }
+    }
+    attached.item.covers.clear();
+    ir::canonicalize(attached.item.descr);
+}
 
 // Source text of `body` from its first retained prologue statement through to
 // just before the closing brace, reformatted with the draft FormatStyle.
@@ -595,6 +669,7 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
                                                                  expos_set,
                                                                  friend_begin,
                                                                  seebelow_target(attached.directives),
+                                                                 omit_target(attached.directives),
                                                                  declarator_qualifier));
     }
     // A constructor's or destructor's name is its class's, without the template
@@ -652,6 +727,7 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     // prefix, independent of the requires-clause handling above, and re-fold
     // into canonical [structure.specifications] order.
     attach_derivation(derive_mandates(def, sm, lang_opts, ns_drop_set, body_expos));
+    cover_derivations(attached);
 
     // \effects-equiv (design §4.2): fill the empty EquivalentTo lowering left
     // on the marker's element from the definition body, excluding the

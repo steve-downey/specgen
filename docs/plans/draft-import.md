@@ -299,6 +299,25 @@ Which kinds land first and which wait for a paper that needs them. `PlaceholderI
   is `\impdef`, set in italic with no index, where `\impldef` is roman and indexes its argument,
   so the round trip needs the argument kept. `floattable` and a list item holding a code block
   are still raw.
+- 2026-11-19: both are read (issue #367). A list item is an `ir::ListItem`, its paragraph and an
+  informative body after it, which holds a code block and the prose after it; the item stays
+  the array of inlines it was in the IR unless it has blocks, and is an object then, which an
+  older renderer rejects. A docblock nests a `\codeblock` under an `\item` by indenting it. A
+  `floattable` in the cross-product shape is a `Table2D` with `floattable_columns` set, so the
+  LaTeX backend writes the `floattable` back; any other shape stays raw. A list nested in an
+  item is still raw.
+- 2026-11-19: a list nested in an item is read (issue #381), as one of the item's blocks. The item
+  scan takes each environment inside an item whole, so a nested list's own `\item`s stay with
+  it, and reads what follows the item's text as an informative body, which nests to any depth.
+  An item holding a note, an example, a footnote or an `enumerate` keeps the list raw: none is
+  an informative body's block. At draft 45b03900 the library clauses give no nested-list
+  warning, down from 79; 48 lists stay raw for a note, some of them lists that the nested-list
+  warning used to name first. A docblock cannot yet write a nested list.
+- 2026-11-19: a note or an example in an item is read (issue #389). `ir::ListItem::blocks` is a
+  description body, not an informative one, which is the body that holds a `Note` and an
+  `Example`; making them informative blocks instead would have let a note hold a note. The
+  saved IR is unchanged for an item without them. At draft 45b03900 the library clauses keep no
+  list raw for a note or an example (48 and 6 before); a footnote keeps 10 and a `tailnote` 2.
 
 ### asdraft-default
 
@@ -460,6 +479,17 @@ Log:
   paper puts before it, a removed one is deleted with its blank line. The granularity is the
   numbered paragraph and not the word: a paragraph the paper rewrites is a sentence to a line
   whatever the draft's lines were. constexpr_callables still gets its 66 edits and nothing else.
+- 2026-11-19: the rest of issue #346. Inside a numbered paragraph that changed, the draft's and the
+  paper's renderings are laid out a sentence to a line and compared by line; each line the paper
+  keeps is found in the draft's source by its text with whitespace folded, and stays byte for
+  byte, so only the sentences that changed are written. Where the draft's source does not fold
+  to the generator's text, the paragraph is replaced whole as before. A declaration joining an
+  item is written as lines of its `itemdecl` after the declaration it follows (the item's
+  declarations now pair most alike first, so a new one cannot take the draft's only one), and one
+  leaving takes its lines. A subclause records its range too (`Section::origin`), so one the paper
+  adds is written after its predecessor at the `\rSec` level read from the draft, and one it
+  removes is deleted. A removed node takes the `%` comment lines directly above it. Word-level
+  placement inside a line was weighed and not taken: the draft's diffs are read by line.
 
 ### importer-vocabulary-gaps
 
@@ -541,6 +571,18 @@ Log:
   (`$\tcode{B}_{1}$`) is kept on the same hint, in its `braced`: the library clauses write a
   group of one 30 times, every one after a `\tcode` inside the mathematics, and [meta.logical]
   alone had 24 differences from the draft without it.
+- 2026-11-19: the rest is read (issue #339). In a `\tcode`, mathematics with no other kind is a
+  `Math` span holding its LaTeX, so a Greek letter or an expression no longer keeps the whole
+  `\tcode` raw; about 37 uses in the library clauses at 45b03900, and the warning "mathematics
+  in `\tcode` is kept as raw LaTeX" is left only for an unclosed `$`. A placeholder can carry a
+  subscript (`$\tcode{\placeholder{it}}_i$`, with the `MathOpen` hint), code can subscript code
+  (`$\tcode{Ds}_{\tcode{T}}$`, the group on the hint's `braced`), and an ordinal suffix is a
+  span kind, `Ordinal`. In running text, mathematics that `code_mathematics` reads is a
+  `CodeInline` with `mathematics` set, which the LaTeX backend writes without the `\tcode`:
+  `$\tcode{T}_i$` (223 uses), ordinals (about 140), and lone variables such as `$i$` and `$N$`,
+  which are most of it. A prose-level inline holding LaTeX mathematics for everything else was
+  weighed and not taken: what stays raw in running text is mathematics proper (`$[0, N)$`,
+  `$N \log N$`), which no backend but LaTeX can write as anything better than the LaTeX.
 - 2026-11-17: the line-break hints in running text and in the name of a prose inline are kept
   (issue #314), in a hint table on `TextInline`, `PlaceholderInline`, `OldConceptRef` and
   `ConceptRef`, with offsets into the text or the name. That is the shape `CodeText::hints`

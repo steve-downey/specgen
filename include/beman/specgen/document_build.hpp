@@ -347,6 +347,10 @@ struct GroupCandidate {
     std::optional<std::string> group_id      = {};
     std::optional<std::string> also_target   = {};
     unsigned                   grouping_line = 0;
+    // Section prose (a SectionProse event): its key is its own offset, which
+    // build_tree moves to stand where it was written among the items
+    // (issue #383).
+    bool prose = false;
 };
 
 // build_tree()'s return: the document,

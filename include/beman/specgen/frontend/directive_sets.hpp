@@ -107,10 +107,10 @@ std::set<std::string> build_namespace_drop_set(const std::vector<clang::Decl*>& 
 // Same pre-pass
 // shape as build_omit_set (out-of-line defs keyed to getFirstDecl(), in-class
 // members to themselves), so extract_synopsis has the set when a class is seen.
-SeeBelowMap build_seebelow_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm);
+DeclarationMaskMap build_mask_map(const std::vector<clang::Decl*>& decls, const clang::SourceManager& sm);
 
 // The literal draft synopsis suffix requested by \freestanding or
-// \freestanding-deleted. Like SeeBelowMap, this is transient front-end
+// \freestanding-deleted. Like DeclarationMaskMap, this is transient front-end
 // metadata keyed to the canonical in-class declaration: an out-of-line
 // definition commonly carries the markup, but the earlier class synopsis is
 // where the comment must be emitted.

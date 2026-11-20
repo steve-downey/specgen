@@ -20,13 +20,29 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <utility>
+#include <vector>
 
 namespace beman::specgen::frontend {
 
 // What a bare or targeted `\seebelow` masks on a function (design §4.3).
 enum class SeeBelowTarget { ReturnType, Noexcept, Explicit };
 
-using SeeBelowMap = std::map<const clang::Decl*, SeeBelowTarget>;
+// What a targeted `\omit` leaves out of a function's declaration (issue
+// #385): what an implementation declares beyond the standard, a strengthened
+// exception specification or `= default` on a member the standard declares.
+enum class OmitTarget { Noexcept, Default };
+
+// Everything a docblock masks on a function's declaration, wherever it is
+// extracted: in a synopsis and in the item declaration alike.
+struct DeclarationMask {
+    std::optional<SeeBelowTarget> seebelow = std::nullopt;
+    std::optional<OmitTarget>     omit     = std::nullopt;
+
+    friend bool operator==(const DeclarationMask&, const DeclarationMask&) = default;
+};
+
+using DeclarationMaskMap = std::map<const clang::Decl*, DeclarationMask>;
 
 enum class FreestandingKind { Freestanding, Deleted };
 using FreestandingMap = std::map<const clang::Decl*, FreestandingKind>;
@@ -64,6 +80,26 @@ std::optional<clang::SourceRange>
 definition_mask_range(const clang::Decl* decl, const clang::SourceManager& sm, const clang::LangOptions& lang_opts);
 
 std::optional<SeeBelowTarget> seebelow_target(const grammar::Markers& markers);
+std::optional<OmitTarget>     omit_target(const grammar::Markers& markers);
+// The masks the markers ask for, or nothing when they ask for none.
+std::optional<DeclarationMask> declaration_mask(const grammar::Markers& markers);
+
+// The bytes of `fn`'s declaration, in its file, that `target` leaves out: the
+// exception specification, or `= default`, with the blanks before it on its
+// line. Nothing when the declaration has no such part.
+std::optional<std::pair<unsigned, unsigned>> omit_byte_range(const clang::FunctionDecl*  fn,
+                                                             OmitTarget                  target,
+                                                             const clang::SourceManager& sm,
+                                                             const clang::LangOptions&   lang_opts);
+
+// The bytes, in its file, of each parameter name of `fn` that
+// `--synopsis-parameter-names drop` leaves out (issue #385), with the blanks
+// before it on its line. A name the declaration uses again -- in a noexcept,
+// a trailing return type or a requires-clause -- stays, and so does every
+// name of a declaration spelled through a macro.
+std::vector<std::pair<unsigned, unsigned>> parameter_name_ranges(const clang::FunctionDecl*  fn,
+                                                                 const clang::SourceManager& sm,
+                                                                 const clang::LangOptions&   lang_opts);
 
 std::optional<clang::SourceRange> seebelow_source_range(const clang::FunctionDecl* fn, SeeBelowTarget target);
 
@@ -74,6 +110,12 @@ inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::fr
     beman::specgen::frontend::SeeBelowTarget::ReturnType,
     beman::specgen::frontend::SeeBelowTarget::Noexcept,
     beman::specgen::frontend::SeeBelowTarget::Explicit,
+};
+
+template <>
+inline constexpr auto beman::specgen::foundation::enumerators<beman::specgen::frontend::OmitTarget> = std::array{
+    beman::specgen::frontend::OmitTarget::Noexcept,
+    beman::specgen::frontend::OmitTarget::Default,
 };
 
 #endif // BEMAN_SPECGEN_FRONTEND_DECLARATION_MASKS_HPP

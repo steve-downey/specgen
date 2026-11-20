@@ -31,6 +31,12 @@ bool set_seebelow_target(Markers& markers, std::string arg) {
     return had;
 }
 
+bool set_omit_target(Markers& markers, std::string arg) {
+    const bool had      = markers.omit_target.has_value();
+    markers.omit_target = std::move(arg);
+    return had;
+}
+
 bool set_group_id(Markers& markers, std::string arg) {
     const bool had   = markers.group_id.has_value();
     markers.group_id = std::move(arg);

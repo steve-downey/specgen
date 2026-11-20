@@ -1,0 +1,60 @@
+\rSec3[demo.syn]{Header \tcode{<demo>} synopsis}
+
+\begin{codeblock}
+namespace std {
+  constexpr int @\libglobal{identity}@(int n);
+}
+\end{codeblock}
+
+\indexlibraryglobal{identity}%
+\begin{itemdecl}
+constexpr int identity(int n);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+\tcode{n}.
+\end{itemdescr}
+
+\rSec3[demo.box]{Class template \tcode{box}}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{box}@ {
+  public:
+    // \ref{demo.box.cons}, constructors
+    constexpr box();
+    constexpr box(const box&) noexcept;
+    constexpr explicit box(int n);
+
+  private:
+    T @\exposid{val}@; // \expos
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.box.cons]{Constructors}
+
+\indexlibraryctor{box}%
+\begin{itemdecl}
+constexpr box();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Value-initializes \exposid{val}.
+\end{itemdescr}
+
+\indexlibraryctor{box}%
+\begin{itemdecl}
+constexpr explicit box(int n);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \exposid{val} with \tcode{n}.
+\end{itemdescr}

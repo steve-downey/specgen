@@ -7,6 +7,7 @@ foreach(
     draft_edit
     draft_spans
     element_label
+    indent_lines
     render_fold
     section_title
     tied_text

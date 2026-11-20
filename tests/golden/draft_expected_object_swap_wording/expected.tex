@@ -1,0 +1,83 @@
+\rSec3[expected.object.swap]{Swap}
+
+\indexlibrarymember{swap}{expected}%
+\begin{itemdecl}
+constexpr void swap(expected& rhs) noexcept(@\seebelow@);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\begin{itemize}
+\item \tcode{is_swappable_v<T>} is \tcode{true} and
+\item \tcode{is_swappable_v<E>} is \tcode{true} and
+\item \tcode{is_move_constructible_v<T> \&\& is_move_constructible_v<E>} is \tcode{true}, and
+\item \tcode{is_nothrow_move_constructible_v<T> || is_nothrow_move_constructible_v<E>} is \tcode{true}.
+\end{itemize}
+
+\pnum
+\effects
+See \tref{expected.object.swap}.
+\begin{floattable}{\tcode{swap(expected\&)} effects}{expected.object.swap}
+{lx{0.35\hsize}x{0.35\hsize}}
+\topline
+& \chdr{\tcode{this->has_value()}} & \rhdr{\tcode{!this->has_value()}} \\ \capsep
+\lhdr{\tcode{rhs.has_value()}} &
+  equivalent to: \tcode{using std::swap; swap(\exposid{val}, rhs.\exposid{val});} &
+  calls \tcode{rhs.swap(*this)} \\
+\lhdr{\tcode{!rhs.has_value()}} &
+  \seebelow &
+  equivalent to: \tcode{using std::swap; swap(\exposid{unex}, rhs.\exposid{unex});} \\
+\end{floattable}
+For the case where \tcode{rhs.has_value()} is \tcode{false} and \tcode{this->has_value()} is \tcode{true}, equivalent to:
+\begin{codeblock}
+if constexpr (is_nothrow_move_constructible_v<E>) {
+  E tmp(std::move(rhs.@\exposid{unex}@));
+  destroy_at(addressof(rhs.@\exposid{unex}@));
+  try {
+    construct_at(addressof(rhs.@\exposid{val}@), std::move(@\exposid{val}@));
+    destroy_at(addressof(@\exposid{val}@));
+    construct_at(addressof(@\exposid{unex}@), std::move(tmp));
+  } catch(...) {
+    construct_at(addressof(rhs.@\exposid{unex}@), std::move(tmp));
+    throw;
+  }
+} else {
+  remove_cv_t<T> tmp(std::move(@\exposid{val}@));
+  destroy_at(addressof(@\exposid{val}@));
+  try {
+    construct_at(addressof(@\exposid{unex}@), std::move(rhs.@\exposid{unex}@));
+    destroy_at(addressof(rhs.@\exposid{unex}@));
+    construct_at(addressof(rhs.@\exposid{val}@), std::move(tmp));
+  } catch (...) {
+    construct_at(addressof(@\exposid{val}@), std::move(tmp));
+    throw;
+  }
+}
+@\exposid{has_val}@ = false;
+rhs.@\exposid{has_val}@ = true;
+\end{codeblock}
+
+\pnum
+\throws
+Any exception thrown by the expressions in the \Fundescx{Effects}.
+
+\pnum
+\remarks
+The exception specification is equivalent to:
+\begin{codeblock}
+is_nothrow_move_constructible_v<T> && is_nothrow_swappable_v<T> &&
+is_nothrow_move_constructible_v<E> && is_nothrow_swappable_v<E>
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{swap}{expected}%
+\begin{itemdecl}
+friend constexpr void swap(expected& x, expected& y) noexcept(noexcept(x.swap(y)));
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to \tcode{x.swap(y)}.
+\end{itemdescr}

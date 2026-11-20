@@ -1,0 +1,42 @@
+\rSec3[demo.holder]{Class template \tcode{holder}}
+
+\begin{codeblock}
+namespace std {
+  template<class I>
+  class @\libglobal{holder}@ {
+  public:
+    // \ref{demo.holder.cons}, constructors
+    constexpr explicit holder(I ptr);
+    constexpr holder(I ptr, int count);
+
+  private:
+    I @\exposid{ptr}@; // \expos
+  };
+
+  template<class I> holder(I) -> holder<I>;
+}
+\end{codeblock}
+
+\rSec4[demo.holder.cons]{Constructors}
+
+\indexlibraryctor{holder}%
+\begin{itemdecl}
+constexpr explicit holder(I ptr);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \tcode{ptr} with \tcode{ptr}.
+\end{itemdescr}
+
+\indexlibraryctor{holder}%
+\begin{itemdecl}
+constexpr holder(I ptr, int count);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \tcode{ptr} with \tcode{ptr}.
+\end{itemdescr}

@@ -47,6 +47,7 @@
 #include <beman/specgen/backend/code_spans.hpp>
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
+#include <beman/specgen/backend/indent_lines.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/tied_text.hpp>
@@ -57,6 +58,7 @@
 #include <beman/tree_algorithms/recursion_schemes.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cstddef>
 #include <format>
 #include <functional>
@@ -187,7 +189,7 @@ std::string number_added_pnums(const std::string& text) {
 // spanned one takes -- an export snippet -- which costs nothing, since the
 // branch already exists.
 bool needs_latex_snippet(const ir::CodeInline& v) {
-    return !v.code.spans.empty() || v.code.text.contains('~') || v.code.text.empty();
+    return !v.code.spans.empty() || v.code.text.contains('~') || v.code.text.empty() || v.mathematics;
 }
 
 std::string html_escape(std::string_view text) {
@@ -218,15 +220,28 @@ std::string html_span(const ir::Span& span, std::string_view spelling) {
         foundation::when<ir::SpanKind::CvQualifier>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
         foundation::when<ir::SpanKind::Optional>([&] { return html_escape(spelling) + "<sub><var>opt</var></sub>"; }),
         foundation::when<ir::SpanKind::MathVariable>([&] { return "<var>" + html_escape(span.payload) + "</var>"; }),
-        // A name is italic and a number upright, as mathematics sets them.
+        // Letters are italic and digits and operators upright, as
+        // mathematics sets them (`$p_{i-1}$`, issue #339).
         foundation::when<ir::SpanKind::Subscript>([&] {
-            const bool number = std::ranges::all_of(span.payload, [](char c) { return c >= '0' && c <= '9'; });
-            return number ? "<sub>" + html_escape(span.payload) + "</sub>"
-                          : "<sub><var>" + html_escape(span.payload) + "</var></sub>";
+            const auto letter = [](char c) { return std::isalpha(static_cast<unsigned char>(c)) != 0; };
+            return "<sub>" +
+                   (span.payload | std::views::chunk_by([&](char a, char b) { return letter(a) == letter(b); }) |
+                    std::views::transform([&](auto&& run) {
+                        const std::string text(run.begin(), run.end());
+                        return letter(text.front()) ? "<var>" + html_escape(text) + "</var>" : html_escape(text);
+                    }) |
+                    std::views::join | std::ranges::to<std::string>()) +
+                   "</sub>";
         }),
         foundation::when<ir::SpanKind::Ellipsis>([&] { return html_escape(spelling); }),
         // Code as a subscript is upright, as code is (issue #339).
-        foundation::when<ir::SpanKind::CodeSubscript>([&] { return "<sub>" + html_escape(span.payload) + "</sub>"; }));
+        foundation::when<ir::SpanKind::CodeSubscript>([&] { return "<sub>" + html_escape(span.payload) + "</sub>"; }),
+        // Mathematics with no other kind is TeX, which org's HTML export
+        // hands to MathJax between `\(` and `\)` (issue #339).
+        // MathJax does not look inside `<code>`, so the code around it is
+        // closed and opened again.
+        foundation::when<ir::SpanKind::Math>([&] { return "</code>\\(" + html_escape(span.payload) + "\\)<code>"; }),
+        foundation::when<ir::SpanKind::Ordinal>([&] { return "<sup>" + html_escape(span.payload) + "</sup>"; }));
 }
 
 std::string html_code_inline(const ir::CodeInline& v) {
@@ -246,6 +261,29 @@ std::string html_code_inline(const ir::CodeInline& v) {
     });
     state.out += html_escape(text.substr(state.pos));
     return "<code>" + state.out + "</code>";
+}
+
+// Mathematics in running text (issue #339): the code in it is in the code
+// font and the rest is not, so each run of code takes its own `<code>`.
+std::string html_mathematics(const ir::CodeInline& v) {
+    const std::string_view text = v.code.text;
+    const auto             code = [](std::string_view run) {
+        return run.empty() ? std::string{} : "<code>" + html_escape(run) + "</code>";
+    };
+    struct State {
+        std::string out;
+        std::size_t pos = 0;
+    };
+    State state = std::ranges::fold_left(v.code.spans, State{}, [&](State state, const ir::Span& span) {
+        if (span.begin <= text.size() && span.end <= text.size() && span.begin >= state.pos &&
+            span.end >= span.begin) {
+            state.out += code(text.substr(state.pos, span.begin - state.pos));
+            state.out += html_span(span, text.substr(span.begin, span.end - span.begin));
+            state.pos = span.end;
+        }
+        return state;
+    });
+    return state.out + code(text.substr(state.pos));
 }
 
 bool under_new_root(std::string_view name, std::span<const std::string> new_roots) {
@@ -280,7 +318,8 @@ struct PieceRenderer {
     // a doubled-up `\tcode{\exposid{value}}`.
     std::string operator()(const ir::CodeInline& v) const {
         if (needs_latex_snippet(v))
-            return "@@latex:" + backend::draft_code_inline(v) + "@@@@html:" + html_code_inline(v) + "@@";
+            return "@@latex:" + backend::draft_code_inline(v) +
+                   "@@@@html:" + (v.mathematics ? html_mathematics(v) : html_code_inline(v)) + "@@";
         return '~' + v.code.text + '~';
     }
 
@@ -479,9 +518,16 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::BodyParagraph& p) const
     return {render_paragraph(p.text, new_roots) + '\n', !p.continuation, true};
 }
 
+std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
+// A list item's blocks, a note or an example among them (issue #389).
+std::string render_item_blocks(const ir::DescriptionBody& blocks, std::span<const std::string> new_roots);
+
+// An item's blocks (issue #367) are indented under it, which is how org puts
+// a block inside a list item.
 RenderedBodyBlock LeafBodyRenderer::operator()(const ir::Itemize& list) const {
-    const std::string items = list.items | std::views::transform([this](const ir::Paragraph& p) {
-                                  return "- " + render_paragraph(p, new_roots) + '\n';
+    const std::string items = list.items | std::views::transform([this](const ir::ListItem& item) {
+                                  return "- " + render_paragraph(item.text, new_roots) + '\n' +
+                                         backend::indent_lines(render_item_blocks(item.blocks, new_roots), "  ");
                               }) |
                               std::views::join | std::ranges::to<std::string>();
     return {items, list.opens_paragraph, false};
@@ -503,7 +549,6 @@ RenderedBodyBlock LeafBodyRenderer::operator()(const ir::AuthoredCode& code) con
     return {render_block("codeblock", code.code), code.opens_paragraph, false};
 }
 
-std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots);
 std::string render_informative_body(const ir::InformativeBody& body, std::span<const std::string> new_roots) {
     return body | std::views::transform([new_roots](const ir::InformativeBlock& block) {
                return wrap_block(ir::block_change(block),
@@ -528,6 +573,14 @@ RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
     return {std::format("#+begin_wgexample\n{}#+end_wgexample\n", render_informative_body(example.body, new_roots)),
             example.opens_paragraph,
             false};
+}
+
+std::string render_item_blocks(const ir::DescriptionBody& blocks, std::span<const std::string> new_roots) {
+    return blocks | std::views::transform([new_roots](const ir::BodyBlock& block) {
+               return wrap_block(ir::block_change(block),
+                                 std::visit(overloaded{BodyRenderer{{new_roots}}}, block).text);
+           }) |
+           std::views::join_with('\n') | std::ranges::to<std::string>();
 }
 
 std::vector<std::string> body_blocks(const ir::DescriptionBody&     body,
@@ -626,7 +679,10 @@ std::string render_item(const ir::SpecItem& item, std::span<const std::string> n
                             return wrap_block(std::ranges::begin(group)->change,
                                               element_group_blocks(group, new_roots) | std::views::join_with('\n') |
                                                   std::ranges::to<std::string>());
-                        }));
+                        }) |
+                        // An element with no body, the stand-in that an empty `\constraints` or a
+                        // `\covers` leaves (issue #386), writes nothing, and no separator either.
+                        std::views::filter([](const std::string& group) { return !group.empty(); }));
 
     if (!out.empty())
         out += '\n';

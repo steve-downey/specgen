@@ -1,0 +1,64 @@
+\rSec3[demo.box]{Class template \tcode{box}}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{box}@ {
+  public:
+    // \ref{demo.box.cons}, constructors
+    constexpr box(const box& rhs);
+    constexpr box(box&& rhs);
+    constexpr box(int n);
+
+  private:
+    T @\exposid{val}@; // \expos
+  };
+}
+\end{codeblock}
+
+\rSec4[demo.box.cons]{Constructors}
+
+\indexlibraryctor{box}%
+\begin{itemdecl}
+constexpr box(const box& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \exposid{val} with \tcode{rhs.\exposid{val}}.
+
+\pnum
+\remarks
+This constructor is defined as deleted unless \tcode{is_copyable_v<T>} is \tcode{true}. This constructor is trivial if \tcode{is_trivially_copyable_v<T>} is \tcode{true}.
+\end{itemdescr}
+
+\indexlibraryctor{box}%
+\begin{itemdecl}
+constexpr box(box&& rhs);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\constraints
+\tcode{(is_trivially_copyable_v<T>)} is \tcode{false}.
+
+\pnum
+\effects
+Initializes \exposid{val} with \tcode{rhs.\exposid{val}}.
+
+\pnum
+\remarks
+This constructor is defined as deleted unless \tcode{is_copyable_v<T>} is \tcode{true}.
+\end{itemdescr}
+
+\indexlibraryctor{box}%
+\begin{itemdecl}
+constexpr box(int n);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Initializes \exposid{val} with \tcode{n}.
+\end{itemdescr}

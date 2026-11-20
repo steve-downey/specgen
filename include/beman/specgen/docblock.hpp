@@ -119,11 +119,24 @@ struct BodyParagraph {
     bool           continuation = false;
 };
 
+struct ListItem;
+
 struct Itemize {
-    std::vector<ProseParagraph> items;
+    std::vector<ListItem> items;
     // Set where the block opens a numbered paragraph of its own: two blank
     // decorated lines before it (ir::opens_paragraph).
     bool opens_paragraph = false;
+};
+
+// What an `\item` holds after its prose, written under it: a `\codeblock`
+// (issue #367) or a list of `\item`s (issue #390), each indented past the
+// `\item` line.
+using ItemBlock = std::variant<ir::CodeText, Itemize>;
+
+// One `\item`: its prose, and the blocks written under it, in order.
+struct ListItem {
+    ProseParagraph         text;
+    std::vector<ItemBlock> blocks = {};
 };
 
 struct AuthoredCode {
@@ -155,14 +168,6 @@ struct Element {
     int                         line     = 0;
     std::vector<ProseParagraph> coverage = {};
 };
-
-// The finding for `\covers <element> P` in a docblock without `\asdraft`.
-// Named because one reader takes it back: on a class definition the scoped
-// form has a second meaning that needs no `\asdraft` (issue #283, the class's
-// leading prose standing for its derived paragraph), and the grammar cannot
-// see what a docblock is attached to.
-inline constexpr std::string_view kCoversNeedsAsdraft =
-    "\\covers naming an element applies to inherited wording, so it requires \\asdraft";
 
 // `\covers constraints P`: coverage claimed for an element the docblock does
 // not author, which `\asdraft` inherits.

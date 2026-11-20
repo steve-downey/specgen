@@ -8,6 +8,8 @@
 #include <beman/specgen/ir.hpp>
 
 #include <algorithm>
+#include <array>
+#include <concepts>
 #include <cctype>
 #include <cstddef>
 #include <filesystem>
@@ -172,6 +174,8 @@ struct Importer {
     // by `source_name`, and the code records where each of its bytes came from
     // (`ir::CodeText::origin`).
     ir::CodeText parse_code(std::string_view raw, bool listing, std::optional<std::size_t> source_at = std::nullopt);
+    // A list item, its prose and the code blocks and prose after it.
+    ir::ListItem parse_item(const struct EvItem& item);
     // The file being read, as `Options::source_name` gives it, the lines it
     // was split into, and where each begins, for `source_at`.
     std::string                     source_name;
@@ -200,9 +204,13 @@ struct Importer {
     // Set by parse_code when it met a macro the span vocabulary lacks: the text
     // it returned has that macro as written, which the LaTeX backend would
     // escape, so a caller that can keep the whole run as raw LaTeX should.
-    bool                      met_unknown_macro = false;
-    ir::Paragraph             parse_prose(std::string_view text);
-    ir::InformativeBody       parse_informative(Lines lines);
+    bool                met_unknown_macro = false;
+    ir::Paragraph       parse_prose(std::string_view text);
+    ir::InformativeBody parse_informative(Lines lines);
+    // An informative body, or a list item's blocks, which hold a note or an
+    // example too (issue #389).
+    template <class Body>
+    Body                      parse_body(Lines lines);
     ir::ItemDescr             parse_description(Lines lines);
     std::vector<ir::Node>     parse_region(Lines lines);
     ir::Section               parse_section(Lines lines, std::size_t header, std::size_t end);
@@ -465,9 +473,16 @@ std::optional<std::string_view> text_escape(std::string_view s, std::size_t pos,
 //   $r_K$           a variable and its subscript
 //   $\tcode{T}_i$   code and its subscript, which says what `T$_i$` says; the
 //                   hint keeps the draft's choice of where the mathematics opens
+//   $i_\tcode{x}$   code as the subscript of a variable, or of code
+//                   (`$\tcode{Ds}_{\tcode{T}}$`)
+//   $\placeholder{C}_i$, $\tcode{\placeholder{it}}_i$
+//                   a placeholder and its subscript
+//   $i^\text{th}$   any of the above but a lone subscript, and an ordinal
+//                   suffix: th, st, nd or rd
 //   $\dotsc$        the elements left out of a sequence
 //
-// Anything else has no kind (`$i - 1$`, `$i_\tcode{x}$`, `$\rho$`).
+// Anything else has no kind here (`$i - 1$`, `$\rho$`); inside a `\tcode` it
+// is a `Math` span, and in running text it stays raw LaTeX (issue #339).
 std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
     const auto  alnum = [](char c) { return std::isalnum(static_cast<unsigned char>(c)) != 0; };
     CodeBuilder out;
@@ -475,9 +490,44 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
         out.span(ir::SpanKind::Ellipsis, {}, "...");
         return out.code;
     }
-    // What the subscript, if there is one, is on: nothing here, a variable, or code.
-    std::size_t at = 0;
-    if (inner.starts_with("\\tcode{")) {
+    // An ordinal suffix closes the mathematics, and is read last.
+    constexpr std::array<std::string_view, 4> suffixes{"th", "st", "nd", "rd"};
+    const auto                 spelled = [](std::string_view suffix) { return std::format("^\\text{{{}}}", suffix); };
+    std::optional<std::string> ordinal;
+    if (const auto* it =
+            std::ranges::find_if(suffixes, [&](std::string_view suffix) { return inner.ends_with(spelled(suffix)); });
+        it != suffixes.end()) {
+        ordinal = std::string(*it);
+        inner.remove_suffix(spelled(*it).size());
+    }
+    const auto with_ordinal = [&](ir::CodeText code) -> std::optional<ir::CodeText> {
+        if (!ordinal)
+            return code;
+        CodeBuilder whole;
+        whole.code = std::move(code);
+        whole.span(ir::SpanKind::Ordinal, *ordinal, *ordinal);
+        return std::move(whole.code);
+    };
+    // What the subscript, if there is one, is on: nothing here, a variable, a
+    // placeholder, or code.
+    std::size_t at        = 0;
+    bool        code_base = false;
+    if (constexpr std::string_view placeholder = "\\placeholder{"; inner.starts_with(placeholder)) {
+        const std::size_t close = inner.find('}');
+        const std::string name(inner.substr(placeholder.size(), close - placeholder.size()));
+        if (close == std::string_view::npos || name.empty() || !std::ranges::all_of(name, is_letter))
+            return std::nullopt;
+        out.span(ir::SpanKind::Placeholder, name, name);
+        at = close + 1;
+    } else if (constexpr std::string_view coded = "\\tcode{\\placeholder{"; inner.starts_with(coded)) {
+        const std::size_t close = inner.find("}}");
+        const std::string name(inner.substr(coded.size(), close - coded.size()));
+        if (close == std::string_view::npos || name.empty() || !std::ranges::all_of(name, is_letter))
+            return std::nullopt;
+        out.hint(ir::LayoutHintKind::MathOpen, false);
+        out.span(ir::SpanKind::Placeholder, name, name);
+        at = close + 2;
+    } else if (inner.starts_with("\\tcode{")) {
         const std::size_t      close = inner.find('}');
         const std::string_view arg = close == std::string_view::npos ? std::string_view{} : inner.substr(7, close - 7);
         const std::optional<std::string> code = plain_code_argument(arg);
@@ -485,9 +535,8 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
             return std::nullopt;
         out.hint(ir::LayoutHintKind::MathOpen, false);
         out.text(*code);
-        at = close + 1;
-        if (at == inner.size())
-            return std::nullopt; // code alone in mathematics is not a shape the draft writes
+        at        = close + 1;
+        code_base = true;
     } else {
         const std::size_t end = std::min(inner.find('_'), inner.size());
         if (!std::ranges::all_of(inner.substr(0, end), is_letter))
@@ -496,18 +545,29 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
             out.span(ir::SpanKind::MathVariable, std::string(inner.substr(0, end)), inner.substr(0, end));
         at = end;
     }
-    if (at == inner.size())
-        return at == 0 ? std::nullopt : std::optional(out.code);
+    if (at == inner.size()) {
+        // Code or a placeholder alone in mathematics is not a shape the draft
+        // writes, but either before an ordinal is (`$\tcode{I}^\text{th}$`).
+        if (at == 0 || ((code_base || out.code.spans.front().kind == ir::SpanKind::Placeholder) && !ordinal))
+            return std::nullopt;
+        return with_ordinal(std::move(out.code));
+    }
     if (inner[at] != '_')
         return std::nullopt;
     std::string_view sub = inner.substr(at + 1);
-    // Code as the subscript of a variable, `$i_\tcode{x}$` (issue #339).
-    if (sub.starts_with("\\tcode{") && sub.ends_with('}') && at > 0 && out.code.hints.empty()) {
-        const std::optional<std::string> code = plain_code_argument(sub.substr(7, sub.size() - 8));
-        if (!code || code->empty())
+    // Code as the subscript of a variable or of code, `$i_\tcode{x}$` and
+    // `$\tcode{Ds}_{\tcode{T}}$` (issue #339).
+    const bool code_grouped = sub.starts_with("{\\tcode{") && sub.ends_with("}}");
+    if ((sub.starts_with("\\tcode{") && sub.ends_with('}')) || code_grouped) {
+        const std::string_view arg  = code_grouped ? sub.substr(8, sub.size() - 10) : sub.substr(7, sub.size() - 8);
+        const bool             base = at > 0 && (code_base || out.code.hints.empty());
+        const std::optional<std::string> code = plain_code_argument(arg);
+        if (!base || !code || code->empty() || (code_grouped && !code_base))
             return std::nullopt;
+        if (code_grouped)
+            out.code.hints.back().braced = true;
         out.span(ir::SpanKind::CodeSubscript, *code, '_' + *code);
-        return out.code;
+        return with_ordinal(std::move(out.code));
     }
     const bool grouped = sub.size() > 2 && sub.front() == '{' && sub.back() == '}';
     if (grouped)
@@ -523,7 +583,10 @@ std::optional<ir::CodeText> code_mathematics(std::string_view inner) {
     if (grouped && sub.size() == 1 && !out.code.hints.empty())
         out.code.hints.back().braced = true;
     out.span(ir::SpanKind::Subscript, std::string(sub), '_' + std::string(sub));
-    return out.code;
+    // An ordinal on a lone subscript has nothing to be the ordinal of.
+    if (ordinal && at == 0)
+        return std::nullopt;
+    return with_ordinal(std::move(out.code));
 }
 
 ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optional<std::size_t> source_at) {
@@ -604,6 +667,12 @@ ir::CodeText Importer::parse_code(std::string_view raw, bool listing, std::optio
                 close == std::string_view::npos ? std::nullopt : code_mathematics(raw.substr(i + 1, close - i - 1));
             if (math) {
                 out.append(*math);
+            } else if (close != std::string_view::npos && close > i + 1) {
+                // Mathematics with no other kind is kept as the draft's own
+                // LaTeX, in a span of its own, so the code around it is
+                // still code (issue #339).
+                const std::string latex(raw.substr(i + 1, close - i - 1));
+                out.span(ir::SpanKind::Math, latex, latex);
             } else {
                 met_unknown_macro = true;
                 report(Severity::Warning, "mathematics in \\tcode is kept as raw LaTeX");
@@ -736,7 +805,15 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
         if (c == '$') {
             const std::size_t close = text.find('$', i + 1);
             const std::size_t end   = close == std::string_view::npos ? text.size() : close + 1;
-            raw(text.substr(i, end - i), "mathematics is kept as raw LaTeX");
+            // Mathematics that reads as code and its subscripts is a code
+            // inline that says so (issue #339); anything else is raw LaTeX.
+            if (auto math = close == std::string_view::npos ? std::nullopt
+                                                            : code_mathematics(text.substr(i + 1, close - i - 1))) {
+                flush();
+                out.push_back(ir::CodeInline{std::move(*math), true});
+            } else {
+                raw(text.substr(i, end - i), "mathematics is kept as raw LaTeX");
+            }
             i = end;
             continue;
         }
@@ -909,8 +986,14 @@ struct EvPnum {
 struct EvProse {
     std::string text;
 };
+// One `\item`: its lines, the text after `\item` first. A nested
+// environment's lines are all there, so a nested list's own items stay with
+// the item that holds it (issues #367, #381).
+struct EvItem {
+    std::vector<std::string> lines;
+};
 struct EvItemize {
-    std::vector<std::string> items;
+    std::vector<EvItem> items;
 };
 struct EvCode {
     std::string code;
@@ -920,7 +1003,8 @@ struct EvNote {
     std::vector<std::string> inner;
 };
 struct EvTable {
-    bool                                  flat = false; // libtab2; else lib2dtab2
+    bool                                  flat               = false;        // libtab2; else lib2dtab2
+    std::optional<std::string>            floattable_columns = std::nullopt; // a floattable's column spec
     std::string                           caption;
     std::string                           stable;
     std::string                           column1;
@@ -941,6 +1025,18 @@ std::optional<std::string> begin_name(std::string_view line) {
     if (!name)
         return std::nullopt;
     return name->inner;
+}
+
+ir::ListItem Importer::parse_item(const EvItem& item) {
+    // The item's own text runs to its first environment; what follows, a code
+    // block, a nested list, a note, an example or more prose, is read as the
+    // item's blocks.
+    const Lines lines(item.lines);
+    const auto  first =
+        std::ranges::find_if(lines, [](const std::string& line) { return begin_name(line).has_value(); });
+    const auto split = static_cast<std::size_t>(first - lines.begin());
+    return ir::ListItem{parse_prose(join_prose(lines.first(split))),
+                        parse_body<ir::DescriptionBody>(lines.subspan(split))};
 }
 
 // The index of the line closing the environment `name` opened at `open`.
@@ -1093,6 +1189,102 @@ std::optional<EvTable> parse_table(bool flat, std::string_view text) {
     return table;
 }
 
+// A `floattable` in the shape a `lib2dtab2` has (issue #367): a column
+// specification of a row-heading column and two data columns
+// (`lx{0.35\hsize}x{0.35\hsize}`), a heading row of `\chdr` and `\rhdr`
+// over the two, and rows each headed by `\lhdr`. Rows end at `\\`, and the
+// draft's rules (`\topline`, `\capsep`, `\rowsep`) are typesetting. Any
+// other shape is not read.
+std::optional<EvTable> parse_floattable(std::string_view text) {
+    EvTable                  table;
+    std::size_t              pos = 0;
+    std::vector<std::string> groups;
+    // substrate generic algorithm: the header groups are read one after the
+    // other, each from where the last ended.
+    while (groups.size() < 3) {
+        // substrate generic algorithm: skipping the whitespace between groups.
+        while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos])) != 0)
+            ++pos;
+        const auto group = read_braced(text, pos);
+        if (!group)
+            return std::nullopt;
+        groups.push_back(group->inner);
+        pos = group->next;
+    }
+    // A column of `l` and then two columns, each a letter with an optional
+    // braced width.
+    const std::string_view spec = groups[2];
+    std::size_t            at   = 1;
+    std::size_t            data = 0;
+    if (!spec.starts_with('l'))
+        return std::nullopt;
+    // substrate generic algorithm: a cursor scan over the column letters.
+    while (at < spec.size()) {
+        if (!is_letter(spec[at]))
+            return std::nullopt;
+        ++at;
+        if (at < spec.size() && spec[at] == '{') {
+            const auto width = read_braced(spec, at);
+            if (!width)
+                return std::nullopt;
+            at = width->next;
+        }
+        ++data;
+    }
+    if (data != 2)
+        return std::nullopt;
+    table.caption            = groups[0];
+    table.stable             = groups[1];
+    table.floattable_columns = std::string(spec);
+
+    // Each rule removed wherever it stands.
+    constexpr std::array<std::string_view, 3> rules{"\\topline", "\\capsep", "\\rowsep"};
+    const std::string                         body =
+        std::ranges::fold_left(rules, std::string(text.substr(pos)), [](std::string acc, std::string_view rule) {
+            return acc | std::views::split(rule) | std::views::join | std::ranges::to<std::string>();
+        });
+    const auto heading = [](std::string_view cell, std::string_view macro) -> std::optional<std::string> {
+        const std::string_view first = trim(cell);
+        if (!first.starts_with(macro))
+            return std::nullopt;
+        const auto arg = read_braced(first, macro.size());
+        if (!arg || !trim(first.substr(arg->next)).empty())
+            return std::nullopt;
+        return arg->inner;
+    };
+    bool             header = true;
+    std::string_view rest   = body;
+    // substrate generic algorithm: rows end at `\\`, found one after another.
+    while (!trim(rest).empty()) {
+        const std::size_t      end   = rest.find("\\\\");
+        const std::string_view piece = trim(rest.substr(0, end));
+        rest                         = end == std::string_view::npos ? std::string_view{} : rest.substr(end + 2);
+        if (piece.empty())
+            continue;
+        std::vector<std::string> cells = split_cells(piece);
+        if (cells.size() != 3)
+            return std::nullopt;
+        if (header) {
+            const auto column1 = heading(cells[1], "\\chdr");
+            const auto column2 = heading(cells[2], "\\rhdr");
+            if (!trim(cells[0]).empty() || !column1 || !column2)
+                return std::nullopt;
+            table.column1 = *column1;
+            table.column2 = *column2;
+            header        = false;
+            continue;
+        }
+        const auto row_heading = heading(cells[0], "\\lhdr");
+        if (!row_heading)
+            return std::nullopt;
+        cells[0] = *row_heading;
+        table.rows.push_back(std::move(cells));
+    }
+    if (header)
+        return std::nullopt;
+    return table;
+}
+
 // --- scanning a body into events -------------------------------------------------
 
 void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
@@ -1168,43 +1360,65 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                                                std::views::join_with('\n') | std::ranges::to<std::string>(),
                                            *name});
                 }
+            } else if (*name == "floattable") {
+                std::vector<std::string> table_lines;
+                table_lines.push_back(
+                    std::string(trim(trim(t).substr(std::string("\\begin{").size() + name->size() + 1))));
+                table_lines.append_range(lines.subspan(i + 1, inner - i - 1));
+                if (auto table =
+                        parse_floattable(table_lines | std::views::join_with('\n') | std::ranges::to<std::string>())) {
+                    events.push_back(std::move(*table));
+                } else {
+                    imp.report(Severity::Warning, "the floattable environment is kept as raw LaTeX");
+                    events.push_back(EvRaw{lines.subspan(i, std::min(end + 1, lines.size()) - i) |
+                                               std::views::join_with('\n') | std::ranges::to<std::string>(),
+                                           *name});
+                }
             } else if (*name == "codeblock") {
                 events.push_back(EvCode{body | std::views::join_with('\n') | std::ranges::to<std::string>()});
             } else if (*name == "note" || *name == "example") {
                 events.push_back(EvNote{*name == "example", std::move(body)});
             } else if (*name == "itemize") {
-                std::vector<std::string> items;
-                std::vector<std::string> current;
-                bool                     open = false;
-                // The first environment inside an item, which the IR's list
-                // item, a paragraph, cannot hold.
+                std::vector<EvItem> items;
+                // The first environment that a list item cannot hold: one
+                // before any `\item`, or anything but a code block, a nested
+                // list, a note or an example (issues #367, #381, #389).
                 std::optional<std::string> nested;
-                const auto                 close = [&] {
-                    if (open)
-                        items.push_back(join_prose(current));
-                    current.clear();
-                };
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
-                // state.
-                for (const std::string& item_line : body) {
+                const Lines                item_lines(body);
+                std::size_t                k = 0;
+                // substrate generic algorithm: a cursor scan over variable-width input; a nested environment is
+                // taken whole, so the position is the loop's state.
+                while (k < item_lines.size()) {
+                    const std::string& item_line = item_lines[k];
                     if (starts_with_command(item_line, "\\item")) {
-                        close();
-                        open = true;
-                        current.push_back(std::string(trim(trim(item_line).substr(5))));
+                        items.push_back({{std::string(trim(trim(item_line).substr(5)))}});
+                        ++k;
+                    } else if (const auto env = begin_name(item_line)) {
+                        const std::size_t close =
+                            std::min(environment_end(item_lines, k, *env), item_lines.size() - 1);
+                        constexpr std::array kHeld{std::string_view{"codeblock"},
+                                                   std::string_view{"itemize"},
+                                                   std::string_view{"note"},
+                                                   std::string_view{"example"}};
+                        if (!nested && (items.empty() || !std::ranges::contains(kHeld, *env)))
+                            nested = env;
+                        if (!items.empty())
+                            items.back().lines.append_range(item_lines.subspan(k, close + 1 - k));
+                        k = close + 1;
                     } else {
-                        if (!nested)
-                            nested = begin_name(item_line);
-                        current.push_back(item_line);
+                        if (!items.empty())
+                            items.back().lines.push_back(item_line);
+                        ++k;
                     }
                 }
-                close();
                 if (nested) {
-                    // Named for what the item holds (issue #355): a list item
-                    // holding a code block is no nested list.
+                    // Named for what the item holds (issue #355).
                     imp.report(Severity::Warning,
-                               *nested == "itemize" || *nested == "enumerate"
-                                   ? std::string("a nested list is kept as raw LaTeX")
-                                   : "a list item holding a " + *nested + " is kept as raw LaTeX");
+                               *nested == "enumerate"
+                                   ? std::string("a nested numbered list is kept as raw LaTeX")
+                                   : std::format("a list item holding {} {} is kept as raw LaTeX",
+                                                 std::string_view("aeiou").contains(nested->front()) ? "an" : "a",
+                                                 *nested));
                     events.push_back(EvRaw{lines.subspan(i, std::min(end + 1, lines.size()) - i) |
                                                std::views::join_with('\n') | std::ranges::to<std::string>(),
                                            *name});
@@ -1234,10 +1448,11 @@ ir::Table2D Importer::make_table2d(const EvTable& table) {
                     .column1     = parse_prose(table.column1),
                     .column2     = parse_prose(table.column2),
                     .rows        = {}};
-    out.rows = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
+    out.floattable_columns = table.floattable_columns;
+    out.rows               = table.rows | std::views::transform([&](const std::vector<std::string>& row) {
                    return ir::Table2DRow{parse_prose(row[0]), parse_prose(row[1]), parse_prose(row[2])};
-               }) |
-               std::ranges::to<std::vector>();
+                             }) |
+                             std::ranges::to<std::vector>();
     return out;
 }
 
@@ -1254,10 +1469,13 @@ ir::Table1D Importer::make_table1d(const EvTable& table) {
     return out;
 }
 
-ir::InformativeBody Importer::parse_informative(Lines lines) {
+ir::InformativeBody Importer::parse_informative(Lines lines) { return parse_body<ir::InformativeBody>(lines); }
+
+template <class Body>
+Body Importer::parse_body(Lines lines) {
     std::vector<Event> events;
     scan_events(*this, lines, events);
-    ir::InformativeBody body;
+    Body body;
     // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's state.
     for (const Event& event : events) {
         std::visit(
@@ -1267,12 +1485,21 @@ ir::InformativeBody Importer::parse_informative(Lines lines) {
                            ir::Itemize list;
                            // substrate generic algorithm: a cursor scan over variable-width input; the position is the
                            // loop's state.
-                           for (const std::string& item : e.items)
-                               list.items.push_back(parse_prose(item));
+                           for (const EvItem& item : e.items)
+                               list.items.push_back(parse_item(item));
                            body.push_back(std::move(list));
                        },
                        [&](const EvCode& e) { body.push_back(ir::AuthoredCode{parse_code(e.code, true)}); },
-                       [&](const EvNote&) { report(Severity::Warning, "a note inside a note is dropped"); },
+                       [&](const EvNote& e) {
+                           if constexpr (std::same_as<Body, ir::DescriptionBody>) {
+                               if (e.example)
+                                   body.push_back(ir::Example{parse_informative(e.inner)});
+                               else
+                                   body.push_back(ir::Note{parse_informative(e.inner)});
+                           } else {
+                               report(Severity::Warning, "a note inside a note is dropped");
+                           }
+                       },
                        [&](const EvTable& e) {
                            if (e.flat)
                                body.push_back(make_table1d(e));
@@ -1332,8 +1559,8 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
                            ir::Itemize list;
                            // substrate generic algorithm: a cursor scan over variable-width input; the position
                            // is the loop's state.
-                           for (const std::string& item : e.items)
-                               list.items.push_back(parse_prose(item));
+                           for (const EvItem& item : e.items)
+                               list.items.push_back(parse_item(item));
                            list.opens_paragraph = opens_paragraph();
                            target->push_back(std::move(list));
                        },
@@ -1553,6 +1780,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 synopsis.origin = node_origin(lines, i, std::min(end + 1, lines.size()));
                 nodes.push_back(std::move(synopsis));
                 pending.clear();
+                // The blank lines read ahead of the synopsis are no prose's:
+                // left, the prose after it would count its lines from before
+                // the code block, and its origin would cover the synopsis
+                // (issue #378).
+                loose.clear();
                 i = end + 1;
                 continue;
             }
@@ -1570,6 +1802,7 @@ ir::Section Importer::parse_section(Lines lines, std::size_t header, std::size_t
     const RSecHeader  head  = *parse_rsec(lines[header]);
     const std::string saved = std::exchange(section, head.stable);
     ir::Section       out{.stable_name = head.stable, .title = head.title, .children = {}};
+    out.origin = node_origin(lines, header, end);
 
     // The section's own lines between its subsections: always a run of the
     // given lines, which stay the file's own, so what is read from them can
