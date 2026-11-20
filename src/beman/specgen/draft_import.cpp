@@ -1757,6 +1757,11 @@ std::vector<ir::Node> Importer::parse_region(Lines lines) {
                 synopsis.origin = node_origin(lines, i, std::min(end + 1, lines.size()));
                 nodes.push_back(std::move(synopsis));
                 pending.clear();
+                // The blank lines read ahead of the synopsis are no prose's:
+                // left, the prose after it would count its lines from before
+                // the code block, and its origin would cover the synopsis
+                // (issue #378).
+                loose.clear();
                 i = end + 1;
                 continue;
             }

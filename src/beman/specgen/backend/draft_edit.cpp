@@ -143,6 +143,18 @@ listing_text(const ir::CodeText& code, std::size_t begin, std::size_t end, bool 
 
 // --- placing code changes ----------------------------------------------------------
 
+// Where the line holding `pos` starts.
+std::size_t line_start(std::string_view text, std::size_t pos) {
+    const std::size_t newline = text.rfind('\n', pos == 0 ? 0 : pos - 1);
+    return pos == 0 || newline == std::string_view::npos ? 0 : newline + 1;
+}
+
+// Whether only spaces come before `pos` on its line.
+bool starts_line(std::string_view text, std::size_t pos) {
+    return std::ranges::all_of(text.substr(line_start(text, pos), pos - line_start(text, pos)),
+                               [](char c) { return c == ' ' || c == '\t'; });
+}
+
 struct Collector {
     std::map<std::string, std::vector<Edit>> edits;
     std::vector<Finding>                     findings;
@@ -189,6 +201,18 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
     const auto file_end = [&](std::size_t pos) { return pos == 0 ? file_at(0) : source->bytes[pos - 1].end; };
     // Whether the paper's text has whitespace between its tokens i - 1 and i.
     const auto paper_space = [&](std::size_t i) { return i > 0 && i < pt.size() && pt[i - 1].end < pt[i].begin; };
+
+    // The paper's lines that hold its tokens [b0, b1) and nothing else, with
+    // the blank lines after them, as the draft writes a listing; nothing when
+    // another token shares a line with them.
+    const auto whole_lines = [&](std::size_t b0, std::size_t b1) -> std::optional<std::string> {
+        const std::string_view ptext = paper.text;
+        if (b1 >= pt.size() ||
+            !(b0 == 0 || ptext.substr(pt[b0 - 1].end, pt[b0].begin - pt[b0 - 1].end).contains('\n')) ||
+            !ptext.substr(pt[b1 - 1].end, pt[b1].begin - pt[b1 - 1].end).contains('\n'))
+            return std::nullopt;
+        return listing_text(paper, line_start(ptext, pt[b0].begin), line_start(ptext, pt[b1].begin), false);
+    };
 
     std::size_t k = 0;
     // substrate generic algorithm: each maximal run of the script's changes
@@ -240,12 +264,30 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
                 else if (!before.empty() && !before.contains('\n'))
                     begin = prev;
             }
+        } else if (const auto lines = whole_lines(b0, b1);
+                   lines && a0 < dt.size() && starts_line(text, dt[a0].begin)) {
+            // Tokens the paper writes on lines of their own, before a token
+            // that starts its line in the draft, are lines of their own there
+            // too, as the paper lays them out: run onto the draft's line, an
+            // access specifier ends up in a comment's text (issue #378).
+            begin = end = line_start(text, dt[a0].begin);
+            replacement = *lines;
         } else if (a0 < dt.size()) {
             begin = end = dt[a0].begin;
             replacement = *added + (paper_space(b1) || b1 == pt.size() ? " " : "");
         } else {
             begin = end = dt.empty() ? 0 : dt.back().end;
             replacement = (paper_space(b0) ? " " : "") + *added;
+        }
+        // Added tokens the paper separates from the token before them, or
+        // after them, by a space are separated so in the draft too, where
+        // nothing already does (issue #378): `expected()` gaining a
+        // `noexcept` reads `expected() noexcept`, not `expected()noexcept`.
+        if (added && !replacement.empty() && !replacement.ends_with('\n')) {
+            if (paper_space(b0) && begin > 0 && !is_space(text[begin - 1]) && !is_space(replacement.front()))
+                replacement.insert(0, 1, ' ');
+            if (paper_space(b1) && end < text.size() && !is_space(text[end]) && !is_space(replacement.back()))
+                replacement.push_back(' ');
         }
         out.edits[source->file].push_back(
             {file_at(begin), begin == end ? file_at(begin) : file_end(end), replacement});

@@ -142,6 +142,74 @@ TEST_CASE("draft_edit - a removed token takes its space with it") {
     CHECK(out.contains("    wrapper() noexcept;"));
 }
 
+// Issue #378: what the paper adds on lines of its own, ahead of a line of the
+// draft's, is lines of their own there too, as the paper lays them out. Run
+// onto the draft's line, `public:` would land in the added `// \expos`.
+TEST_CASE("draft_edit - added lines ahead of an access specifier are lines of their own") {
+    ir::Document paper    = imported();
+    auto&        synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    synopsis              = beman::specgen::draft_import::parse_listing(
+        "namespace std {\n  template<class R>\n  class wrapper {\n  private:\n"
+        "    using @\\exposid{stored-type}@ = long; // \\expos\n\n  public:\n    wrapper() noexcept;\n"
+        "    R operator()() @\\cv{}@;   // \\expos\n    void reset();\n  };\n}");
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(
+        applied(plan).contains("  class wrapper {\n  private:\n    using @\\exposid{stored-type}@ = long; // \\expos\n"
+                               "\n  public:\n    wrapper() noexcept;\n"));
+}
+
+// Issue #378: a token added where the paper has a space before it, and the
+// draft's next token has none, keeps the paper's space.
+TEST_CASE("draft_edit - an added token keeps the space the paper has before it") {
+    ir::Document paper    = imported();
+    auto&        synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    synopsis              = beman::specgen::draft_import::parse_listing(
+        "namespace std {\n  template<class R>\n  class wrapper {\n  public:\n    wrapper() noexcept;\n"
+        "    R operator()() @\\cv{}@;   // \\expos\n    void reset() noexcept;\n  };\n}");
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(applied(plan).contains("\n    void reset() noexcept;\n"));
+}
+
+// Issue #378: the blank line between a subclause's heading and its synopsis
+// is no part of the prose after the synopsis, whose place in the source starts
+// after the code block. Taking that prose out leaves the synopsis, and an edit
+// of the synopsis, alone.
+TEST_CASE("draft_edit - prose after a synopsis is placed after it") {
+    constexpr std::string_view tex = R"(\rSec2[g]{General}
+
+\begin{codeblock}
+namespace std {
+  class gadget {
+  public:
+    void reset();
+  };
+}
+\end{codeblock}
+
+\pnum
+A gadget is a thing.
+)";
+    const auto   draft = [&] { return import_sections(tex, {.sections = {"g"}, .source_name = "g.tex"}).document; };
+    ir::Document paper = draft();
+    auto&        kids  = children(paper);
+    REQUIRE(kids.size() == 2);
+    std::get<ir::Synopsis>(kids[0]).code = beman::specgen::draft_import::parse_listing(
+        "namespace std {\n  class gadget {\n  public:\n    constexpr void reset();\n  };\n}");
+    kids.pop_back();
+    const auto read = [&](const std::string& file) {
+        return file == "g.tex" ? std::optional<std::string>(tex) : std::nullopt;
+    };
+    const draft_edit::Plan plan = draft_edit::plan(draft(), paper, read);
+    CHECK(plan.findings.empty());
+    REQUIRE(plan.files.size() == 1);
+    const auto out = draft_edit::apply(tex, plan.files.front().edits);
+    REQUIRE(out.has_value());
+    CHECK(*out == "\\rSec2[g]{General}\n\n\\begin{codeblock}\nnamespace std {\n  class gadget {\n  public:\n"
+                  "    constexpr void reset();\n  };\n}\n\\end{codeblock}\n\n");
+}
+
 // The draft's source, for the edits that read it.
 std::optional<std::string> read_draft(const std::string& file) {
     return file == "w.tex" ? std::optional<std::string>(kDraft) : std::nullopt;

@@ -1225,7 +1225,10 @@ together.
 A change to the code of a declaration or of a synopsis is placed token by
 token: a token added, removed or replaced. Code is compared with its layout
 ignored, so a declaration the generator lays out differently from the draft is
-not a change, and an added `constexpr` is written into the draft's own line.
+not a change, and an added `constexpr` is written into the draft's own line,
+with the space the paper has beside it. Tokens the paper writes on lines of
+their own, ahead of a line of the draft's, such as an access specifier and the
+member under it, are added as those lines, laid out as the paper has them.
 
 A changed description replaces only what changed. The draft's paragraph and
 the paper's are each laid out a sentence to a line, as the draft writes them,
