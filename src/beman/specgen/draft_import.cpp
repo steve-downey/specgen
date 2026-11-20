@@ -981,15 +981,11 @@ struct EvPnum {
 struct EvProse {
     std::string text;
 };
-// One `\item`: its prose, and what follows it inside the item, a code block
-// or more prose, in order (issue #367).
+// One `\item`: its lines, the text after `\item` first. A nested
+// environment's lines are all there, so a nested list's own items stay with
+// the item that holds it (issues #367, #381).
 struct EvItem {
-    struct Block {
-        bool        code = false;
-        std::string text;
-    };
-    std::string        text;
-    std::vector<Block> blocks = {};
+    std::vector<std::string> lines;
 };
 struct EvItemize {
     std::vector<EvItem> items;
@@ -1016,15 +1012,6 @@ struct EvRaw {
 };
 using Event = std::variant<EvPnum, EvProse, EvItemize, EvCode, EvNote, EvTable, EvRaw>;
 
-ir::ListItem Importer::parse_item(const EvItem& item) {
-    return ir::ListItem{parse_prose(item.text),
-                        item.blocks | std::views::transform([this](const EvItem::Block& block) {
-                            return block.code
-                                       ? ir::InformativeBlock{ir::AuthoredCode{parse_code(block.text, true)}}
-                                       : ir::InformativeBlock{ir::BodyParagraph{parse_prose(block.text), false}};
-                        }) | std::ranges::to<std::vector>()};
-}
-
 std::optional<std::string> begin_name(std::string_view line) {
     const std::string_view t = trim(line);
     if (!t.starts_with("\\begin{"))
@@ -1033,6 +1020,16 @@ std::optional<std::string> begin_name(std::string_view line) {
     if (!name)
         return std::nullopt;
     return name->inner;
+}
+
+ir::ListItem Importer::parse_item(const EvItem& item) {
+    // The item's own text runs to its first environment; what follows, a code
+    // block, a nested list or more prose, is read as an informative body.
+    const Lines lines(item.lines);
+    const auto  first =
+        std::ranges::find_if(lines, [](const std::string& line) { return begin_name(line).has_value(); });
+    const auto split = static_cast<std::size_t>(first - lines.begin());
+    return ir::ListItem{parse_prose(join_prose(lines.first(split))), parse_informative(lines.subspan(split))};
 }
 
 // The index of the line closing the environment `name` opened at `open`.
@@ -1375,60 +1372,42 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             } else if (*name == "note" || *name == "example") {
                 events.push_back(EvNote{*name == "example", std::move(body)});
             } else if (*name == "itemize") {
-                std::vector<EvItem>      items;
-                std::vector<std::string> current;
-                std::vector<std::string> code;
-                bool                     open    = false;
-                bool                     in_code = false;
-                // The first environment inside an item that a list item
-                // cannot hold: anything but a code block (issue #367).
+                std::vector<EvItem> items;
+                // The first environment that a list item cannot hold: one
+                // before any `\item`, or anything but a code block or a
+                // nested list (issues #367, #381).
                 std::optional<std::string> nested;
-                // The prose read so far, as the item's own text or as a block
-                // after a code block.
-                const auto settle_prose = [&] {
-                    if (!open || current.empty())
-                        return;
-                    std::string text = join_prose(current);
-                    current.clear();
-                    if (items.back().blocks.empty() && items.back().text.empty())
-                        items.back().text = std::move(text);
-                    else if (!trim(text).empty())
-                        items.back().blocks.push_back({false, std::move(text)});
-                };
-                // substrate generic algorithm: a cursor scan over variable-width input; the position is the loop's
-                // state.
-                for (const std::string& item_line : body) {
-                    if (in_code) {
-                        if (trim(item_line) == "\\end{codeblock}") {
-                            items.back().blocks.push_back(
-                                {true, code | std::views::join_with('\n') | std::ranges::to<std::string>()});
-                            code.clear();
-                            in_code = false;
-                        } else {
-                            code.push_back(item_line);
-                        }
-                    } else if (starts_with_command(item_line, "\\item")) {
-                        settle_prose();
-                        items.emplace_back();
-                        open = true;
-                        current.push_back(std::string(trim(trim(item_line).substr(5))));
-                    } else if (const auto env = begin_name(item_line); open && env == "codeblock") {
-                        settle_prose();
-                        in_code = true;
-                    } else {
-                        if (!nested)
+                const Lines                item_lines(body);
+                std::size_t                k = 0;
+                // substrate generic algorithm: a cursor scan over variable-width input; a nested environment is
+                // taken whole, so the position is the loop's state.
+                while (k < item_lines.size()) {
+                    const std::string& item_line = item_lines[k];
+                    if (starts_with_command(item_line, "\\item")) {
+                        items.push_back({{std::string(trim(trim(item_line).substr(5)))}});
+                        ++k;
+                    } else if (const auto env = begin_name(item_line)) {
+                        const std::size_t close =
+                            std::min(environment_end(item_lines, k, *env), item_lines.size() - 1);
+                        if (!nested && (items.empty() || (*env != "codeblock" && *env != "itemize")))
                             nested = env;
-                        current.push_back(item_line);
+                        if (!items.empty())
+                            items.back().lines.append_range(item_lines.subspan(k, close + 1 - k));
+                        k = close + 1;
+                    } else {
+                        if (!items.empty())
+                            items.back().lines.push_back(item_line);
+                        ++k;
                     }
                 }
-                settle_prose();
                 if (nested) {
-                    // Named for what the item holds (issue #355): a list item
-                    // holding a code block is no nested list.
+                    // Named for what the item holds (issue #355).
                     imp.report(Severity::Warning,
-                               *nested == "itemize" || *nested == "enumerate"
-                                   ? std::string("a nested list is kept as raw LaTeX")
-                                   : "a list item holding a " + *nested + " is kept as raw LaTeX");
+                               *nested == "enumerate"
+                                   ? std::string("a nested numbered list is kept as raw LaTeX")
+                                   : std::format("a list item holding {} {} is kept as raw LaTeX",
+                                                 std::string_view("aeiou").contains(nested->front()) ? "an" : "a",
+                                                 *nested));
                     events.push_back(EvRaw{lines.subspan(i, std::min(end + 1, lines.size()) - i) |
                                                std::views::join_with('\n') | std::ranges::to<std::string>(),
                                            *name});

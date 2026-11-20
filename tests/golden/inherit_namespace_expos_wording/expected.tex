@@ -17,22 +17,11 @@ Let \tcode{e} be an expression such that \tcode{decltype((e))} is \tcode{T}. \tc
 \pnum
 A \defnadj{disqualifying}{parameter} is a function parameter whose declared type \tcode{P}
 \begin{itemize}
-\item
-is not dependent on a template parameter, and
-there exists an implicit conversion sequence\iref{over.best.ics}
-from \tcode{e} to \tcode{P}; or
-
-\item
-is dependent on one or more template parameters, and either
+\item is not dependent on a template parameter, and there exists an implicit conversion sequence\iref{over.best.ics} from \tcode{e} to \tcode{P}; or
+\item is dependent on one or more template parameters, and either
 \begin{itemize}
-\item
-\tcode{P} contains no template parameter that
-participates in template argument deduction\iref{temp.deduct.type}, or
-\item
-template argument deduction
-using the rules for deducing template arguments
-in a function call\iref{temp.deduct.call} and
-\tcode{e} as the argument succeeds.
+\item \tcode{P} contains no template parameter that participates in template argument deduction\iref{temp.deduct.type}, or
+\item template argument deduction using the rules for deducing template arguments in a function call\iref{temp.deduct.call} and \tcode{e} as the argument succeeds.
 \end{itemize}
 \end{itemize}
 
@@ -57,18 +46,12 @@ the declaration of \tcode{Z::operator\&\&} contains one key parameter, \tcode{C<
 \pnum
 A \defnadj{disqualifying}{declaration} is
 \begin{itemize}
-\item
-a (non-template) function declaration that
-contains at least one disqualifying parameter; or
-
-\item
-a function template declaration that
-contains at least one disqualifying parameter, where
+\item a (non-template) function declaration that contains at least one disqualifying parameter; or
+\item a function template declaration that contains at least one disqualifying parameter, where
 \begin{itemize}
 \item at least one disqualifying parameter is a key parameter; or
 \item the declaration contains no key parameters; or
-\item the declaration declares a function template
-to which no name is bound\iref{dcl.meaning}.
+\item the declaration declares a function template to which no name is bound\iref{dcl.meaning}.
 \end{itemize}
 \end{itemize}
 

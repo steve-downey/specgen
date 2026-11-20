@@ -306,6 +306,13 @@ Which kinds land first and which wait for a paper that needs them. `PlaceholderI
   `floattable` in the cross-product shape is a `Table2D` with `floattable_columns` set, so the
   LaTeX backend writes the `floattable` back; any other shape stays raw. A list nested in an
   item is still raw.
+- 2026-11-19: a list nested in an item is read (issue #381), as one of the item's blocks. The item
+  scan takes each environment inside an item whole, so a nested list's own `\item`s stay with
+  it, and reads what follows the item's text as an informative body, which nests to any depth.
+  An item holding a note, an example, a footnote or an `enumerate` keeps the list raw: none is
+  an informative body's block. At draft 45b03900 the library clauses give no nested-list
+  warning, down from 79; 48 lists stay raw for a note, some of them lists that the nested-list
+  warning used to name first. A docblock cannot yet write a nested list.
 
 ### asdraft-default
 

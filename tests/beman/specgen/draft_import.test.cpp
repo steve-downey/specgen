@@ -1076,7 +1076,7 @@ template<class T>
 
 TEST_CASE("draft_import - a list item holding a code block is the item's paragraph and the code after it") {
     // Issue #367: [expected.object.assign]'s shape, and prose after the code
-    // inside the same item. A list nested in an item is still not read.
+    // inside the same item.
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 \effects
@@ -1090,19 +1090,9 @@ and then done.
 \item
 Otherwise, no effect.
 \end{itemize}
-
-\pnum
-\begin{itemize}
-\item
-One:
-\begin{itemize}
-\item two
-\end{itemize}
-\end{itemize}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    REQUIRE(r.diagnostics.size() == 1);
-    CHECK(r.diagnostics.front().message == "a nested list is kept as raw LaTeX");
+    CHECK(r.diagnostics.empty());
     const auto& item = item_at(only_section(r), 0);
     const auto& list = std::get<ir::Itemize>(item.descr.elements.front().body.front());
     REQUIRE(list.items.size() == 2);
@@ -1114,6 +1104,97 @@ One:
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains("\\item If \\tcode{a}, equivalent to:\n\\begin{codeblock}\nf();\n\\end{codeblock}\n"
                             "and then done.\n\\item Otherwise, no effect.\n"));
+}
+
+TEST_CASE("draft_import - a list nested in a list item is one of the item's blocks") {
+    // Issue #381: [res.on.data.races]'s shape, a nested list after the
+    // item's text, and prose after the nested list; the nested items hold
+    // their own code block and their own nested list. The nested list's
+    // `\item`s do not end the outer item.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\effects
+\begin{itemize}
+\item
+One of:
+\begin{itemize}
+\item
+\tcode{a}, equivalent to:
+\begin{codeblock}
+f();
+\end{codeblock}
+\item
+\tcode{b}, and then:
+\begin{itemize}
+\item \tcode{c}
+\end{itemize}
+\end{itemize}
+whichever comes first.
+\item
+Otherwise, no effect.
+\end{itemize}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& item = item_at(only_section(r), 0);
+    const auto& list = std::get<ir::Itemize>(item.descr.elements.front().body.front());
+    REQUIRE(list.items.size() == 2);
+    CHECK(prose_of(list.items[0].text) == "One of:");
+    REQUIRE(list.items[0].blocks.size() == 2);
+    const auto& inner = std::get<ir::Itemize>(list.items[0].blocks[0]);
+    CHECK_FALSE(inner.opens_paragraph);
+    REQUIRE(inner.items.size() == 2);
+    CHECK(prose_of(inner.items[0].text) == "a, equivalent to:");
+    REQUIRE(inner.items[0].blocks.size() == 1);
+    CHECK(std::get<ir::AuthoredCode>(inner.items[0].blocks[0]).code.text == "f();");
+    REQUIRE(inner.items[1].blocks.size() == 1);
+    const auto& innermost = std::get<ir::Itemize>(inner.items[1].blocks[0]);
+    REQUIRE(innermost.items.size() == 1);
+    CHECK(prose_of(innermost.items[0].text) == "c");
+    CHECK(prose_of(std::get<ir::BodyParagraph>(list.items[0].blocks[1]).text) == "whichever comes first.");
+    CHECK(prose_of(list.items[1].text) == "Otherwise, no effect.");
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\item One of:\n\\begin{itemize}\n\\item \\tcode{a}, equivalent to:\n"
+                            "\\begin{codeblock}\nf();\n\\end{codeblock}\n\\item \\tcode{b}, and then:\n"
+                            "\\begin{itemize}\n\\item \\tcode{c}\n\\end{itemize}\n\\end{itemize}\n"
+                            "whichever comes first.\n\\item Otherwise, no effect.\n"));
+}
+
+TEST_CASE("draft_import - a list item holding a note, an example or a numbered list is kept as raw LaTeX") {
+    // Issue #381: none is one of an informative body's blocks.
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\begin{itemize}
+\item
+One.
+\begin{note}
+Two.
+\end{note}
+\end{itemize}
+
+\pnum
+\begin{itemize}
+\item
+One:
+\begin{enumerate}
+\item two
+\end{enumerate}
+\end{itemize}
+
+\pnum
+\begin{itemize}
+\item
+One.
+\begin{example}
+Two.
+\end{example}
+\end{itemize}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    REQUIRE(r.diagnostics.size() == 3);
+    CHECK(r.diagnostics[0].message == "a list item holding a note is kept as raw LaTeX");
+    CHECK(r.diagnostics[1].message == "a nested numbered list is kept as raw LaTeX");
+    CHECK(r.diagnostics[2].message == "a list item holding an example is kept as raw LaTeX");
 }
 
 TEST_CASE("draft_import - a floattable in the shape of a lib2dtab2 is a table, and keeps its form") {

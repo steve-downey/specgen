@@ -1239,7 +1239,8 @@ There are exactly three backends, and **adding wording to one means adding it to
   `\placeholder` (`\cv{}` for `cv`, `\cvqual` for another placeholder that stands for
   cv-qualifiers) and `\oldconcept` inlines; exact `lib2dtab2` tables, and a `Table2D` read from
   a `floattable` written back as one, with its column specification (`floattable_columns`); a
-  list item's blocks (`ir::ListItem::blocks`) directly after its `\item` line; all eight
+  list item's blocks (`ir::ListItem::blocks`, a nested list among them) directly after its
+  `\item` line; all eight
   `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
   `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
