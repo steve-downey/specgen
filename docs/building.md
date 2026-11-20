@@ -198,10 +198,14 @@ the plan and its measurements are
 [plans/manylinux-release-binary.md](plans/manylinux-release-binary.md)). Pull
 requests that touch the release files run everything but the publishing.
 
-Since each landing is a release, every pull request into `main` bumps
-`PROJECT_VERSION` in `CMakeLists.txt`, patch or minor as the change deserves,
-and the same version in `pyproject.toml`, `vcpkg.json` and the user guide's
-`specgen --version` example. The *Version bump* check
+Since each landing is a release, every pull request into `main` that changes
+anything a release ships bumps `PROJECT_VERSION` in `CMakeLists.txt`, patch or
+minor as the change deserves, and the same version in `pyproject.toml`,
+`vcpkg.json` and the user guide's `specgen --version` example. A pull request
+that touches only documentation (`docs/`, the top-level Markdown, `.gitignore`
+and `.pre-commit-config.yaml`) ships nothing new and does not bump; it lands as
+a GitHub Release of the version already out, and PyPI, which has that version,
+skips it. The *Version bump* check
 (`.github/workflows/version-bump.yml`) runs `tools/release/check-version.sh`
 against the branch's base and fails without one; run it locally as
 `tools/release/check-version.sh origin/main`. Branch protection requires the
