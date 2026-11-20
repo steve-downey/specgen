@@ -248,6 +248,11 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
 
 From each decl's `CharSourceRange` via `Lexer::getSourceText`, then:
 
+- A class template's deduction guides declared right after it, before any other declaration
+  or structure comment, follow the class in its synopsis, as the draft writes them (issue
+  #384); `\omit` leaves one out. A gathered header synopsis writes its guides as its own
+  declarations, and an authored synopsis is left as written.
+
 - Splice out bodies (body range → `;`), keeping `= default` / `= delete`. **The splice starts
   at the `:` of a written ctor-initializer list** when the definition is a constructor's: a
   mem-initializer list is implementation, never interface, and leaving it in place also leaked

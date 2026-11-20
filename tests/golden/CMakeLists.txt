@@ -1184,6 +1184,18 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_verbatim_attached.hpp"
 )
 
+# A class template's deduction guide after the class is written in the
+# class's synopsis, and an `\omit`ted one is not (issue #384).
+specgen_add_golden(
+    class_deduction_guide
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_class_deduction_guide.hpp"
+)
+specgen_add_golden(
+    class_deduction_guide_wording
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/class_deduction_guide/expected.json"
+)
+
 # Clang declaration kinds derive standalone item indexes while
 # synopsis-only facilities carry LibraryIndex spans on their names.
 specgen_add_golden(

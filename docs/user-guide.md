@@ -1341,7 +1341,9 @@ exclusive, and `\asdraft-synopsis` applies only to a class definition.
 
 ## Placement and grouping markers
 
-- `\omit` excludes a declaration entirely.
+- `\omit` excludes a declaration entirely. On a deduction guide written right
+  after its class template, which the class's synopsis otherwise ends with as
+  the draft has it, `\omit` leaves the guide out of that synopsis.
 - `\elsewhere` excludes a declaration from generated wording and records that
   the paper declares the name by hand elsewhere. When several headers are
   rendered together, the name is visible to validation in the sibling

@@ -78,6 +78,7 @@
 #include <optional>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -342,6 +343,37 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                         attached_comments,
                         source_markup);
     };
+    // The draft writes a class template's deduction guides in the class's
+    // synopsis, after the class and inside the same namespace (issue #384):
+    // the guides declared right after a class template, before the next
+    // declaration of anything else or the next structure comment, join its
+    // extracted synopsis. A gathered header synopsis writes them as its own
+    // declarations instead, and an authored synopsis is left as written.
+    const auto append_deduction_guides = [&](db::DocEvent& event, const clang::Decl* decl, std::span<RawItem> after) {
+        auto*       synopsis = std::get_if<db::SynopsisDecl>(&event);
+        const auto* tmpl     = llvm::dyn_cast_if_present<clang::ClassTemplateDecl>(decl);
+        if (synopsis == nullptr || synopsis->exact || synopsis->synopsis.code.text.empty() || tmpl == nullptr ||
+            synopsis->synopsis.declared)
+            return;
+        const auto guide_of = [&](const RawItem& item) {
+            const clang::Decl* candidate = item.decl;
+            if (const auto* fn_tmpl = llvm::dyn_cast_if_present<clang::FunctionTemplateDecl>(candidate))
+                candidate = fn_tmpl->getTemplatedDecl();
+            const auto* guide = llvm::dyn_cast_if_present<clang::CXXDeductionGuideDecl>(candidate);
+            return guide != nullptr && guide->getDeducedTemplate()->getCanonicalDecl() == tmpl->getCanonicalDecl();
+        };
+        const auto structure = [](const RawItem& item) {
+            return item.decl == nullptr &&
+                   (parse_rsec(item.comment_text).has_value() || section_end_fence(item.comment_text).has_value());
+        };
+        const auto run = std::ranges::find_if(
+            after, [&](const RawItem& item) { return item.decl != nullptr ? !guide_of(item) : structure(item); });
+        std::ranges::for_each(std::ranges::subrange(after.begin(), run), [&](const RawItem& item) {
+            if (item.decl != nullptr && !suppresses_generated_entity(docblock_directives(item.decl, sm)))
+                append_synopsis_code(synopsis->synopsis.code,
+                                     extract_header_declaration(item.decl, sm, lang_opts, ns_drop_set, expos_set));
+        });
+    };
     const auto boundary_diagnostic = [&](const RawItem& opener, std::string message) {
         const auto [file, local] = doc.locate(opener.offset);
         events.push_back(db::Ignored{{db::Diagnostic{beman::specgen::Severity::Warning,
@@ -360,6 +392,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                 header = parsed_header->value;
         if (!header || !std::string_view(header->stable).ends_with(".syn")) {
             events.push_back(classify_one(opener));
+            append_deduction_guides(events.back(), opener.decl, std::span(raw_items).subspan(i + 1));
             ++i;
             continue;
         }
