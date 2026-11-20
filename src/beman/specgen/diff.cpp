@@ -1249,9 +1249,10 @@ namespace {
 // contract of verbatim text. The draft's own listings, read by the importer,
 // have the same escapes as spans. For the comparison the authored text is read
 // the way the importer reads a listing, so the same wording is the same IR and
-// a paper that retypes a placeholder is not shown as having changed it.
+// a paper that retypes a placeholder is not shown as having changed it. A
+// comment's `\ref{x}` has no escape and is read as one too (issue #392).
 void read_escapes(ir::CodeText& code) {
-    if (code.spans.empty() && code.text.contains('@'))
+    if (code.spans.empty() && (code.text.contains('@') || code.text.contains('\\')))
         code = draft_import::parse_listing(code.text);
 }
 

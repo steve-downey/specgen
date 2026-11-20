@@ -4,6 +4,7 @@
 #include <beman/specgen/diff.hpp>
 #include <beman/specgen/diff.hpp> // Re-inclusion verification
 
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/ir.hpp>
 
 #include <catch2/catch_test_macros.hpp>
@@ -15,7 +16,8 @@
 #include <vector>
 
 using namespace beman::specgen::ir;
-namespace diff = beman::specgen::diff;
+namespace diff         = beman::specgen::diff;
+namespace draft_import = beman::specgen::draft_import;
 
 namespace {
 
@@ -342,6 +344,19 @@ TEST_CASE("diff - a code line added, one removed, one changed in a synopsis") {
     // No run crosses a line end.
     for (const ChangeRun& run : code.changes)
         CHECK(code.text.substr(run.begin, run.end - run.begin).find('\n') == std::string::npos);
+}
+
+// A `\verbatim-synopsis` keeps its text as typed, `// \ref{x}` in a comment
+// included, where the importer reads the draft's comment as a reference span.
+// The same bytes are the same wording (issue #392).
+TEST_CASE("diff - a reference in an authored listing's comment is the draft's reference span") {
+    const std::string typed = "namespace std {\n  // \\ref{demo.thing}, class \\tcode{thing}\n  class thing;\n}";
+    Document          before;
+    before.nodes.push_back(Synopsis{.name = "thing", .code = draft_import::parse_listing(typed), .roster = {}});
+    REQUIRE(!std::get<Synopsis>(before.nodes[0]).code.spans.empty());
+    Document after;
+    after.nodes.push_back(Synopsis{.name = "", .code = {typed, {}}, .roster = {}});
+    CHECK(!diff::has_marks(diff::compare(before, after, {.context = diff::Context::All})));
 }
 
 // Which of a macro's two forms the draft wrote is typesetting (issue #306). A
