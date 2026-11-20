@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 # Every push to main is a release, and PyPI publishes only a version it does
-# not have yet, so every pull request into main carries a new PROJECT_VERSION
+# not have yet, so every pull request into main carries a new PROJECT_VERSION,
+# unless it touches only documentation, which no release ships
 # (tools/release/check-version.sh says what is checked). Branch protection
 # requires this job and requires the branch to be up to date with main, which
 # is what makes the comparison sound: two pull requests that bump from the same
