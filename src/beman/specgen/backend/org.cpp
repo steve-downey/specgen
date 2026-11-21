@@ -89,14 +89,13 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
     return backend::draft_span_codeblock(span, spelling);
 }
 
-// A span inside a changed run of code: the run has opened the `@...@`
-// escape already, so the span takes the draft's escaped form -- the same
-// bytes the LaTeX backend writes there, less the index it never builds.
-std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) {
-    if (span.kind == ir::SpanKind::LibraryIndex)
-        return std::string(spelling);
-    return backend::draft_span_escaped(span, spelling);
-}
+// A span inside a changed run of code. The run has opened the `@...@`
+// escape already, and wg21org reads a macro nested in it only with `@`
+// delimiters of its own (its AUTHORING.md, "Wording code"):
+// `@\removed{@\exposid{val}@}@`. Without them it prints `\exposid{val}` as
+// text (issue #413). So the span takes the same form it takes outside a
+// run, where the LaTeX backend, already in LaTeX, writes the bare macro.
+std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) { return escape_span(span, spelling); }
 
 std::string render_code(const ir::CodeText& code) {
     // The block's bytes are the draft's, so a line-break hint inside a span is
