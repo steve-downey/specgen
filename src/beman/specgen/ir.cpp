@@ -418,6 +418,7 @@ struct TypesettingRemover {
     PlainInline operator()(RefInline v) const { return v; }
     PlainInline operator()(ConceptRef v) const {
         v.no_correction = false;
+        v.in_tcode      = false;
         v.hints.clear();
         return v;
     }

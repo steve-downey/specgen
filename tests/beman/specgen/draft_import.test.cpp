@@ -1268,3 +1268,29 @@ a & b \\
                           "& \\chdr{\\tcode{a}} & \\rhdr{\\tcode{!a}} \\\\ \\capsep\n"
                           "\\lhdr{\\tcode{b}} &\n  one &\n  two \\\\\n"));
 }
+
+// Issue #407: the draft sometimes wraps a library concept in \tcode. That is
+// the concept name, as it prints, and the LaTeX backend writes the wrapper
+// back; the wrapper is typesetting, so it is no change against the bare form.
+TEST_CASE("draft_import - a concept name in \\tcode is the concept, and keeps its wrapper") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+\tcode{F} models \tcode{\libconcept{invocable}} and \tcode{\exposconcept{boolean-testable}}.
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& para = std::get<ir::BodyParagraph>(item_at(only_section(r), 0).descr.leading.front()).text;
+    const auto& lib  = std::get<ir::ConceptRef>(para.at(2));
+    CHECK(lib.name == "invocable");
+    CHECK_FALSE(lib.exposition);
+    CHECK(lib.in_tcode);
+    const auto& expos = std::get<ir::ConceptRef>(para.at(4));
+    CHECK(expos.name == "boolean-testable");
+    CHECK(expos.exposition);
+    CHECK(expos.in_tcode);
+    CHECK(ir::without_typesetting(ir::PlainInline{lib}) == ir::PlainInline{ir::ConceptRef{.name = "invocable"}});
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains(
+        "\\tcode{F} models \\tcode{\\libconcept{invocable}} and \\tcode{\\exposconcept{boolean-testable}}."));
+}
