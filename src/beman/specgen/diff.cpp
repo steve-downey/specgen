@@ -487,6 +487,27 @@ struct BuiltCode {
     void newline() { code.text += '\n'; }
 };
 
+// The text a kept token is written with. It takes the current revision's
+// spacing, except before a removal that no addition replaces: the removed
+// tokens are the baseline's and sit in the baseline's spacing, so the kept
+// one before them takes the baseline's too. Otherwise a closing `>` the
+// baseline had one more of is placed after the space the current revision
+// puts before the next name, `>> @\removed{>}@ f`, where it belongs against
+// the brackets it closes, `>>@\removed{>}@ f` (issue #409).
+std::string kept_token_text(const CodeToken& a, const CodeToken& b, bool removal_follows) {
+    if (!removal_follows)
+        return b.text;
+    const std::string_view kept = rstripped(b.text);
+    return std::string(kept) + std::string(std::string_view(a.text).substr(rstripped(a.text).size()));
+}
+
+// Whether the edit after `k` begins a removal that no addition replaces.
+bool bare_removal_follows(const std::vector<Edit>& script, std::size_t k) {
+    const auto rest = std::ranges::subrange(script.begin() + static_cast<std::ptrdiff_t>(k) + 1, script.end());
+    const auto past = std::ranges::find_if(rest, [](const Edit& e) { return e.op != Op::Delete; });
+    return past != rest.begin() && (past == rest.end() || past->op != Op::Insert);
+}
+
 // Two similar lines, token by token. A removal directly followed by an
 // addition is a replacement, and its two marks abut, as `[a]{.rm}[b]{.add}`
 // is written: the removal's trailing whitespace is dropped, and the
@@ -498,7 +519,8 @@ void append_merged_line(BuiltCode& out, const Line& a, const Line& b, const Opti
     std::ranges::for_each(std::views::iota(std::size_t{0}, script.size()), [&](std::size_t k) {
         const Edit& e = script[k];
         if (e.op == Op::Keep) {
-            out.append(tb[e.b].text, tb[e.b].span, ir::Change::Same);
+            out.append(
+                kept_token_text(ta[e.a], tb[e.b], bare_removal_follows(script, k)), tb[e.b].span, ir::Change::Same);
         } else if (e.op == Op::Delete) {
             const bool replaced = k + 1 < script.size() && script[k + 1].op == Op::Insert;
             out.append(replaced ? rstripped(ta[e.a].text) : std::string_view(ta[e.a].text),
@@ -560,7 +582,11 @@ void append_merged_group(BuiltCode&                      out,
             return;
         }
         flush_layout(real[e.b]);
-        out.append(tb[e.b].text, tb[e.b].span, e.op == Op::Keep ? ir::Change::Same : ir::Change::Added);
+        if (e.op == Op::Keep)
+            out.append(
+                kept_token_text(ta[e.a], tb[e.b], bare_removal_follows(script, k)), tb[e.b].span, ir::Change::Same);
+        else
+            out.append(tb[e.b].text, tb[e.b].span, ir::Change::Added);
         cursor = real[e.b] + 1;
     });
     flush_layout(tb_all.size());
