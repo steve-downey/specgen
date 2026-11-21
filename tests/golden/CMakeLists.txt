@@ -3068,6 +3068,20 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/forward_move/expected.json"
 )
 
+# An authored \codeblock's `@\exposid{val}@` is the exposition-only span, so
+# mpark writes `$val$` where it used to print the LaTeX escape (issue #406).
+specgen_add_golden(
+    codeblock_escape
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_codeblock_escape.hpp"
+)
+specgen_add_golden(
+    codeblock_escape
+    MODE render
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/codeblock_escape/expected.json"
+)
+
 specgen_add_golden(
     routed_overloads
     MODE generate
