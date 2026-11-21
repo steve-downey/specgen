@@ -285,6 +285,7 @@ struct json_descriptor<ir::Note> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Note::body),
         defaulted_field("opens_paragraph", &ir::Note::opens_paragraph),
+        defaulted_field("tail", &ir::Note::tail),
         defaulted_enum_field("change", &ir::Note::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -294,6 +295,7 @@ struct json_descriptor<ir::Example> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Example::body),
         defaulted_field("opens_paragraph", &ir::Example::opens_paragraph),
+        defaulted_field("tail", &ir::Example::tail),
         defaulted_enum_field("change", &ir::Example::change, Change::Same, change_name, change_from_name, "change"),
     };
 };

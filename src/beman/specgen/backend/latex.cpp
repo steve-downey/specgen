@@ -359,16 +359,21 @@ struct BodyRenderer : LeafBodyRenderer {
     RenderedBodyBlock operator()(const ir::Example& example) const;
 };
 
+// A note, or its `tail` form where the draft wrote that (issue #401).
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("\\begin{{note}}\n{}\\end{{note}}\n", render_informative_body(note.body)),
-            note.opens_paragraph,
-            false};
+    const std::string_view environment = note.tail ? "tailnote" : "note";
+    return {
+        std::format("\\begin{{{}}}\n{}\\end{{{}}}\n", environment, render_informative_body(note.body), environment),
+        note.opens_paragraph,
+        false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
-    return {std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)),
-            example.opens_paragraph,
-            false};
+    const std::string_view environment = example.tail ? "tailexample" : "example";
+    return {
+        std::format("\\begin{{{}}}\n{}\\end{{{}}}\n", environment, render_informative_body(example.body), environment),
+        example.opens_paragraph,
+        false};
 }
 
 std::string render_item_blocks(const ir::DescriptionBody& blocks) {

@@ -1294,3 +1294,37 @@ TEST_CASE("draft_import - a concept name in \\tcode is the concept, and keeps it
     CHECK(rendered.contains(
         "\\tcode{F} models \\tcode{\\libconcept{invocable}} and \\tcode{\\exposconcept{boolean-testable}}."));
 }
+
+// Issue #401: a tailnote is the draft's note that ends without a paragraph
+// break, at the end of a list item or a table cell. It is a note, and the
+// LaTeX backend writes it back as the draft spelled it.
+TEST_CASE("draft_import - a tailnote is a note, in a list item too, and keeps its form") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Either
+\begin{itemize}
+\item
+the first,
+\begin{tailnote}
+Nothing else.
+\end{tailnote}
+\item
+or the second.
+\end{itemize}
+\begin{tailnote}
+After the list.
+\end{tailnote}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& list    = std::get<ir::Itemize>(leading.at(1));
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items.front().blocks.size() == 1);
+    CHECK(std::get<ir::Note>(list.items.front().blocks.front()).tail);
+    CHECK(std::get<ir::Note>(leading.at(2)).tail);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\begin{tailnote}\nNothing else.\n\\end{tailnote}"));
+    CHECK(rendered.contains("\\begin{tailnote}\nAfter the list.\n\\end{tailnote}"));
+}

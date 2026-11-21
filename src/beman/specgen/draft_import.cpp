@@ -1013,6 +1013,7 @@ struct EvCode {
 struct EvNote {
     bool                     example;
     std::vector<std::string> inner;
+    bool                     tail = false; // `tailnote`, `tailexample`
 };
 struct EvTable {
     bool                                  flat               = false;        // libtab2; else lib2dtab2
@@ -1388,8 +1389,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                 }
             } else if (*name == "codeblock") {
                 events.push_back(EvCode{body | std::views::join_with('\n') | std::ranges::to<std::string>()});
-            } else if (*name == "note" || *name == "example") {
-                events.push_back(EvNote{*name == "example", std::move(body)});
+            } else if (*name == "note" || *name == "example" || *name == "tailnote" || *name == "tailexample") {
+                events.push_back(EvNote{name->ends_with("example"), std::move(body), name->starts_with("tail")});
             } else if (*name == "itemize") {
                 std::vector<EvItem> items;
                 // The first environment that a list item cannot hold: one
@@ -1411,7 +1412,9 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                         constexpr std::array kHeld{std::string_view{"codeblock"},
                                                    std::string_view{"itemize"},
                                                    std::string_view{"note"},
-                                                   std::string_view{"example"}};
+                                                   std::string_view{"example"},
+                                                   std::string_view{"tailnote"},
+                                                   std::string_view{"tailexample"}};
                         if (!nested && (items.empty() || !std::ranges::contains(kHeld, *env)))
                             nested = env;
                         if (!items.empty())
@@ -1505,9 +1508,9 @@ Body Importer::parse_body(Lines lines) {
                        [&](const EvNote& e) {
                            if constexpr (std::same_as<Body, ir::DescriptionBody>) {
                                if (e.example)
-                                   body.push_back(ir::Example{parse_informative(e.inner)});
+                                   body.push_back(ir::Example{.body = parse_informative(e.inner), .tail = e.tail});
                                else
-                                   body.push_back(ir::Note{parse_informative(e.inner)});
+                                   body.push_back(ir::Note{.body = parse_informative(e.inner), .tail = e.tail});
                            } else {
                                report(Severity::Warning, "a note inside a note is dropped");
                            }
@@ -1548,64 +1551,65 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
         const Event& event     = events[k++];
         const bool   was_fresh = std::exchange(fresh, false);
         std::visit(
-            overloaded{[&](const EvPnum& e) {
-                           new_para = true;
-                           fresh    = true;
-                           if (e.tag) {
-                               descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
-                               target = &descr.elements.back().body;
-                           }
-                       },
-                       [&](const EvProse& e) {
-                           if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
-                               std::holds_alternative<EvCode>(events[k])) {
-                               target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
-                               ++k;
-                               new_para = false;
-                               return;
-                           }
-                           target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
-                           new_para = false;
-                       },
-                       [&](const EvItemize& e) {
-                           ir::Itemize list;
-                           // substrate generic algorithm: a cursor scan over variable-width input; the position
-                           // is the loop's state.
-                           for (const EvItem& item : e.items)
-                               list.items.push_back(parse_item(item));
-                           list.opens_paragraph = opens_paragraph();
-                           target->push_back(std::move(list));
-                       },
-                       [&](const EvCode& e) {
-                           const bool opens = opens_paragraph();
-                           target->push_back(ir::AuthoredCode{parse_code(e.code, true), ir::Change::Same, opens});
-                       },
-                       [&](const EvNote& e) {
-                           const bool opens = opens_paragraph();
-                           if (e.example)
-                               target->push_back(ir::Example{parse_informative(e.inner), ir::Change::Same, opens});
-                           else
-                               target->push_back(ir::Note{parse_informative(e.inner), ir::Change::Same, opens});
-                       },
-                       [&](const EvTable& e) {
-                           const bool opens = opens_paragraph();
-                           if (e.flat) {
-                               ir::Table1D table     = make_table1d(e);
-                               table.opens_paragraph = opens;
-                               target->push_back(std::move(table));
-                           } else {
-                               ir::Table2D table     = make_table2d(e);
-                               table.opens_paragraph = opens;
-                               target->push_back(std::move(table));
-                           }
-                       },
-                       [&](const EvRaw& e) {
-                           // Kept as raw LaTeX in a paragraph, which says where it
-                           // starts the way prose does.
-                           const bool first = target->empty();
-                           const bool opens = opens_paragraph();
-                           target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, first || !opens});
-                       }},
+            overloaded{
+                [&](const EvPnum& e) {
+                    new_para = true;
+                    fresh    = true;
+                    if (e.tag) {
+                        descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
+                        target = &descr.elements.back().body;
+                    }
+                },
+                [&](const EvProse& e) {
+                    if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
+                        std::holds_alternative<EvCode>(events[k])) {
+                        target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
+                        ++k;
+                        new_para = false;
+                        return;
+                    }
+                    target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
+                    new_para = false;
+                },
+                [&](const EvItemize& e) {
+                    ir::Itemize list;
+                    // substrate generic algorithm: a cursor scan over variable-width input; the position
+                    // is the loop's state.
+                    for (const EvItem& item : e.items)
+                        list.items.push_back(parse_item(item));
+                    list.opens_paragraph = opens_paragraph();
+                    target->push_back(std::move(list));
+                },
+                [&](const EvCode& e) {
+                    const bool opens = opens_paragraph();
+                    target->push_back(ir::AuthoredCode{parse_code(e.code, true), ir::Change::Same, opens});
+                },
+                [&](const EvNote& e) {
+                    const bool opens = opens_paragraph();
+                    if (e.example)
+                        target->push_back(ir::Example{parse_informative(e.inner), ir::Change::Same, opens, e.tail});
+                    else
+                        target->push_back(ir::Note{parse_informative(e.inner), ir::Change::Same, opens, e.tail});
+                },
+                [&](const EvTable& e) {
+                    const bool opens = opens_paragraph();
+                    if (e.flat) {
+                        ir::Table1D table     = make_table1d(e);
+                        table.opens_paragraph = opens;
+                        target->push_back(std::move(table));
+                    } else {
+                        ir::Table2D table     = make_table2d(e);
+                        table.opens_paragraph = opens;
+                        target->push_back(std::move(table));
+                    }
+                },
+                [&](const EvRaw& e) {
+                    // Kept as raw LaTeX in a paragraph, which says where it
+                    // starts the way prose does.
+                    const bool first = target->empty();
+                    const bool opens = opens_paragraph();
+                    target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, first || !opens});
+                }},
             event);
     }
     return descr;
