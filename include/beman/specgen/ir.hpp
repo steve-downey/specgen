@@ -656,6 +656,10 @@ struct Note {
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
+    // The draft wrote its `tail` form (`tailnote`), which ends without a
+    // paragraph break: at the end of a list item or a table cell (issue #401).
+    // Typesetting; it reads the same.
+    bool tail = false;
 
     friend bool operator==(const Note&, const Note&) = default;
 };
@@ -665,6 +669,10 @@ struct Example {
     // Whether the block opens a numbered paragraph of its own (`opens_paragraph`
     // below). Unset, it belongs to the paragraph before it.
     bool opens_paragraph = false;
+    // The draft wrote its `tail` form (`tailexample`), which ends without a
+    // paragraph break: at the end of a list item or a table cell (issue #401).
+    // Typesetting; it reads the same.
+    bool tail = false;
 
     friend bool operator==(const Example&, const Example&) = default;
 };
