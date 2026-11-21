@@ -969,6 +969,41 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
+        } else if (name == "begin" && arg && arg->inner == "footnote") {
+            // A footnote (issue #401), whose words are prose of the kinds a
+            // footnote holds; one holding anything else is kept as written.
+            constexpr std::string_view closing = "\\end{footnote}";
+            const std::size_t          close   = text.find(closing, arg->next);
+            const std::size_t          stop  = close == std::string_view::npos ? text.size() : close + closing.size();
+            const ir::Paragraph        words = close == std::string_view::npos
+                                                   ? ir::Paragraph{}
+                                                   : parse_prose(trim(text.substr(arg->next, close - arg->next)));
+            std::vector<ir::FootnotePiece> content;
+            const bool                     plain =
+                close != std::string_view::npos && std::ranges::all_of(words, [&](const ir::Inline& piece) {
+                    return std::visit(
+                        [&](const auto& v) {
+                            if constexpr (std::is_constructible_v<ir::FootnotePiece, decltype(v)>) {
+                                content.emplace_back(v);
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        },
+                        piece);
+                });
+            if (plain) {
+                // The draft's footnote sets its mark against the word before it.
+                const auto at_end = [&](const ir::LayoutHint& hint) { return hint.at >= pending.text.size(); };
+                // substrate generic algorithm: trims the spaces at the end of the pending text.
+                while (pending.text.ends_with(' ') && std::ranges::none_of(pending.hints, at_end))
+                    pending.text.pop_back();
+                flush();
+                out.push_back(ir::FootnoteInline{std::move(content)});
+            } else {
+                raw(text.substr(i, stop - i), "a footnote holding what a footnote cannot is kept as raw LaTeX");
+            }
+            i = stop;
         } else if (name == "br" || name == "linebreak" || name == "nolinebreak") {
             // What is left of the layout macros once the hints are read: `\br`,
             // which is the grammar environments', and the two that say how
@@ -1043,11 +1078,14 @@ std::optional<std::string> begin_name(std::string_view line) {
 ir::ListItem Importer::parse_item(const EvItem& item) {
     // The item's own text runs to its first environment; what follows, a code
     // block, a nested list, a note, an example or more prose, is read as the
-    // item's blocks.
+    // item's blocks. A footnote is running text, and does not end it (issue
+    // #401).
     const Lines lines(item.lines);
-    const auto  first =
-        std::ranges::find_if(lines, [](const std::string& line) { return begin_name(line).has_value(); });
-    const auto split = static_cast<std::size_t>(first - lines.begin());
+    const auto  first = std::ranges::find_if(lines, [](const std::string& line) {
+        const std::optional<std::string> name = begin_name(line);
+        return name.has_value() && *name != "footnote";
+    });
+    const auto  split = static_cast<std::size_t>(first - lines.begin());
     return ir::ListItem{parse_prose(join_prose(lines.first(split))),
                         parse_body<ir::DescriptionBody>(lines.subspan(split))};
 }
@@ -1351,6 +1389,15 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             ++i; // an index entry is not content
             continue;
         }
+        // A footnote is running text: the draft writes it inside a paragraph,
+        // and its words belong there (issue #401). So the environment joins
+        // the prose around it, and the prose reader takes it apart.
+        if (begin_name(t) == "footnote") {
+            const std::size_t end = std::min(environment_end(lines, i, "footnote"), lines.size() - 1);
+            prose.append_range(lines.subspan(i, end + 1 - i));
+            i = end + 1;
+            continue;
+        }
         if (const auto name = begin_name(t)) {
             flush();
             const std::size_t        end   = environment_end(lines, i, *name);
@@ -1414,7 +1461,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                                                    std::string_view{"note"},
                                                    std::string_view{"example"},
                                                    std::string_view{"tailnote"},
-                                                   std::string_view{"tailexample"}};
+                                                   std::string_view{"tailexample"},
+                                                   std::string_view{"footnote"}};
                         if (!nested && (items.empty() || !std::ranges::contains(kHeld, *env)))
                             nested = env;
                         if (!items.empty())

@@ -436,6 +436,18 @@ std::optional<Phrase>   phrase_from_name(std::string_view);
 // macro: "implementation-defined", "NTBS", "NTMBS".
 std::string_view phrase_words(Phrase);
 
+// A footnote (issue #401): the draft's `\begin{footnote}...\end{footnote}`,
+// which it writes inside running text, so its words belong to the paragraph it
+// interrupts. What it says is prose of the kinds that hold no prose of their
+// own; a footnote holding anything else is kept as raw LaTeX.
+using FootnotePiece = std::
+    variant<TextInline, CodeInline, RefInline, ConceptRef, PlaceholderInline, OldConceptRef, TermInline, PhraseInline>;
+struct FootnoteInline {
+    std::vector<FootnotePiece> content;
+
+    friend bool operator==(const FootnoteInline&, const FootnoteInline&) = default;
+};
+
 // The inlines a changed run can hold: everything but another run, because
 // marks do not nest. A separate variant rather than `Inline` recursing into
 // itself, so that a visitor over a run's contents dispatches a different,
@@ -450,7 +462,8 @@ using PlainInline = std::variant<TextInline,
                                  TableRef,
                                  RawInline,
                                  TermInline,
-                                 PhraseInline>;
+                                 PhraseInline,
+                                 FootnoteInline>;
 
 // A marked run of prose: the wording diff's `[...]{.add}` / `\added{...}`.
 // One mark covers the whole run, so a backend writes one span per run rather
@@ -462,17 +475,23 @@ struct ChangedInline {
 
     friend bool operator==(const ChangedInline&, const ChangedInline&) = default;
 };
-using Inline    = std::variant<TextInline,
-                               CodeInline,
-                               RefInline,
-                               ConceptRef,
-                               PlaceholderInline,
-                               OldConceptRef,
-                               TableRef,
-                               RawInline,
-                               TermInline,
-                               PhraseInline,
-                               ChangedInline>;
+using Inline = std::variant<TextInline,
+                            CodeInline,
+                            RefInline,
+                            ConceptRef,
+                            PlaceholderInline,
+                            OldConceptRef,
+                            TableRef,
+                            RawInline,
+                            TermInline,
+                            PhraseInline,
+                            FootnoteInline,
+                            ChangedInline>;
+
+// One piece of a footnote as an inline of a run, which every kind of piece is.
+inline PlainInline plain_inline(const FootnotePiece& piece) {
+    return std::visit([](const auto& v) -> PlainInline { return v; }, piece);
+}
 using Paragraph = std::vector<Inline>;
 
 // A piece of wording with the draft's typesetting taken off: the choice

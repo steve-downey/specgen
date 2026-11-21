@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -474,6 +475,12 @@ struct TypesettingRemover {
     PlainInline operator()(PhraseInline v) const {
         v.index.clear();
         v.bare = false;
+        return v;
+    }
+    PlainInline operator()(FootnoteInline v) const {
+        std::ranges::for_each(v.content, [this](FootnotePiece& piece) {
+            std::visit([this](auto& p) { p = std::get<std::decay_t<decltype(p)>>((*this)(p)); }, piece);
+        });
         return v;
     }
 };
