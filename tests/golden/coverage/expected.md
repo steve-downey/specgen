@@ -1,6 +1,6 @@
 ::: wording
 
-## Explicit coverage [demo.coverage]{- .sref} {-}
+## Explicit coverage [demo.coverage](){.sref} {-}
 
 ```cpp
 template<class F>
@@ -18,19 +18,19 @@ namespace std {
 }
 ```
 
-### Class move_only_function [demo.coverage.class]{- .sref} {-}
+### Class move_only_function [demo.coverage.class](){.sref} {-}
 
 ```cpp
 namespace std {
   class move_only_function {
   private:
-    // @[demo.coverage.ctors]{- .sref}@, exposition members
+    // @[demo.coverage.ctors](){.sref}@, exposition members
 
     template<class VT>
     static constexpr bool $is-callable-from$ = $see below$; // exposition only
 
   public:
-    // @[demo.coverage.ctors]{- .sref}@, constructors
+    // @[demo.coverage.ctors](){.sref}@, constructors
 
     template<class F> constexpr move_only_function(F&& f);
 
@@ -41,7 +41,7 @@ namespace std {
 
 [#]{.pnum} The wrapper stores a callable object.
 
-### Construction [demo.coverage.ctors]{- .sref} {-}
+### Construction [demo.coverage.ctors](){.sref} {-}
 
 ```cpp
 template<class VT>

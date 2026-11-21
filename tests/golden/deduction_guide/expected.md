@@ -1,6 +1,6 @@
 ::: wording
 
-## Header synopsis [demo.syn]{- .sref} {-}
+## Header synopsis [demo.syn](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -18,7 +18,7 @@ namespace std {
 }
 ```
 
-### Class template `holder` [demo.holder]{- .sref} {-}
+### Class template `holder` [demo.holder](){.sref} {-}
 
 ```cpp
 constexpr explicit holder(I ptr);

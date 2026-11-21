@@ -79,6 +79,14 @@ std::string subscript(std::string_view payload) {
     return '~' + body + '~';
 }
 
+// A stable name as mpark/wg21 links it: `[x](){.sref}`, which the framework
+// prints as the bracketed name, linked to the draft. A *span* of that class,
+// `[x]{.sref}`, it prints with the draft's title for the name in front, so a
+// heading, an `\iref` and a synopsis comment would each say the title twice
+// (issue #412). The link form is the one the framework's own stable-name
+// definitions (`srefs-md.py`) give an implicit `[x]`.
+std::string sref_link(std::string_view name) { return std::format("[{}](){{.sref}}", name); }
+
 // mpark/wg21 turns on embedded Markdown for `cpp`, `default` and `diff` code
 // -- both fenced blocks and inline `code` -- with `@` as the Markdown
 // delimiter and `$` as an italics shorthand (`$x$` means `@*x*@`).
@@ -87,7 +95,7 @@ std::string subscript(std::string_view payload) {
 // covers four of them outright: \exposid{x} is \tcode{\placeholder{x}},
 // \placeholder{x} is \textit{x}, and \seebelow is \UNSP{see below} --
 // \textit{\texttt{...}}. Only a cross-reference needs the general form, since
-// its payload is a span with attributes rather than a run of text.
+// its payload is a link with attributes rather than a run of text.
 std::string escape_span(const ir::Span& span, std::string_view spelling) {
     return foundation::match(
         span.kind,
@@ -106,7 +114,7 @@ std::string escape_span(const ir::Span& span, std::string_view spelling) {
         // listings setup (`texcl=true` puts comments in TeX mode already), and
         // mpark has no comment exception at all -- its scanner is purely
         // delimiter-driven and does not know a comment from any other text.
-        foundation::when<ir::SpanKind::Ref>([&] { return "@[" + span.payload + "]{- .sref}@"; }),
+        foundation::when<ir::SpanKind::Ref>([&] { return "@" + sref_link(span.payload) + "@"; }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
         // \cvqual{x} is \textit{x}, as \placeholder{x} is.
         foundation::when<ir::SpanKind::CvQualifier>([&] { return '$' + span.payload + '$'; }),
@@ -153,7 +161,7 @@ std::string escape_span_in_run(const ir::Span& span, std::string_view spelling) 
         foundation::when<ir::SpanKind::SeeBelow>([&] { return "*see below*"; }),
         foundation::when<ir::SpanKind::ImplDefined>([&] { return "*implementation-defined*"; }),
         foundation::when<ir::SpanKind::Placeholder>([&] { return '*' + span.payload + '*'; }),
-        foundation::when<ir::SpanKind::Ref>([&] { return "[" + span.payload + "]{- .sref}"; }),
+        foundation::when<ir::SpanKind::Ref>([&] { return sref_link(span.payload); }),
         foundation::when<ir::SpanKind::LibraryIndex>([&] { return std::string(spelling); }),
         foundation::when<ir::SpanKind::CvQualifier>([&] { return '*' + span.payload + '*'; }),
         foundation::when<ir::SpanKind::Optional>([&] { return std::string(spelling) + "~_opt_~"; }),
@@ -231,14 +239,13 @@ struct PieceRenderer {
 
     // A cross-reference to another stable name. `\iref{x}` renders "([x])" in
     // the draft, so the parentheses belong to this rendering and not to the
-    // authored prose around it. Unnumbered (`{- .sref}`) for the reason the
-    // section headings are: a wording cross-reference reads as the bracketed
-    // stable name, not as a section number. A bare reference is the draft's
-    // `\ref{x}`, the number alone, so it is the same span without the
-    // parentheses: "Within subclause [x], ...".
+    // authored prose around it. A link and not a span (`sref_link`), so it
+    // reads as the bracketed stable name and nothing more. A bare reference is
+    // the draft's `\ref{x}`, the number alone, so it is the same link without
+    // the parentheses: "Within subclause [x], ...".
     std::string operator()(const ir::RefInline& v) const {
-        const std::string span = "[" + v.stable_name + "]{- .sref}";
-        return v.bare ? span : '(' + span + ')';
+        const std::string link = sref_link(v.stable_name);
+        return v.bare ? link : '(' + link + ')';
     }
 
     // A library concept name. The draft's \libconcept sets the code font and
@@ -564,12 +571,12 @@ struct SeededProjector {
     // known only here during descent, so it is rendered now into
     // `RenderedSectionF::header` -- the field named for exactly this.
     //
-    // The form is a deliberate checkpoint call: the IR's own
-    // title, then the stable name as an *unnumbered* sref, then `{-}` to keep
-    // the paper's section numbering off a heading that carries a stable name
-    // of its own. Unnumbered because a facility being proposed is not in the
-    // srefs database the numbered form looks up: `{.sref}` alone would warn at
-    // paper-build time and discard the title specgen already knows.
+    // The form is a deliberate checkpoint call: the IR's own title, then the
+    // stable name as an sref link, then `{-}` to keep the paper's section
+    // numbering off a heading that carries a stable name of its own. The
+    // title is specgen's, since a facility being proposed is not in the
+    // srefs database, and a link prints the bracketed name alone after it,
+    // where a span would print the draft's title a second time (issue #412).
     backend::RenderF<Seeded> operator()(const ir::Section& s) const {
         // Markdown has six heading levels; a document nested past that is
         // already past what a paper's outline can express, so the level
@@ -579,11 +586,11 @@ struct SeededProjector {
         const std::string hashes(static_cast<std::size_t>(level), '#');
         // A hand-written Section may carry no title; emitting the empty one
         // would leave a double space before the stable name.
-        std::string header = s.title.empty() ? std::format("{} [{}]{{- .sref}} {{-}}\n", hashes, s.stable_name)
-                                             : std::format("{} {} [{}]{{- .sref}} {{-}}\n",
+        std::string header = s.title.empty() ? std::format("{} {} {{-}}\n", hashes, sref_link(s.stable_name))
+                                             : std::format("{} {} {} {{-}}\n",
                                                            hashes,
                                                            backend::render_section_title(s.title, '`'),
-                                                           s.stable_name);
+                                                           sref_link(s.stable_name));
 
         const RenderCtx     child_ctx{ctx.level + 1};
         std::vector<Seeded> children =
@@ -788,7 +795,7 @@ bool under_new_root(std::string_view name, std::span<const std::string> new_root
     });
 }
 
-// Strips the `.sref` class from every `[name]{- .sref}` this fragment wrote
+// Strips the `.sref` link from every `[name](){.sref}` this fragment wrote
 // for a name under one of `new_roots` (issue #89): a paper's own proposed
 // clause is not yet in the srefs database `.sref` looks up, so keeping the
 // class there buys nothing but a build-time warning and a dead link to
@@ -798,15 +805,15 @@ bool under_new_root(std::string_view name, std::span<const std::string> new_root
 // Runs over already-rendered text rather than inside the algebra, for the
 // same reason `renumber_added` above does: this is a property of the
 // document (which names are the paper's own), not of any one node, and the
-// three call sites that write `{- .sref}` -- the `Ref` span inside a `@…@`
+// three call sites that write `(){.sref}` -- the `Ref` span inside a `@…@`
 // comment escape, `ir::RefInline`'s parenthesized form, and the Section
-// heading -- all write the exact same `{- .sref}` immediately after the
+// heading -- all write the exact same `(){.sref}` immediately after the
 // closing `]`, so one pass here covers all three without threading
 // `new_roots` through the render algebra at all.
 std::string drop_sref_for_new_root(const std::string& text, std::span<const std::string> new_roots) {
     if (new_roots.empty())
         return text;
-    constexpr std::string_view kSref = "]{- .sref}";
+    constexpr std::string_view kSref = "](){.sref}";
     std::string                out;
     out.reserve(text.size());
     std::size_t pos = 0;
@@ -832,7 +839,7 @@ std::string drop_sref_for_new_root(const std::string& text, std::span<const std:
         out += name;
         out += ']';
         if (!under_new_root(name, new_roots))
-            out += "{- .sref}";
+            out += "(){.sref}";
         pos = close + kSref.size();
     }
     out += text.substr(pos);

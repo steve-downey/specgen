@@ -1777,8 +1777,8 @@ prose:
 
 | The draft writes | It is read as | mpark | org |
 | --- | --- | --- | --- |
-| `\iref{x}` | a reference in parentheses | `([x]{- .sref})` | a link in parentheses |
-| `\ref{x}` | the same reference, bare | `[x]{- .sref}` | the link alone |
+| `\iref{x}` | a reference in parentheses | `([x](){.sref})` | a link in parentheses |
+| `\ref{x}` | the same reference, bare | `[x](){.sref}` | the link alone |
 | `\libconcept{c}` | a library concept | `` `c` `` | `~c~` |
 | `\exposconcept{c}` | an exposition-only concept | `` `$c$` `` | italic code |
 | `\placeholder{p}`, `\cv{}` | a placeholder | `*p*` | italic |
@@ -1805,7 +1805,7 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers | `$cv2$` | `<var>cv2</var>` |
 | `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
 | `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
-| `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+| `\ref{x}` in a comment | a reference | `@[x](){.sref}@` | `[x]` |
 | `$i$` in a `\tcode` | a variable of the mathematics around the code | `$i$` | `<var>i</var>` |
 | `$_i$`, `$_{10}$` in a `\tcode` | a subscript | `@~_i_~@`, `@~10~@` | `<sub><var>i</var></sub>`, `<sub>10</sub>` |
 | `$r_K$` in a `\tcode` | a variable and its subscript | `$r$@~_K_~@` | `<var>r</var><sub><var>K</var></sub>` |
@@ -1978,7 +1978,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.55.9 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.55.10 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

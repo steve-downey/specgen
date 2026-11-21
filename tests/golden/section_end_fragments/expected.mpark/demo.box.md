@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template `box` [demo.box]{- .sref} {-}
+## Class template `box` [demo.box](){.sref} {-}
 
 ```cpp
 namespace std {

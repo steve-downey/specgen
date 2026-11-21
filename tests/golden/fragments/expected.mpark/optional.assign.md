@@ -1,6 +1,6 @@
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 template<class... Args>

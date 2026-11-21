@@ -1,6 +1,6 @@
 ::: wording
 
-## Operations [paragraphs.operations]{- .sref} {-}
+## Operations [paragraphs.operations](){.sref} {-}
 
 ```cpp
 inline void operate();

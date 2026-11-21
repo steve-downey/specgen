@@ -706,7 +706,7 @@ public:
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 constexpr bool ready() const noexcept;
@@ -727,7 +727,7 @@ constexpr bool ready() const noexcept;
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ```cpp
 constexpr void reset() noexcept;
@@ -846,15 +846,15 @@ cd "$REPO_ROOT"
 namespace std {
   class gadget {
   public:
-    // @[gadget.observe]{- .sref}@, observers
+    // @[gadget.observe](){.sref}@, observers
     bool ready() const @[noexcept]{.add}@;
     int level() const;
 
-    // @[gadget.mod]{- .sref}@, modifiers
+    // @[gadget.mod](){.sref}@, modifiers
     void @[reset]{.rm}@@[clear]{.add}@();
     void arm(int level);
 
-    @[// [gadget.query]{- .sref}, queries]{.add}@
+    @[// [gadget.query](){.sref}, queries]{.add}@
     @[bool armed() const;]{.add}@
   };
 }
@@ -862,7 +862,7 @@ namespace std {
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 bool ready() const @[noexcept]{.add}@;
@@ -888,7 +888,7 @@ int level() const;
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ::: rm
 
@@ -930,7 +930,7 @@ void arm(int level);
 
 ::: wording
 
-## Queries [gadget.query]{- .sref} {-}
+## Queries [gadget.query](){.sref} {-}
 
 ```cpp
 bool armed() const;
@@ -1066,15 +1066,15 @@ And under the `items` context, where `level()` collapses to the ellipsis:
 namespace std {
   class gadget {
   public:
-    // @[gadget.observe]{- .sref}@, observers
+    // @[gadget.observe](){.sref}@, observers
     bool ready() const @[noexcept]{.add}@;
     int level() const;
 
-    // @[gadget.mod]{- .sref}@, modifiers
+    // @[gadget.mod](){.sref}@, modifiers
     void @[reset]{.rm}@@[clear]{.add}@();
     void arm(int level);
 
-    @[// [gadget.query]{- .sref}, queries]{.add}@
+    @[// [gadget.query](){.sref}, queries]{.add}@
     @[bool armed() const;]{.add}@
   };
 }
@@ -1082,7 +1082,7 @@ namespace std {
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 bool ready() const @[noexcept]{.add}@;
@@ -1102,7 +1102,7 @@ bool ready() const @[noexcept]{.add}@;
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ::: rm
 
@@ -1144,7 +1144,7 @@ void arm(int level);
 
 ::: wording
 
-## Queries [gadget.query]{- .sref} {-}
+## Queries [gadget.query](){.sref} {-}
 
 […]
 
@@ -1200,7 +1200,7 @@ namespace std {
   template<class T>
   class optional {
   public:
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     constexpr optional& operator=(nullopt_t) noexcept;
   };
 }
@@ -1210,7 +1210,7 @@ namespace std {
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 constexpr optional@[<T>]{.rm}@& operator=(nullopt_t) noexcept;
@@ -1545,7 +1545,7 @@ If \tcode{rhs} contains a value, direct-non-list-initializes the contained value
 ````markdown
 ::: wording
 
-## Constructors [optional.ctor]{- .sref} {-}
+## Constructors [optional.ctor](){.sref} {-}
 
 ```cpp
 constexpr optional() noexcept;
@@ -2558,7 +2558,7 @@ namespace std {
   public:
     using value_type = T;
 
-    // @[optional.ctor]{- .sref}@, constructors
+    // @[optional.ctor](){.sref}@, constructors
     constexpr optional() noexcept;
     constexpr optional(nullopt_t) noexcept;
 
@@ -2569,19 +2569,19 @@ namespace std {
     template<class U>
     constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     template<class... Args> constexpr T& emplace(Args&&... args);
 
-    // @[optional.observe]{- .sref}@, observers
+    // @[optional.observe](){.sref}@, observers
     constexpr bool has_value() const noexcept;
     constexpr const T& operator*() const&;
 
     template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
 
-    // @[optional.monadic]{- .sref}@, monadic operations
+    // @[optional.monadic](){.sref}@, monadic operations
     template<class F> constexpr $see below$ transform(F&& f) const&;
 
-    // @[optional.mod]{- .sref}@, modifiers
+    // @[optional.mod](){.sref}@, modifiers
     constexpr void reset() noexcept;
 
     friend constexpr bool operator==(const optional& x, const optional& y);
@@ -2595,7 +2595,7 @@ namespace std {
 
 ::: wording
 
-## Constructors [optional.ctor]{- .sref} {-}
+## Constructors [optional.ctor](){.sref} {-}
 
 ```cpp
 constexpr optional() noexcept;
@@ -2645,7 +2645,7 @@ template<class U>
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 template<class... Args>
@@ -2664,7 +2664,7 @@ template<class... Args>
 
 ::: wording
 
-## Observers [optional.observe]{- .sref} {-}
+## Observers [optional.observe](){.sref} {-}
 
 ```cpp
 constexpr bool has_value() const noexcept;
@@ -2697,7 +2697,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 
 ::: wording
 
-## Monadic operations [optional.monadic]{- .sref} {-}
+## Monadic operations [optional.monadic](){.sref} {-}
 
 ```cpp
 template<class F>
@@ -2712,7 +2712,7 @@ template<class F>
 
 ::: wording
 
-## Modifiers [optional.mod]{- .sref} {-}
+## Modifiers [optional.mod](){.sref} {-}
 
 ```cpp
 constexpr void reset() noexcept;

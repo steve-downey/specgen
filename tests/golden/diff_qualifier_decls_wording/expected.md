@@ -2,7 +2,7 @@
 namespace std {
   class span_like {
   public:
-    // @[span.like.obs]{- .sref}@, observers
+    // @[span.like.obs](){.sref}@, observers
     @[constexpr]{.add}@ int size() const;
     @[constexpr]{.add}@ bool empty() const;
     @[constexpr]{.add}@ int front() const;
@@ -12,7 +12,7 @@ namespace std {
 
 ::: wording
 
-## Observers [span.like.obs]{- .sref} {-}
+## Observers [span.like.obs](){.sref} {-}
 
 ```cpp
 @[constexpr]{.add}@ int size() const;

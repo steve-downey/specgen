@@ -1,6 +1,6 @@
 ::: wording
 
-## Undefined primaries [undef.primary]{- .sref} {-}
+## Undefined primaries [undef.primary](){.sref} {-}
 
 ```cpp
 template<class L, class R>

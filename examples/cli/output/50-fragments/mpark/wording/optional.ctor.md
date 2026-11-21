@@ -1,6 +1,6 @@
 ::: wording
 
-## Constructors [optional.ctor]{- .sref} {-}
+## Constructors [optional.ctor](){.sref} {-}
 
 ```cpp
 constexpr optional() noexcept;

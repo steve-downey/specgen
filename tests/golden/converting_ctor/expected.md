@@ -13,6 +13,6 @@ template<class U> constexpr explicit($see below$) optional(const optional<U>& rh
 
 [#]{.pnum} *Effects*: If `rhs` contains a value, direct-non-list-initializes the contained value with `*rhs`.
 
-[#]{.pnum} *Remarks*: The expression inside `explicit` is equivalent to `!is_convertible_v<const U&, T>`, see ([optional.general]{- .sref}).
+[#]{.pnum} *Remarks*: The expression inside `explicit` is equivalent to `!is_convertible_v<const U&, T>`, see ([optional.general](){.sref}).
 
 :::

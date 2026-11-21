@@ -1,6 +1,6 @@
 ::: wording
 
-## Blocks that open a paragraph [numbered.blocks]{- .sref} {-}
+## Blocks that open a paragraph [numbered.blocks](){.sref} {-}
 
 ```cpp
 void first();

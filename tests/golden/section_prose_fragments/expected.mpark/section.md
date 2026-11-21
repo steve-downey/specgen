@@ -1,8 +1,8 @@
 ::: wording
 
-## Section prose [section]{- .sref} {-}
+## Section prose [section](){.sref} {-}
 
-### General [section.general]{- .sref} {-}
+### General [section.general](){.sref} {-}
 
 [#]{.pnum} The header provides a `wrapper` with these choices:
 
@@ -11,9 +11,9 @@
 
 Prose resumes after the list.
 
-[#]{.pnum} A separate paragraph refers to ([section.class]{- .sref}).
+[#]{.pnum} A separate paragraph refers to ([section.class](){.sref}).
 
-### Class template wrapper [section.class]{- .sref} {-}
+### Class template wrapper [section.class](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -24,7 +24,7 @@ namespace std {
 
 [#]{.pnum} The `wrapper` class template stores a callable object.
 
-### Operations [section.operations]{- .sref} {-}
+### Operations [section.operations](){.sref} {-}
 
 ```cpp
 inline void first();
@@ -40,13 +40,13 @@ inline void second();
 
 [#]{.pnum} *Effects*: Performs the second operation.
 
-#### Details [section.operations.detail]{- .sref} {-}
+#### Details [section.operations.detail](){.sref} {-}
 
 [#]{.pnum} A block-form paragraph belongs to the nested section.
 
 [#]{.pnum} This paragraph belongs to the enclosing section again.
 
-### Header synopsis [section.syn]{- .sref} {-}
+### Header synopsis [section.syn](){.sref} {-}
 
 ```cpp
 namespace std {

@@ -11,7 +11,7 @@ namespace std {
   template<class T>
   class optional {
   public:
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     constexpr optional& operator=(nullopt_t) noexcept;
   };
 }
@@ -21,7 +21,7 @@ namespace std {
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 constexpr optional@[<T>]{.rm}@& operator=(nullopt_t) noexcept;

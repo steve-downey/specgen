@@ -2,7 +2,7 @@
 namespace std {
   class widget {
   public:
-    // @[widget.mod]{- .sref}@, modifiers
+    // @[widget.mod](){.sref}@, modifiers
     void configure(int mode);
   };
 }
@@ -10,7 +10,7 @@ namespace std {
 
 ::: wording
 
-## Modifiers [widget.mod]{- .sref} {-}
+## Modifiers [widget.mod](){.sref} {-}
 
 ```cpp
 void configure(int mode);
@@ -20,7 +20,7 @@ void configure(int mode);
 
 - [#.#]{.pnum} `mode >= 0`,
 - [#.#]{.pnum} `mode <= 2`, and
-- [#.#]{.pnum} `mode` denotes a supported mode as specified in ([external.mode.requirements]{- .sref}).
+- [#.#]{.pnum} `mode` denotes a supported mode as specified in ([external.mode.requirements](){.sref}).
 
 [#]{.pnum} *Effects*: Configures the widget.
 

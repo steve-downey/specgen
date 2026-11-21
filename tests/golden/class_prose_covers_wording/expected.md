@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template holder [demo.holder]{- .sref} {-}
+## Class template holder [demo.holder](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -9,7 +9,7 @@ namespace std {
 }
 ```
 
-[#]{.pnum} Subclause ([demo.holder]{- .sref}) describes the class template `holder`.
+[#]{.pnum} Subclause ([demo.holder](){.sref}) describes the class template `holder`.
 
 [#]{.pnum} A program that instantiates the definition of `holder` for a non-object type or an array type is ill-formed.
 
@@ -17,7 +17,7 @@ namespace std {
 
 ::: wording
 
-## Class template slot [demo.slot]{- .sref} {-}
+## Class template slot [demo.slot](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -32,7 +32,7 @@ namespace std {
 
 ::: wording
 
-## Class template plain [demo.plain]{- .sref} {-}
+## Class template plain [demo.plain](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -43,6 +43,6 @@ namespace std {
 
 [#]{.pnum} A program that instantiates `plain<E>` is ill-formed unless `is_object_like<E>` is `true`.
 
-[#]{.pnum} Subclause ([demo.plain]{- .sref}) describes the class template `plain`.
+[#]{.pnum} Subclause ([demo.plain](){.sref}) describes the class template `plain`.
 
 :::

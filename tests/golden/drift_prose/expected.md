@@ -1,6 +1,6 @@
 ::: wording
 
-## Functions [drift.functions]{- .sref} {-}
+## Functions [drift.functions](){.sref} {-}
 
 ```cpp
 template<class F>

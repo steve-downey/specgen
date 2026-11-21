@@ -1,6 +1,6 @@
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 constexpr optional<T>& operator=(nullopt_t) noexcept;

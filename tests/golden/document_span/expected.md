@@ -1,10 +1,10 @@
 ::: wording
 
-## Header `<span>` synopsis [span.syn]{- .sref} {-}
+## Header `<span>` synopsis [span.syn](){.sref} {-}
 
 ```cpp
 namespace std {
-  // @[span.errors]{- .sref}@, error types
+  // @[span.errors](){.sref}@, error types
 
   enum class error_kind { bad_input, truncated };
 
@@ -18,7 +18,7 @@ namespace std {
     int $count$ = 0; // exposition only
 
   public:
-    // @[span.widget]{- .sref}@, observers
+    // @[span.widget](){.sref}@, observers
     int count() const;
   };
 }
@@ -28,7 +28,7 @@ namespace std {
 
 ::: wording
 
-## Error types [span.errors]{- .sref} {-}
+## Error types [span.errors](){.sref} {-}
 
 ```cpp
 enum class error_kind { bad_input, truncated };
@@ -50,7 +50,7 @@ template<class T>
 
 ::: wording
 
-## Class `widget` [span.widget]{- .sref} {-}
+## Class `widget` [span.widget](){.sref} {-}
 
 ```cpp
 int count() const;
