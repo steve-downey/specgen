@@ -185,3 +185,14 @@ TEST_CASE("code_spans - a malformed run is skipped and a span straddling a run's
     const CodeText code{"abcdef", {{2, 5, SpanKind::ExposId, "x"}}, {{0, 3, Change::Added}, {9, 12, Change::Added}}};
     CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "+(abc)def");
 }
+
+// Issue #410: a run's text can take an escape of its own, and otherwise takes
+// the one outside it.
+TEST_CASE("code_spans - a change run's text takes its own escape when it has one") {
+    const auto     escape_run = [](std::string_view text) { return "<" + std::string(text) + ">"; };
+    const CodeText code{"a&b&c", {}, {{2, 3, Change::Added}}};
+    CHECK(backend::render_code_spans(
+              code, bracket_escape, plain_escape, wrap_change, std::identity{}, show_hint, escape_run) ==
+          "a&+(<b>)&c");
+    CHECK(backend::render_code_spans(code, bracket_escape, plain_escape, wrap_change) == "a&+(b)&c");
+}
