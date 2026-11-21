@@ -11,6 +11,7 @@ target_sources(
                 draft_spans.hpp
                 element_label.hpp
                 indent_lines.hpp
+                iref_spacing.hpp
                 render_fold.hpp
                 section_title.hpp
                 tied_text.hpp
