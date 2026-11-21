@@ -62,6 +62,25 @@ std::optional<std::string> declaration_namespace_name(const clang::NamedDecl* de
     return parts | std::views::join_with(std::string_view("::")) | std::ranges::to<std::string>();
 }
 
+// The draft writes `std::forward` and `std::move` qualified wherever library
+// wording uses them, in code as in prose, though every other name inside
+// namespace std is unqualified (issue #405). So the `std::` before a reference
+// to one of these is kept. The test is on the declaration the reference
+// resolves to, not on the spelling: a `forward` of the author's own keeps its
+// qualifier only if it has one anyway.
+bool draft_keeps_std_qualifier(const clang::NamedDecl* decl) {
+    if (decl == nullptr)
+        return false;
+    const clang::NamedDecl* named = decl->getUnderlyingDecl();
+    if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(named))
+        named = tmpl->getTemplatedDecl();
+    const auto* function = llvm::dyn_cast<clang::FunctionDecl>(named);
+    if (function == nullptr || !function->getIdentifier())
+        return false;
+    const std::string_view name = function->getName();
+    return (name == "forward" || name == "move") && declaration_namespace_name(function) == "std";
+}
+
 // Collects the source ranges of droppable namespace qualifiers under a decl.
 // RecursiveASTVisitor in this LLVM has no VisitNestedNameSpecifierLoc hook, so
 // the traversal method itself is overridden.
@@ -105,7 +124,11 @@ class QualifierDropper : public clang::RecursiveASTVisitor<QualifierDropper> {
     }
 
     bool VisitDeclRefExpr(clang::DeclRefExpr* expr) {
-        if (expr != nullptr)
+        if (expr == nullptr)
+            return true;
+        if (draft_keeps_std_qualifier(expr->getDecl()))
+            keep(expr->getQualifierLoc());
+        else
             add_imported(expr->getDecl(), expr->getQualifierLoc());
         return true;
     }
@@ -119,6 +142,12 @@ class QualifierDropper : public clang::RecursiveASTVisitor<QualifierDropper> {
     bool VisitUnresolvedLookupExpr(clang::UnresolvedLookupExpr* expr) {
         if (expr == nullptr || !expr->getQualifierLoc())
             return true;
+        if (expr->decls_begin() != expr->decls_end() && std::ranges::all_of(expr->decls(), [](clang::NamedDecl* decl) {
+                return draft_keeps_std_qualifier(decl);
+            })) {
+            keep(expr->getQualifierLoc());
+            return true;
+        }
         const bool all_imported = expr->decls_begin() != expr->decls_end() &&
                                   std::ranges::all_of(expr->decls(), [&](clang::NamedDecl* decl) {
                                       return imported_qualifier_is_droppable(decl, expr->getQualifierLoc(), drop_);
@@ -128,27 +157,48 @@ class QualifierDropper : public clang::RecursiveASTVisitor<QualifierDropper> {
         return true;
     }
 
+    // The qualifiers to keep, which `TraverseNestedNameSpecifierLoc` may
+    // have collected before the reference that owns them was visited, taken
+    // back out.
+    void drop_kept() {
+        std::erase_if(out_, [this](const std::pair<unsigned, unsigned>& edit) { return kept_.contains(edit); });
+    }
+
   private:
+    void keep(clang::NestedNameSpecifierLoc qualifier) {
+        if (const std::optional<std::pair<unsigned, unsigned>> range = offsets(qualifier))
+            kept_.insert(*range);
+    }
+
+    std::optional<std::pair<unsigned, unsigned>> offsets(clang::NestedNameSpecifierLoc qualifier) const {
+        if (!qualifier)
+            return std::nullopt;
+        const clang::SourceRange range = qualifier.getSourceRange();
+        if (!range.isValid() || !range.getBegin().isFileID() || !range.getEnd().isFileID())
+            return std::nullopt;
+        const unsigned begin = sm_.getDecomposedLoc(range.getBegin()).second;
+        const unsigned end =
+            sm_.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm_, lang_opts_)).second;
+        if (end <= begin)
+            return std::nullopt;
+        return std::pair{begin, end};
+    }
+
     void add_imported(const clang::NamedDecl* decl, clang::NestedNameSpecifierLoc qualifier) {
         if (imported_qualifier_is_droppable(decl, qualifier, drop_))
             add_range(qualifier);
     }
 
     void add_range(clang::NestedNameSpecifierLoc qualifier) {
-        const clang::SourceRange range = qualifier.getSourceRange();
-        if (!range.isValid() || !range.getBegin().isFileID() || !range.getEnd().isFileID())
-            return;
-        const unsigned begin = sm_.getDecomposedLoc(range.getBegin()).second;
-        const unsigned end =
-            sm_.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(range.getEnd(), 0, sm_, lang_opts_)).second;
-        if (end > begin)
-            out_.emplace_back(begin, end);
+        if (const std::optional<std::pair<unsigned, unsigned>> range = offsets(qualifier))
+            out_.push_back(*range);
     }
 
     const std::set<std::string>&                drop_;
     const clang::SourceManager&                 sm_;
     const clang::LangOptions&                   lang_opts_;
     std::vector<std::pair<unsigned, unsigned>>& out_;
+    std::set<std::pair<unsigned, unsigned>>     kept_;
 };
 
 // Reference-resolved uses of namespace-scope exposition-only declarations.
@@ -375,6 +425,7 @@ namespace_qualifier_edits(clang::Stmt*                                     root,
     if (root != nullptr && !drop.empty()) {
         QualifierDropper dropper(drop, sm, lang_opts, out);
         dropper.TraverseStmt(root);
+        dropper.drop_kept();
         drop_edits_inside_expos_qualifiers(out, expos_uses(root, expos, sm, lang_opts));
     }
     return out;
@@ -390,6 +441,7 @@ namespace_qualifier_edits(clang::Decl*                                     root,
     if (root != nullptr && !drop.empty()) {
         QualifierDropper dropper(drop, sm, lang_opts, out);
         dropper.TraverseDecl(root);
+        dropper.drop_kept();
         drop_edits_inside_expos_qualifiers(out, expos_uses(root, expos, sm, lang_opts));
     }
     return out;

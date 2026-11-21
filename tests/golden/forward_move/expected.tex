@@ -1,0 +1,50 @@
+\rSec3[box.class]{Class template box}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{box}@ {
+  public:
+    // \ref{box.ops}, operations
+    template<class F> constexpr auto apply(F&& f) const;
+    constexpr T take();
+
+  private:
+    T @\exposid{val}@; // \expos
+  };
+}
+\end{codeblock}
+
+\pnum
+The draft writes \tcode{std::forward} and \tcode{std::move} qualified in an extracted body, and every other name in namespace std unqualified (issue \#405).
+
+\rSec3[box.ops]{Operations}
+
+\indexlibrarymember{apply}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto apply(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), @\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{take}{box}%
+\begin{itemdecl}
+constexpr T take();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return exchange(@\exposid{val}@, std::move(@\exposid{val}@));
+\end{codeblock}
+\end{itemdescr}
