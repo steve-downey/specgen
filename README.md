@@ -20,6 +20,10 @@ draft LaTeX, mpark/wg21 markdown, or org.
 
 ## Documentation
 
+The pages meant to be read in a browser -- the examples, the live examples run
+by the latest release, and the typeset [optional.ref.monadic] example -- are
+published at <https://steve-downey.github.io/specgen/>.
+
 - [User guide](docs/user-guide.md): markup, commands, diagnostics, and examples
 - [Examples](docs/examples.md): transcluded headers and rendered outputs
 - [Architecture and wording model](docs/architecture.md): the design reference source comments cite as `design §N`

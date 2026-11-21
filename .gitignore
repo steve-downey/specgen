@@ -27,6 +27,8 @@
 /docs/*.html.deps
 /docs/examples.md.deps
 /docs/examples.html
+/docs/index.html
+/docs/codestyle.html
 /docs/examples-live.html
 /docs/examples-live.html.deps
 
