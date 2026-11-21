@@ -326,6 +326,10 @@ struct ConceptRef {
     bool        exposition = false;
     // The draft wrote \exposconceptnc: typesetting, as `Span::no_correction` is.
     bool no_correction = false;
+    // The draft wrapped the macro in \tcode (`\tcode{\libconcept{x}}`), which
+    // prints the same: typesetting too, kept so inherited wording is written
+    // back as the draft spells it (issue #407).
+    bool in_tcode = false;
     // The draft's line-break hints inside the name (`\libconcept{con\-cept}`):
     // offsets into `name`, which is the name without them.
     std::vector<LayoutHint> hints = {};
