@@ -9,7 +9,7 @@ public:
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 constexpr bool ready() const@[ noexcept]{.rm}@;
@@ -20,7 +20,7 @@ constexpr bool ready() const@[ noexcept]{.rm}@;
 - [#.#]{.pnum} `is_copy_constructible_v<T>` is `true`,
 - [#.#]{.pnum} `is_move_constructible_v<T>` is `true`.
 
-[#]{.pnum} *Returns*: `true` if and only if the gadget is [ready]{.rm}[armed (see ([gadget.mod]{- .sref}))]{.add}.
+[#]{.pnum} *Returns*: `true` if and only if the gadget is [ready]{.rm}[armed (see ([gadget.mod](){.sref}))]{.add}.
 
 ::: rm
 
@@ -58,7 +58,7 @@ void reset($val$ v);
 
 ::: wording
 
-## Arming [gadget.arm]{- .sref} {-}
+## Arming [gadget.arm](){.sref} {-}
 
 ```cpp
 void arm();
@@ -74,7 +74,7 @@ void arm();
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ```cpp
 void reset($val$ v);

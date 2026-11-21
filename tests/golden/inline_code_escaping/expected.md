@@ -1,6 +1,6 @@
 ::: wording
 
-## General [escaping.general]{- .sref} {-}
+## General [escaping.general](){.sref} {-}
 
 [#]{.pnum} A reference qualifier is one of the following:
 
@@ -13,7 +13,7 @@ Special characters in code are literal: `# % _ { } ~ ^ $ \`.
 
 ::: wording
 
-## References [escaping.references]{- .sref} {-}
+## References [escaping.references](){.sref} {-}
 
 ```cpp
 inline int& alias(int& value);

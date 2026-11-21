@@ -1,6 +1,6 @@
 ::: wording
 
-## Macro continuations [macro.general]{- .sref} {-}
+## Macro continuations [macro.general](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -14,7 +14,7 @@ namespace std {
 
 [#]{.pnum} *noex* is a placeholder in leading prose.
 
-[#]{.pnum} Within subclause [macro.general]{- .sref}, a type that satisfies `$gadget-like$` models `copyable` for some *cv2*, as [Table \[macro.flat\]](#macro.flat) shows.
+[#]{.pnum} Within subclause [macro.general](){.sref}, a type that satisfies `$gadget-like$` models `copyable` for some *cv2*, as [Table \[macro.flat\]](#macro.flat) shows.
 
 ```cpp
 int size() const;

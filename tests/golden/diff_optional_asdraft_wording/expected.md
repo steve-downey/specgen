@@ -11,7 +11,7 @@ namespace std {
   template<class T>
   class optional {
   public:
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     constexpr optional<T>& operator=(nullopt_t) noexcept;
 
     template<class U = remove_cv_t<T>> constexpr optional& operator=(U&& v);
@@ -23,7 +23,7 @@ namespace std {
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 […]
 

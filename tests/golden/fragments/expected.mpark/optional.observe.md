@@ -1,6 +1,6 @@
 ::: wording
 
-## Observers [optional.observe]{- .sref} {-}
+## Observers [optional.observe](){.sref} {-}
 
 ```cpp
 constexpr bool has_value() const noexcept;

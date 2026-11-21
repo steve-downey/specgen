@@ -1,6 +1,6 @@
 ::: wording
 
-## References [escaping.references]{- .sref} {-}
+## References [escaping.references](){.sref} {-}
 
 ```cpp
 inline int& alias(int& value);

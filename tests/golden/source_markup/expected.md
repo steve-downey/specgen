@@ -2,16 +2,16 @@
 namespace std {
   class tally {
   public:
-    // @[tally.modifiers]{- .sref}@, modifiers
+    // @[tally.modifiers](){.sref}@, modifiers
     void reset();
     void assign(long value);
     void assign(int value);
 
-    // @[tally.observers]{- .sref}@, observers
+    // @[tally.observers](){.sref}@, observers
     int size() const;
     $see below$ data();
 
-    // @[tally.ops]{- .sref}@, operations
+    // @[tally.ops](){.sref}@, operations
     friend bool operator==(const tally& x, const tally& y);
 
   private:
@@ -22,9 +22,9 @@ namespace std {
 
 ::: wording
 
-## Class tally [tally]{- .sref} {-}
+## Class tally [tally](){.sref} {-}
 
-### Modifiers [tally.modifiers]{- .sref} {-}
+### Modifiers [tally.modifiers](){.sref} {-}
 
 ```cpp
 void reset();
@@ -45,7 +45,7 @@ void assign(int value);
 
 [#]{.pnum} *Effects*: Sets the count to `value`.
 
-### Observers [tally.observers]{- .sref} {-}
+### Observers [tally.observers](){.sref} {-}
 
 ```cpp
 int size() const;
@@ -59,7 +59,7 @@ $see below$ data();
 
 [#]{.pnum} *Returns*: A pointer to the count.
 
-### Operations [tally.ops]{- .sref} {-}
+### Operations [tally.ops](){.sref} {-}
 
 ```cpp
 friend bool operator==(const tally& x, const tally& y);

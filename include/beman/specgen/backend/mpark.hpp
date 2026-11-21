@@ -3,7 +3,7 @@
 //
 // specgen — mpark/wg21 serializer.
 // Emits pandoc markdown for the mpark/wg21 paper framework: `::: wording`
-// divs with `[#]{.pnum}` auto-numbering, `[stable.name]{- .sref}` headings,
+// divs with `[#]{.pnum}` auto-numbering, `[stable.name](){.sref}` headings,
 // ```cpp fences whose spans use the framework's embedded-Markdown `$…$`
 // convention. Like the LaTeX backend these are standalone fragments for
 // transclusion; the including paper owns its front matter and framing.

@@ -1,6 +1,6 @@
 ::: wording
 
-## Monadic operations [optional.monadic]{- .sref} {-}
+## Monadic operations [optional.monadic](){.sref} {-}
 
 ```cpp
 template<class F>

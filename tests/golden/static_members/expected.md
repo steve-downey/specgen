@@ -3,7 +3,7 @@ namespace std {
   template<class T>
   class gauge {
   public:
-    // @[gauge.members]{- .sref}@, static members
+    // @[gauge.members](){.sref}@, static members
     static constexpr bool consumes = true;
 
     static constexpr int digits = 8 * sizeof(T);
@@ -14,7 +14,7 @@ namespace std {
 
     static constexpr int limit = 100;
 
-    // @[gauge.ops]{- .sref}@, operations
+    // @[gauge.ops](){.sref}@, operations
     constexpr T read() const;
   };
 }
@@ -22,9 +22,9 @@ namespace std {
 
 ::: wording
 
-## Class template gauge [gauge]{- .sref} {-}
+## Class template gauge [gauge](){.sref} {-}
 
-### Static members [gauge.members]{- .sref} {-}
+### Static members [gauge.members](){.sref} {-}
 
 ```cpp
 static constexpr bool consumes = true;
@@ -45,7 +45,7 @@ template<class U>
 
 [#]{.pnum} *Remarks*: `true` when a reading converts to `U`.
 
-### Limits [gauge.limits]{- .sref} {-}
+### Limits [gauge.limits](){.sref} {-}
 
 ```cpp
 static constexpr int limit = 100;
@@ -53,7 +53,7 @@ static constexpr int limit = 100;
 
 [#]{.pnum} *Remarks*: The largest reading.
 
-### Operations [gauge.ops]{- .sref} {-}
+### Operations [gauge.ops](){.sref} {-}
 
 ```cpp
 constexpr T read() const;

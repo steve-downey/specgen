@@ -1,6 +1,6 @@
 ::: wording
 
-## General [paragraphs.general]{- .sref} {-}
+## General [paragraphs.general](){.sref} {-}
 
 [#]{.pnum} The header provides these choices:
 
@@ -18,7 +18,7 @@ This continues the second paragraph.
 
 ::: wording
 
-## Operations [paragraphs.operations]{- .sref} {-}
+## Operations [paragraphs.operations](){.sref} {-}
 
 ```cpp
 inline void operate();

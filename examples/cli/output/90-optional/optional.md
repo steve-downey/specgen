@@ -19,7 +19,7 @@ namespace std {
   public:
     using value_type = T;
 
-    // @[optional.ctor]{- .sref}@, constructors
+    // @[optional.ctor](){.sref}@, constructors
     constexpr optional() noexcept;
     constexpr optional(nullopt_t) noexcept;
 
@@ -30,19 +30,19 @@ namespace std {
     template<class U>
     constexpr explicit(!is_convertible_v<U, T>) optional(const optional<U>& rhs);
 
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     template<class... Args> constexpr T& emplace(Args&&... args);
 
-    // @[optional.observe]{- .sref}@, observers
+    // @[optional.observe](){.sref}@, observers
     constexpr bool has_value() const noexcept;
     constexpr const T& operator*() const&;
 
     template<class U = remove_cv_t<T>> constexpr remove_cv_t<T> value_or(U&& u) const&;
 
-    // @[optional.monadic]{- .sref}@, monadic operations
+    // @[optional.monadic](){.sref}@, monadic operations
     template<class F> constexpr $see below$ transform(F&& f) const&;
 
-    // @[optional.mod]{- .sref}@, modifiers
+    // @[optional.mod](){.sref}@, modifiers
     constexpr void reset() noexcept;
 
     friend constexpr bool operator==(const optional& x, const optional& y);
@@ -56,7 +56,7 @@ namespace std {
 
 ::: wording
 
-## Constructors [optional.ctor]{- .sref} {-}
+## Constructors [optional.ctor](){.sref} {-}
 
 ```cpp
 constexpr optional() noexcept;
@@ -106,7 +106,7 @@ template<class U>
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 template<class... Args>
@@ -125,7 +125,7 @@ template<class... Args>
 
 ::: wording
 
-## Observers [optional.observe]{- .sref} {-}
+## Observers [optional.observe](){.sref} {-}
 
 ```cpp
 constexpr bool has_value() const noexcept;
@@ -158,7 +158,7 @@ return has_value() ? **this : static_cast<remove_cv_t<T>>(u);
 
 ::: wording
 
-## Monadic operations [optional.monadic]{- .sref} {-}
+## Monadic operations [optional.monadic](){.sref} {-}
 
 ```cpp
 template<class F>
@@ -173,7 +173,7 @@ template<class F>
 
 ::: wording
 
-## Modifiers [optional.mod]{- .sref} {-}
+## Modifiers [optional.mod](){.sref} {-}
 
 ```cpp
 constexpr void reset() noexcept;

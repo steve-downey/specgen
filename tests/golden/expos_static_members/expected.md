@@ -2,7 +2,7 @@
 namespace std {
   class table {
   public:
-    // @[table.ops]{- .sref}@, operations
+    // @[table.ops](){.sref}@, operations
     constexpr void reset();
 
   private:
@@ -17,7 +17,7 @@ namespace std {
 
 ::: wording
 
-## Operations [table.ops]{- .sref} {-}
+## Operations [table.ops](){.sref} {-}
 
 ```cpp
 constexpr void reset();

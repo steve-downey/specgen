@@ -1,11 +1,11 @@
 ::: wording
 
-## Class `box` [demo.box]{- .sref} {-}
+## Class `box` [demo.box](){.sref} {-}
 
 ```cpp
 namespace std {
   struct box {
-    // @[demo.box]{- .sref}@, observers
+    // @[demo.box](){.sref}@, observers
 
     template<class T> constexpr int with_req_expr(T) const;
 
@@ -47,7 +47,7 @@ template<class I>
 
 ::: wording
 
-## Free functions [demo.free]{- .sref} {-}
+## Free functions [demo.free](){.sref} {-}
 
 ```cpp
 template<class T>

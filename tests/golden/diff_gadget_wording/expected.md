@@ -2,15 +2,15 @@
 namespace std {
   class gadget {
   public:
-    // @[gadget.observe]{- .sref}@, observers
+    // @[gadget.observe](){.sref}@, observers
     bool ready() const @[noexcept]{.add}@;
     int level() const;
 
-    // @[gadget.mod]{- .sref}@, modifiers
+    // @[gadget.mod](){.sref}@, modifiers
     void @[reset]{.rm}@@[clear]{.add}@();
     void arm(int level);
 
-    @[// [gadget.query]{- .sref}, queries]{.add}@
+    @[// [gadget.query](){.sref}, queries]{.add}@
     @[bool armed() const;]{.add}@
   };
 }
@@ -18,7 +18,7 @@ namespace std {
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 bool ready() const @[noexcept]{.add}@;
@@ -44,7 +44,7 @@ int level() const;
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ::: rm
 
@@ -86,7 +86,7 @@ void arm(int level);
 
 ::: wording
 
-## Queries [gadget.query]{- .sref} {-}
+## Queries [gadget.query](){.sref} {-}
 
 ```cpp
 bool armed() const;

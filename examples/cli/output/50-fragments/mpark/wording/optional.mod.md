@@ -1,6 +1,6 @@
 ::: wording
 
-## Modifiers [optional.mod]{- .sref} {-}
+## Modifiers [optional.mod](){.sref} {-}
 
 ```cpp
 constexpr void reset() noexcept;

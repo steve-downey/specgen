@@ -1,13 +1,13 @@
 ::: wording
 
-## Class template box [box.class]{- .sref} {-}
+## Class template box [box.class](){.sref} {-}
 
 ```cpp
 namespace std {
   template<class T>
   class box {
   public:
-    // @[box.ops]{- .sref}@, operations
+    // @[box.ops](){.sref}@, operations
     template<class F> constexpr void show(F&& f) const;
 
   private:
@@ -22,7 +22,7 @@ namespace std {
 
 ::: wording
 
-## Operations [box.ops]{- .sref} {-}
+## Operations [box.ops](){.sref} {-}
 
 ```cpp
 template<class F>

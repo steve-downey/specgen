@@ -1,7 +1,7 @@
 ```cpp
 namespace std {
   struct wrapper {
-    // @[leading.members]{- .sref}@, members
+    // @[leading.members](){.sref}@, members
     wrapper() = default;
 
     virtual void run() = 0;
@@ -11,15 +11,15 @@ namespace std {
 
 ::: wording
 
-## Leading descriptions [leading]{- .sref} {-}
+## Leading descriptions [leading](){.sref} {-}
 
-### General [leading.general]{- .sref} {-}
+### General [leading.general](){.sref} {-}
 
 [#]{.pnum} A wrapper stores one value.
 
 [#]{.pnum} Its description is routed independently of its synopsis.
 
-### Members [leading.members]{- .sref} {-}
+### Members [leading.members](){.sref} {-}
 
 ```cpp
 wrapper() = default;
@@ -33,7 +33,7 @@ virtual void run() = 0;
 
 [#]{.pnum} A concrete wrapper supplies this operation.
 
-### Functions [leading.functions]{- .sref} {-}
+### Functions [leading.functions](){.sref} {-}
 
 ```cpp
 inline void first();
@@ -59,7 +59,7 @@ inline void third(int);
 
 It introduces the labelled requirements.
 
-[#]{.pnum} This is a separate leading paragraph with ([leading.general]{- .sref}).
+[#]{.pnum} This is a separate leading paragraph with ([leading.general](){.sref}).
 
 [#]{.pnum} *Effects*: Performs the operation.
 

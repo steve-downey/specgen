@@ -1,6 +1,6 @@
 ::: wording
 
-## Description blocks [blocks.general]{- .sref} {-}
+## Description blocks [blocks.general](){.sref} {-}
 
 ```cpp
 inline void run();
@@ -10,7 +10,7 @@ inline void run();
 
 ::: note
 
-An explanation with `int` and ([blocks.general]{- .sref}).
+An explanation with `int` and ([blocks.general](){.sref}).
 
 A second informative paragraph.
 
