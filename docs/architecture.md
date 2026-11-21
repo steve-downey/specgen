@@ -396,7 +396,9 @@ back to name match within the class's fragments only):
   the synopsis/itemdecls (names are unqualified within `namespace std`). The drop set is
   built from **prefix-minimal** paths, so a nested namespace written out in full
   (`demo::detail::storage`) renders the same as the abbreviated spelling instead of losing
-  its qualifier.
+  its qualifier. The exception is the draft's own: a reference to `std::forward` or
+  `std::move` keeps its `std::`, in code as in prose (issue #405). The test is on the
+  declaration the reference resolves to, not on its spelling.
 - **A nested namespace is dropped, specified, or foreign** (issue #209, decision
   `nested-namespace-rendering`). Below the dropped prefix, a namespace is *specified* when
   some redeclaration of it, anywhere in the translation unit, carries `//! \specified` as
