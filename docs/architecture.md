@@ -1266,7 +1266,9 @@ There are exactly three backends, and **adding wording to one means adding it to
   top-level nodes share one `addedblock`. `render_to_string` is the backend's whole surface.
 - **mpark/wg21** (`backend/mpark.cpp`): the framework's pandoc markdown. One `::: wording`
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
-  `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
+  `## Title [stable.name](){.sref} {-}` headings (a stable name is always an `.sref` *link*,
+  which the framework prints as the bare `[x]`; a span it prints with the draft's title in front,
+  issue #412), ```` ```cpp ```` fences, native pipe tables
   with caption anchors; index entries dropped. A change mark (§7) renders as the framework's
   editing instruction: a marked node or element in a `::: add` / `::: rm` div, a prose run as
   `[...]{.add}` / `[...]{.rm}`, a code run as `@[...]{.add}@` with the spans inside it in the
@@ -1359,10 +1361,10 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   where LaTeX has one, because backticks supply the code font that `\tcode` supplies there;
   `mpark.test.cpp` asserts the opposite of its `latex.test.cpp` twin on purpose.
 - `SpanKind::Ref` is a cross-reference **inside a code comment** and `ir::RefInline` is the
-  prose one: they render `\ref{x}` / `@[x]{- .sref}@` and `\iref{x}` / `([x]{- .sref})`
+  prose one: they render `\ref{x}` / `@[x](){.sref}@` and `\iref{x}` / `([x](){.sref})`
   respectively, and the parentheses belong to the prose form only. The draft also writes `\ref`
   in prose, for the number a sentence reads as a noun ("Within subclause~`\ref{x}`, ..."): that
-  is a `RefInline` with `bare` set, `\ref{x}` / `[x]{- .sref}`, and still not a span. A Ref span is also the one
+  is a `RefInline` with `bare` set, `\ref{x}` / `[x](){.sref}`, and still not a span. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters

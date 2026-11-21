@@ -1,22 +1,22 @@
 ::: wording
 
-## Non-owning wrapper [func.wrap.ref]{- .sref} {-}
+## Non-owning wrapper [func.wrap.ref](){.sref} {-}
 
-### General [func.wrap.ref.general]{- .sref} {-}
+### General [func.wrap.ref.general](){.sref} {-}
 
 [#]{.pnum} The header provides partial specializations of `function_ref` for each combination of the possible replacements of the placeholders *cv* and *noex* where:
 
 - [#.#]{.pnum} *cv* is either const or empty, and
 - [#.#]{.pnum} *noex* is either `true` or `false`.
 
-### Class template `function_ref` [func.wrap.ref.class]{- .sref} {-}
+### Class template `function_ref` [func.wrap.ref.class](){.sref} {-}
 
 ```cpp
 namespace std {
   template<class R, class... ArgTypes>
   class function_ref<R(ArgTypes...) $cv$ noexcept($noex$)> {
   public:
-    // @[func.wrap.ref.ctor]{- .sref}@, constructors and assignment operators
+    // @[func.wrap.ref.ctor](){.sref}@, constructors and assignment operators
     template<class F> function_ref(F*) noexcept;
     template<class F> constexpr function_ref(F&&) noexcept;
     template<auto c, class F> constexpr function_ref(constant_wrapper<c, F>) noexcept;
@@ -29,7 +29,7 @@ namespace std {
     constexpr function_ref& operator=(const function_ref&) noexcept = default;
     template<class T> function_ref& operator=(T) = delete;
 
-    // @[func.wrap.ref.inv]{- .sref}@, invocation
+    // @[func.wrap.ref.inv](){.sref}@, invocation
     R operator()(ArgTypes...) const noexcept($noex$);
 
   private:
@@ -40,7 +40,7 @@ namespace std {
     $BoundEntityType$ $bound-entity$;                                       // exposition only
   };
 
-  // @[func.wrap.ref.deduct]{- .sref}@, deduction guides
+  // @[func.wrap.ref.deduct](){.sref}@, deduction guides
   template<class F>
     function_ref(F*) -> function_ref<F>;
   template<auto c, class F0>
@@ -52,9 +52,9 @@ namespace std {
 
 [#]{.pnum} An object of class `function_ref<R(Args...) $cv$ noexcept($noex$)>` stores a pointer to function `$thunk-ptr$` and an object `$bound-entity$`. The object `$bound-entity$` has an unspecified trivially copyable type `$BoundEntityType$`, that models `copyable` and is capable of storing a pointer to object value or a pointer to function value. The type of `$thunk-ptr$` is `R(*)($BoundEntityType$, Args&&...) noexcept($noex$)`.
 
-[#]{.pnum} Each specialization of `function_ref` is a trivially copyable type ([term.trivially.copyable.type]{- .sref}) that models `copyable`.
+[#]{.pnum} Each specialization of `function_ref` is a trivially copyable type ([term.trivially.copyable.type](){.sref}) that models `copyable`.
 
-[#]{.pnum} Within subclause&nbsp;[func.wrap.ref]{- .sref}, `$call-args$` is an argument pack with elements such that
+[#]{.pnum} Within subclause&nbsp;[func.wrap.ref](){.sref}, `$call-args$` is an argument pack with elements such that
 
 ```cpp
 decltype(($call-args$))...
@@ -62,7 +62,7 @@ decltype(($call-args$))...
 
 denote `ArgTypes&&...` respectively.
 
-### Constructors and assignment operators [func.wrap.ref.ctor]{- .sref} {-}
+### Constructors and assignment operators [func.wrap.ref.ctor](){.sref} {-}
 
 ```cpp
 template<class... T>
@@ -106,7 +106,7 @@ template<class F> function_ref(F* f) noexcept;
 
 [#]{.pnum} *Preconditions*: `f` is not a null pointer.
 
-[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `f`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(f, $call-args$...)`.
+[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `f`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent](){.sref}) to `invoke_r<R>(f, $call-args$...)`.
 
 ```cpp
 template<class F> constexpr function_ref(F&& f) noexcept;
@@ -120,7 +120,7 @@ template<class F> constexpr function_ref(F&& f) noexcept;
 - [#.#]{.pnum} `is_member_pointer_v<T>` is `false`, and
 - [#.#]{.pnum} `$is-invocable-using$<$cv$ T&>` is `true`.
 
-[#]{.pnum} *Effects*: If `$is-convertible-from-specialization$<remove_cv_t<T>>` is `false`, initializes `$bound-entity$` with `addressof(f)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(static_cast<$cv$ T&>(f), $call-args$...)`. Otherwise, initializes `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-ptr$` with the value of `f.$thunk-ptr$`.
+[#]{.pnum} *Effects*: If `$is-convertible-from-specialization$<remove_cv_t<T>>` is `false`, initializes `$bound-entity$` with `addressof(f)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent](){.sref}) to `invoke_r<R>(static_cast<$cv$ T&>(f), $call-args$...)`. Otherwise, initializes `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-ptr$` with the value of `f.$thunk-ptr$`.
 
 [#]{.pnum} *Remarks*: If `remove_cvref_t<F>` is a specialization of `function_ref`, an implementation may initialize `$bound-entity$` with the value of `f.$bound-entity$` and `$thunk-ptr$` with the value of `f.$thunk-ptr$`.
 
@@ -150,7 +150,7 @@ template<auto c, class F> constexpr function_ref(constant_wrapper<c, F> f) noexc
 - [#.#]{.pnum} If `is_pointer_v<F> || is_member_pointer_v<F>` is `true`, then `f.value != nullptr` is `true`, and
 - [#.#]{.pnum} if `ArgTypes` is not an empty pack and all types in `remove_cvref_t<ArgTypes>...` satisfy `$constexpr-param$` then `constant_wrapper<$INVOKE$(f.value, remove_cvref_t<ArgTypes>::value...)>` is not a valid type.
 
-[#]{.pnum} *Effects*: Initializes `$bound-entity$` with a pointer to an unspecified object or null pointer value, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(f.value, $call-args$...)`.
+[#]{.pnum} *Effects*: Initializes `$bound-entity$` with a pointer to an unspecified object or null pointer value, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent](){.sref}) to `invoke_r<R>(f.value, $call-args$...)`.
 
 ```cpp
 template<auto c, class F, class U>
@@ -166,7 +166,7 @@ template<auto c, class F, class U>
 
 [#]{.pnum} *Mandates*: If `is_pointer_v<F> || is_member_pointer_v<F>` is `true`, then `f.value != nullptr` is `true`.
 
-[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `addressof(obj)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(f.value, static_cast<$cv$ T&>(obj), $call-args$...)`.
+[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `addressof(obj)`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent](){.sref}) to `invoke_r<R>(f.value, static_cast<$cv$ T&>(obj), $call-args$...)`.
 
 ```cpp
 template<auto c, class F, class T>
@@ -179,7 +179,7 @@ template<auto c, class F, class T>
 
 [#]{.pnum} *Preconditions*: If `is_member_pointer_v<F>` is `true`, `obj` is not a null pointer.
 
-[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `obj`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent]{- .sref}) to `invoke_r<R>(f.value, obj, $call-args$...)`.
+[#]{.pnum} *Effects*: Initializes `$bound-entity$` with `obj`, and `$thunk-ptr$` with the address of a function `$thunk$` such that `$thunk$($bound-entity$, $call-args$...)` is expression-equivalent ([defns.expression.equivalent](){.sref}) to `invoke_r<R>(f.value, obj, $call-args$...)`.
 
 ```cpp
 template<class T> function_ref& operator=(T) = delete;
@@ -191,7 +191,7 @@ template<class T> function_ref& operator=(T) = delete;
 - [#.#]{.pnum} `is_pointer_v<T>` is `false`, and
 - [#.#]{.pnum} `T` is not a specialization of `constant_wrapper`.
 
-### Invocation [func.wrap.ref.inv]{- .sref} {-}
+### Invocation [func.wrap.ref.inv](){.sref} {-}
 
 ```cpp
 R operator()(ArgTypes... args) const noexcept($noex$);
@@ -199,7 +199,7 @@ R operator()(ArgTypes... args) const noexcept($noex$);
 
 [#]{.pnum} *Effects*: Equivalent to: `return $thunk-ptr$($bound-entity$, std::forward<ArgTypes>(args)...);`
 
-### Deduction guides [func.wrap.ref.deduct]{- .sref} {-}
+### Deduction guides [func.wrap.ref.deduct](){.sref} {-}
 
 ```cpp
 template<class F>

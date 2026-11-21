@@ -1,6 +1,6 @@
 ::: wording
 
-## Verbatim item declarations [verbatim.itemdecl]{- .sref} {-}
+## Verbatim item declarations [verbatim.itemdecl](){.sref} {-}
 
 ```cpp
 struct nullopt_t {@\seebelow@};

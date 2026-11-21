@@ -1,6 +1,6 @@
 ::: wording
 
-## Errors [demo.errors]{- .sref} {-}
+## Errors [demo.errors](){.sref} {-}
 
 ```cpp
 enum class whatwg_error { invalid_byte, truncated_sequence };

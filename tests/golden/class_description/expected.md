@@ -48,7 +48,7 @@ namespace std {
 namespace std {
   template<class T>
   struct box {
-    // @[box.mem]{- .sref}@, member types
+    // @[box.mem](){.sref}@, member types
     using type = T;
   };
 }
@@ -62,7 +62,7 @@ namespace std {
 
 ::: wording
 
-## Member types [box.mem]{- .sref} {-}
+## Member types [box.mem](){.sref} {-}
 
 ```cpp
 using type = T;

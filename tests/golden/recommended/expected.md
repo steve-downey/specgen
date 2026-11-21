@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template wrapper [recommended.class]{- .sref} {-}
+## Class template wrapper [recommended.class](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -15,7 +15,7 @@ namespace std {
 
 ::: wording
 
-## Reset [recommended.reset]{- .sref} {-}
+## Reset [recommended.reset](){.sref} {-}
 
 ```cpp
 inline void reset();

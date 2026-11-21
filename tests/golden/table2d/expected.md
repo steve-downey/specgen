@@ -2,7 +2,7 @@
 namespace std {
   class optional {
   public:
-    // @[optional.assign]{- .sref}@, assignment
+    // @[optional.assign](){.sref}@, assignment
     optional& operator=(const optional& rhs);
 
   private:
@@ -13,7 +13,7 @@ namespace std {
 
 ::: wording
 
-## Assignment [optional.assign]{- .sref} {-}
+## Assignment [optional.assign](){.sref} {-}
 
 ```cpp
 optional& operator=(const optional& rhs);

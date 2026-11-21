@@ -1,6 +1,6 @@
 ::: wording
 
-## Waiting [demo.wait]{- .sref} {-}
+## Waiting [demo.wait](){.sref} {-}
 
 ```cpp
 inline void wait();

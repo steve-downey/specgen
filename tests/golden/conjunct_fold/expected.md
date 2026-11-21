@@ -1,6 +1,6 @@
 ::: wording
 
-## Folded conjuncts [demo.fold]{- .sref} {-}
+## Folded conjuncts [demo.fold](){.sref} {-}
 
 ```cpp
 template<class FIRST_ARGUMENT_TYPE, class SECOND_ARGUMENT_TYPE>

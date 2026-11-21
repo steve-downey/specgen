@@ -1,26 +1,26 @@
 ::: wording
 
-## Callable wrappers [callable]{- .sref} {-}
+## Callable wrappers [callable](){.sref} {-}
 
-### General [callable.general]{- .sref} {-}
+### General [callable.general](){.sref} {-}
 
 [#]{.pnum} The header provides callable wrappers for each combination of the placeholders.
 
 [#]{.pnum} The invocation qualifiers determine how the stored target is called.
 
-### Class template callable_wrapper [callable.class]{- .sref} {-}
+### Class template callable_wrapper [callable.class](){.sref} {-}
 
 ```cpp
 namespace std {
   template<class R, class... ArgTypes>
   class callable_wrapper {
   public:
-    // @[callable.ctor]{- .sref}@, constructors
+    // @[callable.ctor](){.sref}@, constructors
 
     template<class F> callable_wrapper(F&& f);
 
   private:
-    // @[callable.ctor]{- .sref}@, exposition members
+    // @[callable.ctor](){.sref}@, exposition members
 
     template<class VT>
     static constexpr bool $is-callable-from$ = $see below$; // exposition only
@@ -28,7 +28,7 @@ namespace std {
 }
 ```
 
-[#]{.pnum} The `callable_wrapper` class template provides polymorphic wrappers that generalize the notion of a callable object ([func.def]{- .sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+[#]{.pnum} The `callable_wrapper` class template provides polymorphic wrappers that generalize the notion of a callable object ([func.def](){.sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
 
 [#]{.pnum} *Recommended practice*: Implementations should avoid the use of dynamically allocated memory for a small contained value.
 
@@ -38,7 +38,7 @@ Such small-object optimization can only be applied to a type `T` for which `is_n
 
 :::
 
-### Construction [callable.ctor]{- .sref} {-}
+### Construction [callable.ctor](){.sref} {-}
 
 ```cpp
 template<class F>

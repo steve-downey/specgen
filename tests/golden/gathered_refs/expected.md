@@ -1,6 +1,6 @@
 ::: wording
 
-## Header synopsis [demo.syn]{- .sref} {-}
+## Header synopsis [demo.syn](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -9,17 +9,17 @@ namespace std {
     I $ptr$; // exposition only
 
   public:
-    // @[demo.holder]{- .sref}@, construction
+    // @[demo.holder](){.sref}@, construction
     constexpr explicit holder(I ptr);
   };
 
-  // @[demo.ops]{- .sref}@, operations
+  // @[demo.ops](){.sref}@, operations
 
   template<typename I> void swap(holder<I>&, holder<I>&);
 }
 ```
 
-### Class template `holder` [demo.holder]{- .sref} {-}
+### Class template `holder` [demo.holder](){.sref} {-}
 
 ```cpp
 constexpr explicit holder(I ptr);
@@ -27,7 +27,7 @@ constexpr explicit holder(I ptr);
 
 [#]{.pnum} *Effects*: Initializes the holder with `ptr`.
 
-### Operations [demo.ops]{- .sref} {-}
+### Operations [demo.ops](){.sref} {-}
 
 ```cpp
 template<typename I>

@@ -1,6 +1,6 @@
 ::: wording
 
-## Class `result` [demo.result]{- .sref} {-}
+## Class `result` [demo.result](){.sref} {-}
 
 ```cpp
 namespace std {

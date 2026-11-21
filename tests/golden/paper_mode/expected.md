@@ -9,7 +9,7 @@ public:
 
 ::: wording
 
-## Observers [gadget.observe]{- .sref} {-}
+## Observers [gadget.observe](){.sref} {-}
 
 ```cpp
 constexpr bool ready() const noexcept;
@@ -30,7 +30,7 @@ constexpr bool ready() const noexcept;
 
 ::: wording
 
-## Modifiers [gadget.mod]{- .sref} {-}
+## Modifiers [gadget.mod](){.sref} {-}
 
 ```cpp
 constexpr void reset() noexcept;

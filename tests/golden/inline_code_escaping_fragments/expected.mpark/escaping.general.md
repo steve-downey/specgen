@@ -1,6 +1,6 @@
 ::: wording
 
-## General [escaping.general]{- .sref} {-}
+## General [escaping.general](){.sref} {-}
 
 [#]{.pnum} A reference qualifier is one of the following:
 

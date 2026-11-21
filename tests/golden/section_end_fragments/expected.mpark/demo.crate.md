@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template `crate` [demo.crate]{- .sref} {-}
+## Class template `crate` [demo.crate](){.sref} {-}
 
 ```cpp
 namespace std {
