@@ -424,6 +424,7 @@ struct json_descriptor<ConceptRef> {
     static constexpr auto members = std::tuple{field("name", &ConceptRef::name),
                                                defaulted_field("expos", &ConceptRef::exposition),
                                                defaulted_field("nc", &ConceptRef::no_correction),
+                                               defaulted_field("tcode", &ConceptRef::in_tcode),
                                                defaulted_field("hints", &ConceptRef::hints)};
 };
 
