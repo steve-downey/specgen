@@ -386,6 +386,17 @@ struct PieceRenderer {
         return "@@latex:" + backend::draft_phrase(v) + "@@@@html:" + std::string(ir::phrase_words(v.phrase)) + "@@";
     }
 
+    // A footnote (issue #401): org's inline footnote, `[fn::...]`, where the
+    // draft's environment stood.
+    std::string operator()(const ir::FootnoteInline& v) const {
+        return "[fn::" +
+               (v.content | std::views::transform([this](const ir::FootnotePiece& piece) {
+                    return std::visit(overloaded{*this}, ir::plain_inline(piece));
+                }) |
+                std::views::join | std::ranges::to<std::string>()) +
+               ']';
+    }
+
     // A changed run of prose (the wording diff's mark): wg21org's
     // `[[insert:][...]]` / `[[delete:][...]]` links around the run. Defined
     // after `RunPieceRenderer` below, which renders the run's contents.
@@ -411,6 +422,7 @@ struct RunPieceRenderer {
     std::string operator()(const ir::RawInline& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::TermInline& v) const { return PieceRenderer{}(v); }
     std::string operator()(const ir::PhraseInline& v) const { return PieceRenderer{}(v); }
+    std::string operator()(const ir::FootnoteInline& v) const { return PieceRenderer{}(v); }
 };
 
 // A parenthesized cross-reference takes the space the draft's `\iref` prints
