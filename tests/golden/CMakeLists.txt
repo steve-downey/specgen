@@ -3082,6 +3082,20 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/codeblock_escape/expected.json"
 )
 
+# A leading alias a "Let `U` be `X`." already states is dropped from the
+# Equivalent to code, as the consumed static_asserts are (issue #404).
+specgen_add_golden(
+    let_alias
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_let_alias.hpp"
+)
+specgen_add_golden(
+    let_alias
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/let_alias/expected.json"
+)
+
 specgen_add_golden(
     routed_overloads
     MODE generate

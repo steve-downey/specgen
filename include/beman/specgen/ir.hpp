@@ -11,8 +11,9 @@
 
 #include <array>
 #include <cstddef>
-#include <memory>
 #include <initializer_list>
+#include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -722,7 +723,12 @@ struct DescriptionElement {
 // Views of all wording sites, in authored order. Code returned here is block
 // code; inline code is reached through the returned paragraphs.
 std::vector<const Paragraph*> body_paragraphs(const DescriptionBody&, bool include_informative = true);
-std::vector<const CodeText*>  body_code(const DescriptionBody&, bool include_informative = true);
+
+// The names a description's normative leading prose binds, each to what it
+// stands for: a paragraph that is exactly "Let `U` be `X`." binds `U` to `X`.
+// A name bound twice is ambiguous and binds nothing.
+std::map<std::string, std::string> let_bindings(const DescriptionBody& leading);
+std::vector<const CodeText*>       body_code(const DescriptionBody&, bool include_informative = true);
 // Adjacent lists in a merged same-kind description form one itemization.
 DescriptionBody coalesce_itemizations(DescriptionBody);
 
