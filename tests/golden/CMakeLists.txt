@@ -3053,6 +3053,21 @@ specgen_add_golden(
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_qualified_move.hpp"
 )
 
+# `std::forward` and `std::move` keep their `std::` in an extracted body, as
+# the draft writes them; `std::invoke` and `std::exchange` lose theirs (issue
+# #405).
+specgen_add_golden(
+    forward_move
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_forward_move.hpp"
+)
+specgen_add_golden(
+    forward_move
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/forward_move/expected.json"
+)
+
 specgen_add_golden(
     routed_overloads
     MODE generate
