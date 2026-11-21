@@ -191,7 +191,7 @@ template<class F>
 [#]{.pnum} *Returns*: `true` if `*this` has a target object, otherwise `false`.
 
 ```cpp
-@[constexpr]{.add}@ R operator()(ArgTypes... args)@[*cv* *ref* noexcept(*noex*)]{.rm}@;
+@[constexpr]{.add}@ R operator()(ArgTypes... args) @[*cv* *ref* noexcept(*noex*)]{.rm}@;
 ```
 
 [#]{.pnum} *Preconditions*: `*this` has a target object.
