@@ -1330,7 +1330,9 @@ There are exactly three backends, and **adding wording to one means adding it to
   `removedblock` special block (which org's stock export turns into the draft's environment
   of that name), a prose run is an `[[insert:][...]]` / `[[delete:][...]]` link whose
   cross-references are the `{{{sref(name)}}}` macro (org links do not nest), and a code run is
-  the draft's own `@\added{...}@`, the same bytes the LaTeX backend writes. Only a `pnum`
+  the draft's own `@\added{...}@`, as the LaTeX backend writes it, except that a span inside
+  the run is a nested escape with its own `@` delimiters, the form wg21org reads
+  (`@\removed{@\exposid{val}@}@`), and the run's text is not escaped for LaTeX. Only a `pnum`
   under an added section or inside an `addedblock` takes an `x`, `x+1`, ... label, one run
   over the fragment, read back off the rendered text. Paper mode is the empty-baseline diff:
   every top-level node marked added.
