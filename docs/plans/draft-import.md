@@ -222,8 +222,8 @@ check runs after the qualifier is dropped. That is a bug and gets its own issue.
 
 ## What it does not do
 
-- It does not import the core language clauses. Grammar productions, `bnf` environments and
-  footnotes are out of scope until a paper needs one.
+- It does not import the core language clauses. Grammar productions and `bnf` environments
+  are out of scope until a paper needs one. (Footnotes and tailnotes are read since issue #401.)
 - It does not track the draft. A paper names a draft revision; rebasing onto a newer one is a
   deliberate act, and the diff shows what moved.
 - It does not make placeholders such as `cv`, `ref` and `noex` extractable. A class that stands for

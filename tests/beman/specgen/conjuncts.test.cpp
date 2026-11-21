@@ -48,6 +48,7 @@ std::string plain_prose(const PlainInline& piece) {
                           [](const RawInline& v) { return v.latex; },
                           [](const TermInline&) { return std::string("<term>"); },
                           [](const PhraseInline&) { return std::string("<phrase>"); },
+                          [](const FootnoteInline&) { return std::string("<footnote>"); },
                       },
                       piece);
 }
@@ -66,6 +67,7 @@ std::string prose(const Paragraph& paragraph) {
                               [](const RawInline& v) { return plain_prose(v); },
                               [](const TermInline& v) { return plain_prose(v); },
                               [](const PhraseInline& v) { return plain_prose(v); },
+                              [](const FootnoteInline& v) { return plain_prose(v); },
                               // A changed run (the wording diff's mark) flattens to its contents;
                               // no conjunct carries one, so the mark itself is not shown.
                               [](const ChangedInline& v) {

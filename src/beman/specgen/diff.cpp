@@ -129,6 +129,7 @@ struct PlainTokenizer {
     std::vector<ProseToken> operator()(const ir::RawInline& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::TermInline& v) const { return {v}; }
     std::vector<ProseToken> operator()(const ir::PhraseInline& v) const { return {v}; }
+    std::vector<ProseToken> operator()(const ir::FootnoteInline& v) const { return {v}; }
 };
 
 struct Tokenizer : PlainTokenizer {
@@ -169,6 +170,12 @@ struct TokenKey {
         return key;
     }
     std::string operator()(const ir::PhraseInline& v) const { return "f:" + std::string(ir::phrase_name(v.phrase)); }
+    std::string operator()(const ir::FootnoteInline& v) const {
+        return "n:" + (v.content | std::views::transform([this](const ir::FootnotePiece& piece) {
+                           return std::visit(*this, ir::plain_inline(piece));
+                       }) |
+                       std::views::join_with('|') | std::ranges::to<std::string>());
+    }
 };
 
 std::vector<std::string> token_keys(const std::vector<ProseToken>& tokens) {
