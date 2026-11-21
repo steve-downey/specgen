@@ -47,6 +47,7 @@
 namespace beman::specgen::frontend {
 
 struct MandatesPrologue {
+    std::vector<const clang::DeclStmt*> aliases; // the leading body-local aliases
     std::vector<const clang::DeclStmt*> assertions;
     const clang::Stmt*                  extraction_first = nullptr;
 };

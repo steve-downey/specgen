@@ -885,7 +885,10 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   in source order (diagnostic order = specification order). Any other statement
   ends the prologue, so later assertions remain ordinary body code. Leading body-local
   aliases do not block the derivation; `*-equiv` extraction retains the aliases and removes
-  only the consumed run.
+  only the consumed run, except an alias the item's leading prose already states as
+  "Let `U` be `X`.", which goes as the run does (issue #404). An alias kept under a name a
+  "Let" binds to something else is a drift warning. No "Let" paragraph is derived from an
+  alias.
 - Consumed asserts are excluded from `\effects-equiv` extraction.
 - `static_assert` messages are stripped.
 - An authored `\mandates` replaces the derived wording. The suppressed

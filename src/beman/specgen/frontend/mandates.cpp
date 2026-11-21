@@ -46,13 +46,15 @@ const clang::Decl* single_decl(const clang::Stmt* stmt) {
 MandatesPrologue mandates_prologue(const clang::CompoundStmt* body) {
     const std::vector<const clang::Stmt*> stmts(body->body_begin(), body->body_end());
     std::size_t                           pos = 0;
+    MandatesPrologue                      result;
     // substrate generic algorithm: the shared cursor partitions one source
     // sequence into aliases, assertions, and the unconsumed remainder.
-    while (pos < stmts.size() && llvm::isa_and_nonnull<clang::TypeAliasDecl>(single_decl(stmts[pos])))
+    while (pos < stmts.size() && llvm::isa_and_nonnull<clang::TypeAliasDecl>(single_decl(stmts[pos]))) {
+        result.aliases.push_back(llvm::cast<clang::DeclStmt>(stmts[pos]));
         ++pos;
+    }
     const std::size_t alias_count = pos;
 
-    MandatesPrologue result;
     // substrate generic algorithm: continue the same partitioning cursor while
     // recording the middle run for both derivation and source deletion.
     while (pos < stmts.size() && llvm::isa_and_nonnull<clang::StaticAssertDecl>(single_decl(stmts[pos]))) {
