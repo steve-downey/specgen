@@ -28,7 +28,7 @@ namespace std {
 }
 ```
 
-[#]{.pnum} The `callable_wrapper` class template provides polymorphic wrappers that generalize the notion of a callable object([func.def]{- .sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+[#]{.pnum} The `callable_wrapper` class template provides polymorphic wrappers that generalize the notion of a callable object ([func.def]{- .sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
 
 [#]{.pnum} *Recommended practice*: Implementations should avoid the use of dynamically allocated memory for a small contained value.
 
