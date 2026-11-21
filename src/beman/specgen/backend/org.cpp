@@ -48,6 +48,7 @@
 #include <beman/specgen/backend/draft_spans.hpp>
 #include <beman/specgen/backend/element_label.hpp>
 #include <beman/specgen/backend/indent_lines.hpp>
+#include <beman/specgen/backend/iref_spacing.hpp>
 #include <beman/specgen/backend/render_fold.hpp>
 #include <beman/specgen/backend/section_title.hpp>
 #include <beman/specgen/backend/tied_text.hpp>
@@ -412,11 +413,11 @@ struct RunPieceRenderer {
     std::string operator()(const ir::PhraseInline& v) const { return PieceRenderer{}(v); }
 };
 
+// A parenthesized cross-reference takes the space the draft's `\iref` prints
+// before it (issue #408), here and in a paragraph.
 std::string render_run(const std::vector<ir::PlainInline>& inlines) {
-    return inlines | std::views::transform([](const ir::PlainInline& piece) {
-               return std::visit(overloaded{RunPieceRenderer{}}, piece);
-           }) |
-           std::views::join | std::ranges::to<std::string>();
+    return backend::join_with_iref_spacing(
+        inlines, [](const ir::PlainInline& piece) { return std::visit(overloaded{RunPieceRenderer{}}, piece); });
 }
 
 std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
@@ -429,10 +430,9 @@ std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
 }
 
 std::string render_paragraph(const ir::Paragraph& para, std::span<const std::string> new_roots) {
-    return para | std::views::transform([new_roots](const ir::Inline& piece) {
-               return std::visit(overloaded{PieceRenderer{new_roots}}, piece);
-           }) |
-           std::views::join | std::ranges::to<std::string>();
+    return backend::join_with_iref_spacing(para, [new_roots](const ir::Inline& piece) {
+        return std::visit(overloaded{PieceRenderer{new_roots}}, piece);
+    });
 }
 
 std::string render_table_cell(const ir::Paragraph& paragraph, std::span<const std::string> new_roots) {

@@ -8,6 +8,7 @@ foreach(
     draft_spans
     element_label
     indent_lines
+    iref_spacing
     render_fold
     section_title
     tied_text
