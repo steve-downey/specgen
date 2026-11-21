@@ -4,8 +4,32 @@
 #ifndef BEMAN_SPECGEN_CORPUS_SPEC_FORWARD_MOVE_HPP
 #define BEMAN_SPECGEN_CORPUS_SPEC_FORWARD_MOVE_HPP
 
-#include <functional>
-#include <utility>
+// Hand-curated corpus header (decision hermetic-corpus): the std names the
+// bodies call are declared here rather than included, so the parse reaches
+// nothing outside the corpus.
+namespace std {
+template <class T>
+struct remove_reference {
+    using type = T;
+};
+template <class T>
+struct remove_reference<T&> {
+    using type = T;
+};
+template <class T>
+struct remove_reference<T&&> {
+    using type = T;
+};
+
+template <class T>
+constexpr T&& forward(typename remove_reference<T>::type& t) noexcept;
+template <class T>
+constexpr typename remove_reference<T>::type&& move(T&& t) noexcept;
+template <class F, class... Args>
+constexpr decltype(auto) invoke(F&& f, Args&&... args);
+template <class T, class U = T>
+constexpr T exchange(T& obj, U&& new_value);
+} // namespace std
 
 namespace demo {
 
