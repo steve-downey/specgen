@@ -33,7 +33,7 @@ TEST_CASE("latex - code inlines escape text-mode characters while listings remai
     CHECK(out.find(R"(\tcode{initializer_list<U>\&})") != std::string::npos);
     CHECK(out.find("\\item \\tcode{\\&}\n\\item \\tcode{\\&\\&}\n") != std::string::npos);
     CHECK(out.find(R"(int& value = other; // @\tcode{\&}@)") != std::string::npos);
-    CHECK(out.find(R"(\added{\tcode{\&}})") != std::string::npos);
+    CHECK(out.find(R"(\tcode{\added{\&}})") != std::string::npos);
 }
 
 TEST_CASE("latex - a listing's exposition-only comment is the draft's macro") {
@@ -87,7 +87,8 @@ TEST_CASE("latex - table cells escape code and prose ampersands once") {
                 .rows        = {{cell, cell, cell}}},
     };
     const auto out = latex::render_to_string(item);
-    CHECK(out.find(R"(\tcode{\&\&} prose_text \& \added{\tcode{value_\&} prose_text \& })") != std::string::npos);
+    CHECK(out.find(R"(\tcode{\&\&} prose_text \& \tcode{\added{value_\&}}\added{ prose_text \& })") !=
+          std::string::npos);
     CHECK(out.find(R"(\\&)") == std::string::npos);
 }
 
@@ -737,7 +738,9 @@ TEST_CASE("latex - a nested section descends from a non-default base") {
 
 // --- the wording diff's marks (docs/plans/wording-diff.md) -----------------
 
-TEST_CASE("latex - a changed prose run is the draft's \\added or \\removed around the run") {
+// Issue #411: wg21-latex's marks are ulem's, which lose a \tcode inside them,
+// so a code inline in a run takes the mark inside its \tcode.
+TEST_CASE("latex - a changed prose run is the draft's \\added or \\removed, inside each \\tcode") {
     SpecItem item;
     item.decl.signatures.push_back({"void f();", {}});
     DescriptionElement effects;
@@ -750,7 +753,7 @@ TEST_CASE("latex - a changed prose run is the draft's \\added or \\removed aroun
                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(effects));
     const std::string out = latex::render_to_string(item);
-    CHECK(out.find("\\effects\nSets \\removed{\\tcode{x}}\\added{\\tcode{y} (see \\iref{a.b})}.\n") !=
+    CHECK(out.find("\\effects\nSets \\tcode{\\removed{x}}\\tcode{\\added{y}}\\added{ (see \\iref{a.b})}.\n") !=
           std::string::npos);
 }
 

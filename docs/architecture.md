@@ -1255,9 +1255,11 @@ There are exactly three backends, and **adding wording to one means adding it to
   `\item` line; all eight
   `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
-  `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
-  as `@\added{...}@` with the spans inside it in their escaped form (`\exposid{x}`,
-  `draft_span_escaped`), the run having opened the escape. Paper mode (`--paper`), once
+  `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}` with the mark
+  inside each `\tcode` in it (`\tcode{\removed{x}}`, since wg21-latex's marks are ulem's and
+  lose a `\tcode` inside them), a code run as `@\added{...}@` with its text escaped as LaTeX
+  text and the spans inside it in their escaped form (`\exposid{x}`, `draft_span_escaped`),
+  the run having opened the escape. Paper mode (`--paper`), once
   refused here for want of anything to emit, is the empty-baseline diff: adjacent marked
   top-level nodes share one `addedblock`. `render_to_string` is the backend's whole surface.
 - **mpark/wg21** (`backend/mpark.cpp`): the framework's pandoc markdown. One `::: wording`
