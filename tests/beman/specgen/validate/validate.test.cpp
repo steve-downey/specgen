@@ -1790,3 +1790,28 @@ TEST_CASE("validate - draft constraint prose and bindings remain evidence inside
         CHECK(findings.front().message.find("contradicts") != std::string::npos);
     }
 }
+
+// Issue #404: extraction drops a leading alias that a "Let" sentence states,
+// so an alias still in the Equivalent to code under that name disagrees.
+TEST_CASE("validate - an alias the Equivalent to code keeps under a Let-bound name is drift") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class F> auto f(F&&);", {}});
+    item.descr.leading.push_back(ir::BodyParagraph{{ir::TextInline{"Let "},
+                                                    ir::CodeInline{{"U", {}}},
+                                                    ir::TextInline{" be "},
+                                                    ir::CodeInline{{"invoke_result_t<F&>", {}}},
+                                                    ir::TextInline{"."}}});
+    ir::DescriptionElement effects;
+    effects.kind = ir::ElementKind::Effects;
+    effects.body.push_back(ir::EquivalentTo{{"return g();", {}}});
+    item.descr.elements.push_back(effects);
+    CHECK(validate(ir::Node{item}).empty());
+
+    std::get<ir::EquivalentTo>(item.descr.elements.front().body.front()).code.text =
+        "using U = invoke_result_t<F>;\n\nreturn g();";
+    const auto drift = validate(ir::Node{item});
+    REQUIRE(drift.size() == 1);
+    CHECK(drift.front().severity == beman::specgen::Severity::Warning);
+    CHECK(drift.front().message.find("lets `U` be `invoke_result_t<F&>`") != std::string::npos);
+    CHECK(drift.front().message.find("says `invoke_result_t<F>`") != std::string::npos);
+}

@@ -1,0 +1,42 @@
+\rSec3[box.class]{Class template box}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{box}@ {
+  public:
+    // \ref{box.ops}, operations
+    template<class F> constexpr auto apply(F&& f) const;
+
+  private:
+    T* @\exposid{val}@ = nullptr; // \expos
+  };
+}
+\end{codeblock}
+
+\pnum
+A body-local alias the description introduces with "Let" is not repeated in the Effects code (issue \#404).
+
+\rSec3[box.ops]{Operations}
+
+\indexlibrarymember{apply}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto apply(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>}.
+
+\pnum
+\mandates
+\tcode{is_object_v<U>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}

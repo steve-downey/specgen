@@ -48,6 +48,7 @@
 #include <cstddef>
 #include <expected>
 #include <format>
+#include <cctype>
 #include <map>
 #include <optional>
 #include <ranges>
@@ -316,6 +317,25 @@ std::string apply_body_edits(std::string                                       t
     return text;
 }
 
+// Whether an alias's written type is the type a "Let" sentence binds: the
+// same tokens, once whitespace and the qualifiers the wording drops are
+// taken out of both.
+bool same_binding(std::string_view written, std::string_view stated, const std::set<std::string>& ns_drop_set) {
+    const auto normal = [&](std::string_view text) {
+        std::string out =
+            text | std::views::filter([](char ch) { return std::isspace(static_cast<unsigned char>(ch)) == 0; }) |
+            std::ranges::to<std::string>();
+        std::ranges::for_each(ns_drop_set, [&out](const std::string& ns) {
+            const std::string qualifier = ns + "::";
+            // substrate generic algorithm: erase every occurrence of one qualifier.
+            for (std::size_t at = out.find(qualifier); at != std::string::npos; at = out.find(qualifier, at))
+                out.erase(at, qualifier.size());
+        });
+        return out;
+    };
+    return normal(written) == normal(stated);
+}
+
 beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*                       body,
                                                 const clang::ASTContext&                         ctx,
                                                 const clang::SourceManager&                      sm,
@@ -323,25 +343,51 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
                                                 const std::map<std::string, std::string>&        expos_names,
                                                 const std::map<const clang::Decl*, std::string>& expos_set,
                                                 const std::set<std::string>&                     ns_drop_set,
-                                                const SkippedRanges&                             skipped) {
+                                                const SkippedRanges&                             skipped,
+                                                const std::map<std::string, std::string>&        let_bindings) {
     const MandatesPrologue prologue = mandates_prologue(body);
     if (prologue.extraction_first == nullptr)
         return {};
 
-    const unsigned begin = sm.getDecomposedLoc(sm.getFileLoc(prologue.extraction_first->getBeginLoc())).second;
+    // A leading alias the description already introduces, "Let `U` be `X`.",
+    // states the binding a second time, after the *Mandates* that uses it: the
+    // description's sentence is the draft's form, so the alias goes, as the
+    // consumed assertions do (issue #404).
+    const auto stated = [&](const clang::DeclStmt* statement) {
+        const auto*                  alias = llvm::cast<clang::TypeAliasDecl>(statement->getSingleDecl());
+        const auto                   found = let_bindings.find(alias->getNameAsString());
+        const clang::TypeSourceInfo* info  = alias->getTypeSourceInfo();
+        if (found == let_bindings.end() || info == nullptr)
+            return false;
+        const clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(
+            sm.getFileLoc(info->getTypeLoc().getBeginLoc()), sm.getFileLoc(info->getTypeLoc().getEndLoc()));
+        const std::string written = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+        return same_binding(written, found->second, ns_drop_set);
+    };
+    std::vector<const clang::DeclStmt*> removed = prologue.assertions;
+    removed.append_range(prologue.aliases | std::views::filter(stated));
+    // The code starts at the first statement that stays.
+    const auto kept = std::find_if(body->body_begin(), body->body_end(), [&](const clang::Stmt* statement) {
+        return std::ranges::find(removed, statement) == removed.end();
+    });
+    if (kept == body->body_end())
+        return {};
+    const clang::Stmt* const first = *kept;
+
+    const unsigned begin = sm.getDecomposedLoc(sm.getFileLoc(first->getBeginLoc())).second;
     const unsigned end   = sm.getDecomposedLoc(body->getRBracLoc()).second;
     if (end <= begin)
         return {};
 
-    const llvm::StringRef buffer = file_buffer(sm, sm.getFileLoc(prologue.extraction_first->getBeginLoc()));
+    const llvm::StringRef                      buffer = file_buffer(sm, sm.getFileLoc(first->getBeginLoc()));
     std::vector<std::pair<unsigned, unsigned>> deletions =
         namespace_qualifier_edits(const_cast<clang::CompoundStmt*>(body), ns_drop_set, sm, lang_opts, expos_set);
-    deletions.append_range(conditional_body_edits(
-        buffer, sm.getFileID(sm.getFileLoc(prologue.extraction_first->getBeginLoc())), begin, end, skipped));
-    deletions.append_range(body_comment_edits(
-        ctx, sm, lang_opts, buffer, sm.getFileLoc(prologue.extraction_first->getBeginLoc()), begin, end));
     deletions.append_range(
-        prologue.assertions | std::views::transform([&](const clang::DeclStmt* statement) {
+        conditional_body_edits(buffer, sm.getFileID(sm.getFileLoc(first->getBeginLoc())), begin, end, skipped));
+    deletions.append_range(
+        body_comment_edits(ctx, sm, lang_opts, buffer, sm.getFileLoc(first->getBeginLoc()), begin, end));
+    deletions.append_range(
+        removed | std::views::transform([&](const clang::DeclStmt* statement) {
             const unsigned statement_begin = sm.getDecomposedLoc(sm.getFileLoc(statement->getBeginLoc())).second;
             const unsigned statement_end =
                 sm.getDecomposedLoc(clang::Lexer::getLocForEndOfToken(statement->getEndLoc(), 0, sm, lang_opts))
@@ -421,8 +467,15 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
     if (body == nullptr)
         return;
 
-    const ir::CodeText code =
-        extract_equiv_body(body, fn->getASTContext(), sm, lang_opts, expos_names, expos_set, ns_drop_set, skipped);
+    const ir::CodeText code = extract_equiv_body(body,
+                                                 fn->getASTContext(),
+                                                 sm,
+                                                 lang_opts,
+                                                 expos_names,
+                                                 expos_set,
+                                                 ns_drop_set,
+                                                 skipped,
+                                                 ir::let_bindings(descr.leading));
     // substrate generic algorithm: a for_each-shaped mutation of the elements
     // it iterates, not a container rebuild -- filtering states the predicate
     // up front instead of burying it in the loop body's if, but this tree
