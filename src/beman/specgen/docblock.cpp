@@ -3,6 +3,7 @@
 
 #include <beman/specgen/docblock.hpp>
 
+#include <beman/specgen/draft_import.hpp>
 #include <beman/specgen/foundation/enumeration.hpp>
 
 #include <beman/specgen/foundation/overloaded.hpp>
@@ -615,9 +616,13 @@ ParseResult parse_docblock(std::string_view raw) {
                                                                                : code_line.find_first_not_of(' '));
             return code_line.substr(blanks);
         };
-        ir::CodeText code{code_lines | std::views::transform(dedent) | std::views::join_with('\n') |
-                              std::ranges::to<std::string>(),
-                          {}};
+        // An escape the draft's listings use, `@\exposid{val}@`, is read as the
+        // span it stands for, as `specgen import` reads the draft's own, so
+        // every backend writes the name in its form (issue #406). An escape
+        // the importer has no kind for stays as written.
+        ir::CodeText code = draft_import::parse_listing(code_lines | std::views::transform(dedent) |
+                                                        std::views::join_with('\n') | std::ranges::to<std::string>());
+        code.origin       = {};
         code_lines.clear();
         in_code = false;
         if (std::exchange(code_in_item, false)) {
