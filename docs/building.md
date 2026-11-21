@@ -187,6 +187,12 @@ publishes the report as an artifact; nothing uploads to an external service.
   current text of every file the document transcludes. That check needs no Emacs; the
   export does, with the `org-transclusion` and `ox-gfm` packages, which `.emacs.d/init.el`
   installs on first use and so needs network access once per checkout.
+- The `Pages` workflow (`.github/workflows/pages.yml`) publishes `docs/` as a site, with
+  each org document beside its HTML export (`docs/index.org` is the front page). It runs
+  after the release workflow has published a push to `main`, exporting with the
+  Makefile's `docs/%.html` rule and running the live document with that release's
+  binary. The typeset pages under `docs/optional-ref-monadic/rendered/` are published as
+  committed. The repository's Pages source must be set to "GitHub Actions" once.
 
 ## Release binary
 
