@@ -71,14 +71,18 @@ using backend::draft_span_codeblock;
 // (`draft_listing_text`). The spans are substituted, via the shared substrate (backend/code_spans.hpp)
 // -- and the wording diff's change runs, each closed in the draft's own
 // `@\added{...}@` with the spans inside it in their escaped form, since the
-// run has opened the `@...@` already (docs/plans/wording-diff.md).
+// run has opened the `@...@` already (docs/plans/wording-diff.md). The run's
+// own text is in that escape too, which is LaTeX text and not the listing, so
+// it is escaped as code in a `\tcode` is: `T&` in an added run is `T\&`, not
+// an alignment tab that stops the build (issue #410).
 std::string render_code_codeblock(const ir::CodeText& code) {
     return backend::render_code_spans(code,
                                       draft_span_codeblock,
                                       backend::draft_span_escaped,
                                       backend::draft_change_codeblock,
                                       backend::draft_listing_text,
-                                      backend::draft_layout_hint_listing);
+                                      backend::draft_layout_hint_listing,
+                                      backend::draft_escape_code_text);
 }
 
 // A marked node or element in the draft's own environment for it,

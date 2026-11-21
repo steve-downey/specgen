@@ -3,7 +3,7 @@ class gadget {
 public:
   constexpr bool ready() const noexcept;
 @[  void reset(*val* v);]{.add}@
-@[  void arm();]{.rm}@
+@[  void arm(T&& t);]{.rm}@
 };
 ```
 

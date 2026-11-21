@@ -775,7 +775,8 @@ specgen_add_golden(
 # backends from one hand-marked IR: an added and a removed section, item,
 # element and free paragraph; a prose run holding a code inline and a
 # cross-reference; a code run holding an exposition-only span, in a synopsis,
-# a signature and an *Equivalent to* body; and an added paragraph between
+# a signature and an *Equivalent to* body, and one holding `&&`, which LaTeX
+# must escape there (issue #410); and an added paragraph between
 # retained ones, so the numbering shows `#`, `x`, `#`. No `--paper`: the
 # marks are the IR's own, and this pins that they render without it.
 specgen_add_golden(
