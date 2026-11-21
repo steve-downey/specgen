@@ -14,7 +14,10 @@
 // A change to the code of a declaration or a synopsis is placed token by
 // token: a token added, removed or replaced, such as `constexpr`. Code is
 // compared with its layout ignored, so a declaration the generator lays out
-// differently from the draft is not a change.
+// differently from the draft is not a change. The two are first aligned
+// declaration by declaration: one the paper adds goes on lines of its own, in
+// the paper's layout, one it drops takes its lines, and only a declaration
+// both have is edited token by token (issue #397).
 //
 // A change to an item's description replaces the numbered paragraphs that
 // changed, each laid out as the draft's are, a sentence to a line, and leaves

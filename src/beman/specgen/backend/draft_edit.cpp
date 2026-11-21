@@ -178,13 +178,147 @@ struct Collector {
     }
 };
 
+// --- declarations of a listing (issue #397) ----------------------------------------
+
+// One declaration of a listing, as the tokens [first, last): everything up to
+// the line that ends with a `;`, a brace or an access specifier's colon, with
+// what follows that on its line (a comment). A comment line, or the
+// `template<...>` line of a declaration laid over two, belongs to the
+// declaration after it.
+struct Unit {
+    std::size_t first = 0;
+    std::size_t last  = 0;
+};
+
+std::string_view token_text(const ir::CodeText& code, const Token& token) {
+    return std::string_view(code.text).substr(token.begin, token.end - token.begin);
+}
+
+bool ends_declaration(const ir::CodeText& code, const std::vector<Token>& tokens, std::size_t i) {
+    if (tokens[i].span != nullptr)
+        return false;
+    const std::string_view text = token_text(code, tokens[i]);
+    if (text == ";" || text == "{" || text == "}")
+        return true;
+    if (text != ":" || i == 0 || (i + 1 < tokens.size() && token_text(code, tokens[i + 1]) == ":"))
+        return false;
+    const std::string_view before = token_text(code, tokens[i - 1]);
+    return before == "public" || before == "protected" || before == "private";
+}
+
+std::vector<Unit> units_of(const ir::CodeText& code, const std::vector<Token>& tokens) {
+    std::vector<Unit> out;
+    std::size_t       first = 0;
+    bool              ended = false;
+    // substrate generic algorithm: a scan that cuts the token sequence at the
+    // first line break after each declaration's end.
+    for (std::size_t i = 0; i < tokens.size(); ++i) {
+        if (ended && std::string_view(code.text)
+                         .substr(tokens[i - 1].end, tokens[i].begin - tokens[i - 1].end)
+                         .contains('\n')) {
+            out.push_back({first, i});
+            first = i;
+            ended = false;
+        }
+        ended = ended || ends_declaration(code, tokens, i);
+    }
+    if (first < tokens.size())
+        out.push_back({first, tokens.size()});
+    return out;
+}
+
+// The token script of a listing, read declaration by declaration: the
+// declarations both sides have whole are kept, and the ones that differ are
+// paired by likeness. A paired declaration is diffed token by token inside
+// itself; one the paper adds, or the draft has and the paper does not, is
+// added or removed whole. `breaks` says where an edit starts a declaration of
+// its own, so that no run of changes reaches across two.
+struct CodeScript {
+    std::vector<diff::Edit> edits;
+    std::vector<bool>       breaks;
+};
+
+CodeScript code_script(const ir::CodeText&       draft,
+                       const std::vector<Token>& dt,
+                       const ir::CodeText&       paper,
+                       const std::vector<Token>& pt) {
+    const SameToken         same{draft, paper};
+    const std::vector<Unit> du     = units_of(draft, dt);
+    const std::vector<Unit> pu     = units_of(paper, pt);
+    const auto              tokens = [](const std::vector<Token>& all, const Unit& u) {
+        return std::span<const Token>(all).subspan(u.first, u.last - u.first);
+    };
+    const auto same_unit = [&](const Unit& x, const Unit& y) {
+        return std::ranges::equal(tokens(dt, x), tokens(pt, y), same);
+    };
+    // Two declarations are one edited when at least half their tokens agree.
+    const auto alike_unit = [&](const Unit& x, const Unit& y) {
+        const auto script = diff::edit_script(tokens(dt, x), tokens(pt, y), same);
+        const auto kept   = static_cast<std::size_t>(std::ranges::count(script, diff::Op::Keep, &diff::Edit::op));
+        return 4 * kept >= (x.last - x.first + y.last - y.first);
+    };
+
+    CodeScript  out;
+    std::size_t a    = 0; // the next draft token
+    std::size_t b    = 0; // the next paper token
+    const auto  push = [&](diff::Op op, bool starts) {
+        out.edits.push_back({op, a, b});
+        out.breaks.push_back(starts);
+        a += op != diff::Op::Insert ? 1 : 0;
+        b += op != diff::Op::Delete ? 1 : 0;
+    };
+    const auto whole = [&](diff::Op op, std::size_t count) {
+        std::ranges::for_each(std::views::iota(std::size_t{0}, count), [&](std::size_t i) { push(op, i == 0); });
+    };
+    const auto paired = [&](const Unit& x, const Unit& y) {
+        const auto script = diff::edit_script(tokens(dt, x), tokens(pt, y), same);
+        std::ranges::for_each(std::views::enumerate(script),
+                              [&](const auto& entry) { push(std::get<1>(entry).op, std::get<0>(entry) == 0); });
+    };
+
+    const auto  units = diff::edit_script(du, pu, same_unit);
+    std::size_t k     = 0;
+    // substrate generic algorithm: each maximal run of changed declarations is
+    // aligned again by likeness; the position in the script is the loop's state.
+    while (k < units.size()) {
+        if (units[k].op == diff::Op::Keep) {
+            whole(diff::Op::Keep, du[units[k].a].last - du[units[k].a].first);
+            ++k;
+            continue;
+        }
+        const std::size_t begin = k;
+        // substrate generic algorithm: a cursor scan to the end of the run.
+        while (k < units.size() && units[k].op != diff::Op::Keep)
+            ++k;
+        const auto run  = std::span(units).subspan(begin, k - begin);
+        const auto gone = run | std::views::filter([](const diff::Edit& e) { return e.op == diff::Op::Delete; }) |
+                          std::views::transform([&](const diff::Edit& e) { return du[e.a]; }) |
+                          std::ranges::to<std::vector>();
+        const auto come = run | std::views::filter([](const diff::Edit& e) { return e.op == diff::Op::Insert; }) |
+                          std::views::transform([&](const diff::Edit& e) { return pu[e.b]; }) |
+                          std::ranges::to<std::vector>();
+        std::ranges::for_each(diff::edit_script(gone, come, alike_unit), [&](const diff::Edit& e) {
+            if (e.op == diff::Op::Keep)
+                paired(gone[e.a], come[e.b]);
+            else if (e.op == diff::Op::Delete)
+                whole(diff::Op::Delete, gone[e.a].last - gone[e.a].first);
+            else
+                whole(diff::Op::Insert, come[e.b].last - come[e.b].first);
+        });
+    }
+    return out;
+}
+
 // The edits that turn `draft`'s code into `paper`'s, in the file `draft` was
-// read from.
+// read from. The two are aligned declaration by declaration (`code_script`),
+// so a declaration the paper adds among ones it changes goes on lines of its
+// own, as the paper lays it out, and not run onto the draft's (issue #397).
 void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const std::string& where, Collector& out) {
-    const ir::CodeText       paper  = as_imported(paper_code);
-    const std::vector<Token> dt     = tokens_of(draft);
-    const std::vector<Token> pt     = tokens_of(paper);
-    const auto               script = diff::edit_script(dt, pt, SameToken{draft, paper});
+    const ir::CodeText       paper   = as_imported(paper_code);
+    const std::vector<Token> dt      = tokens_of(draft);
+    const std::vector<Token> pt      = tokens_of(paper);
+    const CodeScript         aligned = code_script(draft, dt, paper, pt);
+    const auto&              script  = aligned.edits;
     if (std::ranges::all_of(script, [](const diff::Edit& e) { return e.op == diff::Op::Keep; }))
         return;
     const ir::CodeSource* source = draft.origin.source.get();
@@ -222,9 +356,10 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
             ++k;
             continue;
         }
-        const std::size_t run_begin = k;
-        // substrate generic algorithm: a cursor scan to the end of the run.
-        while (k < script.size() && script[k].op != diff::Op::Keep)
+        const std::size_t run_begin = k++;
+        // substrate generic algorithm: a cursor scan to the end of the run,
+        // which ends where a declaration of its own begins.
+        while (k < script.size() && script[k].op != diff::Op::Keep && !aligned.breaks[k])
             ++k;
         const std::span<const diff::Edit> run(script.data() + run_begin, k - run_begin);
         const auto deleted  = run | std::views::filter([](const diff::Edit& e) { return e.op == diff::Op::Delete; }) |
@@ -254,12 +389,16 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
             replacement = added.value_or("");
             if (inserted.empty()) {
                 // A token removed takes the spaces after it on its line, or,
-                // when none follow it there, the ones before it.
+                // when none follow it there, the ones before it. Tokens that
+                // are the whole of their lines take the lines.
                 const std::size_t next   = a1 < dt.size() ? dt[a1].begin : text.size();
                 const auto        after  = text.substr(end, next - end);
                 const std::size_t prev   = a0 > 0 ? dt[a0 - 1].end : begin;
                 const auto        before = text.substr(prev, begin - prev);
-                if (!after.empty() && !after.contains('\n') && a1 < dt.size())
+                if (starts_line(text, begin) && after.contains('\n') && a1 < dt.size()) {
+                    begin = line_start(text, begin);
+                    end   = std::min(text.find('\n', end) + 1, next);
+                } else if (!after.empty() && !after.contains('\n') && a1 < dt.size())
                     end = next;
                 else if (!before.empty() && !before.contains('\n'))
                     begin = prev;
@@ -289,8 +428,14 @@ void place_code(const ir::CodeText& draft, const ir::CodeText& paper_code, const
             if (paper_space(b1) && end < text.size() && !is_space(text[end]) && !is_space(replacement.back()))
                 replacement.push_back(' ');
         }
-        out.edits[source->file].push_back(
-            {file_at(begin), begin == end ? file_at(begin) : file_end(end), replacement});
+        // Declarations added one after another go in at one place, in order:
+        // one edit, since the plan sorts edits by place alone.
+        const Edit edit{file_at(begin), begin == end ? file_at(begin) : file_end(end), replacement};
+        auto&      list = out.edits[source->file];
+        if (edit.begin == edit.end && !list.empty() && list.back().begin == edit.begin && list.back().end == edit.end)
+            list.back().text += edit.text;
+        else
+            list.push_back(edit);
     }
 }
 
