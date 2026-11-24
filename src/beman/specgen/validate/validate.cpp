@@ -749,6 +749,11 @@ struct InlineHasContent {
         });
     }
     bool operator()(const ir::PhraseInline&) const { return true; }
+    bool operator()(const ir::FootnoteInline& v) const {
+        return std::ranges::any_of(v.content, [](const ir::FootnotePiece& piece) {
+            return std::visit([](const auto& p) { return InlineHasContent{}(p); }, piece);
+        });
+    }
     bool operator()(const ir::ChangedInline& run) const {
         return std::ranges::any_of(
             run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
@@ -1033,6 +1038,7 @@ struct UnmarkedPieces {
     std::vector<ir::PlainInline> operator()(const ir::RawInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::TermInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::PhraseInline& piece) const;
+    std::vector<ir::PlainInline> operator()(const ir::FootnoteInline& piece) const;
     std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
 };
 
@@ -1053,6 +1059,10 @@ std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TermInline& pi
            std::ranges::to<std::vector>();
 }
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PhraseInline& piece) const { return {piece}; }
+// A footnote's words are the paragraph's too, for the checks that read code.
+std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::FootnoteInline& piece) const {
+    return piece.content | std::views::transform(ir::plain_inline) | std::ranges::to<std::vector>();
+}
 std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
 
 std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
@@ -1668,6 +1678,12 @@ struct InlineText {
                std::views::join | std::ranges::to<std::string>();
     }
     std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_name(v.phrase)); }
+    std::string operator()(const ir::FootnoteInline& v) const {
+        return v.content | std::views::transform([](const ir::FootnotePiece& piece) {
+                   return std::visit([](const auto& p) { return InlineText{}(p); }, piece);
+               }) |
+               std::views::join | std::ranges::to<std::string>();
+    }
     std::string operator()(const ir::ChangedInline& run) const {
         return foundation::mconcat_map(
             run.inlines,

@@ -144,6 +144,16 @@ struct PieceRenderer {
     std::string operator()(const ir::TermInline& v) const { return backend::draft_term(v); }
     std::string operator()(const ir::PhraseInline& v) const { return backend::draft_phrase(v); }
 
+    // A footnote, as the draft writes one, in running text (issue #401).
+    std::string operator()(const ir::FootnoteInline& v) const {
+        return "\\begin{footnote}" +
+               (v.content | std::views::transform([this](const ir::FootnotePiece& piece) {
+                    return std::visit(overloaded{*this}, ir::plain_inline(piece));
+                }) |
+                std::views::join | std::ranges::to<std::string>()) +
+               "\\end{footnote}";
+    }
+
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
     // rendered as it would be unmarked, the mark inside each `\tcode`.
@@ -359,16 +369,21 @@ struct BodyRenderer : LeafBodyRenderer {
     RenderedBodyBlock operator()(const ir::Example& example) const;
 };
 
+// A note, or its `tail` form where the draft wrote that (issue #401).
 RenderedBodyBlock BodyRenderer::operator()(const ir::Note& note) const {
-    return {std::format("\\begin{{note}}\n{}\\end{{note}}\n", render_informative_body(note.body)),
-            note.opens_paragraph,
-            false};
+    const std::string_view environment = note.tail ? "tailnote" : "note";
+    return {
+        std::format("\\begin{{{}}}\n{}\\end{{{}}}\n", environment, render_informative_body(note.body), environment),
+        note.opens_paragraph,
+        false};
 }
 
 RenderedBodyBlock BodyRenderer::operator()(const ir::Example& example) const {
-    return {std::format("\\begin{{example}}\n{}\\end{{example}}\n", render_informative_body(example.body)),
-            example.opens_paragraph,
-            false};
+    const std::string_view environment = example.tail ? "tailexample" : "example";
+    return {
+        std::format("\\begin{{{}}}\n{}\\end{{{}}}\n", environment, render_informative_body(example.body), environment),
+        example.opens_paragraph,
+        false};
 }
 
 std::string render_item_blocks(const ir::DescriptionBody& blocks) {

@@ -59,6 +59,8 @@ using beman::specgen::ir::Document;
 using beman::specgen::ir::element_from_name;
 using beman::specgen::ir::element_name;
 using beman::specgen::ir::EquivalentTo;
+using beman::specgen::ir::FootnoteInline;
+using beman::specgen::ir::FootnotePiece;
 using beman::specgen::ir::ForeignDeclaration;
 using beman::specgen::ir::ForeignNamespace;
 using beman::specgen::ir::FreeParagraph;
@@ -285,6 +287,7 @@ struct json_descriptor<ir::Note> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Note::body),
         defaulted_field("opens_paragraph", &ir::Note::opens_paragraph),
+        defaulted_field("tail", &ir::Note::tail),
         defaulted_enum_field("change", &ir::Note::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -294,6 +297,7 @@ struct json_descriptor<ir::Example> {
     static constexpr auto members = std::tuple{
         field("body", &ir::Example::body),
         defaulted_field("opens_paragraph", &ir::Example::opens_paragraph),
+        defaulted_field("tail", &ir::Example::tail),
         defaulted_enum_field("change", &ir::Example::change, Change::Same, change_name, change_from_name, "change"),
     };
 };
@@ -477,6 +481,26 @@ struct json_descriptor<PhraseInline> {
     };
 };
 
+// A footnote's pieces, tagged as the same inlines are in a paragraph.
+template <>
+struct json_descriptor<FootnotePiece> {
+    static constexpr auto alts = alternatives("t",
+                                              "footnote piece type",
+                                              alt<TextInline>("text"),
+                                              alt<CodeInline>("code"),
+                                              alt<RefInline>("ref"),
+                                              alt<ConceptRef>("concept"),
+                                              alt<PlaceholderInline>("placeholder"),
+                                              alt<OldConceptRef>("oldconcept"),
+                                              alt<TermInline>("term"),
+                                              alt<PhraseInline>("phrase"));
+};
+
+template <>
+struct json_descriptor<FootnoteInline> {
+    static constexpr auto members = std::tuple{field("content", &FootnoteInline::content)};
+};
+
 // A plain inline inside a changed run serializes exactly as the same inline
 // does outside one: the two variants share the tag key and the plain tags.
 template <>
@@ -492,7 +516,8 @@ struct json_descriptor<PlainInline> {
                                               alt<TableRef>("tableref"),
                                               alt<RawInline>("raw"),
                                               alt<TermInline>("term"),
-                                              alt<PhraseInline>("phrase"));
+                                              alt<PhraseInline>("phrase"),
+                                              alt<FootnoteInline>("footnote"));
 };
 
 template <>
@@ -517,6 +542,7 @@ struct json_descriptor<Inline> {
                                               alt<RawInline>("raw"),
                                               alt<TermInline>("term"),
                                               alt<PhraseInline>("phrase"),
+                                              alt<FootnoteInline>("footnote"),
                                               alt<ChangedInline>("changed"));
 };
 

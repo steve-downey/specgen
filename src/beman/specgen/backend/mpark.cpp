@@ -285,6 +285,17 @@ struct PieceRenderer {
     }
     std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_words(v.phrase)); }
 
+    // A footnote (issue #401): pandoc's inline note, `^[...]`, where the
+    // draft's environment stood.
+    std::string operator()(const ir::FootnoteInline& v) const {
+        return "^[" +
+               (v.content | std::views::transform([this](const ir::FootnotePiece& piece) {
+                    return std::visit(overloaded{*this}, ir::plain_inline(piece));
+                }) |
+                std::views::join | std::ranges::to<std::string>()) +
+               ']';
+    }
+
     // A changed run of prose (the wording diff's mark): the framework's
     // `[...]{.add}` / `[...]{.rm}` spans around the run rendered as it would
     // be unmarked. Defined after `render_run` below, which dispatches the

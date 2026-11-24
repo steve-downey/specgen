@@ -1196,9 +1196,10 @@ and five.
                             "\\end{example}\nand five.\n\\end{itemize}\n"));
 }
 
-TEST_CASE("draft_import - a list item holding a numbered list or a footnote is kept as raw LaTeX") {
-    // Neither is a block an item holds: the IR has no numbered list, and a
-    // footnote is part of the running text.
+TEST_CASE(
+    "draft_import - a list item holding a numbered list is kept as raw LaTeX, and one holding a footnote is not") {
+    // The IR has no numbered list. A footnote is part of the item's running
+    // text (issue #401).
     constexpr std::string_view tex = R"(\rSec3[x]{X}
 \pnum
 \begin{itemize}
@@ -1219,9 +1220,8 @@ Two.
 \end{itemize}
 )";
     const auto                 r   = import_sections(tex, Options{{"x"}});
-    REQUIRE(r.diagnostics.size() == 2);
+    REQUIRE(r.diagnostics.size() == 1);
     CHECK(r.diagnostics[0].message == "a nested numbered list is kept as raw LaTeX");
-    CHECK(r.diagnostics[1].message == "a list item holding a footnote is kept as raw LaTeX");
 }
 
 TEST_CASE("draft_import - a floattable in the shape of a lib2dtab2 is a table, and keeps its form") {
@@ -1293,4 +1293,83 @@ TEST_CASE("draft_import - a concept name in \\tcode is the concept, and keeps it
     const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
     CHECK(rendered.contains(
         "\\tcode{F} models \\tcode{\\libconcept{invocable}} and \\tcode{\\exposconcept{boolean-testable}}."));
+}
+
+// Issue #401: a tailnote is the draft's note that ends without a paragraph
+// break, at the end of a list item or a table cell. It is a note, and the
+// LaTeX backend writes it back as the draft spelled it.
+TEST_CASE("draft_import - a tailnote is a note, in a list item too, and keeps its form") {
+    constexpr std::string_view tex = R"(\rSec3[x]{X}
+\pnum
+Either
+\begin{itemize}
+\item
+the first,
+\begin{tailnote}
+Nothing else.
+\end{tailnote}
+\item
+or the second.
+\end{itemize}
+\begin{tailnote}
+After the list.
+\end{tailnote}
+)";
+    const auto                 r   = import_sections(tex, Options{{"x"}});
+    CHECK(r.diagnostics.empty());
+    const auto& leading = item_at(only_section(r), 0).descr.leading;
+    const auto& list    = std::get<ir::Itemize>(leading.at(1));
+    REQUIRE(list.items.size() == 2);
+    REQUIRE(list.items.front().blocks.size() == 1);
+    CHECK(std::get<ir::Note>(list.items.front().blocks.front()).tail);
+    CHECK(std::get<ir::Note>(leading.at(2)).tail);
+
+    const std::string rendered = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(rendered.contains("\\begin{tailnote}\nNothing else.\n\\end{tailnote}"));
+    CHECK(rendered.contains("\\begin{tailnote}\nAfter the list.\n\\end{tailnote}"));
+}
+
+// Issue #401: a footnote is running text, so it is an inline of the paragraph
+// it interrupts, in a list item too, and every backend writes its own form.
+// One holding a macro the IR has no kind for stays raw, as the macro would.
+TEST_CASE("draft_import - a footnote is an inline of its paragraph") {
+    constexpr std::string_view tex     = R"(\rSec3[x]{X}
+\pnum
+Throws \tcode{length_error}.%
+\begin{footnote}
+\tcode{reserve()} uses \tcode{allocate()}\iref{x}.
+\end{footnote}
+And more.
+\begin{itemize}
+\item
+an item%
+\begin{footnote}
+A note on it.
+\end{footnote}
+\end{itemize}
+
+\pnum
+Granted in \IsoC{}.%
+\begin{footnote}
+See \IsoC{}, 7.1.4.
+\end{footnote}
+)";
+    const auto                 r       = import_sections(tex, Options{{"x"}});
+    const auto&                leading = item_at(only_section(r), 0).descr.leading;
+    const auto&                para    = std::get<ir::BodyParagraph>(leading.at(0)).text;
+    REQUIRE(para.size() == 5);
+    CHECK(std::get<ir::TextInline>(para.at(2)).text == ".");
+    const auto& note = std::get<ir::FootnoteInline>(para.at(3));
+    REQUIRE(note.content.size() == 5);
+    CHECK(std::get<ir::CodeInline>(note.content.at(0)).code.text == "reserve()");
+    CHECK(std::get<ir::RefInline>(note.content.at(3)).stable_name == "x");
+    CHECK(std::get<ir::TextInline>(para.at(4)).text == " And more.");
+    const auto& list = std::get<ir::Itemize>(leading.at(1));
+    CHECK(std::holds_alternative<ir::FootnoteInline>(list.items.front().text.back()));
+    CHECK(has_diag(r, Severity::Warning, "a footnote holding what a footnote cannot is kept as raw LaTeX"));
+    CHECK_FALSE(has_diag(r, Severity::Warning, "the footnote environment"));
+
+    const std::string latex = backend::latex::render_to_string(r.document, {.base_section_depth = 3});
+    CHECK(latex.contains("Throws \\tcode{length_error}.\\begin{footnote}\\tcode{reserve()} uses "
+                         "\\tcode{allocate()}\\iref{x}.\\end{footnote} And more."));
 }

@@ -1915,8 +1915,13 @@ docblock writes this with two blank decorated lines before the block (see
 
 A list item can hold a code block, a nested list, a note, an example, and prose
 after any of them, inside the item; mpark and org indent them under the item.
-A list item holding a footnote, a `tailnote` or a numbered (`enumerate`) list
-is still kept as raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
+A `tailnote` (the draft's note at the end of an item or a table cell) is a
+note, which the LaTeX backend writes back as a `tailnote`. A footnote is part
+of the running text it interrupts, in a paragraph or an item, and each backend
+writes it in its own form: the draft's `footnote` environment, pandoc's
+`^[...]`, org's `[fn::...]`. A footnote holding a macro the IR has no kind for
+(`\IsoC`, say) is kept as raw LaTeX, as the macro would be. A list item holding a
+numbered (`enumerate`) list is still kept as raw LaTeX. A `floattable` in the shape of a `lib2dtab2` (a row-heading column
 and two data columns, `\chdr` and `\rhdr` over them and `\lhdr` on each row,
 as [expected.object.swap] has) is read as the same two-dimensional table, and
 the LaTeX backend writes it back as the `floattable` it was, with its column
@@ -1978,7 +1983,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.55.13 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.55.15 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

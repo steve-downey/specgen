@@ -969,6 +969,41 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
             flush();
             out.push_back(ir::RefInline{.stable_name = arg->inner, .bare = name == "ref"});
             i = arg->next;
+        } else if (name == "begin" && arg && arg->inner == "footnote") {
+            // A footnote (issue #401), whose words are prose of the kinds a
+            // footnote holds; one holding anything else is kept as written.
+            constexpr std::string_view closing = "\\end{footnote}";
+            const std::size_t          close   = text.find(closing, arg->next);
+            const std::size_t          stop  = close == std::string_view::npos ? text.size() : close + closing.size();
+            const ir::Paragraph        words = close == std::string_view::npos
+                                                   ? ir::Paragraph{}
+                                                   : parse_prose(trim(text.substr(arg->next, close - arg->next)));
+            std::vector<ir::FootnotePiece> content;
+            const bool                     plain =
+                close != std::string_view::npos && std::ranges::all_of(words, [&](const ir::Inline& piece) {
+                    return std::visit(
+                        [&](const auto& v) {
+                            if constexpr (std::is_constructible_v<ir::FootnotePiece, decltype(v)>) {
+                                content.emplace_back(v);
+                                return true;
+                            } else {
+                                return false;
+                            }
+                        },
+                        piece);
+                });
+            if (plain) {
+                // The draft's footnote sets its mark against the word before it.
+                const auto at_end = [&](const ir::LayoutHint& hint) { return hint.at >= pending.text.size(); };
+                // substrate generic algorithm: trims the spaces at the end of the pending text.
+                while (pending.text.ends_with(' ') && std::ranges::none_of(pending.hints, at_end))
+                    pending.text.pop_back();
+                flush();
+                out.push_back(ir::FootnoteInline{std::move(content)});
+            } else {
+                raw(text.substr(i, stop - i), "a footnote holding what a footnote cannot is kept as raw LaTeX");
+            }
+            i = stop;
         } else if (name == "br" || name == "linebreak" || name == "nolinebreak") {
             // What is left of the layout macros once the hints are read: `\br`,
             // which is the grammar environments', and the two that say how
@@ -1013,6 +1048,7 @@ struct EvCode {
 struct EvNote {
     bool                     example;
     std::vector<std::string> inner;
+    bool                     tail = false; // `tailnote`, `tailexample`
 };
 struct EvTable {
     bool                                  flat               = false;        // libtab2; else lib2dtab2
@@ -1042,11 +1078,14 @@ std::optional<std::string> begin_name(std::string_view line) {
 ir::ListItem Importer::parse_item(const EvItem& item) {
     // The item's own text runs to its first environment; what follows, a code
     // block, a nested list, a note, an example or more prose, is read as the
-    // item's blocks.
+    // item's blocks. A footnote is running text, and does not end it (issue
+    // #401).
     const Lines lines(item.lines);
-    const auto  first =
-        std::ranges::find_if(lines, [](const std::string& line) { return begin_name(line).has_value(); });
-    const auto split = static_cast<std::size_t>(first - lines.begin());
+    const auto  first = std::ranges::find_if(lines, [](const std::string& line) {
+        const std::optional<std::string> name = begin_name(line);
+        return name.has_value() && *name != "footnote";
+    });
+    const auto  split = static_cast<std::size_t>(first - lines.begin());
     return ir::ListItem{parse_prose(join_prose(lines.first(split))),
                         parse_body<ir::DescriptionBody>(lines.subspan(split))};
 }
@@ -1350,6 +1389,15 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
             ++i; // an index entry is not content
             continue;
         }
+        // A footnote is running text: the draft writes it inside a paragraph,
+        // and its words belong there (issue #401). So the environment joins
+        // the prose around it, and the prose reader takes it apart.
+        if (begin_name(t) == "footnote") {
+            const std::size_t end = std::min(environment_end(lines, i, "footnote"), lines.size() - 1);
+            prose.append_range(lines.subspan(i, end + 1 - i));
+            i = end + 1;
+            continue;
+        }
         if (const auto name = begin_name(t)) {
             flush();
             const std::size_t        end   = environment_end(lines, i, *name);
@@ -1388,8 +1436,8 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                 }
             } else if (*name == "codeblock") {
                 events.push_back(EvCode{body | std::views::join_with('\n') | std::ranges::to<std::string>()});
-            } else if (*name == "note" || *name == "example") {
-                events.push_back(EvNote{*name == "example", std::move(body)});
+            } else if (*name == "note" || *name == "example" || *name == "tailnote" || *name == "tailexample") {
+                events.push_back(EvNote{name->ends_with("example"), std::move(body), name->starts_with("tail")});
             } else if (*name == "itemize") {
                 std::vector<EvItem> items;
                 // The first environment that a list item cannot hold: one
@@ -1411,7 +1459,10 @@ void scan_events(Importer& imp, Lines lines, std::vector<Event>& events) {
                         constexpr std::array kHeld{std::string_view{"codeblock"},
                                                    std::string_view{"itemize"},
                                                    std::string_view{"note"},
-                                                   std::string_view{"example"}};
+                                                   std::string_view{"example"},
+                                                   std::string_view{"tailnote"},
+                                                   std::string_view{"tailexample"},
+                                                   std::string_view{"footnote"}};
                         if (!nested && (items.empty() || !std::ranges::contains(kHeld, *env)))
                             nested = env;
                         if (!items.empty())
@@ -1505,9 +1556,9 @@ Body Importer::parse_body(Lines lines) {
                        [&](const EvNote& e) {
                            if constexpr (std::same_as<Body, ir::DescriptionBody>) {
                                if (e.example)
-                                   body.push_back(ir::Example{parse_informative(e.inner)});
+                                   body.push_back(ir::Example{.body = parse_informative(e.inner), .tail = e.tail});
                                else
-                                   body.push_back(ir::Note{parse_informative(e.inner)});
+                                   body.push_back(ir::Note{.body = parse_informative(e.inner), .tail = e.tail});
                            } else {
                                report(Severity::Warning, "a note inside a note is dropped");
                            }
@@ -1548,64 +1599,65 @@ ir::ItemDescr Importer::parse_description(Lines lines) {
         const Event& event     = events[k++];
         const bool   was_fresh = std::exchange(fresh, false);
         std::visit(
-            overloaded{[&](const EvPnum& e) {
-                           new_para = true;
-                           fresh    = true;
-                           if (e.tag) {
-                               descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
-                               target = &descr.elements.back().body;
-                           }
-                       },
-                       [&](const EvProse& e) {
-                           if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
-                               std::holds_alternative<EvCode>(events[k])) {
-                               target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
-                               ++k;
-                               new_para = false;
-                               return;
-                           }
-                           target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
-                           new_para = false;
-                       },
-                       [&](const EvItemize& e) {
-                           ir::Itemize list;
-                           // substrate generic algorithm: a cursor scan over variable-width input; the position
-                           // is the loop's state.
-                           for (const EvItem& item : e.items)
-                               list.items.push_back(parse_item(item));
-                           list.opens_paragraph = opens_paragraph();
-                           target->push_back(std::move(list));
-                       },
-                       [&](const EvCode& e) {
-                           const bool opens = opens_paragraph();
-                           target->push_back(ir::AuthoredCode{parse_code(e.code, true), ir::Change::Same, opens});
-                       },
-                       [&](const EvNote& e) {
-                           const bool opens = opens_paragraph();
-                           if (e.example)
-                               target->push_back(ir::Example{parse_informative(e.inner), ir::Change::Same, opens});
-                           else
-                               target->push_back(ir::Note{parse_informative(e.inner), ir::Change::Same, opens});
-                       },
-                       [&](const EvTable& e) {
-                           const bool opens = opens_paragraph();
-                           if (e.flat) {
-                               ir::Table1D table     = make_table1d(e);
-                               table.opens_paragraph = opens;
-                               target->push_back(std::move(table));
-                           } else {
-                               ir::Table2D table     = make_table2d(e);
-                               table.opens_paragraph = opens;
-                               target->push_back(std::move(table));
-                           }
-                       },
-                       [&](const EvRaw& e) {
-                           // Kept as raw LaTeX in a paragraph, which says where it
-                           // starts the way prose does.
-                           const bool first = target->empty();
-                           const bool opens = opens_paragraph();
-                           target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, first || !opens});
-                       }},
+            overloaded{
+                [&](const EvPnum& e) {
+                    new_para = true;
+                    fresh    = true;
+                    if (e.tag) {
+                        descr.elements.push_back(ir::DescriptionElement{.kind = *e.tag, .body = {}});
+                        target = &descr.elements.back().body;
+                    }
+                },
+                [&](const EvProse& e) {
+                    if (was_fresh && e.text == "Equivalent to:" && k < events.size() &&
+                        std::holds_alternative<EvCode>(events[k])) {
+                        target->push_back(ir::EquivalentTo{parse_code(std::get<EvCode>(events[k]).code, true)});
+                        ++k;
+                        new_para = false;
+                        return;
+                    }
+                    target->push_back(ir::BodyParagraph{parse_prose(e.text), !new_para});
+                    new_para = false;
+                },
+                [&](const EvItemize& e) {
+                    ir::Itemize list;
+                    // substrate generic algorithm: a cursor scan over variable-width input; the position
+                    // is the loop's state.
+                    for (const EvItem& item : e.items)
+                        list.items.push_back(parse_item(item));
+                    list.opens_paragraph = opens_paragraph();
+                    target->push_back(std::move(list));
+                },
+                [&](const EvCode& e) {
+                    const bool opens = opens_paragraph();
+                    target->push_back(ir::AuthoredCode{parse_code(e.code, true), ir::Change::Same, opens});
+                },
+                [&](const EvNote& e) {
+                    const bool opens = opens_paragraph();
+                    if (e.example)
+                        target->push_back(ir::Example{parse_informative(e.inner), ir::Change::Same, opens, e.tail});
+                    else
+                        target->push_back(ir::Note{parse_informative(e.inner), ir::Change::Same, opens, e.tail});
+                },
+                [&](const EvTable& e) {
+                    const bool opens = opens_paragraph();
+                    if (e.flat) {
+                        ir::Table1D table     = make_table1d(e);
+                        table.opens_paragraph = opens;
+                        target->push_back(std::move(table));
+                    } else {
+                        ir::Table2D table     = make_table2d(e);
+                        table.opens_paragraph = opens;
+                        target->push_back(std::move(table));
+                    }
+                },
+                [&](const EvRaw& e) {
+                    // Kept as raw LaTeX in a paragraph, which says where it
+                    // starts the way prose does.
+                    const bool first = target->empty();
+                    const bool opens = opens_paragraph();
+                    target->push_back(ir::BodyParagraph{{ir::RawInline{e.latex}}, first || !opens});
+                }},
             event);
     }
     return descr;

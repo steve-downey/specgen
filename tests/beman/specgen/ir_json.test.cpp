@@ -816,6 +816,20 @@ TEST_CASE("ir_json - a term and a fixed phrase round-trip") {
     CHECK(*back == doc);
 }
 
+// Issue #401: a footnote, inside a paragraph and inside a changed run.
+TEST_CASE("ir_json - a footnote round-trips") {
+    SpecItem             item;
+    const FootnoteInline note{{CodeInline{{"reserve()", {}}}, TextInline{" can throw"}, RefInline{"x"}}};
+    item.descr.leading = {BodyParagraph{{TextInline{"Throws."}, note, ChangedInline{Change::Added, {note}}}}};
+    Document doc;
+    doc.nodes.push_back(item);
+    const std::string json = emit_json(doc);
+    CHECK(json.contains("\"t\":\"footnote\""));
+    const auto back = parse_document(json);
+    REQUIRE(back.has_value());
+    CHECK(*back == doc);
+}
+
 TEST_CASE("ir_json - an inherited item round-trips and is silent at its default") {
     SpecItem plain;
     plain.decl.signatures.push_back({"void f();", {}});
