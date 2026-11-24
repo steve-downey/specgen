@@ -172,6 +172,37 @@ TEST_CASE("draft_edit - an added token keeps the space the paper has before it")
     CHECK(applied(plan).contains("\n    void reset() noexcept;\n"));
 }
 
+// Issue #397: declarations the paper adds among ones it changes are whole
+// lines of their own, in the paper's layout, and the changed ones are edited
+// token by token where the draft has them.
+TEST_CASE("draft_edit - declarations added among changed ones are lines of their own") {
+    ir::Document paper    = imported();
+    auto&        synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    synopsis              = beman::specgen::draft_import::parse_listing(
+        "namespace std {\n  template<class R>\n  class wrapper {\n  public:\n    constexpr wrapper() noexcept;\n"
+        "    wrapper(const wrapper&);\n    wrapper(wrapper&&) noexcept;\n"
+        "    constexpr R operator()() @\\cv{}@;   // \\expos\n    void reset();\n  };\n}");
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(applied(plan).contains(
+        "  public:\n    constexpr wrapper() noexcept;\n    wrapper(const wrapper&);\n"
+        "    wrapper(wrapper&&) noexcept;\n    constexpr R operator()() @\\cv{}@;   // \\expos\n"
+        "    void reset();\n"));
+}
+
+// Issue #397: a declaration the paper drops among ones it keeps takes its
+// line with it.
+TEST_CASE("draft_edit - a declaration removed whole takes its line") {
+    ir::Document paper    = imported();
+    auto&        synopsis = std::get<ir::Synopsis>(children(paper)[0]).code;
+    synopsis              = beman::specgen::draft_import::parse_listing(
+        "namespace std {\n  template<class R>\n  class wrapper {\n  public:\n    wrapper() noexcept;\n"
+        "    void reset();\n  };\n}");
+    const draft_edit::Plan plan = draft_edit::plan(imported(), paper);
+    CHECK(plan.findings.empty());
+    CHECK(applied(plan).contains("  public:\n    wrapper() noexcept;\n    void reset();\n  };\n"));
+}
+
 // Issue #378: the blank line between a subclause's heading and its synopsis
 // is no part of the prose after the synopsis, whose place in the source starts
 // after the code block. Taking that prose out leaves the synopsis, and an edit

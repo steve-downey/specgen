@@ -1,0 +1,29 @@
+#+OPTIONS: broken-links:nil c:nil creator:nil d:(not "LOGBOOK") date:nil e:t
+#+OPTIONS: ':nil *:t -:t ::t <:t H:4 \n:nil ^:nil arch:headline author:nil
+#+OPTIONS: email:nil f:t inline:t num:nil p:nil pri:nil prop:nil stat:t tags:t
+#+OPTIONS: tasks:t tex:t timestamp:nil title:t toc:nil todo:t |:t
+#+TITLE: specgen documentation
+#+LANGUAGE: en
+#+STARTUP: showall
+
+specgen generates C++ standard library description wording from annotated headers.
+These are the pages of its documentation that are meant to be read in a browser.
+The source, and the rest of the documentation, is in the [[https://github.com/steve-downey/specgen][repository]].
+
+* Examples
+
+- [[file:examples.org][CLI examples]]: each command, and the output the test suite checks it against.
+- [[file:examples-live.org][Live examples]]: the same kind of commands, run by the released specgen when this page was built.
+
+* [optional.ref.monadic]
+
+- [[file:optional-ref-monadic/optional-ref-monadic.org][The example]]: the subclause generated from Beman optional, and diffed against the working draft.
+- Typeset by mpark/wg21: [[file:optional-ref-monadic/rendered/wording.mpark.html][wording]], [[file:optional-ref-monadic/rendered/diff.mpark.html][diff]].
+- Typeset by wg21org: [[file:optional-ref-monadic/rendered/wording.org.html][wording]], [[file:optional-ref-monadic/rendered/diff.org.html][diff]].
+- Typeset by wg21-latex: [[file:optional-ref-monadic/rendered/wording.pdf][wording]], [[file:optional-ref-monadic/rendered/diff.pdf][diff]].
+
+* Reference
+
+- [[https://github.com/steve-downey/specgen/blob/main/docs/user-guide.md][User guide]]
+- [[https://github.com/steve-downey/specgen/blob/main/docs/architecture.md][Architecture]]
+- [[https://github.com/steve-downey/specgen/blob/main/docs/building.md][Building]]

@@ -1,6 +1,6 @@
 ::: wording
 
-## Vocabulary [demo.vocab]{- .sref} {-}
+## Vocabulary [demo.vocab](){.sref} {-}
 
 ```cpp
 template<class T>

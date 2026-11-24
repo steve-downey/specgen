@@ -1110,8 +1110,12 @@ numbered.
 `\codeblock` / `\endcodeblock` preserves the decorated payload lines,
 including indentation and blank lines. Tags inside the payload are literal;
 only a line containing `\endcodeblock` closes it. Authored code has no
-attached C++ AST and is not introduced as “Equivalent to”. Like verbatim item
-declarations, its payload preserves explicit backend escapes as authored.
+attached C++ AST and is not introduced as “Equivalent to”. An escape the draft's
+own listings use is read as what it stands for, as `specgen import` reads the
+draft's: `@\exposid{val}@` is the exposition-only name, which every backend
+writes in its own form (`$val$` under mpark), and likewise `@\placeholder{x}@`,
+`@\seebelow@` and the draft's other code macros. Any other escape is kept as
+authored.
 
 The LaTeX backend writes the draft's note, example, and codeblock environments.
 Mpark uses note/example divs and fenced C++ blocks. Org uses `note`, `wgexample`,
@@ -1487,7 +1491,8 @@ wording follows [structure.specifications].
   name the wording already uses for something else is not read as one: a
   parameter called `value`, or a member function `value()`, stays what it is,
   and only `value_` then names the exposition-only member. The contents of a
-  string literal and of a `\codeblock` are left as written.
+  string literal and of a `\codeblock` are left as written; a code block names an
+  exposition-only member with the draft's escape, `@\exposid{value}@`.
 
   A partial or explicit specialization follows its primary and needs no marker
   of its own: it is the same entity and renders under the same exposition name.
@@ -1772,8 +1777,8 @@ prose:
 
 | The draft writes | It is read as | mpark | org |
 | --- | --- | --- | --- |
-| `\iref{x}` | a reference in parentheses | `([x]{- .sref})` | a link in parentheses |
-| `\ref{x}` | the same reference, bare | `[x]{- .sref}` | the link alone |
+| `\iref{x}` | a reference in parentheses | `([x](){.sref})` | a link in parentheses |
+| `\ref{x}` | the same reference, bare | `[x](){.sref}` | the link alone |
 | `\libconcept{c}` | a library concept | `` `c` `` | `~c~` |
 | `\exposconcept{c}` | an exposition-only concept | `` `$c$` `` | italic code |
 | `\placeholder{p}`, `\cv{}` | a placeholder | `*p*` | italic |
@@ -1800,7 +1805,7 @@ And in code, which is a `\tcode` in prose or an `@...@` escape in a listing:
 | `\cvqual{cv2}` | a placeholder for cv-qualifiers | `$cv2$` | `<var>cv2</var>` |
 | `\opt{x}` | code that may be absent | `x@~_opt_~@` | `x<sub><var>opt</var></sub>` |
 | `\seebelow`, `\impdef` | the fixed phrases | `$see below$` | `<var>see below</var>` |
-| `\ref{x}` in a comment | a reference | `@[x]{- .sref}@` | `[x]` |
+| `\ref{x}` in a comment | a reference | `@[x](){.sref}@` | `[x]` |
 | `$i$` in a `\tcode` | a variable of the mathematics around the code | `$i$` | `<var>i</var>` |
 | `$_i$`, `$_{10}$` in a `\tcode` | a subscript | `@~_i_~@`, `@~10~@` | `<sub><var>i</var></sub>`, `<sub>10</sub>` |
 | `$r_K$` in a `\tcode` | a variable and its subscript | `$r$@~_K_~@` | `<var>r</var><sub><var>K</var></sub>` |
@@ -1973,7 +1978,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.55.1 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.55.13 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

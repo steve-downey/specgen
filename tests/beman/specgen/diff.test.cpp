@@ -567,6 +567,25 @@ TEST_CASE("diff - a code mark spans the changed tokens, not the whitespace after
     CHECK(marked(sig) == std::vector<std::string>{"constexpr", "consteval"});
 }
 
+// Issue #409: a `>` the baseline has one more of is removed against the
+// brackets it closed, in the baseline's spacing, and the name after it keeps
+// its one space.
+TEST_CASE("diff - a removed closing bracket stays against the brackets it closed") {
+    Document before = gadget();
+    Document after  = gadget();
+    std::get<SpecItem>(std::get<Section>(before.nodes[1]).children[0]).decl.signatures[0].text =
+        "optional<remove_cv_t<invoke_result_t<F, T&>>> transform(F&& f) const;";
+    std::get<SpecItem>(std::get<Section>(after.nodes[1]).children[0]).decl.signatures[0].text =
+        "optional<invoke_result_t<F, T&>> transform(F&& f) const;";
+    const Document out = diff::compare(before, after);
+    const auto&    sig = std::get<SpecItem>(std::get<Section>(out.nodes[0]).children[0]).decl.signatures[0];
+    CHECK(sig.text == "optional<remove_cv_t<invoke_result_t<F, T&>>> transform(F&& f) const;");
+    REQUIRE(sig.changes.size() == 2);
+    CHECK(sig.text.substr(sig.changes[0].begin, sig.changes[0].end - sig.changes[0].begin) == "remove_cv_t<");
+    CHECK(sig.changes[1].begin == sig.text.find(">>> ") + 2);
+    CHECK(sig.changes[1].end == sig.changes[1].begin + 1);
+}
+
 TEST_CASE("diff - a prose mark spans the changed words, not the whitespace around them") {
     Document before = gadget();
     Document after  = gadget();

@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template `holder` [demo.holder]{- .sref} {-}
+## Class template `holder` [demo.holder](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -10,7 +10,7 @@ namespace std {
     int $count$; // exposition only
 
   public:
-    // @[demo.holder]{- .sref}@, construction
+    // @[demo.holder](){.sref}@, construction
     constexpr explicit holder(R base);
 
     constexpr holder();

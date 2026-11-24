@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <cstddef>
 #include <array>
+#include <map>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <variant>
@@ -358,6 +360,32 @@ std::vector<const Paragraph*> body_paragraphs(const DescriptionBody& body, bool 
            }) |
            std::views::join | std::ranges::to<std::vector>();
 }
+std::map<std::string, std::string> let_bindings(const DescriptionBody& leading) {
+    // The "Let `U` be `X`." shape, read from one normative paragraph.
+    const auto binding = [](const Paragraph* paragraph) -> std::optional<std::pair<std::string, std::string>> {
+        if (paragraph->size() != 5)
+            return std::nullopt;
+        const auto* let   = std::get_if<TextInline>(&(*paragraph)[0]);
+        const auto* name  = std::get_if<CodeInline>(&(*paragraph)[1]);
+        const auto* be    = std::get_if<TextInline>(&(*paragraph)[2]);
+        const auto* value = std::get_if<CodeInline>(&(*paragraph)[3]);
+        const auto* stop  = std::get_if<TextInline>(&(*paragraph)[4]);
+        if (let == nullptr || name == nullptr || be == nullptr || value == nullptr || stop == nullptr ||
+            let->text != "Let " || be->text != " be " || stop->text != ".")
+            return std::nullopt;
+        return std::pair{name->code.text, value->code.text};
+    };
+    const auto found = body_paragraphs(leading, false) | std::views::transform(binding) |
+                       std::views::filter([](const auto& b) { return b.has_value(); }) |
+                       std::views::transform([](const auto& b) { return *b; }) | std::ranges::to<std::vector>();
+    std::map<std::string, std::string> out;
+    std::ranges::for_each(found, [&](const auto& b) {
+        if (std::ranges::count(found, b.first, &std::pair<std::string, std::string>::first) == 1)
+            out.insert(b);
+    });
+    return out;
+}
+
 std::vector<const CodeText*> body_code(const DescriptionBody& body, bool include_informative) {
     return body | std::views::transform([include_informative](const BodyBlock& block) {
                return std::visit(foundation::overloaded{BlockCode{{}, include_informative}}, block);
@@ -418,6 +446,7 @@ struct TypesettingRemover {
     PlainInline operator()(RefInline v) const { return v; }
     PlainInline operator()(ConceptRef v) const {
         v.no_correction = false;
+        v.in_tcode      = false;
         v.hints.clear();
         return v;
     }

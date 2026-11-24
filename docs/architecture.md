@@ -396,7 +396,9 @@ back to name match within the class's fragments only):
   the synopsis/itemdecls (names are unqualified within `namespace std`). The drop set is
   built from **prefix-minimal** paths, so a nested namespace written out in full
   (`demo::detail::storage`) renders the same as the abbreviated spelling instead of losing
-  its qualifier.
+  its qualifier. The exception is the draft's own: a reference to `std::forward` or
+  `std::move` keeps its `std::`, in code as in prose (issue #405). The test is on the
+  declaration the reference resolves to, not on its spelling.
 - **A nested namespace is dropped, specified, or foreign** (issue #209, decision
   `nested-namespace-rendering`). Below the dropped prefix, a namespace is *specified* when
   some redeclaration of it, anywhere in the translation unit, carries `//! \specified` as
@@ -883,7 +885,10 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   in source order (diagnostic order = specification order). Any other statement
   ends the prologue, so later assertions remain ordinary body code. Leading body-local
   aliases do not block the derivation; `*-equiv` extraction retains the aliases and removes
-  only the consumed run.
+  only the consumed run, except an alias the item's leading prose already states as
+  "Let `U` be `X`.", which goes as the run does (issue #404). An alias kept under a name a
+  "Let" binds to something else is a drift warning. No "Let" paragraph is derived from an
+  alias.
 - Consumed asserts are excluded from `\effects-equiv` extraction.
 - `static_assert` messages are stripped.
 - An authored `\mandates` replaces the derived wording. The suppressed
@@ -1255,14 +1260,18 @@ There are exactly three backends, and **adding wording to one means adding it to
   `\item` line; all eight
   `\indexlibrary…` itemdecl forms and the `\libglobal`/`\libmember` synopsis spans.
   A change mark (§7) renders in `macros.tex`'s own vocabulary: a marked node or element in
-  `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}`, a code run
-  as `@\added{...}@` with the spans inside it in their escaped form (`\exposid{x}`,
-  `draft_span_escaped`), the run having opened the escape. Paper mode (`--paper`), once
+  `addedblock` / `removedblock`, a prose run as `\added{...}` / `\removed{...}` with the mark
+  inside each `\tcode` in it (`\tcode{\removed{x}}`, since wg21-latex's marks are ulem's and
+  lose a `\tcode` inside them), a code run as `@\added{...}@` with its text escaped as LaTeX
+  text and the spans inside it in their escaped form (`\exposid{x}`, `draft_span_escaped`),
+  the run having opened the escape. Paper mode (`--paper`), once
   refused here for want of anything to emit, is the empty-baseline diff: adjacent marked
   top-level nodes share one `addedblock`. `render_to_string` is the backend's whole surface.
 - **mpark/wg21** (`backend/mpark.cpp`): the framework's pandoc markdown. One `::: wording`
   div per top-level node, `[#]{.pnum}` / `[#.#]{.pnum}` auto-numbering,
-  `## Title [stable.name]{- .sref} {-}` headings, ```` ```cpp ```` fences, native pipe tables
+  `## Title [stable.name](){.sref} {-}` headings (a stable name is always an `.sref` *link*,
+  which the framework prints as the bare `[x]`; a span it prints with the draft's title in front,
+  issue #412), ```` ```cpp ```` fences, native pipe tables
   with caption anchors; index entries dropped. A change mark (§7) renders as the framework's
   editing instruction: a marked node or element in a `::: add` / `::: rm` div, a prose run as
   `[...]{.add}` / `[...]{.rm}`, a code run as `@[...]{.add}@` with the spans inside it in the
@@ -1330,7 +1339,9 @@ There are exactly three backends, and **adding wording to one means adding it to
   `removedblock` special block (which org's stock export turns into the draft's environment
   of that name), a prose run is an `[[insert:][...]]` / `[[delete:][...]]` link whose
   cross-references are the `{{{sref(name)}}}` macro (org links do not nest), and a code run is
-  the draft's own `@\added{...}@`, the same bytes the LaTeX backend writes. Only a `pnum`
+  the draft's own `@\added{...}@`, as the LaTeX backend writes it, except that a span inside
+  the run is a nested escape with its own `@` delimiters, the form wg21org reads
+  (`@\removed{@\exposid{val}@}@`), and the run's text is not escaped for LaTeX. Only a `pnum`
   under an added section or inside an `addedblock` takes an `x`, `x+1`, ... label, one run
   over the fragment, read back off the rendered text. Paper mode is the empty-baseline diff:
   every top-level node marked added.
@@ -1353,10 +1364,10 @@ written against ([backend-direct-algebra](decisions/backend-direct-algebra.md),
   where LaTeX has one, because backticks supply the code font that `\tcode` supplies there;
   `mpark.test.cpp` asserts the opposite of its `latex.test.cpp` twin on purpose.
 - `SpanKind::Ref` is a cross-reference **inside a code comment** and `ir::RefInline` is the
-  prose one: they render `\ref{x}` / `@[x]{- .sref}@` and `\iref{x}` / `([x]{- .sref})`
+  prose one: they render `\ref{x}` / `@[x](){.sref}@` and `\iref{x}` / `([x](){.sref})`
   respectively, and the parentheses belong to the prose form only. The draft also writes `\ref`
   in prose, for the number a sentence reads as a noun ("Within subclause~`\ref{x}`, ..."): that
-  is a `RefInline` with `bare` set, `\ref{x}` / `[x]{- .sref}`, and still not a span. A Ref span is also the one
+  is a `RefInline` with `bare` set, `\ref{x}` / `[x](){.sref}`, and still not a span. A Ref span is also the one
   kind LaTeX does *not* wrap in `@…@`, because the draft's `macros.tex` sets `texcl=true` and
   a `//` comment in a `codeblock` is already in TeX mode.
 - The draft's `\tcode` argument is text mode. Escape literal code characters

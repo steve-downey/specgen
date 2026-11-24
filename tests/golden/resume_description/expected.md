@@ -1,6 +1,6 @@
 ::: wording
 
-## Assignment [resume.assign]{- .sref} {-}
+## Assignment [resume.assign](){.sref} {-}
 
 ```cpp
 inline void assign();
@@ -25,7 +25,7 @@ This continues the further guarantee.
 
 ::: wording
 
-## Tables [resume.tables]{- .sref} {-}
+## Tables [resume.tables](){.sref} {-}
 
 ```cpp
 inline void apply();

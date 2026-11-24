@@ -1,0 +1,117 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+
+# The documentation as web pages (issue #415). GitHub shows a committed .html
+# file as its source, so the pages people need to read in a browser -- the
+# rendered [optional.ref.monadic] example under docs/optional-ref-monadic/
+# rendered/, and the exports of the org documents, which are built rather than
+# committed -- are published here instead.
+#
+# The site mirrors docs/: every committed file at its own path, and beside each
+# org document its HTML export. The org documents link each other and the
+# rendered pages by relative file: links, which therefore keep working.
+#
+# docs/examples-live.org runs specgen while it exports, so this runs after the
+# release workflow has published the push's binary, and uses that binary. The
+# committed rendered pages are published as they are: re-rendering them needs
+# wg21-latex, mpark/wg21 and wg21org checkouts, which this job does not have.
+#
+# Publishing needs the repository's Pages source set to "GitHub Actions"
+# (Settings > Pages), once.
+
+name: Pages
+
+on:
+  workflow_run:
+    workflows:
+      - Release binary
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+# One deployment at a time, and a newer one never cancels an older one midway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the pages
+    # Only a release that was published: a run for a pull request, or one that
+    # failed, has no binary to run the live document with.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Install Emacs
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends emacs-nox
+
+      # The release made from this commit, or, run by hand, the latest one.
+      - name: Download specgen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases" \
+                    --jq "[.[] | select(.target_commitish == \"$SHA\")][0].tag_name // empty")
+          if [ -z "$tag" ]; then
+              tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          fi
+          echo "specgen from release $tag"
+          mkdir -p "$RUNNER_TEMP/specgen"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern specgen-manylinux_2_34_x86_64.tar.xz --dir "$RUNNER_TEMP/specgen"
+          tar -xJf "$RUNNER_TEMP/specgen/specgen-manylinux_2_34_x86_64.tar.xz" -C "$RUNNER_TEMP/specgen"
+          specgen=$(find "$RUNNER_TEMP/specgen" -path '*/bin/specgen' -type f | head -n 1)
+          "$specgen" --version
+          echo "SPECGEN=$specgen" >> "$GITHUB_ENV"
+
+      # The export rule is the Makefile's own, so a page here is the page
+      # `make docs/<name>.html` builds locally. The live document's commands
+      # read SPECGEN, and the Makefile's order-only install of a local build is
+      # bypassed by naming the target file.
+      - name: Export the org documents
+        run: |
+          find docs -name '*.org' -not -path '*/output/*' | sed 's/\.org$/.html/' |
+              xargs make --assume-old=install-release EMACS=emacs
+
+      - name: Assemble the site
+        run: |
+          mkdir -p _site
+          cp -R docs/. _site/
+          find _site -name '*.html.deps' -delete
+
+      - name: Upload
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy the pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

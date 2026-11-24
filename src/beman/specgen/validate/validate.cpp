@@ -1465,11 +1465,56 @@ Diagnostics check_missing_pair(const ir::DescriptionElement& derived,
 // itself. Compare every authored element of that kind with this evidence,
 // including later elements that carry no copy of the conjuncts. The grouped
 // authored/derived form remains readable for hand-built IR.
+// A leading alias the *Equivalent to* code keeps, under a name the
+// description's "Let" sentence binds: extraction drops one that agrees with
+// the sentence, so one still there says something else (issue #404).
+Diagnostics check_let_alias_drift(const ir::ItemDescr& description, const Bindings& bindings) {
+    return foundation::mconcat_map(
+        description.elements,
+        [&](const ir::DescriptionElement& element) -> Diagnostics {
+            return foundation::mconcat_map(
+                element.body,
+                [&](const ir::BodyBlock& block) -> Diagnostics {
+                    const auto* equivalent = std::get_if<ir::EquivalentTo>(&block);
+                    if (equivalent == nullptr)
+                        return {};
+                    const auto lines = equivalent->code.text | std::views::split('\n') |
+                                       std::views::transform(
+                                           [](auto&& range) { return std::string_view(range.begin(), range.end()); }) |
+                                       std::ranges::to<std::vector>();
+                    return foundation::mconcat_map(
+                        lines,
+                        [&](std::string_view line) -> Diagnostics {
+                            line.remove_prefix(std::min(line.size(), line.find_first_not_of(' ')));
+                            if (!line.starts_with("using "))
+                                return {};
+                            const std::string_view rest = line.substr(6);
+                            const std::size_t      eq   = rest.find(" = ");
+                            if (eq == std::string_view::npos)
+                                return {};
+                            const auto bound = bindings.find(std::string(rest.substr(0, eq)));
+                            if (bound == bindings.end())
+                                return {};
+                            return {{Severity::Warning,
+                                     "Effects",
+                                     std::format("the description lets `{}` be `{}`, and the Equivalent to code's "
+                                                 "alias says `{}`",
+                                                 bound->first,
+                                                 bound->second,
+                                                 rest.substr(eq + 3, rest.rfind(';') - eq - 3))}};
+                        },
+                        diagnostics_monoid);
+                },
+                diagnostics_monoid);
+        },
+        diagnostics_monoid);
+}
+
 Diagnostics check_mandates_constraints_drift(const ir::ItemDescr& description) {
     const auto bindings = description_bindings(description);
     const auto coverage = audit_coverage(description, bindings);
     return diagnostics_monoid.combine(
-        coverage.diagnostics,
+        diagnostics_monoid.combine(coverage.diagnostics, check_let_alias_drift(description, bindings)),
         foundation::mconcat_map(
             description.elements,
             [&](const ir::DescriptionElement& authored) -> Diagnostics {

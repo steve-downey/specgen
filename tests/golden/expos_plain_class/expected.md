@@ -32,7 +32,7 @@ namespace std {
 namespace std {
   class widget {
   public:
-    // @[widget.ops]{- .sref}@, operations
+    // @[widget.ops](){.sref}@, operations
     $token$ issue($helper-t$ h) const;
     $count-t$ count() const;
     $mode-t$ mode() const;
@@ -46,7 +46,7 @@ namespace std {
 
 ::: wording
 
-## Operations [widget.ops]{- .sref} {-}
+## Operations [widget.ops](){.sref} {-}
 
 ```cpp
 $token$ issue($helper-t$ h) const;

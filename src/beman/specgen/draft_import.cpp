@@ -864,6 +864,18 @@ ir::Paragraph Importer::parse_prose(std::string_view text) {
 
         if (name == "tcode" && arg) {
             flush();
+            // A concept name the draft wrapped in \tcode (issue #407) is the
+            // concept name, as it prints: the wrapper is typesetting, recorded so
+            // the LaTeX backend writes it back.
+            if (arg->inner.starts_with("\\libconcept{") || arg->inner.starts_with("\\exposconcept")) {
+                ir::Paragraph wrapped = parse_prose(arg->inner);
+                if (wrapped.size() == 1 && std::holds_alternative<ir::ConceptRef>(wrapped.front())) {
+                    std::get<ir::ConceptRef>(wrapped.front()).in_tcode = true;
+                    out.push_back(std::move(wrapped.front()));
+                    i = arg->next;
+                    continue;
+                }
+            }
             met_unknown_macro = false;
             ir::CodeText code = parse_code(arg->inner, false);
             // A macro in the code the IR has no kind for is not text: the whole run

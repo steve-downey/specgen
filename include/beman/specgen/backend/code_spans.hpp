@@ -13,11 +13,13 @@
 
 #include <beman/specgen/ir.hpp>
 
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -147,6 +149,20 @@ std::string wrap_run_lines(std::string_view interior, ir::Change change, WrapRun
            std::views::join_with('\n') | std::ranges::to<std::string>();
 }
 
+// The default for a changed run's literal text: the same escape as the text
+// outside the run.
+struct same_as_outside {};
+
+// The escape for a run's literal text: `escape_text_in_run`, or `escape_text`
+// when the backend gave none.
+template <typename EscapeText, typename EscapeTextInRun>
+decltype(auto) run_text_escape(EscapeText& escape_text, EscapeTextInRun& escape_text_in_run) {
+    if constexpr (std::same_as<std::remove_cvref_t<EscapeTextInRun>, same_as_outside>)
+        return (escape_text);
+    else
+        return (escape_text_in_run);
+}
+
 } // namespace code_spans_detail
 
 // Tree -> text for one CodeText, splicing each span's backend-supplied
@@ -178,17 +194,25 @@ std::string wrap_run_lines(std::string_view interior, ir::Change change, WrapRun
 // `(const ir::LayoutHint&, std::string_view following, bool in_span) ->
 // std::string`. The default writes nothing, which is right for every backend
 // but the ones writing draft LaTeX.
+//
+// `escape_text_in_run` handles the literal text inside a change run, and
+// defaults to `escape_text`. A backend whose mark leaves the listing needs it:
+// the LaTeX backend's `@\added{...}@` is a text-mode argument, so `&` in the
+// run is LaTeX's alignment tab unless it is written `\&` (issue #410).
 template <typename EscapeSpan,
           typename EscapeSpanInRun,
           typename WrapRun,
-          typename EscapeText = std::identity,
-          typename WriteHint  = code_spans_detail::no_hints>
+          typename EscapeText      = std::identity,
+          typename WriteHint       = code_spans_detail::no_hints,
+          typename EscapeTextInRun = code_spans_detail::same_as_outside>
 std::string render_code_spans(const ir::CodeText& code,
                               EscapeSpan&&        escape_span,
                               EscapeSpanInRun&&   escape_span_in_run,
                               WrapRun&&           wrap_run,
-                              EscapeText&&        escape_text = {},
-                              WriteHint&&         write_hint  = {}) {
+                              EscapeText&&        escape_text        = {},
+                              WriteHint&&         write_hint         = {},
+                              EscapeTextInRun&&   escape_text_in_run = {}) {
+    auto&&      run_text = code_spans_detail::run_text_escape(escape_text, escape_text_in_run);
     std::string out;
     std::size_t pos  = 0;
     auto        next = code.spans.begin();
@@ -202,7 +226,7 @@ std::string render_code_spans(const ir::CodeText& code,
         out += code_spans_detail::render_slice(code, pos, run.begin, next, hint, escape_span, escape_text, write_hint);
         out += code_spans_detail::wrap_run_lines(
             code_spans_detail::render_slice(
-                code, run.begin, run.end, next, hint, escape_span_in_run, escape_text, write_hint),
+                code, run.begin, run.end, next, hint, escape_span_in_run, run_text, write_hint),
             run.change,
             wrap_run);
         pos = run.end;

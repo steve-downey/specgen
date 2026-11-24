@@ -1,8 +1,8 @@
 ::: wording
 
-## Move-only wrapper [func.wrap.move]{- .sref} {-}
+## Move-only wrapper [func.wrap.move](){.sref} {-}
 
-### General [func.wrap.move.general]{- .sref} {-}
+### General [func.wrap.move.general](){.sref} {-}
 
 [#]{.pnum} The header provides partial specializations of `move_only_function` for each combination of the possible replacements of the placeholders *cv*, *ref*, and *noex* where
 
@@ -15,7 +15,7 @@
 - [#.#]{.pnum} If *ref* is empty, let *inv-quals* be *cv*`&`,
 - [#.#]{.pnum} otherwise, let *inv-quals* be *cv* *ref*.
 
-### Class template `move_only_function` [func.wrap.move.class]{- .sref} {-}
+### Class template `move_only_function` [func.wrap.move.class](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -24,7 +24,7 @@ namespace std {
   public:
     using result_type = R;
 
-    // @[func.wrap.move.ctor]{- .sref}@, constructors, assignments, and destructor
+    // @[func.wrap.move.ctor](){.sref}@, constructors, assignments, and destructor
     move_only_function() noexcept;
     move_only_function(nullptr_t) noexcept;
     move_only_function(move_only_function&&) noexcept;
@@ -40,11 +40,11 @@ namespace std {
 
     ~move_only_function();
 
-    // @[func.wrap.move.inv]{- .sref}@, invocation
+    // @[func.wrap.move.inv](){.sref}@, invocation
     explicit operator bool() const noexcept;
     R operator()(ArgTypes...) $cv$ $ref$ noexcept($noex$);
 
-    // @[func.wrap.move.util]{- .sref}@, utility
+    // @[func.wrap.move.util](){.sref}@, utility
     void swap(move_only_function&) noexcept;
     friend void swap(move_only_function&, move_only_function&) noexcept;
     friend bool operator==(const move_only_function&, nullptr_t) noexcept;
@@ -56,7 +56,7 @@ namespace std {
 }
 ```
 
-[#]{.pnum} The `move_only_function` class template provides polymorphic wrappers that generalize the notion of a callable object([func.def]{- .sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+[#]{.pnum} The `move_only_function` class template provides polymorphic wrappers that generalize the notion of a callable object ([func.def](){.sref}). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
 
 [#]{.pnum} *Recommended practice*: Implementations should avoid the use of dynamically allocated memory for a small contained value.
 
@@ -66,7 +66,7 @@ Such small-object optimization can only be applied to a type `T` for which `is_n
 
 :::
 
-### Constructors, assignments, and destructor [func.wrap.move.ctor]{- .sref} {-}
+### Constructors, assignments, and destructor [func.wrap.move.ctor](){.sref} {-}
 
 ```cpp
 template<class VT>
@@ -196,7 +196,7 @@ template<class F> move_only_function& operator=(F&& f);
 
 [#]{.pnum} *Effects*: Destroys the target object of `*this`, if any.
 
-### Invocation [func.wrap.move.inv]{- .sref} {-}
+### Invocation [func.wrap.move.inv](){.sref} {-}
 
 ```cpp
 explicit operator bool() const noexcept;
@@ -218,7 +218,7 @@ return $INVOKE$<R>(static_cast<F $inv-quals$>(f), std::forward<ArgTypes>(args)..
 
 where `f` is an lvalue designating the target object of `*this` and `F` is the type of `f`.
 
-### Utility [func.wrap.move.util]{- .sref} {-}
+### Utility [func.wrap.move.util](){.sref} {-}
 
 ```cpp
 void swap(move_only_function& other) noexcept;

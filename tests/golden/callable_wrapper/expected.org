@@ -44,7 +44,7 @@ namespace std {
 #+end_codeblock
 
 #+begin_pnum
-The ~callable_wrapper~ class template provides polymorphic wrappers that generalize the notion of a callable object([[https://eel.is/c++draft/func.def][@@html:[func.def]@@@@latex:{[}func.def{]}@@]]). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
+The ~callable_wrapper~ class template provides polymorphic wrappers that generalize the notion of a callable object ([[https://eel.is/c++draft/func.def][@@html:[func.def]@@@@latex:{[}func.def{]}@@]]). These wrappers can store, move, and call arbitrary callable objects, given a call signature.
 #+end_pnum
 
 #+begin_pnum

@@ -836,14 +836,16 @@ TEST_CASE("org - a changed prose run is an insert or delete link, a reference in
     CHECK(out.find("/Effects/: Sets [[delete:][~x~]][[insert:][~y~ (see {{{sref(a.b)}}})]].\n") != std::string::npos);
 }
 
-TEST_CASE("org - a changed run of code is the draft's escape, the same bytes the LaTeX backend writes") {
+// A span inside the run has its own `@` delimiters, the nested escape wg21org
+// reads (issue #413); the LaTeX backend writes the bare macro there.
+TEST_CASE("org - a changed run of code is the draft's escape, with a span in it nested in its own") {
     Synopsis synopsis;
     synopsis.code = CodeText{
         "T VAL;\nU w;", {{2, 5, SpanKind::ExposId, "val"}}, {{0, 6, Change::Added}, {7, 11, Change::Removed}}};
     Document doc;
     doc.nodes.push_back(synopsis);
     CHECK(org::render_to_string(doc) ==
-          "#+begin_codeblock\n@\\added{T \\exposid{val};}@\n@\\removed{U w;}@\n#+end_codeblock\n");
+          "#+begin_codeblock\n@\\added{T @\\exposid{val}@;}@\n@\\removed{U w;}@\n#+end_codeblock\n");
 }
 
 TEST_CASE("org - a marked section says so in its properties, a marked leaf in a block, added pnums take labels") {

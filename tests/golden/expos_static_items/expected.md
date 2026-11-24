@@ -2,7 +2,7 @@
 namespace std {
   class predicate {
   public:
-    // @[predicate.members]{- .sref}@, exposition members
+    // @[predicate.members](){.sref}@, exposition members
     static constexpr bool $test-value$ = true; // exposition only
 
   private:
@@ -17,9 +17,9 @@ namespace std {
 
 ::: wording
 
-## Class predicate [predicate]{- .sref} {-}
+## Class predicate [predicate](){.sref} {-}
 
-### Exposition members [predicate.members]{- .sref} {-}
+### Exposition members [predicate.members](){.sref} {-}
 
 ```cpp
 static constexpr bool $test-value$ = true;
@@ -44,7 +44,7 @@ static_assert(true);
 
 :::
 
-### Limits [predicate.limits]{- .sref} {-}
+### Limits [predicate.limits](){.sref} {-}
 
 ```cpp
 static constexpr int $storage-limit${42};

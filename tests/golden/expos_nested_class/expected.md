@@ -1,6 +1,6 @@
 ::: wording
 
-## Class template `demo_view` [demo.view]{- .sref} {-}
+## Class template `demo_view` [demo.view](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -15,7 +15,7 @@ namespace std {
     }; // exposition only
 
   public:
-    // @[demo.view]{- .sref}@, access
+    // @[demo.view](){.sref}@, access
     constexpr $iterator$ begin() const;
   };
 }
@@ -27,7 +27,7 @@ constexpr $iterator$ begin() const;
 
 [#]{.pnum} *Returns*: An iterator over the base range, positioned at its first element.
 
-### Class `demo_view::iterator` [demo.view.iterator]{- .sref} {-}
+### Class `demo_view::iterator` [demo.view.iterator](){.sref} {-}
 
 ```cpp
 constexpr int operator*() const;

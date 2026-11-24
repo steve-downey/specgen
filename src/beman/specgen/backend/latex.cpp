@@ -71,14 +71,18 @@ using backend::draft_span_codeblock;
 // (`draft_listing_text`). The spans are substituted, via the shared substrate (backend/code_spans.hpp)
 // -- and the wording diff's change runs, each closed in the draft's own
 // `@\added{...}@` with the spans inside it in their escaped form, since the
-// run has opened the `@...@` already (docs/plans/wording-diff.md).
+// run has opened the `@...@` already (docs/plans/wording-diff.md). The run's
+// own text is in that escape too, which is LaTeX text and not the listing, so
+// it is escaped as code in a `\tcode` is: `T&` in an added run is `T\&`, not
+// an alignment tab that stops the build (issue #410).
 std::string render_code_codeblock(const ir::CodeText& code) {
     return backend::render_code_spans(code,
                                       draft_span_codeblock,
                                       backend::draft_span_escaped,
                                       backend::draft_change_codeblock,
                                       backend::draft_listing_text,
-                                      backend::draft_layout_hint_listing);
+                                      backend::draft_layout_hint_listing,
+                                      backend::draft_escape_code_text);
 }
 
 // A marked node or element in the draft's own environment for it,
@@ -142,21 +146,46 @@ struct PieceRenderer {
 
     // A changed run of prose (the wording diff's mark): the draft's own
     // `\added{...}` / `\removed{...}` from macros.tex, around the run
-    // rendered as it would be unmarked. Defined after `render_run` below,
-    // which dispatches the run's `PlainInline`s -- a different, non-recursive
-    // variant -- through this same visitor's other four cases.
+    // rendered as it would be unmarked, the mark inside each `\tcode`.
+    // Defined below, where it dispatches the run's `PlainInline`s -- a
+    // different, non-recursive variant -- through this same visitor's other
+    // cases.
     std::string operator()(const ir::ChangedInline& run) const;
 };
 
-std::string render_run(const std::vector<ir::PlainInline>& inlines) {
-    return inlines | std::views::transform([](const ir::PlainInline& piece) {
-               return std::visit(overloaded{PieceRenderer{}}, piece);
-           }) |
-           std::views::join | std::ranges::to<std::string>();
-}
+// One stretch of a changed run: the pieces between code inlines, rendered and
+// joined, or one code inline's `\tcode` argument.
+struct RunSegment {
+    bool        code = false;
+    std::string text;
+};
 
 std::string PieceRenderer::operator()(const ir::ChangedInline& run) const {
-    return backend::draft_change_prose(run.change, render_run(run.inlines));
+    // wg21-latex's `\added` and `\removed` are ulem's `\uline` and `\sout`,
+    // which take their argument apart word by word: a `\tcode` inside one is
+    // set partly in the text font and loses characters. So the mark goes
+    // inside the code instead, `\tcode{\removed{X}}`, which prints whole
+    // (issue #411). The text between code inlines shares one mark, as the
+    // whole run did before.
+    constexpr std::string_view    tcode    = "\\tcode{";
+    const std::vector<RunSegment> segments = std::ranges::fold_left(
+        run.inlines, std::vector<RunSegment>{}, [&](std::vector<RunSegment> acc, const ir::PlainInline& piece) {
+            std::string text = std::visit(overloaded{PieceRenderer{}}, piece);
+            const auto* code = std::get_if<ir::CodeInline>(&piece);
+            const bool coded = code != nullptr && !code->mathematics && text.starts_with(tcode) && text.ends_with('}');
+            if (coded)
+                acc.push_back({true, text.substr(tcode.size(), text.size() - tcode.size() - 1)});
+            else if (!acc.empty() && !acc.back().code)
+                acc.back().text += text;
+            else
+                acc.push_back({false, std::move(text)});
+            return acc;
+        });
+    return segments | std::views::transform([&](const RunSegment& segment) {
+               const std::string marked = backend::draft_change_prose(run.change, segment.text);
+               return segment.code ? std::string(tcode) + marked + '}' : marked;
+           }) |
+           std::views::join | std::ranges::to<std::string>();
 }
 
 std::string render_paragraph(const ir::Paragraph& para) {

@@ -1,19 +1,19 @@
 ::: wording
 
-## Header <routed> synopsis [routed.syn]{- .sref} {-}
+## Header <routed> synopsis [routed.syn](){.sref} {-}
 
 ```cpp
 namespace std {
   class gadget {
   public:
-    // @[gadget.ctor]{- .sref}@, constructors
+    // @[gadget.ctor](){.sref}@, constructors
     constexpr gadget() noexcept;
     int size() const;
     constexpr gadget(int) noexcept;
     constexpr gadget(long) noexcept;
     constexpr gadget(short) noexcept;
 
-    // @[gadget.obs]{- .sref}@, observers
+    // @[gadget.obs](){.sref}@, observers
     using value_type = int;
     using reference = int&;
 
@@ -24,7 +24,7 @@ namespace std {
     friend void swap(gadget&, int);
   };
 
-  // @[gadget.obs]{- .sref}@, namespace observers
+  // @[gadget.obs](){.sref}@, namespace observers
 
   int observe(gadget&);
 
@@ -37,7 +37,7 @@ namespace std {
   template<>
   class specialized<int> {
   public:
-    // @[gadget.ctor]{- .sref}@, constructors
+    // @[gadget.ctor](){.sref}@, constructors
     specialized();
     specialized(int);
   };
@@ -45,14 +45,14 @@ namespace std {
   template<>
   class specialized<long> {
   public:
-    // @[gadget.ctor]{- .sref}@, constructors
+    // @[gadget.ctor](){.sref}@, constructors
     specialized();
     specialized(long);
   };
 }
 ```
 
-### Constructors [gadget.ctor]{- .sref} {-}
+### Constructors [gadget.ctor](){.sref} {-}
 
 ```cpp
 constexpr gadget() noexcept;
@@ -83,7 +83,7 @@ specialized(long);
 
 [#]{.pnum} *Postconditions*: Has a long value.
 
-### Observers [gadget.obs]{- .sref} {-}
+### Observers [gadget.obs](){.sref} {-}
 
 ```cpp
 using value_type = int;

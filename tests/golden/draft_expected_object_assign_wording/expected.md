@@ -1,6 +1,6 @@
 ::: wording
 
-## Assignment [expected.object.assign]{- .sref} {-}
+## Assignment [expected.object.assign](){.sref} {-}
 
 [#]{.pnum} This subclause makes use of the following exposition-only function template:
 

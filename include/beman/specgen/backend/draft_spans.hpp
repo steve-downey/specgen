@@ -324,12 +324,12 @@ inline std::string draft_placeholder(const ir::PlaceholderInline& v) {
 }
 
 // A concept name in prose: \libconcept, or \exposconcept for an
-// exposition-only one.
+// exposition-only one; inside \tcode where the draft wrote it there.
 inline std::string draft_concept(const ir::ConceptRef& v) {
-    const std::string name = draft_hinted_text(v.name, v.hints);
-    if (!v.exposition)
-        return "\\libconcept{" + name + '}';
-    return (v.no_correction ? "\\exposconceptnc{" : "\\exposconcept{") + name + '}';
+    const std::string name  = draft_hinted_text(v.name, v.hints);
+    const std::string macro = !v.exposition ? "\\libconcept{" + name + '}'
+                                            : (v.no_correction ? "\\exposconceptnc{" : "\\exposconcept{") + name + '}';
+    return v.in_tcode ? "\\tcode{" + macro + '}' : macro;
 }
 
 // A C++17 named requirement in prose: \oldconcept, which prints the Cpp17

@@ -775,7 +775,8 @@ specgen_add_golden(
 # backends from one hand-marked IR: an added and a removed section, item,
 # element and free paragraph; a prose run holding a code inline and a
 # cross-reference; a code run holding an exposition-only span, in a synopsis,
-# a signature and an *Equivalent to* body; and an added paragraph between
+# a signature and an *Equivalent to* body, and one holding `&&`, which LaTeX
+# must escape there (issue #410); and an added paragraph between
 # retained ones, so the numbering shows `#`, `x`, `#`. No `--paper`: the
 # marks are the IR's own, and this pins that they render without it.
 specgen_add_golden(
@@ -3050,6 +3051,49 @@ specgen_add_golden(
     qualified_move
     MODE generate
     INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_qualified_move.hpp"
+)
+
+# `std::forward` and `std::move` keep their `std::` in an extracted body, as
+# the draft writes them; `std::invoke` and `std::exchange` lose theirs (issue
+# #405).
+specgen_add_golden(
+    forward_move
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_forward_move.hpp"
+)
+specgen_add_golden(
+    forward_move
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/forward_move/expected.json"
+)
+
+# An authored \codeblock's `@\exposid{val}@` is the exposition-only span, so
+# mpark writes `$val$` where it used to print the LaTeX escape (issue #406).
+specgen_add_golden(
+    codeblock_escape
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_codeblock_escape.hpp"
+)
+specgen_add_golden(
+    codeblock_escape
+    MODE render
+    BACKEND mpark
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/codeblock_escape/expected.json"
+)
+
+# A leading alias a "Let `U` be `X`." already states is dropped from the
+# Equivalent to code, as the consumed static_asserts are (issue #404).
+specgen_add_golden(
+    let_alias
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_let_alias.hpp"
+)
+specgen_add_golden(
+    let_alias
+    MODE render
+    BACKEND latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/let_alias/expected.json"
 )
 
 specgen_add_golden(

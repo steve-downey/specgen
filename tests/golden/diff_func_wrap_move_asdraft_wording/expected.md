@@ -18,13 +18,13 @@ namespace std {
 
 ::: wording
 
-## Move-only wrapper [func.wrap.move]{- .sref} {-}
+## Move-only wrapper [func.wrap.move](){.sref} {-}
 
-### General [func.wrap.move.general]{- .sref} {-}
+### General [func.wrap.move.general](){.sref} {-}
 
 […]
 
-### Class template `move_only_function` [func.wrap.move.class]{- .sref} {-}
+### Class template `move_only_function` [func.wrap.move.class](){.sref} {-}
 
 ```cpp
 namespace std {
@@ -33,7 +33,7 @@ namespace std {
   public:
     using result_type = R;
 
-    // @[func.wrap.move.ctor]{- .sref}@, constructors, assignments, and destructor
+    // @[func.wrap.move.ctor](){.sref}@, constructors, assignments, and destructor
     @[constexpr]{.add}@ move_only_function() noexcept;
     @[constexpr]{.add}@ move_only_function(nullptr_t) noexcept;
     @[constexpr]{.add}@ move_only_function(move_only_function&&) noexcept;
@@ -49,11 +49,11 @@ namespace std {
 
     @[constexpr]{.add}@ ~move_only_function();
 
-    // @[func.wrap.move.inv]{- .sref}@, invocation
+    // @[func.wrap.move.inv](){.sref}@, invocation
     @[constexpr]{.add}@ explicit operator bool() const noexcept;
     @[constexpr]{.add}@ R operator()(ArgTypes...) $cv$ $ref$ noexcept($noex$);
 
-    // @[func.wrap.move.util]{- .sref}@, utility
+    // @[func.wrap.move.util](){.sref}@, utility
     @[constexpr]{.add}@ void swap(move_only_function&) noexcept;
     friend @[constexpr]{.add}@ void swap(move_only_function&, move_only_function&) noexcept;
     friend @[constexpr]{.add}@ bool operator==(const move_only_function&, nullptr_t) noexcept;
@@ -67,7 +67,7 @@ namespace std {
 
 […]
 
-### Constructors, assignments, and destructor [func.wrap.move.ctor]{- .sref} {-}
+### Constructors, assignments, and destructor [func.wrap.move.ctor](){.sref} {-}
 
 […]
 
@@ -182,7 +182,7 @@ template<class F>
 
 [#]{.pnum} *Effects*: Destroys the target object of `*this`, if any.
 
-### Invocation [func.wrap.move.inv]{- .sref} {-}
+### Invocation [func.wrap.move.inv](){.sref} {-}
 
 ```cpp
 @[constexpr]{.add}@ explicit operator bool() const noexcept;
@@ -191,7 +191,7 @@ template<class F>
 [#]{.pnum} *Returns*: `true` if `*this` has a target object, otherwise `false`.
 
 ```cpp
-@[constexpr]{.add}@ R operator()(ArgTypes... args)@[*cv* *ref* noexcept(*noex*)]{.rm}@;
+@[constexpr]{.add}@ R operator()(ArgTypes... args) @[*cv* *ref* noexcept(*noex*)]{.rm}@;
 ```
 
 [#]{.pnum} *Preconditions*: `*this` has a target object.
@@ -204,7 +204,7 @@ return $INVOKE$<R>(static_cast<F $inv-quals$>(f), std::forward<ArgTypes>(args)..
 
 where `f` is an lvalue designating the target object of `*this` and `F` is the type of `f`.
 
-### Utility [func.wrap.move.util]{- .sref} {-}
+### Utility [func.wrap.move.util](){.sref} {-}
 
 ```cpp
 @[constexpr]{.add}@ void swap(move_only_function& other) noexcept;

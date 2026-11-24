@@ -112,7 +112,7 @@ TEST_CASE("mpark - spans use the framework's embedded-Markdown convention") {
     // counterpart to assert.
     CHECK(out.find("T $val$;") != std::string::npos);
     CHECK(out.find("`$see below$`") != std::string::npos);
-    CHECK(out.find("see ([optional.general]{- .sref}).") != std::string::npos);
+    CHECK(out.find("see ([optional.general](){.sref}).") != std::string::npos);
 }
 
 TEST_CASE("mpark - implementation-defined spans use the framework's italic shorthand") {
@@ -256,7 +256,7 @@ TEST_CASE("mpark - a tie in running text is a no-break space, and the other hint
     item.descr.elements.push_back(std::move(remarks));
 
     const std::string out = mpark::render_to_string(item);
-    CHECK(out.contains("Within subclause&nbsp;[gadget]{- .sref}, `R(*)(G) noexcept`."));
+    CHECK(out.contains("Within subclause&nbsp;[gadget](){.sref}, `R(*)(G) noexcept`."));
 }
 
 // The draft's line-break hints are LaTeX typesetting. They are beside the code,
@@ -289,7 +289,7 @@ TEST_CASE("mpark - a ref span in a synopsis group comment") {
     });
 
     const std::string out = mpark::render_to_string(doc);
-    CHECK(out.find("// @[optional.ctor]{- .sref}@, constructors") != std::string::npos);
+    CHECK(out.find("// @[optional.ctor](){.sref}@, constructors") != std::string::npos);
     // The parenthesized form belongs to RefInline, in prose, and must not
     // leak into a comment.
     CHECK(out.find("([optional.ctor]") == std::string::npos);
@@ -547,7 +547,7 @@ TEST_CASE("mpark - document with sections, synopsis, and free prose") {
     const std::string expected =
         R"(::: wording
 
-## Observers [optional.observe]{- .sref} {-}
+## Observers [optional.observe](){.sref} {-}
 
 ```cpp
 constexpr bool has_value() const noexcept;
@@ -555,7 +555,7 @@ constexpr bool has_value() const noexcept;
 
 [#]{.pnum} A program that instantiates it is ill-formed.
 
-### Deeper [optional.observe.deep]{- .sref} {-}
+### Deeper [optional.observe.deep](){.sref} {-}
 
 :::
 )";
@@ -596,11 +596,11 @@ TEST_CASE("mpark - a nested section descends from a non-default base") {
     const std::string expected =
         R"(::: wording
 
-### Transcoding [transcode]{- .sref} {-}
+### Transcoding [transcode](){.sref} {-}
 
-#### Error types [transcode.errors]{- .sref} {-}
+#### Error types [transcode.errors](){.sref} {-}
 
-##### Enumerators [transcode.errors.enum]{- .sref} {-}
+##### Enumerators [transcode.errors.enum](){.sref} {-}
 
 :::
 )";
@@ -623,9 +623,9 @@ TEST_CASE("mpark - heading level saturates at six on the way down") {
     const std::string expected =
         R"(::: wording
 
-###### [deep]{- .sref} {-}
+###### [deep](){.sref} {-}
 
-###### [deep.deeper]{- .sref} {-}
+###### [deep.deeper](){.sref} {-}
 
 :::
 )";
@@ -638,7 +638,7 @@ TEST_CASE("mpark - a titleless section emits no double space") {
     sec.stable_name = "optional.ctor";
     doc.nodes.push_back(std::move(sec));
 
-    CHECK(mpark::render_to_string(doc) == "::: wording\n\n## [optional.ctor]{- .sref} {-}\n\n:::\n");
+    CHECK(mpark::render_to_string(doc) == "::: wording\n\n## [optional.ctor](){.sref} {-}\n\n:::\n");
 }
 
 // --- --new-root (issues #89, #94): a paper's own proposed clause is not yet
@@ -665,7 +665,7 @@ TEST_CASE("new-root - a Section heading under the root drops .sref, one outside 
     const std::string out = mpark::render_to_string(doc, {.new_roots = {"transcode"}});
     CHECK(out.find("## Header <transcode> synopsis [transcode] {-}") != std::string::npos);
     CHECK(out.find("### Errors [transcode.errors] {-}") != std::string::npos);
-    CHECK(out.find("## General utilities [range.utility]{- .sref} {-}") != std::string::npos);
+    CHECK(out.find("## General utilities [range.utility](){.sref} {-}") != std::string::npos);
 }
 
 TEST_CASE("new-root - a Ref span under the root drops .sref, in the synopsis comment") {
@@ -696,7 +696,7 @@ TEST_CASE("new-root - a RefInline citation outside the root keeps .sref, one und
 
     const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode"}});
     CHECK(out.find("([transcode.errors])") != std::string::npos);
-    CHECK(out.find("([range.utility]{- .sref})") != std::string::npos);
+    CHECK(out.find("([range.utility](){.sref})") != std::string::npos);
 }
 
 TEST_CASE("new-root - an exact match and a name at any depth are under the root; a longer prefix is not") {
@@ -719,7 +719,7 @@ TEST_CASE("new-root - an exact match and a name at any depth are under the root;
     // The whole subtree, not one segment: three levels down is still the
     // paper's own clause, which is what the help text now says (issue #94).
     CHECK(out.find("([transcode.whatwg.decode.iterator])") != std::string::npos);
-    CHECK(out.find("([transcoded.other]{- .sref})") != std::string::npos);
+    CHECK(out.find("([transcoded.other](){.sref})") != std::string::npos);
 }
 
 // A paper proposing two headers gives a root for each, and both subtrees are
@@ -740,7 +740,7 @@ TEST_CASE("new-root - two roots both apply, and a name under neither keeps .sref
     const std::string out = mpark::render_to_string(item, {.new_roots = {"transcode", "null.term"}});
     CHECK(out.find("([transcode.reqs])") != std::string::npos);
     CHECK(out.find("([null.term.adaptor])") != std::string::npos);
-    CHECK(out.find("([range.utility]{- .sref})") != std::string::npos);
+    CHECK(out.find("([range.utility](){.sref})") != std::string::npos);
 }
 
 // The first root survives the second: the defect issue #94 reports is that
@@ -763,7 +763,7 @@ TEST_CASE("new-root - a Section heading under either of two roots drops .sref") 
     const std::string out = mpark::render_to_string(doc, {.new_roots = {"transcode", "null.term"}});
     CHECK(out.find("## Header <transcode> synopsis [transcode] {-}") != std::string::npos);
     CHECK(out.find("## Adaptor [null.term.adaptor] {-}") != std::string::npos);
-    CHECK(out.find("## General utilities [range.utility]{- .sref} {-}") != std::string::npos);
+    CHECK(out.find("## General utilities [range.utility](){.sref} {-}") != std::string::npos);
 }
 
 TEST_CASE("new-root - empty (the default) changes nothing") {
@@ -774,8 +774,8 @@ TEST_CASE("new-root - empty (the default) changes nothing") {
         beman::specgen::ir::BodyParagraph{beman::specgen::ir::Paragraph{RefInline{"transcode.errors"}}});
     item.descr.elements.push_back(std::move(remarks));
 
-    CHECK(mpark::render_to_string(item).find("([transcode.errors]{- .sref})") != std::string::npos);
-    CHECK(mpark::render_to_string(item, {.new_roots = {}}).find("([transcode.errors]{- .sref})") != std::string::npos);
+    CHECK(mpark::render_to_string(item).find("([transcode.errors](){.sref})") != std::string::npos);
+    CHECK(mpark::render_to_string(item, {.new_roots = {}}).find("([transcode.errors](){.sref})") != std::string::npos);
 }
 
 // A synopsis holds no numbered paragraph, so wrapping one would leave an empty
@@ -937,7 +937,7 @@ TEST_CASE("mpark - a changed prose run is the framework's add or rm span around 
                        TextInline{"."}}});
     item.descr.elements.push_back(std::move(effects));
     const std::string out = mpark::render_to_string(item);
-    CHECK(out.find("*Effects*: Sets [`x`]{.rm}[`y` (see ([a.b]{- .sref}))]{.add}.\n") != std::string::npos);
+    CHECK(out.find("*Effects*: Sets [`x`]{.rm}[`y` (see ([a.b](){.sref}))]{.add}.\n") != std::string::npos);
 }
 
 TEST_CASE("mpark - a changed run of code is the embedded-Markdown span, its spans unabbreviated inside it") {
@@ -959,7 +959,7 @@ TEST_CASE("mpark - marked nodes take editing-instruction divs, and only added pa
                                           "\n"
                                           "::: rm\n\n::: wording\n\n[#]{.pnum} Gone.\n\n:::\n\n:::\n"
                                           "\n"
-                                          "::: wording\n\n## S [g.s]{- .sref} {-}\n\n[#]{.pnum} Kept.\n\n"
+                                          "::: wording\n\n## S [g.s](){.sref} {-}\n\n[#]{.pnum} Kept.\n\n"
                                           "::: add\n\n[x]{.pnum} New.\n\n:::\n\n:::\n");
 }
 
@@ -973,7 +973,7 @@ TEST_CASE("mpark - paper mode is every top-level node marked added") {
     CHECK(mpark::render_to_string(marked) == paper);
     CHECK(
         paper ==
-        "::: add\n\n```cpp\nclass g;\n```\n\n::: wording\n\n## S [g.s]{- .sref} {-}\n\n[x]{.pnum} P.\n\n:::\n\n:::\n");
+        "::: add\n\n```cpp\nclass g;\n```\n\n::: wording\n\n## S [g.s](){.sref} {-}\n\n[x]{.pnum} P.\n\n:::\n\n:::\n");
 }
 
 TEST_CASE("mpark - a marked element takes its own div inside the wording div") {
@@ -1064,7 +1064,7 @@ TEST_CASE("mpark - an elided paragraph is the unnumbered ellipsis") {
     doc.nodes.push_back(Section{
         "g.s", "S", {FreeParagraph{{TextInline{"hidden"}}, Change::Elided}, FreeParagraph{{TextInline{"Kept."}}}}});
     CHECK(mpark::render_to_string(doc) ==
-          "::: wording\n\n## S [g.s]{- .sref} {-}\n\n[…]\n\n[#]{.pnum} Kept.\n\n:::\n");
+          "::: wording\n\n## S [g.s](){.sref} {-}\n\n[…]\n\n[#]{.pnum} Kept.\n\n:::\n");
 }
 
 // Issue #339: a math span is TeX, an ordinal a superscript, a subscript has

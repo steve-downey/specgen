@@ -1,34 +1,34 @@
 ::: wording
 
-## Header <demo> synopsis [demo.syn]{- .sref} {-}
+## Header <demo> synopsis [demo.syn](){.sref} {-}
 
 ```cpp
 namespace std {
-  // @[demo.buffer]{- .sref}@, class template buffer
+  // @[demo.buffer](){.sref}@, class template buffer
 
   template<class T> class buffer;
 
   namespace views {
-    // @[demo.views]{- .sref}@, range adaptor objects
+    // @[demo.views](){.sref}@, range adaptor objects
 
     inline constexpr $unspecified$ adapt;
   }
 
   namespace proto {
-    // @[demo.encoding]{- .sref}@, encodings
+    // @[demo.encoding](){.sref}@, encodings
 
     enum class encoding { utf8, utf16 };
 
-    // @[demo.decoder]{- .sref}@, class template decoder
+    // @[demo.decoder](){.sref}@, class template decoder
 
     template<encoding E> class decoder;
 
-    // @[demo.decode]{- .sref}@, decoding
+    // @[demo.decode](){.sref}@, decoding
 
     template<encoding E> decoder<E> decode(const char* text);
   }
 
-  // @[demo.decode]{- .sref}@, decoding
+  // @[demo.decode](){.sref}@, decoding
 
   template<class D> D decode(D d);
 
@@ -47,20 +47,20 @@ namespace std {
 
 ::: wording
 
-## Class template `buffer` [demo.buffer]{- .sref} {-}
+## Class template `buffer` [demo.buffer](){.sref} {-}
 
 ```cpp
 namespace std {
   template<class T>
   class buffer {
   public:
-    // @[demo.buffer.obs]{- .sref}@, observers
+    // @[demo.buffer.obs](){.sref}@, observers
     constexpr bool empty() const;
   };
 }
 ```
 
-### Observers [demo.buffer.obs]{- .sref} {-}
+### Observers [demo.buffer.obs](){.sref} {-}
 
 ```cpp
 constexpr bool empty() const;
@@ -72,7 +72,7 @@ constexpr bool empty() const;
 
 ::: wording
 
-## Range adaptor objects [demo.views]{- .sref} {-}
+## Range adaptor objects [demo.views](){.sref} {-}
 
 ```cpp
 inline constexpr $unspecified$ views::adapt;
@@ -84,7 +84,7 @@ inline constexpr $unspecified$ views::adapt;
 
 ::: wording
 
-## Encodings [demo.encoding]{- .sref} {-}
+## Encodings [demo.encoding](){.sref} {-}
 
 ```cpp
 enum class encoding { utf8, utf16 };
@@ -96,20 +96,20 @@ enum class encoding { utf8, utf16 };
 
 ::: wording
 
-## Class template `decoder` [demo.decoder]{- .sref} {-}
+## Class template `decoder` [demo.decoder](){.sref} {-}
 
 ```cpp
 namespace std::proto {
   template<encoding E>
   class decoder {
   public:
-    // @[demo.decoder.obs]{- .sref}@, observers
+    // @[demo.decoder.obs](){.sref}@, observers
     constexpr encoding scheme() const;
   };
 }
 ```
 
-### Observers [demo.decoder.obs]{- .sref} {-}
+### Observers [demo.decoder.obs](){.sref} {-}
 
 ```cpp
 constexpr encoding scheme() const;
@@ -121,7 +121,7 @@ constexpr encoding scheme() const;
 
 ::: wording
 
-## Decoding [demo.decode]{- .sref} {-}
+## Decoding [demo.decode](){.sref} {-}
 
 ```cpp
 template<encoding E>

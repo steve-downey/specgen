@@ -1,6 +1,6 @@
 ::: wording
 
-## Swap [expected.object.swap]{- .sref} {-}
+## Swap [expected.object.swap](){.sref} {-}
 
 ```cpp
 constexpr void swap(expected& rhs) noexcept($see below$);
