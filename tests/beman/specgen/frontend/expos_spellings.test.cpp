@@ -78,4 +78,21 @@ TEST_CASE("expos_spellings - every use in a code span is renamed, by either spel
 
     // A literal's contents are text.
     CHECK(rewritten("\"value_\" 'p_'").spans.empty());
+
+    // A name already in the mpark spelling is the exposition name, taken or
+    // not, and is not wrapped twice (issue #432).
+    const ir::CodeText dollared = rewritten("$value$ + $has-next$ + $p_$", {"value"});
+    CHECK(dollared.text == "value + has-next + ptr");
+    CHECK(covered(dollared) == "value|has-next|ptr|");
+
+    // A name reached through a scope is that scope's (issue #432).
+    const ir::CodeText scoped = rewritten("ns::value<int> + T::value_ + value_");
+    CHECK(scoped.text == "ns::value<int> + T::value_ + value");
+    CHECK(covered(scoped) == "value|");
+
+    // An exposition name followed by a template argument list is a
+    // template's, while the written spelling still names the member.
+    const ir::CodeText templated = rewritten("value<int> + value < 1 + p_<int>");
+    CHECK(templated.text == "value<int> + value < 1 + ptr<int>");
+    CHECK(covered(templated) == "value|ptr|");
 }
