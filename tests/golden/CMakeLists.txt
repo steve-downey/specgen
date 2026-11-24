@@ -3127,6 +3127,20 @@ foreach(backend IN ITEMS latex mpark org)
     )
 endforeach()
 
+# Out-of-line definitions that contribute nothing (issue #433): the members of
+# an `\omit`ted class, documented or not, and an undocumented definition with
+# no preceding item to join. Each used to come out as a stray item with no
+# description, in a fenced header synopsis and in an ordinary section alike.
+specgen_add_golden(
+    undocumented_definitions
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_undocumented_definitions.hpp"
+)
+specgen_add_golden(
+    undocumented_definitions_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undocumented_definitions/expected.json"
+)
+
 # Specifiers spelled through macros are written as they expand (issue #349).
 specgen_add_golden(
     macro_specifiers

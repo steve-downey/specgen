@@ -100,6 +100,15 @@ std::vector<GroupCandidate> group_items(std::vector<GroupCandidate> candidates, 
                    std::holds_alternative<ir::SpecItem>(grouped[*adjacent_primary].node)) {
             append_signatures(grouped[*adjacent_primary], candidate);
             continue;
+        } else if (candidate.wants_join && is_item &&
+                   !ir::has_description(std::get<ir::SpecItem>(candidate.node).descr) &&
+                   !std::get<ir::SpecItem>(candidate.node).as_draft) {
+            // A follower with nothing to join and nothing of its own to say:
+            // an undocumented definition, which is the ordinary fate of an
+            // unannotated entity (design §6). It used to stand as an item
+            // with no description, and a run of them as one item holding
+            // all their signatures (issue #433).
+            continue;
         }
 
         grouped.push_back(std::move(candidate));

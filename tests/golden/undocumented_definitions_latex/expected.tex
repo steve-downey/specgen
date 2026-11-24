@@ -1,0 +1,56 @@
+\rSec3[demo.syn]{Header \tcode{<demo>} synopsis}
+
+\begin{codeblock}
+namespace std {
+  // \ref{demo.thing}, thing
+
+  template<class T>
+  class @\libglobal{shown}@ {
+  public:
+    class @\exposid{iterator}@; // \expos
+    void g();
+  };
+}
+\end{codeblock}
+
+\pnum
+\remarks
+A thing.
+
+\indexlibrarymember{g}{shown}%
+\begin{itemdecl}
+void g();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Does g.
+\end{itemdescr}
+
+\rSec3[demo.thing]{Things}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{plain_shown}@ {
+  public:
+    class @\exposid{iterator}@; // \expos
+    void g();
+  };
+}
+\end{codeblock}
+
+\pnum
+\remarks
+Another thing.
+
+\indexlibrarymember{g}{plain_shown}%
+\begin{itemdecl}
+void g();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Does plain g.
+\end{itemdescr}
