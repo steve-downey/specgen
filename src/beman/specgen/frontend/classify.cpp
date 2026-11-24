@@ -156,6 +156,31 @@ classify_record_declaration(const clang::NamedDecl*                          dec
     return item_decl_event(attach_record_declaration(decl, record, sm, lang_opts, ns_drop_set, expos_set), doc);
 }
 
+// Whether `decl` is a member of an `\omit`ted class, or of a class nested in
+// one (issue #433). The class is left out of the wording whole, so its
+// members' out-of-line definitions are too, documented or not; without this
+// they arrived as items of their own, an undocumented run of them as one
+// empty item of everyone's signatures.
+bool member_of_omitted_class(const clang::Decl* decl, const clang::SourceManager& sm) {
+    const clang::FunctionDecl* fn = as_out_of_line_function(decl);
+    if (fn == nullptr)
+        return false;
+    // substrate generic algorithm: a walk up a parent chain, which no range
+    // adaptor expresses.
+    for (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(fn->getDeclContext()); record != nullptr;
+         record             = llvm::dyn_cast<clang::CXXRecordDecl>(record->getParent())) {
+        const clang::CXXRecordDecl* definition = record->getDefinition();
+        if (definition == nullptr)
+            continue;
+        const clang::Decl* head = definition->getDescribedClassTemplate() != nullptr
+                                      ? static_cast<const clang::Decl*>(definition->getDescribedClassTemplate())
+                                      : definition;
+        if (docblock_directives(head, sm).omit)
+            return true;
+    }
+    return false;
+}
+
 bool is_attached_comment(unsigned offset, const AttachedCommentRanges& ranges) {
     return std::ranges::any_of(
         ranges, [offset](const auto& range) { return offset >= range.first && offset <= range.second; });
@@ -589,6 +614,9 @@ db::DocEvent classify(const RawItem&                                   ev,
             return item_decl_event(std::move(attached), doc);
         }
     }
+
+    if (member_of_omitted_class(ev.decl, sm))
+        return db::Ignored{};
 
     AttachedItem attached = build_spec_item(ev.decl, sm, lang_opts, ns_drop_set, expos_set, skipped, specified_set);
     if (!attached.is_function_def) {

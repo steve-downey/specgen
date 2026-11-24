@@ -1815,6 +1815,23 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_code_spans/expected.json"
 )
 
+# Three spellings in a code span that look like an exposition-only member's
+# exposition name and are not uses of it (issue #432): a name the author
+# already wrote as `$name$`, which must not be wrapped again; a name reached
+# through `::` or followed by `<`, which is another scope's or a template's;
+# and `end()` on a nested iterator, which is the enclosing view's member
+# function, not the iterator's `end_`. The LaTeX render shows the `$name$`
+# case: one `\exposid`, no dollars.
+specgen_add_golden(
+    expos_prose_spellings
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_prose_spellings.hpp"
+)
+specgen_add_golden(
+    expos_prose_spellings_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_prose_spellings/expected.json"
+)
+
 # An authored header synopsis (issue #284): a detached `\verbatim-synopsis`
 # alone in a `.syn` section is that section's synopsis exactly as written,
 # with no second `namespace std {` around it, and `/// END` closes the
@@ -3109,6 +3126,20 @@ foreach(backend IN ITEMS latex mpark org)
         INPUT "${CMAKE_CURRENT_SOURCE_DIR}/routed_overloads/expected.json"
     )
 endforeach()
+
+# Out-of-line definitions that contribute nothing (issue #433): the members of
+# an `\omit`ted class, documented or not, and an undocumented definition with
+# no preceding item to join. Each used to come out as a stray item with no
+# description, in a fenced header synopsis and in an ordinary section alike.
+specgen_add_golden(
+    undocumented_definitions
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_undocumented_definitions.hpp"
+)
+specgen_add_golden(
+    undocumented_definitions_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undocumented_definitions/expected.json"
+)
 
 # Specifiers spelled through macros are written as they expand (issue #349).
 specgen_add_golden(

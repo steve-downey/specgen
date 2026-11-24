@@ -419,7 +419,11 @@ std::vector<PendingItem> group_pending_items(std::vector<PendingItem> pending,
 // a Synopsis/Section/FreeParagraph): that candidate is not merged with
 // anything and stands alone, its `item` untouched —
 // `wants_join` is read but never used to mutate
-// `item` before the adjacency check runs.
+// `item` before the adjacency check runs. The exception is a follower with
+// no description and no `\asdraft`, an undocumented definition: with nothing
+// to join and nothing to say it is dropped, the ordinary fate of an
+// unannotated entity (design §6), rather than standing as an item with an
+// itemdecl and no description (issue #433).
 // A duplicate group ID or unresolved named target appends an Error to
 // `diagnostics` and leaves that candidate standalone and unmodified.
 //

@@ -30,8 +30,9 @@ std::map<std::string, std::string> expos_spellings(const clang::CXXRecordDecl*  
                                                    const std::map<const clang::Decl*, std::string>& expos_set);
 
 // The names `record`'s wording already uses for something that is not an
-// exposition-only member: the class itself, its other members, and
-// `function`'s parameters when the wording is a function's. An author who
+// exposition-only member: the class itself, its other members, the same for
+// every class it is nested in, and `function`'s parameters when the wording
+// is a function's. An author who
 // writes one of these in a code span means that entity, so it is never read
 // as an exposition name (rewrite_prose_expos).
 std::set<std::string> taken_names(const clang::CXXRecordDecl*                      record,
@@ -82,6 +83,11 @@ apply_ref_sentinels(std::string text, unsigned& span_n, std::map<std::string, sp
 // exposition name is text, with nothing behind it to resolve, so a name in
 // `taken` -- another member, the class, a parameter -- is not read as one.
 // Authored code blocks remain verbatim.
+//
+// A name the author already wrote as `$name$` becomes the exposition-name span
+// without its dollars, so running the rewrite over mpark-spelled wording
+// changes nothing. A name after `::` is another scope's, and an exposition
+// name followed directly by `<` is a template's; neither is renamed.
 void rewrite_prose_expos(beman::specgen::ir::ItemDescr&            descr,
                          const std::map<std::string, std::string>& spellings,
                          const std::set<std::string>&              taken = {});

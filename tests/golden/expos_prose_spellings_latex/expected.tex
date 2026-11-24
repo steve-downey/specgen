@@ -1,0 +1,59 @@
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{decoder}@ {};
+}
+\end{codeblock}
+
+\rSec3[demo.view]{Class \tcode{view}}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{view}@ {
+    int @\exposid{codec}@;            // \expos
+    decoder<int> @\exposid{decoder}@; // \expos
+
+  public:
+    class @\exposid{iterator}@; // \expos
+    @\exposid{iterator}@ begin();
+    @\exposid{iterator}@ end();
+  };
+}
+\end{codeblock}
+
+\indexlibrarymember{operator++}{iterator}%
+\begin{itemdecl}
+@\exposid{iterator}@& operator++();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Makes \tcode{*this} equal to \tcode{end()}, through \exposid{end}.
+
+\pnum
+\returns
+\tcode{*this}.
+\end{itemdescr}
+
+\indexlibrarymember{begin}{view}%
+\begin{itemdecl}
+@\exposid{iterator}@ begin();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+An \exposid{iterator} over a copy of \exposid{codec}.
+\end{itemdescr}
+
+\indexlibrarymember{end}{view}%
+\begin{itemdecl}
+@\exposid{iterator}@ end();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+An \exposid{iterator} behaving as \tcode{demo::decoder<int>} does, and \tcode{decoder<int>} too.
+\end{itemdescr}

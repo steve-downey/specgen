@@ -1490,7 +1490,13 @@ wording follows [structure.specifications].
   vocabulary or the header's. The exposition name is matched as text, so a
   name the wording already uses for something else is not read as one: a
   parameter called `value`, or a member function `value()`, stays what it is,
-  and only `value_` then names the exposition-only member. The contents of a
+  and only `value_` then names the exposition-only member. A nested class's
+  wording can use its enclosing class's names the same way, so `end()` in an
+  iterator's description is the view's `end()`, not the iterator's `end_`. A
+  name reached through a scope, as in `ns::value`, belongs to that scope, and
+  an exposition name followed directly by `<`, as in `value<int>`, is a
+  template's. A span already written in mpark's spelling, `` `$value$` ``, is
+  the exposition name and is not wrapped again. The contents of a
   string literal and of a `\codeblock` are left as written; a code block names an
   exposition-only member with the draft's escape, `@\exposid{value}@`.
 
@@ -1983,7 +1989,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.55.15 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.55.17 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

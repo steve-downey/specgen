@@ -69,11 +69,17 @@ std::set<std::string> taken_names(const clang::CXXRecordDecl*                   
                                   const std::map<const clang::Decl*, std::string>& expos_set,
                                   const clang::FunctionDecl*                       function) {
     std::set<std::string> taken;
-    if (record != nullptr) {
-        if (record->getIdentifier() != nullptr)
-            taken.insert(record->getName().str());
+    // The class and every class it is nested in: a nested class's wording can
+    // name the enclosing class's members too, as `end()` on an iterator names
+    // its view's (issue #432).
+    // substrate generic algorithm: a walk up a parent chain, which no range
+    // adaptor expresses.
+    for (const clang::CXXRecordDecl* scope = record; scope != nullptr;
+         scope                             = llvm::dyn_cast<clang::CXXRecordDecl>(scope->getParent())) {
+        if (scope->getIdentifier() != nullptr)
+            taken.insert(scope->getName().str());
         taken.insert_range(
-            real_record_members(record) | std::views::transform([](const RealRecordMember& member) {
+            real_record_members(scope) | std::views::transform([](const RealRecordMember& member) {
                 const auto* member_fn = member_function_or_template(member.decl);
                 return member_fn != nullptr ? llvm::dyn_cast<clang::NamedDecl>(member_fn)
                                             : llvm::dyn_cast<clang::NamedDecl>(member.decl);
@@ -178,9 +184,38 @@ namespace ir = beman::specgen::ir;
 // written spelling, or the member's exposition name where that name is not
 // `taken` by something else the wording can mean. The contents of string and
 // character literals are text, not names.
+//
+// Three spellings are not uses (issue #432). A name already written in the
+// mpark form, `$name$`, is the exposition name and becomes its span with the
+// dollars dropped, so the rewrite is idempotent and every backend writes its
+// own form. A name reached through `::` belongs to that scope, not to the
+// class. And an exposition name followed directly by `<` is a template's
+// name, not the member's: `decoder<int>` is not `decoder_`.
 ir::CodeText rename_expos_uses(std::string_view                          text,
                                const std::map<std::string, std::string>& spellings,
                                const std::set<std::string>&              taken) {
+    // Every name an author may wrap in dollars: either spelling, `taken` or
+    // not, since `$name$` cannot mean anything but the exposition name.
+    std::vector<std::pair<std::string_view, std::string_view>> dollared =
+        spellings | std::views::transform([](const auto& spelling) {
+            return std::pair<std::string_view, std::string_view>(spelling.first, spelling.second);
+        }) |
+        std::ranges::to<std::vector>();
+    dollared.append_range(spellings | std::views::values | std::views::transform([](const std::string& display) {
+                              return std::pair<std::string_view, std::string_view>(display, display);
+                          }));
+    std::ranges::sort(dollared, std::ranges::greater{}, [](const auto& name) { return name.first.size(); });
+    const auto dollared_here = [&](std::size_t pos) -> std::optional<std::pair<std::string_view, std::string_view>> {
+        if (text[pos] != '$')
+            return std::nullopt;
+        const auto found = std::ranges::find_if(dollared, [&](const auto& name) {
+            return !name.first.empty() && text.substr(pos + 1).starts_with(name.first) &&
+                   pos + 1 + name.first.size() < text.size() && text[pos + 1 + name.first.size()] == '$';
+        });
+        return found == dollared.end() ? std::nullopt : std::optional(*found);
+    };
+    const auto qualified = [&](std::size_t pos) { return pos >= 2 && text.substr(pos - 2, 2) == "::"; };
+
     // The exposition names an author may write directly, longest first so
     // `has-value` is tried before `has`.
     std::vector<std::string_view> displays =
@@ -199,7 +234,8 @@ ir::CodeText rename_expos_uses(std::string_view                          text,
             return std::nullopt;
         const auto found = std::ranges::find_if(displays, [&](std::string_view display) {
             return text.substr(pos).starts_with(display) &&
-                   (pos + display.size() == text.size() || boundary(text[pos + display.size()]));
+                   (pos + display.size() == text.size() ||
+                    (boundary(text[pos + display.size()]) && text[pos + display.size()] != '<'));
         });
         return found == displays.end() ? std::nullopt : std::optional<std::string_view>(*found);
     };
@@ -229,13 +265,21 @@ ir::CodeText rename_expos_uses(std::string_view                          text,
             pos = end;
             continue;
         }
+        if (const auto name = dollared_here(pos)) {
+            add_span(name->second);
+            pos += name->first.size() + 2;
+            continue;
+        }
         if (!is_ident_char(c) || (pos > 0 && is_ident_char(text[pos - 1]))) {
             out.text += text[pos++];
             continue;
         }
         const std::size_t end =
             static_cast<std::size_t>(std::ranges::find_if_not(text.substr(pos), is_ident_char) - text.begin());
-        if (const auto it = spellings.find(std::string(text.substr(pos, end - pos))); it != spellings.end()) {
+        if (qualified(pos)) {
+            out.text += text.substr(pos, end - pos);
+            pos = end;
+        } else if (const auto it = spellings.find(std::string(text.substr(pos, end - pos))); it != spellings.end()) {
             add_span(it->second);
             pos = end;
         } else if (const std::optional<std::string_view> display = display_here(pos)) {

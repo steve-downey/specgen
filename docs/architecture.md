@@ -641,7 +641,9 @@ normal paragraph numbers, and have no fabricated label. This applies to a
 class's own description and a standalone verbatim item declaration too.
 Prose-only descriptions request wording when grouping, routing, and coverage
 are decided; an empty description and explicit `\also` retain their grouping
-meaning. Leading prose undergoes the same reference, span, and leakage checks
+meaning. An item with an empty description and nothing before it to join is
+left out, as an unannotated entity is (§6), and so is every member of an
+`\omit`ted class, documented or not (issue #433). Leading prose undergoes the same reference, span, and leakage checks
 as other authored wording.
 
 Notes (`\note` / `\endnote`) and examples (`\example` /

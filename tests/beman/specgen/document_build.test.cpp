@@ -283,7 +283,7 @@ TEST_CASE("group_items - a description-only item is neither a group primary nor 
 
     auto doc = build({
         db::ItemDecl{10, false, std::move(class_descr)},
-        db::ItemDecl{20, true, make_item("f();", false)},
+        db::ItemDecl{20, true, make_item("f();", true)},
     });
 
     REQUIRE(doc.nodes.size() == 2);
@@ -505,7 +505,7 @@ TEST_CASE("group_items - a wants_join candidate does not join a non-SpecItem pre
     std::vector<db::GroupCandidate> candidates;
     candidates.push_back(db::GroupCandidate{
         0, ir::Synopsis{.name = {}, .code = ir::CodeText{"class widget { ... };", {}}, .roster = {}}, false});
-    candidates.push_back(db::GroupCandidate{1, make_item("widget();", false), true});
+    candidates.push_back(db::GroupCandidate{1, make_item("widget();", true), true});
 
     auto grouped = db::group_items(std::move(candidates));
 
@@ -514,6 +514,27 @@ TEST_CASE("group_items - a wants_join candidate does not join a non-SpecItem pre
     const auto* item = std::get_if<ir::SpecItem>(&grouped[1].node);
     REQUIRE(item != nullptr);
     REQUIRE(item->decl.signatures.size() == 1);
+}
+
+// An undocumented definition asks to join whatever precedes it. With nothing
+// to join it has nothing to say either, and is left out (issue #433), where
+// it used to stand as an item with no description -- and a run of them as one
+// item holding every signature. One with a description keeps it.
+TEST_CASE("group_items - an empty follower with nothing to join is dropped") {
+    std::vector<db::GroupCandidate> candidates;
+    candidates.push_back(db::GroupCandidate{0, make_item("hidden(int);", false), true});
+    candidates.push_back(db::GroupCandidate{1, make_item("void f();", false), true});
+    candidates.push_back(db::GroupCandidate{2, make_item("void g();", true), true});
+    candidates.push_back(db::GroupCandidate{3, make_item("void h();", false), true});
+
+    auto grouped = db::group_items(std::move(candidates));
+
+    REQUIRE(grouped.size() == 1);
+    const auto* item = std::get_if<ir::SpecItem>(&grouped[0].node);
+    REQUIRE(item != nullptr);
+    REQUIRE(item->decl.signatures.size() == 2);
+    CHECK(item->decl.signatures[0].text == "void g();");
+    CHECK(item->decl.signatures[1].text == "void h();");
 }
 
 TEST_CASE("group_items - two candidates that both decline to join are left ungrouped") {
@@ -704,7 +725,7 @@ TEST_CASE("build_tree - section prose keeps paragraph order and interrupts adjac
                          {},
                          10,
                          "part.hpp"},
-        db::ItemDecl{4, true, make_item("after();", false)},
+        db::ItemDecl{4, true, make_item("after();", true)},
     };
     const auto result = db::build_tree(events);
     CHECK(result.diagnostics.empty());
