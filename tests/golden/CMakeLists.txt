@@ -1832,6 +1832,21 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_prose_spellings/expected.json"
 )
 
+# A constructor of an exposition-only class is named the way its class is
+# (issue #434): `$iterator$(int handle)` beside `~$iterator$()`, in an
+# itemdecl and inside a shown class's synopsis, under an `\expos(name)`
+# spelling, and in a namespace-scope class template, whose destructor kept
+# its C++ name too.
+specgen_add_golden(
+    expos_constructors
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_expos_constructors.hpp"
+)
+specgen_add_golden(
+    expos_constructors_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/expos_constructors/expected.json"
+)
+
 # An authored header synopsis (issue #284): a detached `\verbatim-synopsis`
 # alone in a `.syn` section is that section's synopsis exactly as written,
 # with no second `namespace std {` around it, and `/// END` closes the

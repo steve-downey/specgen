@@ -1,0 +1,69 @@
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\exposid{box}@ {
+  public:
+    @\exposid{box}@(int v);
+    ~@\exposid{box}@() = default;
+  }; // \expos
+}
+\end{codeblock}
+
+\indexlibraryctor{box_impl}%
+\begin{itemdecl}
+@\exposid{box}@(int v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Holds \tcode{v}.
+\end{itemdescr}
+
+\rSec3[demo.view]{Class \tcode{view}}
+
+\begin{codeblock}
+namespace std {
+  class @\libglobal{view}@ {
+  public:
+    class @\exposid{iterator}@; // \expos
+    class @\exposid{end-mark}@ {
+    public:
+      @\exposid{end-mark}@(int handle);
+    }; // \expos
+  };
+}
+\end{codeblock}
+
+\indexlibraryctor{iterator}%
+\begin{itemdecl}
+@\exposid{iterator}@();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Value-initializes nothing.
+\end{itemdescr}
+
+\indexlibraryctor{iterator}%
+\begin{itemdecl}
+@\exposid{iterator}@(int handle);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Opens \tcode{handle}.
+\end{itemdescr}
+
+\indexlibrarydtor{iterator}%
+\begin{itemdecl}
+~@\exposid{iterator}@();
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Closes the handle.
+\end{itemdescr}
