@@ -1,0 +1,197 @@
+** Class template box [box.class]
+:PROPERTIES:
+:CUSTOM_ID: box.class
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_codeblock
+namespace std {
+  template<class T>
+  class box {
+  public:
+    // \ref{box.ops}, operations
+    template<class F> constexpr auto apply(F&& f) const;
+    template<class F> constexpr auto chain(F&& f) const;
+    template<class F> constexpr auto local(F&& f) const;
+    constexpr auto member() const;
+    template<class F> constexpr auto prose(F&& f) const;
+    template<class F> constexpr auto triple(F&& f) const;
+    template<class F> constexpr auto joined(F&& f) const;
+
+  private:
+    T* @\exposid{val}@ = nullptr; // exposition only
+  };
+}
+#+end_codeblock
+
+#+begin_pnum
+The leading aliases that a static_assert names are introduced by one derived "Let" paragraph ahead of the Mandates, and leave the Effects code (issue #404, decision let-binding-wording).
+#+end_pnum
+
+** Operations [box.ops]
+:PROPERTIES:
+:CUSTOM_ID: box.ops
+:UNNUMBERED: t
+:WG21_WORDING: t
+:END:
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto apply(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be ~invoke_result_t<F, T&>~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<U>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto chain(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be ~invoke_result_t<F, T&>~ and ~V~ be ~remove_cvref_t<U>~.
+#+end_pnum
+
+#+begin_pnum
+An alias the asserted one names is introduced too, in source order.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<V>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto local(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+An alias only the body uses stays in the code.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<T>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+using W = invoke_result_t<F, T&>;
+
+return W(invoke(std::forward<F>(f), *@\exposid{val}@));
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+constexpr auto member() const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be @@latex:\tcode{decltype((\exposid{val}))}@@@@html:<code>decltype((<var>val</var>))</code>@@.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_const_v<U>~ is ~false~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return *@\exposid{val}@;
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto prose(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be ~invoke_result_t<F, T&>~.
+#+end_pnum
+
+#+begin_pnum
+~U~ names the result of calling ~f~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<U>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto triple(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be ~invoke_result_t<F, T&>~, ~V~ be ~remove_cvref_t<U>~, and ~W~ be ~remove_cvref_t<V>~.
+#+end_pnum
+
+#+begin_pnum
+Three aliases are bound in one sentence, the last after ", and".
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<W>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+#+end_codeblock
+#+end_pnum
+
+#+begin_itemdecl
+template<class F>
+  constexpr auto joined(F&& f) const;
+#+end_itemdecl
+
+#+begin_pnum
+Let ~U~ be ~invoke_result_t<F, T&>~ and ~V~ be ~remove_cvref_t<U>~.
+#+end_pnum
+
+#+begin_pnum
+/Mandates/: ~is_object_v<V>~ is ~true~.
+#+end_pnum
+
+#+begin_pnum
+/Effects/: Equivalent to:
+
+#+begin_codeblock
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+#+end_codeblock
+#+end_pnum

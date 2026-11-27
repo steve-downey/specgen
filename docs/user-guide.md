@@ -1150,8 +1150,18 @@ agree: a clause is stated once, as *Constraints*, or shown in both under
 `\constraints-in-decl`. A member with no item of its own, such as a
 `= default` member that is not described, keeps its clause in the synopsis,
 since nothing else would state it. A leading run of body-local type aliases
-followed by `static_assert`s produces derived *Mandates*; the aliases remain in
-an extracted equivalent-to body, and the consumed assertions do not. An
+followed by `static_assert`s produces derived *Mandates*. The aliases the
+assertions name, directly or through another alias, are introduced ahead of
+them by one derived paragraph, in source order and in the draft's sentence:
+"Let `U` be `X`.", "Let `U` be `X` and `V` be `Y`.", or "Let `U` be `X`, `V`
+be `Y`, and `W` be `Z`.". It comes before any leading prose the author wrote,
+so that prose may use the names. Those aliases leave an extracted
+equivalent-to body, as the consumed assertions do. An alias only the body uses
+stays in the body. An authored leading paragraph that opens "Let `U`"
+introduces `U` itself, and no paragraph is derived for it; the alias then
+leaves the body only when that paragraph is exactly the draft's sentence with
+the alias's own type. Otherwise it stays, and `--validate` reports the binding
+stated twice as drift. An
 authored `\constraints` or `\mandates` replaces the corresponding derived
 wording, and the derivation is retained as evidence for the drift checks. An
 empty one, the marker with nothing after it, removes the derived element and
@@ -1989,7 +1999,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.55.17 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.56.0 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

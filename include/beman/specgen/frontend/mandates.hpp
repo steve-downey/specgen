@@ -59,6 +59,31 @@ struct MandatesPrologue {
 // prologue; an assertion after that boundary is ordinary body code.
 MandatesPrologue mandates_prologue(const clang::CompoundStmt* body);
 
+// A body-local alias the derived Mandates needs, and what it stands for
+// (issue #404).
+struct LetBinding {
+    const clang::TypeAliasDecl*  alias = nullptr;
+    beman::specgen::ir::CodeText type;
+};
+
+// The leading aliases of `fn`'s body that its static_assert prefix names,
+// directly or through another such alias, in source order. Each one's `type`
+// is the alias's written type, rewritten as the conjuncts are, with
+// `expos_names` as the extracted body's class-local fallback. An alias only
+// the rest of the body uses is not one of them.
+std::vector<LetBinding> derive_let_bindings(const clang::FunctionDecl*                       fn,
+                                            const clang::SourceManager&                      sm,
+                                            const clang::LangOptions&                        lang_opts,
+                                            const std::set<std::string>&                     ns_drop_set,
+                                            const std::map<const clang::Decl*, std::string>& expos_set,
+                                            const std::map<std::string, std::string>&        expos_names);
+
+// The one paragraph that introduces `bindings`, in order, in the draft's
+// sentence (decision let-binding-wording): "Let `U` be `X`.", "Let `U` be `X`
+// and `V` be `Y`.", "Let `U` be `X`, `V` be `Y`, and `W` be `Z`.".
+// ir::let_sentence reads it back. `bindings` is not empty.
+beman::specgen::ir::Paragraph let_paragraph(const std::vector<LetBinding>& bindings);
+
 std::optional<beman::specgen::ir::DescriptionElement>
 derive_mandates(const clang::FunctionDecl*                       fn,
                 const clang::SourceManager&                      sm,

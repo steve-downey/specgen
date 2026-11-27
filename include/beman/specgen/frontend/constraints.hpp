@@ -31,6 +31,7 @@
 #include <clang/AST/Expr.h>
 #include <clang/AST/Stmt.h>
 #include <clang/Basic/LangOptions.h>
+#include <clang/Basic/SourceLocation.h>
 #include <clang/Basic/SourceManager.h>
 
 #include <map>
@@ -47,6 +48,18 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
                                                  const std::set<std::string>&                     ns_drop_set,
                                                  const std::map<const clang::Decl*, std::string>& expos_set,
                                                  const std::map<std::string, std::string>&        expos_names = {});
+
+// The written text of `range`, which lies inside `root`, rewritten as every
+// code fragment is: the drop set's qualifiers removed, exposition-only uses
+// replaced by their exposid spans, and the lines folded. The edits are found
+// by walking `root`; one outside the range is discarded.
+beman::specgen::ir::CodeText range_code_rewritten(const clang::Stmt*                               root,
+                                                  clang::CharSourceRange                           range,
+                                                  const clang::SourceManager&                      sm,
+                                                  const clang::LangOptions&                        lang_opts,
+                                                  const std::set<std::string>&                     ns_drop_set,
+                                                  const std::map<const clang::Decl*, std::string>& expos_set,
+                                                  const std::map<std::string, std::string>&        expos_names = {});
 
 // Phrase one conjunct (design §5.1), peeled past parens/implicit casts:
 //   - a single-argument concept-id reads "`X` models \libconcept{C}" (the WG21

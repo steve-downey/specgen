@@ -189,6 +189,16 @@ beman::specgen::ir::CodeText expr_code_rewritten(const clang::Expr*             
                           expos_names);
 }
 
+beman::specgen::ir::CodeText range_code_rewritten(const clang::Stmt*                               root,
+                                                  clang::CharSourceRange                           range,
+                                                  const clang::SourceManager&                      sm,
+                                                  const clang::LangOptions&                        lang_opts,
+                                                  const std::set<std::string>&                     ns_drop_set,
+                                                  const std::map<const clang::Decl*, std::string>& expos_set,
+                                                  const std::map<std::string, std::string>&        expos_names) {
+    return code_rewritten(root, range, sm, lang_opts, ns_drop_set, expos_set, expos_names);
+}
+
 beman::specgen::ir::Paragraph phrase_conjunct(const clang::Expr*                               leaf,
                                               const clang::SourceManager&                      sm,
                                               const clang::LangOptions&                        lang_opts,

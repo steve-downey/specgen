@@ -1,0 +1,190 @@
+\rSec3[box.class]{Class template box}
+
+\begin{codeblock}
+namespace std {
+  template<class T>
+  class @\libglobal{box}@ {
+  public:
+    // \ref{box.ops}, operations
+    template<class F> constexpr auto apply(F&& f) const;
+    template<class F> constexpr auto chain(F&& f) const;
+    template<class F> constexpr auto local(F&& f) const;
+    constexpr auto member() const;
+    template<class F> constexpr auto prose(F&& f) const;
+    template<class F> constexpr auto triple(F&& f) const;
+    template<class F> constexpr auto joined(F&& f) const;
+
+  private:
+    T* @\exposid{val}@ = nullptr; // \expos
+  };
+}
+\end{codeblock}
+
+\pnum
+The leading aliases that a static_assert names are introduced by one derived "Let" paragraph ahead of the Mandates, and leave the Effects code (issue \#404, decision let-binding-wording).
+
+\rSec3[box.ops]{Operations}
+
+\indexlibrarymember{apply}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto apply(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>}.
+
+\pnum
+\mandates
+\tcode{is_object_v<U>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{chain}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto chain(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>} and \tcode{V} be \tcode{remove_cvref_t<U>}.
+
+\pnum
+An alias the asserted one names is introduced too, in source order.
+
+\pnum
+\mandates
+\tcode{is_object_v<V>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{local}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto local(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+An alias only the body uses stays in the code.
+
+\pnum
+\mandates
+\tcode{is_object_v<T>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+using W = invoke_result_t<F, T&>;
+
+return W(invoke(std::forward<F>(f), *@\exposid{val}@));
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{member}{box}%
+\begin{itemdecl}
+constexpr auto member() const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{decltype((\exposid{val}))}.
+
+\pnum
+\mandates
+\tcode{is_const_v<U>} is \tcode{false}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return *@\exposid{val}@;
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{prose}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto prose(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>}.
+
+\pnum
+\tcode{U} names the result of calling \tcode{f}.
+
+\pnum
+\mandates
+\tcode{is_object_v<U>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{triple}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto triple(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>}, \tcode{V} be \tcode{remove_cvref_t<U>}, and \tcode{W} be \tcode{remove_cvref_t<V>}.
+
+\pnum
+Three aliases are bound in one sentence, the last after ", and".
+
+\pnum
+\mandates
+\tcode{is_object_v<W>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}
+
+\indexlibrarymember{joined}{box}%
+\begin{itemdecl}
+template<class F>
+  constexpr auto joined(F&& f) const;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+Let \tcode{U} be \tcode{invoke_result_t<F, T\&>} and \tcode{V} be \tcode{remove_cvref_t<U>}.
+
+\pnum
+\mandates
+\tcode{is_object_v<V>} is \tcode{true}.
+
+\pnum
+\effects
+Equivalent to:
+\begin{codeblock}
+return invoke(std::forward<F>(f), *@\exposid{val}@);
+\end{codeblock}
+\end{itemdescr}

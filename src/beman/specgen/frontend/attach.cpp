@@ -336,6 +336,23 @@ bool same_binding(std::string_view written, std::string_view stated, const std::
     return normal(written) == normal(stated);
 }
 
+// Whether the description's "Let `U` be `X`." states `alias`: its name, and
+// its written type once the qualifiers the wording drops are taken out.
+bool alias_stated(const clang::TypeAliasDecl*               alias,
+                  const std::map<std::string, std::string>& let_bindings,
+                  const clang::SourceManager&               sm,
+                  const clang::LangOptions&                 lang_opts,
+                  const std::set<std::string>&              ns_drop_set) {
+    const auto                   found = let_bindings.find(alias->getNameAsString());
+    const clang::TypeSourceInfo* info  = alias->getTypeSourceInfo();
+    if (found == let_bindings.end() || info == nullptr)
+        return false;
+    const clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(
+        sm.getFileLoc(info->getTypeLoc().getBeginLoc()), sm.getFileLoc(info->getTypeLoc().getEndLoc()));
+    const std::string written = clang::Lexer::getSourceText(range, sm, lang_opts).str();
+    return same_binding(written, found->second, ns_drop_set);
+}
+
 beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*                       body,
                                                 const clang::ASTContext&                         ctx,
                                                 const clang::SourceManager&                      sm,
@@ -344,7 +361,8 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
                                                 const std::map<const clang::Decl*, std::string>& expos_set,
                                                 const std::set<std::string>&                     ns_drop_set,
                                                 const SkippedRanges&                             skipped,
-                                                const std::map<std::string, std::string>&        let_bindings) {
+                                                const std::map<std::string, std::string>&        let_bindings,
+                                                const std::set<const clang::TypeAliasDecl*>&     derived_lets) {
     const MandatesPrologue prologue = mandates_prologue(body);
     if (prologue.extraction_first == nullptr)
         return {};
@@ -354,15 +372,9 @@ beman::specgen::ir::CodeText extract_equiv_body(const clang::CompoundStmt*      
     // description's sentence is the draft's form, so the alias goes, as the
     // consumed assertions do (issue #404).
     const auto stated = [&](const clang::DeclStmt* statement) {
-        const auto*                  alias = llvm::cast<clang::TypeAliasDecl>(statement->getSingleDecl());
-        const auto                   found = let_bindings.find(alias->getNameAsString());
-        const clang::TypeSourceInfo* info  = alias->getTypeSourceInfo();
-        if (found == let_bindings.end() || info == nullptr)
-            return false;
-        const clang::CharSourceRange range = clang::CharSourceRange::getTokenRange(
-            sm.getFileLoc(info->getTypeLoc().getBeginLoc()), sm.getFileLoc(info->getTypeLoc().getEndLoc()));
-        const std::string written = clang::Lexer::getSourceText(range, sm, lang_opts).str();
-        return same_binding(written, found->second, ns_drop_set);
+        const auto* alias = llvm::cast<clang::TypeAliasDecl>(statement->getSingleDecl());
+        // A derived "Let" introduces the alias itself.
+        return derived_lets.contains(alias) || alias_stated(alias, let_bindings, sm, lang_opts, ns_drop_set);
     };
     std::vector<const clang::DeclStmt*> removed = prologue.assertions;
     removed.append_range(prologue.aliases | std::views::filter(stated));
@@ -451,7 +463,8 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
                        const std::map<std::string, std::string>&        expos_names,
                        const std::map<const clang::Decl*, std::string>& expos_set,
                        const std::set<std::string>&                     ns_drop_set,
-                       const SkippedRanges&                             skipped) {
+                       const SkippedRanges&                             skipped,
+                       const std::set<const clang::TypeAliasDecl*>&     derived_lets) {
     namespace ir = beman::specgen::ir;
 
     const auto is_empty_slot = [](const ir::DescriptionElement& el) {
@@ -475,7 +488,8 @@ void fill_equiv_bodies(const clang::FunctionDecl*                       fn,
                                                  expos_set,
                                                  ns_drop_set,
                                                  skipped,
-                                                 ir::let_bindings(descr.leading));
+                                                 ir::let_bindings(descr.leading),
+                                                 derived_lets);
     // substrate generic algorithm: a for_each-shaped mutation of the elements
     // it iterates, not a container rebuild -- filtering states the predicate
     // up front instead of burying it in the loop body's if, but this tree
@@ -790,7 +804,26 @@ AttachedItem attach_function(const clang::FunctionDecl*                       de
     // uses of its exposition-only members render as \exposid — in the extracted
     // equiv body, and in backticked prose.
     const std::map<std::string, std::string> expos_names = expos_spellings(enclosing_record(def), expos_set);
-    fill_equiv_bodies(def, attached.item.descr, sm, lang_opts, expos_names, body_expos, ns_drop_set, skipped);
+    // "Let `U` be `X`." (design §5.2, issue #404, decision
+    // let-binding-wording): the leading aliases the static_assert prefix names
+    // are introduced ahead of the Mandates that uses them, in one paragraph,
+    // before any authored leading prose, and the extracted body loses them, as
+    // it loses the assertions. An authored paragraph that opens "Let `U`"
+    // introduces `U` already, in whatever shape it takes, and the derivation
+    // gives way to it.
+    const std::set<std::string>   authored_lets = ir::let_names(attached.item.descr.leading);
+    const std::vector<LetBinding> lets =
+        derive_let_bindings(def, sm, lang_opts, ns_drop_set, body_expos, expos_names) |
+        std::views::filter(
+            [&](const LetBinding& let) { return !authored_lets.contains(let.alias->getNameAsString()); }) |
+        std::ranges::to<std::vector<LetBinding>>();
+    if (!lets.empty())
+        attached.item.descr.leading.insert(attached.item.descr.leading.begin(),
+                                           ir::BodyParagraph{.text = let_paragraph(lets)});
+    const std::set<const clang::TypeAliasDecl*> derived_lets =
+        lets | std::views::transform(&LetBinding::alias) | std::ranges::to<std::set<const clang::TypeAliasDecl*>>();
+    fill_equiv_bodies(
+        def, attached.item.descr, sm, lang_opts, expos_names, body_expos, ns_drop_set, skipped, derived_lets);
     // \returns-expr builds its Returns element from the same body, with the
     // same expos rewriting.
     if (attached.directives.returns_expr) {

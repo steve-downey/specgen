@@ -14,6 +14,7 @@
 #include <clang/AST/DeclCXX.h>
 #include <clang/AST/DeclTemplate.h>
 #include <clang/AST/Expr.h>
+#include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/AST/Stmt.h>
 #include <clang/AST/TypeBase.h>
 #include <clang/AST/TypeLoc.h>
@@ -24,6 +25,7 @@
 #include <clang/Lex/Token.h>
 #include <llvm/Support/Casting.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <map>
 #include <optional>
@@ -40,6 +42,17 @@ const clang::Decl* single_decl(const clang::Stmt* stmt) {
     const auto* decl_stmt = llvm::dyn_cast<clang::DeclStmt>(stmt);
     return decl_stmt != nullptr && decl_stmt->isSingleDecl() ? decl_stmt->getSingleDecl() : nullptr;
 }
+
+// The aliases a statement or a type names.
+class AliasUses : public clang::RecursiveASTVisitor<AliasUses> {
+  public:
+    std::set<const clang::TypedefNameDecl*> found;
+
+    bool VisitTypedefTypeLoc(clang::TypedefTypeLoc tl) {
+        found.insert(tl.getDecl()->getCanonicalDecl());
+        return true;
+    }
+};
 
 } // namespace
 
@@ -69,6 +82,73 @@ MandatesPrologue mandates_prologue(const clang::CompoundStmt* body) {
     else if (pos < stmts.size())
         result.extraction_first = stmts[pos];
     return result;
+}
+
+std::vector<LetBinding> derive_let_bindings(const clang::FunctionDecl*                       fn,
+                                            const clang::SourceManager&                      sm,
+                                            const clang::LangOptions&                        lang_opts,
+                                            const std::set<std::string>&                     ns_drop_set,
+                                            const std::map<const clang::Decl*, std::string>& expos_set,
+                                            const std::map<std::string, std::string>&        expos_names) {
+    namespace ir = beman::specgen::ir;
+
+    const auto* body = llvm::dyn_cast_or_null<clang::CompoundStmt>(fn->getBody());
+    if (body == nullptr)
+        return {};
+    const MandatesPrologue prologue = mandates_prologue(body);
+    const auto             alias_of = [](const clang::DeclStmt* statement) {
+        return llvm::cast<clang::TypeAliasDecl>(statement->getSingleDecl());
+    };
+
+    AliasUses uses;
+    std::ranges::for_each(prologue.assertions, [&](const clang::DeclStmt* statement) {
+        uses.TraverseStmt(const_cast<clang::DeclStmt*>(statement));
+    });
+    // An alias a named alias's type names is named too. An alias can name only
+    // the ones before it, so one walk from the last to the first closes the set.
+    std::ranges::for_each(prologue.aliases | std::views::reverse, [&](const clang::DeclStmt* statement) {
+        const clang::TypeAliasDecl* alias = alias_of(statement);
+        if (const clang::TypeSourceInfo* info = alias->getTypeSourceInfo();
+            info != nullptr && uses.found.contains(alias->getCanonicalDecl()))
+            uses.TraverseTypeLoc(info->getTypeLoc());
+    });
+
+    const auto named = [&](const clang::DeclStmt* statement) {
+        const clang::TypeAliasDecl* alias = alias_of(statement);
+        return alias->getTypeSourceInfo() != nullptr && uses.found.contains(alias->getCanonicalDecl());
+    };
+    const auto binding = [&](const clang::DeclStmt* statement) {
+        const clang::TypeAliasDecl*  alias = alias_of(statement);
+        const clang::TypeLoc         type  = alias->getTypeSourceInfo()->getTypeLoc();
+        const clang::CharSourceRange range =
+            clang::CharSourceRange::getTokenRange(sm.getFileLoc(type.getBeginLoc()), sm.getFileLoc(type.getEndLoc()));
+        return LetBinding{
+            .alias = alias,
+            .type  = range_code_rewritten(statement, range, sm, lang_opts, ns_drop_set, expos_set, expos_names)};
+    };
+    return prologue.aliases | std::views::filter(named) | std::views::transform(binding) |
+           std::ranges::to<std::vector<LetBinding>>();
+}
+
+beman::specgen::ir::Paragraph let_paragraph(const std::vector<LetBinding>& bindings) {
+    namespace ir             = beman::specgen::ir;
+    const std::size_t count  = bindings.size();
+    const auto        clause = [count](std::size_t k, const LetBinding& binding) {
+        const char* lead = k == 0 ? "Let " : count == 2 ? " and " : k + 1 == count ? ", and " : ", ";
+        return std::vector<ir::Inline>{
+            ir::TextInline{.text = lead},
+            ir::CodeInline{.code = ir::CodeText{.text = binding.alias->getNameAsString(), .spans = {}}},
+            ir::TextInline{.text = " be "},
+            ir::CodeInline{.code = binding.type},
+        };
+    };
+    ir::Paragraph paragraph = std::views::enumerate(bindings) | std::views::transform([&](const auto& indexed) {
+                                  const auto& [k, binding] = indexed;
+                                  return clause(static_cast<std::size_t>(k), binding);
+                              }) |
+                              std::views::join | std::ranges::to<ir::Paragraph>();
+    paragraph.push_back(ir::TextInline{.text = "."});
+    return paragraph;
 }
 
 std::optional<beman::specgen::ir::DescriptionElement>

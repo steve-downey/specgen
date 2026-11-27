@@ -41,6 +41,8 @@ and cite the design document as `docs/architecture.md` §N.
 | [construct-recognition](construct-recognition.md) | The AST says what a construct is; the lexer, how far it reaches |
 | [wording-base-level](wording-base-level.md) | Where a section starts is one option per unit |
 | [returns-extraction](returns-extraction.md) | `\returns-expr` renders *Returns*: `E` from one `return E;` |
+| [let-binding-wording](let-binding-wording.md) | A derived "Let" binds every asserted alias in one paragraph, ahead of authored prose |
+| [let-binding-wording](let-binding-wording.md) | A derived "Let" binds every asserted alias in one paragraph, ahead of authored prose |
 | [nested-namespace-rendering](nested-namespace-rendering.md) | A nested namespace is dropped, `\specified`, or foreign; specified ones render as the draft writes them |
 | [explicit-constraint-coverage](explicit-constraint-coverage.md) | Element-scoped checked coverage claims; visible old-reader rejection |
 | [ir-level-diff](ir-level-diff.md) | The wording diff is a diff of the IR, carried as marks in the IR |

@@ -1815,3 +1815,29 @@ TEST_CASE("validate - an alias the Equivalent to code keeps under a Let-bound na
     CHECK(drift.front().message.find("lets `U` be `invoke_result_t<F&>`") != std::string::npos);
     CHECK(drift.front().message.find("says `invoke_result_t<F>`") != std::string::npos);
 }
+
+// Decision let-binding-wording: a "Let `U`" in a looser shape binds nothing
+// extraction can compare, so the alias stays beside it and is drift too.
+TEST_CASE("validate - an alias the Equivalent to code keeps beside a loose Let is drift") {
+    ir::SpecItem item;
+    item.decl.signatures.push_back({"template<class F> auto f(F&&);", {}});
+    item.descr.leading.push_back(ir::BodyParagraph{{ir::TextInline{"Let "},
+                                                    ir::CodeInline{{"U", {}}},
+                                                    ir::TextInline{" be the type "},
+                                                    ir::CodeInline{{"invoke_result_t<F&>", {}}},
+                                                    ir::TextInline{"."}}});
+    ir::DescriptionElement effects;
+    effects.kind = ir::ElementKind::Effects;
+    effects.body.push_back(ir::EquivalentTo{{"using U = invoke_result_t<F&>;\n\nreturn g();", {}}});
+    item.descr.elements.push_back(effects);
+    const auto drift = validate(ir::Node{item});
+    REQUIRE(drift.size() == 1);
+    CHECK(drift.front().severity == beman::specgen::Severity::Warning);
+    CHECK(drift.front().message.find("introduces `U` with a \"Let\"") != std::string::npos);
+    CHECK(drift.front().message.find("says `invoke_result_t<F&>`") != std::string::npos);
+
+    // An alias no "Let" introduces is the body's own.
+    std::get<ir::EquivalentTo>(item.descr.elements.front().body.front()).code.text =
+        "using W = invoke_result_t<F&>;\n\nreturn g();";
+    CHECK(validate(ir::Node{item}).empty());
+}

@@ -9,14 +9,18 @@
 #ifndef BEMAN_SPECGEN_IR_HPP
 #define BEMAN_SPECGEN_IR_HPP
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -751,11 +755,54 @@ struct DescriptionElement {
 // code; inline code is reached through the returned paragraphs.
 std::vector<const Paragraph*> body_paragraphs(const DescriptionBody&, bool include_informative = true);
 
+// The bindings one paragraph states, in order, when it is exactly the draft's
+// sentence for them (decision let-binding-wording): "Let `U` be `X`.", "Let
+// `U` be `X` and `V` be `Y`.", or "Let `U` be `X`, `V` be `Y`, and `W` be
+// `Z`.". Any other paragraph states none. A template so that the validator's
+// mark-free pieces read the same way.
+template <class Pieces>
+std::optional<std::vector<std::pair<std::string, std::string>>> let_sentence(const Pieces& pieces) {
+    using Binding         = std::pair<std::string, std::string>;
+    const std::size_t end = std::ranges::size(pieces);
+    // A lead-in, the name, " be ", the value, per binding, and a closing ".".
+    if (end < 5 || (end - 1) % 4 != 0)
+        return std::nullopt;
+    const std::size_t count   = (end - 1) / 4;
+    const auto        text_is = [&](std::size_t at, std::string_view expected) {
+        const auto* text = std::get_if<TextInline>(&pieces[at]);
+        return text != nullptr && text->text == expected;
+    };
+    const auto code_at = [&](std::size_t at) -> const std::string* {
+        const auto* code = std::get_if<CodeInline>(&pieces[at]);
+        return code == nullptr ? nullptr : &code->code.text;
+    };
+    const auto binding = [&](std::size_t k) -> std::optional<Binding> {
+        const std::size_t      at   = 4 * k;
+        const std::string_view lead = k == 0 ? "Let " : count == 2 ? " and " : k + 1 == count ? ", and " : ", ";
+        const std::string*     name = code_at(at + 1);
+        const std::string*     type = code_at(at + 3);
+        if (!text_is(at, lead) || name == nullptr || !text_is(at + 2, " be ") || type == nullptr)
+            return std::nullopt;
+        return Binding{*name, *type};
+    };
+    if (!text_is(end - 1, "."))
+        return std::nullopt;
+    const auto found = std::views::iota(std::size_t{0}, count) | std::views::transform(binding) |
+                       std::ranges::to<std::vector<std::optional<Binding>>>();
+    if (!std::ranges::all_of(found, [](const auto& b) { return b.has_value(); }))
+        return std::nullopt;
+    return found | std::views::transform([](const auto& b) { return *b; }) | std::ranges::to<std::vector<Binding>>();
+}
+
 // The names a description's normative leading prose binds, each to what it
-// stands for: a paragraph that is exactly "Let `U` be `X`." binds `U` to `X`.
-// A name bound twice is ambiguous and binds nothing.
+// stands for, read from every paragraph that is a let_sentence. A name bound
+// twice is ambiguous and binds nothing.
 std::map<std::string, std::string> let_bindings(const DescriptionBody& leading);
-std::vector<const CodeText*>       body_code(const DescriptionBody&, bool include_informative = true);
+// The names a description's normative leading prose introduces with "Let":
+// every name a let_sentence binds, and the first name of any other paragraph
+// that opens "Let `U` ...", whatever its shape ("Let `U` be the type `X`.").
+std::set<std::string>        let_names(const DescriptionBody& leading);
+std::vector<const CodeText*> body_code(const DescriptionBody&, bool include_informative = true);
 // Adjacent lists in a merged same-kind description form one itemization.
 DescriptionBody coalesce_itemizations(DescriptionBody);
 
