@@ -1491,7 +1491,9 @@ wording follows [structure.specifications].
   `\seebelow` it renders as a declaration, `class $iterator$; // exposition
   only`, which is how the draft writes a view's iterator. Its own members are
   exposition-only with it, so an extracted body that names one uses the
-  exposition name.
+  exposition name. An exposition-only class's constructors and destructor are
+  named the way the class is, `$iterator$(int handle);` and `~$iterator$();`,
+  as the draft writes them.
 
   In a description, a backticked span names an exposition-only member of the
   class by either spelling, anywhere in the span: `` `value_ == 0` `` and
@@ -1999,7 +2001,7 @@ specgen generate include/beman/example/example.hpp \
 
 `specgen --help` prints the current command-line summary, and
 `specgen --version` prints the installed version and source revision as
-`specgen 0.56.0 (git <commit>)`. A source archive without Git metadata can set
+`specgen 0.56.2 (git <commit>)`. A source archive without Git metadata can set
 `BEMAN_SPECGEN_GIT_COMMIT` explicitly when it is configured; otherwise the
 revision is reported as `unknown`.
 

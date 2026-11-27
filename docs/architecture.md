@@ -238,6 +238,11 @@ written against exactly one LLVM, not a range. There is no Clang-free configurat
   specgen markup and have both semantic and lexical file contexts; the second condition keeps
   hidden friends on the in-class path, and the markup condition keeps unannotated helpers out.
   The first declaration supplies the signature; the definition supplies wording and placement.
+  A class's friend declaration of the function does not count as its first declaration: a
+  class that befriends a factory to reach a private constructor is not the factory's home. The
+  namespace-scope declaration supplies the signature and the synopsis line, without `friend`,
+  and the friend declaration has no synopsis line and no roster entry (issue #441). A hidden
+  friend, declared nowhere else, keeps its friend declaration.
 - **Marked in-class function templates follow the ordinary member path.** A template with an
   authored description attaches to its routed section, and `\merge`/`\omit` removes a template
   declaration from the synopsis just as it does a non-template member. This also holds when

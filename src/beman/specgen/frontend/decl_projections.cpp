@@ -10,7 +10,12 @@
 #include <clang/AST/DeclTemplate.h>
 #include <llvm/Support/Casting.h>
 
+#include <clang/Basic/SourceManager.h>
+
+#include <algorithm>
+#include <iterator>
 #include <utility>
+#include <vector>
 
 namespace beman::specgen::frontend {
 
@@ -33,11 +38,40 @@ const clang::FunctionDecl* function_or_template(const clang::Decl* decl) {
     return nullptr;
 }
 
-bool is_first_declaration(const clang::Decl* decl) {
+const clang::FunctionDecl* home_declaration(const clang::FunctionDecl* fn, const clang::SourceManager& sm) {
+    const clang::FunctionDecl* first = fn->getFirstDecl();
+    if (first->getFriendObjectKind() == clang::Decl::FOK_None)
+        return first;
+    const auto befriended = [](const clang::FunctionDecl* redecl) {
+        const clang::Decl* as_written = redecl->getDescribedFunctionTemplate() != nullptr
+                                            ? static_cast<const clang::Decl*>(redecl->getDescribedFunctionTemplate())
+                                            : redecl;
+        return as_written->getFriendObjectKind() != clang::Decl::FOK_None;
+    };
+    std::vector<const clang::FunctionDecl*> homes;
+    std::ranges::copy_if(first->redecls(), std::back_inserter(homes), [&](const clang::FunctionDecl* redecl) {
+        return !befriended(redecl);
+    });
+    const auto earliest =
+        std::ranges::min_element(homes, [&](const clang::FunctionDecl* a, const clang::FunctionDecl* b) {
+            return sm.isBeforeInTranslationUnit(a->getLocation(), b->getLocation());
+        });
+    return earliest == homes.end() ? first : *earliest;
+}
+
+bool redeclared_friend(const clang::Decl* member, const clang::SourceManager& sm) {
+    const auto* friend_decl = llvm::dyn_cast<clang::FriendDecl>(member);
+    if (friend_decl == nullptr)
+        return false;
+    const clang::FunctionDecl* fn = function_or_template(friend_decl->getFriendDecl());
+    return fn != nullptr && !fn->doesThisDeclarationHaveABody() && home_declaration(fn, sm) != fn;
+}
+
+bool is_first_declaration(const clang::Decl* decl, const clang::SourceManager& sm) {
     if (const auto* fn = llvm::dyn_cast<clang::FunctionDecl>(decl))
-        return fn->getFirstDecl() == fn;
+        return home_declaration(fn, sm) == fn;
     if (const auto* tmpl = llvm::dyn_cast<clang::FunctionTemplateDecl>(decl))
-        return tmpl->getFirstDecl() == tmpl;
+        return home_declaration(tmpl->getTemplatedDecl(), sm) == tmpl->getTemplatedDecl();
     if (const auto* var = llvm::dyn_cast<clang::VarDecl>(decl))
         return var->getFirstDecl() == var;
     return true;

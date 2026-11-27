@@ -283,6 +283,18 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         return true;
     }
 
+    // A constructor is named by its class, and the draft writes an
+    // exposition-only class's as `@\exposid{iterator}@(...)` (issue #434).
+    // A destructor's `~iterator` is a type use and reaches VisitTagTypeLoc;
+    // a constructor's name is a bare identifier with no TypeLoc behind it, so
+    // it kept the C++ name while the destructor beside it did not.
+    bool VisitCXXConstructorDecl(clang::CXXConstructorDecl* ctor) {
+        if (ctor == nullptr || ctor->isImplicit())
+            return true;
+        add(ctor->getParent(), ctor->getNameInfo().getSourceRange(), {});
+        return true;
+    }
+
   private:
     void add(const clang::NamedDecl* decl, clang::SourceRange name_range, clang::NestedNameSpecifierLoc qualifier) {
         if (decl == nullptr)
@@ -290,6 +302,13 @@ class ExposUseFinder : public clang::RecursiveASTVisitor<ExposUseFinder> {
         const clang::NamedDecl* marked_decl = decl;
         if (const auto* specialization = llvm::dyn_cast<clang::VarTemplateSpecializationDecl>(decl))
             marked_decl = specialization->getSpecializedTemplate();
+        // A class template's own name inside its definition -- a constructor,
+        // `~box_impl`, `box_impl&` -- names the pattern record, while the
+        // set keys the template (issue #434).
+        if (const auto* record = llvm::dyn_cast<clang::CXXRecordDecl>(marked_decl);
+            record != nullptr && record->getDescribedClassTemplate() != nullptr &&
+            !expos_.contains(record->getCanonicalDecl()))
+            marked_decl = record->getDescribedClassTemplate();
         const auto found = expos_.find(marked_decl->getCanonicalDecl());
         if (found == expos_.end() || !name_range.isValid())
             return;

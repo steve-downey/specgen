@@ -1,0 +1,72 @@
+\rSec3[demo.syn]{Header \tcode{<demo>} synopsis}
+
+\begin{codeblock}
+namespace std {
+  // \ref{demo.thing}, thing
+
+  class @\libglobal{thing}@ {
+  public:
+    // \ref{demo.thing}, construction
+    thing() noexcept;
+
+    // \ref{demo.thing}, swap
+    friend void swap(thing&, thing&) noexcept;
+  };
+
+  // \ref{demo.thing}, creating a thing
+
+  thing @\libglobal{make_thing}@(int v);
+
+  thing @\libglobal{make_other}@(int v);
+}
+\end{codeblock}
+
+\rSec3[demo.thing]{Things}
+
+\pnum
+\remarks
+A thing.
+
+\indexlibraryctor{thing}%
+\begin{itemdecl}
+thing() noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Constructs a default thing.
+\end{itemdescr}
+
+\indexlibraryglobal{swap}%
+\begin{itemdecl}
+friend void swap(thing&, thing&) noexcept;
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\effects
+Exchanges nothing.
+\end{itemdescr}
+
+\indexlibraryglobal{make_thing}%
+\begin{itemdecl}
+thing make_thing(int v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+A thing made from \tcode{v}.
+\end{itemdescr}
+
+\indexlibraryglobal{make_other}%
+\begin{itemdecl}
+thing make_other(int v);
+\end{itemdecl}
+
+\begin{itemdescr}
+\pnum
+\returns
+Another thing made from \tcode{v}.
+\end{itemdescr}
