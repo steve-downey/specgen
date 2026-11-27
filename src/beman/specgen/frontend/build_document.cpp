@@ -631,7 +631,7 @@ std::expected<DocumentBuild, BuildFailure> build_document_with_sources(std::stri
                             }
                         }
                     }
-                    if (!suppresses_generated_entity(directives) && is_first_declaration(item.decl)) {
+                    if (!suppresses_generated_entity(directives) && is_first_declaration(item.decl, sm)) {
                         // The marker masks the declaration here exactly as it
                         // does outside the region (issue #55): a
                         // customization point object belongs in the header

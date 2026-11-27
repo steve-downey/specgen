@@ -3195,6 +3195,21 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/undocumented_definitions/expected.json"
 )
 
+# A namespace-scope function a class also befriends is specified where it is
+# declared (issue #441): its synopsis line and item declaration come from the
+# namespace-scope declaration, without `friend`, and the friend declaration
+# has no line in the class synopsis and no roster entry, with or without
+# `\omit`. A hidden friend keeps its friend declaration.
+specgen_add_golden(
+    friend_redeclaration
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_friend_redeclaration.hpp"
+)
+specgen_add_golden(
+    friend_redeclaration_latex
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/friend_redeclaration/expected.json"
+)
+
 # Specifiers spelled through macros are written as they expand (issue #349).
 specgen_add_golden(
     macro_specifiers

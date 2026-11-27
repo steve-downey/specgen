@@ -3,6 +3,7 @@
 
 #include <beman/specgen/frontend/synopsis_extraction.hpp>
 
+#include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/directive_sets.hpp>
@@ -419,7 +420,7 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
             const clang::FunctionDecl* fn = member_function_or_template(member);
             if (fn == nullptr)
                 continue;
-            if (omit_set.count(fn->getCanonicalDecl()) != 0 ||
+            if (omit_set.count(fn->getCanonicalDecl()) != 0 || redeclared_friend(member, sm) ||
                 suppresses_generated_entity(docblock_directives(member, sm))) {
                 omit_line(member); // \omit / \merge / \elsewhere
                 continue;
@@ -478,6 +479,13 @@ beman::specgen::ir::CodeText extract_synopsis(const clang::CXXRecordDecl*       
         // adjacent general-subclause paragraph; remove it here regardless of
         // access, since StaticAssertDecl itself commonly reports AS_none.
         if (llvm::isa<clang::StaticAssertDecl>(member)) {
+            omit_line(member);
+            continue;
+        }
+
+        // A friend declaration of a function declared at namespace scope only
+        // grants access; the function's line is its own (issue #441).
+        if (redeclared_friend(member, sm)) {
             omit_line(member);
             continue;
         }

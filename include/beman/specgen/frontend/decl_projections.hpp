@@ -11,6 +11,7 @@
 #include <clang/AST/Decl.h>
 #include <clang/AST/DeclBase.h>
 #include <clang/AST/DeclCXX.h>
+#include <clang/Basic/SourceManager.h>
 
 #include <utility>
 
@@ -32,7 +33,26 @@ const clang::FunctionDecl* function_or_template(const clang::Decl* decl);
 // both, and a definition folded in would list a member the class synopsis
 // above it already declares, in the `Class::member` spelling the draft never
 // prints.  Its *wording* still travels: only the synopsis entry is dropped.
-bool is_first_declaration(const clang::Decl* decl);
+//
+// "First" is home_declaration's: a friend declaration that a namespace-scope
+// declaration also declares does not count (issue #441).
+bool is_first_declaration(const clang::Decl* decl, const clang::SourceManager& sm);
+
+// The declaration a function's synopsis line and item declaration come from:
+// its earliest declaration that is not a friend declaration in some class
+// (issue #441). A class befriends a function -- a factory that reaches a
+// private constructor -- without making the class the function's home, so
+// the namespace-scope declaration is the one the draft shows, without
+// `friend`. A function declared only as a friend, a hidden friend, has no
+// other declaration and keeps its friend declaration.
+const clang::FunctionDecl* home_declaration(const clang::FunctionDecl* fn, const clang::SourceManager& sm);
+
+// Is `member` a class's friend declaration, not a definition, of a function
+// whose home_declaration is elsewhere? Such a declaration grants access and
+// nothing more: it has no line in the class synopsis and no entry in the
+// class's coverage roster, whatever its markup (issue #441). The function is
+// specified where it is declared.
+bool redeclared_friend(const clang::Decl* member, const clang::SourceManager& sm);
 
 //
 // collect_inclass_items below and the build_omit_set/build_expos_set/

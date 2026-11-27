@@ -7,6 +7,7 @@
 #include <beman/specgen/ir.hpp>
 #include <beman/specgen/lower.hpp>
 #include <beman/specgen/frontend/attach.hpp>
+#include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
 #include <beman/specgen/frontend/record_members.hpp>
 
@@ -76,6 +77,11 @@ build_roster(const clang::CXXRecordDecl*                                     rec
     for (const RealRecordMember& real_member : real_record_members(record)) {
         const clang::Decl* member = real_member.decl;
         if (llvm::isa<clang::AccessSpecDecl>(member))
+            continue;
+        // A friend declaration of a function declared at namespace scope is
+        // not the class's member; the function is accounted for where it is
+        // declared (issue #441).
+        if (redeclared_friend(member, sm))
             continue;
 
         // Anonymous records are transparent only for declarations that the

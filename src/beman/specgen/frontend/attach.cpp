@@ -12,6 +12,7 @@
 #include <beman/specgen/span_sentinels.hpp>
 #include <beman/specgen/synopsis_edits.hpp>
 #include <beman/specgen/frontend/constraints.hpp>
+#include <beman/specgen/frontend/decl_projections.hpp>
 #include <beman/specgen/frontend/declaration_masks.hpp>
 #include <beman/specgen/frontend/directive_sets.hpp>
 #include <beman/specgen/frontend/docblock_lookup.hpp>
@@ -1025,18 +1026,20 @@ AttachedItem build_spec_item(clang::Decl*                                     de
         return {};
 
     // Markup/body/derivations come from the definition; itemdecl text comes
-    // from its first declaration (design §3.3). A free function stays ordered
-    // where its documented definition appears, even when its first declaration
-    // is earlier. Not a hidden friend, so there is no friend-begin override.
-    AttachedItem attached = attach_function(fn,
-                                            fn->getFirstDecl(),
-                                            /*friend_begin=*/{},
-                                            sm,
-                                            lang_opts,
-                                            ns_drop_set,
-                                            expos_set,
-                                            skipped,
-                                            declarator_qualifier(fn->getFirstDecl(), ns_drop_set, specified_set));
+    // from its first declaration (design §3.3), not counting a class's friend
+    // declaration of it (issue #441). A free function stays ordered where its
+    // documented definition appears, even when its first declaration is
+    // earlier. Not a hidden friend, so there is no friend-begin override.
+    const clang::FunctionDecl* home     = home_declaration(fn, sm);
+    AttachedItem               attached = attach_function(fn,
+                                                          home,
+                                                          /*friend_begin=*/{},
+                                                          sm,
+                                                          lang_opts,
+                                                          ns_drop_set,
+                                                          expos_set,
+                                                          skipped,
+                                                          declarator_qualifier(home, ns_drop_set, specified_set));
     if (documented_free)
         attached.inclass_offset = sm.getDecomposedLoc(sm.getFileLoc(decl->getBeginLoc())).second;
     attached.file = sm.getFileID(sm.getFileLoc(decl->getBeginLoc()));
