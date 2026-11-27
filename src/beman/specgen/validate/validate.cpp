@@ -693,28 +693,21 @@ Diagnostics check_synopsis_leakage(const std::string& context, const ir::Synopsi
 // become `\tcode`. `RefInline` and `ConceptRef` name a stable name and a
 // library concept respectively, neither of which is a class-body
 // declaration, so neither is a leakage site.
-// A changed run (the wording diff's mark) is looked inside: what it holds is
-// prose of this document, marked or not.
-std::vector<const ir::CodeText*> paragraph_code(const ir::Paragraph& paragraph) {
-    const auto plain_code = [](const ir::PlainInline& inl) -> const ir::CodeText* {
-        const auto* code = std::get_if<ir::CodeInline>(&inl);
-        return code != nullptr ? &code->code : nullptr;
-    };
-    return paragraph | std::views::transform([&](const ir::Inline& inl) -> std::vector<const ir::CodeText*> {
-               if (const auto* run = std::get_if<ir::ChangedInline>(&inl))
-                   return run->inlines | std::views::transform(plain_code) | std::ranges::to<std::vector>();
-               if (const auto* code = std::get_if<ir::CodeInline>(&inl))
-                   return {&code->code};
-               return {};
+// The code is read off the paragraph's leaves (`ir::leaf_inlines`), so code
+// in a term, in a footnote or in a changed run (the wording diff's mark) is
+// read with the rest: what those hold is prose of this document (issue #451).
+std::vector<ir::CodeText> paragraph_code(const ir::Paragraph& paragraph) {
+    return ir::leaf_inlines(paragraph) | std::views::filter([](const ir::LeafInline& leaf) {
+               return std::holds_alternative<ir::CodeInline>(leaf);
            }) |
-           std::views::join | std::views::filter([](const ir::CodeText* code) { return code != nullptr; }) |
+           std::views::transform([](const ir::LeafInline& leaf) { return std::get<ir::CodeInline>(leaf).code; }) |
            std::ranges::to<std::vector>();
 }
 
 Diagnostics check_paragraph_spans(const std::string& context, const ir::Paragraph& paragraph) {
     return foundation::mconcat_map(
         paragraph_code(paragraph),
-        [&](const ir::CodeText* code) { return check_spans(context, *code); },
+        [&](const ir::CodeText& code) { return check_spans(context, code); },
         diagnostics_monoid);
 }
 
@@ -722,47 +715,15 @@ Diagnostics
 check_paragraph_leakage(const std::string& context, const ir::Paragraph& paragraph, const NameVisibility& visible) {
     return foundation::mconcat_map(
         paragraph_code(paragraph),
-        [&](const ir::CodeText* code) { return check_leakage(context, *code, visible); },
+        [&](const ir::CodeText& code) { return check_leakage(context, code, visible); },
         diagnostics_monoid);
 }
 
-// Whether one inline says anything. Seven alternatives (decision
-// visitation-rules' >3 rule), so a named visitor. The changed-run case visits
-// `PlainInline`, a different and non-recursive variant, with this same
-// visitor: a run cannot hold a run, so this is dispatch, not recursion.
-struct InlineHasContent {
-    static bool has_non_whitespace(std::string_view text) {
-        return std::ranges::any_of(text, [](char ch) { return ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r'; });
-    }
-
-    bool operator()(const ir::TextInline& text) const { return has_non_whitespace(text.text); }
-    bool operator()(const ir::CodeInline& code) const { return has_non_whitespace(code.code.text); }
-    bool operator()(const ir::RefInline& ref) const { return has_non_whitespace(ref.stable_name); }
-    bool operator()(const ir::ConceptRef& ref) const { return has_non_whitespace(ref.name); }
-    bool operator()(const ir::PlaceholderInline& v) const { return has_non_whitespace(v.text); }
-    bool operator()(const ir::OldConceptRef& v) const { return has_non_whitespace(v.name); }
-    bool operator()(const ir::TableRef& v) const { return has_non_whitespace(v.stable_name); }
-    bool operator()(const ir::RawInline& v) const { return has_non_whitespace(v.latex); }
-    bool operator()(const ir::TermInline& v) const {
-        return std::ranges::any_of(v.content, [](const ir::TermPiece& piece) {
-            return std::visit([](const auto& p) { return InlineHasContent{}(p); }, piece);
-        });
-    }
-    bool operator()(const ir::PhraseInline&) const { return true; }
-    bool operator()(const ir::FootnoteInline& v) const {
-        return std::ranges::any_of(v.content, [](const ir::FootnotePiece& piece) {
-            return std::visit([](const auto& p) { return InlineHasContent{}(p); }, piece);
-        });
-    }
-    bool operator()(const ir::ChangedInline& run) const {
-        return std::ranges::any_of(
-            run.inlines, [](const ir::PlainInline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
-    }
-};
-
+// Whether a paragraph says anything: some inline of it, at any depth, has
+// text that is not whitespace. A phrase always does, since it prints words.
 bool paragraph_has_content(const ir::Paragraph& paragraph) {
-    return std::ranges::any_of(paragraph,
-                               [](const ir::Inline& inl) { return std::visit(overloaded{InlineHasContent{}}, inl); });
+    return std::ranges::any_of(ir::paragraph_text(paragraph),
+                               [](char ch) { return ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r'; });
 }
 
 template <class Block>
@@ -919,7 +880,7 @@ std::set<std::string> code_names(const ir::CodeText& code) {
 
 std::set<std::string> paragraph_names(const ir::Paragraph& paragraph) {
     return foundation::mconcat_map(
-        paragraph_code(paragraph), [](const ir::CodeText* code) { return code_names(*code); }, names_monoid);
+        paragraph_code(paragraph), [](const ir::CodeText& code) { return code_names(code); }, names_monoid);
 }
 
 std::set<std::string> body_names(const ir::DescriptionBody& body);
@@ -1025,65 +986,25 @@ struct Conjunct {
     ConjunctPolarity polarity;
 };
 
-// The ordinary inline kinds stay one piece; a changed run contributes
-// its plain pieces. Marks annotate wording rather than hide drift evidence.
-struct UnmarkedPieces {
-    std::vector<ir::PlainInline> operator()(const ir::TextInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::CodeInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::RefInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::ConceptRef& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::PlaceholderInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::OldConceptRef& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::TableRef& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::RawInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::TermInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::PhraseInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::FootnoteInline& piece) const;
-    std::vector<ir::PlainInline> operator()(const ir::ChangedInline& run) const;
-};
+// A paragraph's leaves (`ir::leaf_inlines`): marks annotate wording rather
+// than hide drift evidence, and a term's or a footnote's words and code are
+// the paragraph's, so the checks that read code read them too.
+std::vector<ir::LeafInline> unmarked_paragraph(const ir::Paragraph& paragraph);
 
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TextInline& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::CodeInline& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RefInline& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ConceptRef& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PlaceholderInline& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::OldConceptRef& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TableRef& piece) const { return {piece}; }
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::RawInline& piece) const { return {piece}; }
-// A term's words and code are the paragraph's, so the checks that read code
-// read the code inside a term too.
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::TermInline& piece) const {
-    return piece.content | std::views::transform([](const ir::TermPiece& p) {
-               return std::visit([](const auto& v) -> ir::PlainInline { return v; }, p);
-           }) |
-           std::ranges::to<std::vector>();
-}
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::PhraseInline& piece) const { return {piece}; }
-// A footnote's words are the paragraph's too, for the checks that read code.
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::FootnoteInline& piece) const {
-    return piece.content | std::views::transform(ir::plain_inline) | std::ranges::to<std::vector>();
-}
-std::vector<ir::PlainInline> UnmarkedPieces::operator()(const ir::ChangedInline& run) const { return run.inlines; }
-
-std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph);
-
-std::vector<ir::PlainInline> unmarked_paragraph(const ir::Paragraph& paragraph) {
-    auto pieces = paragraph | std::views::transform([](const ir::Inline& piece) {
-                      return std::visit(overloaded{UnmarkedPieces{}}, piece);
-                  }) |
-                  std::views::join;
+std::vector<ir::LeafInline> unmarked_paragraph(const ir::Paragraph& paragraph) {
     // A word-level mark may split a relation or a Let introduction into
     // adjacent text pieces; rejoin those before recognizing its phrasing.
-    return std::ranges::fold_left(pieces, std::vector<ir::PlainInline>{}, [](auto out, const ir::PlainInline& piece) {
-        if (const auto* text = std::get_if<ir::TextInline>(&piece); text != nullptr && !out.empty()) {
-            if (auto* previous = std::get_if<ir::TextInline>(&out.back())) {
-                previous->text += text->text;
-                return out;
+    return std::ranges::fold_left(
+        ir::leaf_inlines(paragraph), std::vector<ir::LeafInline>{}, [](auto out, const ir::LeafInline& piece) {
+            if (const auto* text = std::get_if<ir::TextInline>(&piece); text != nullptr && !out.empty()) {
+                if (auto* previous = std::get_if<ir::TextInline>(&out.back())) {
+                    previous->text += text->text;
+                    return out;
+                }
             }
-        }
-        out.push_back(piece);
-        return out;
-    });
+            out.push_back(piece);
+            return out;
+        });
 }
 
 // The subject and polarity of one derived conjunct, read off the
@@ -1255,7 +1176,7 @@ find_subject(const ir::Paragraph& input, const std::string& subject, const Bindi
                 normalized)
             return positive ? ConjunctPolarity::Positive : ConjunctPolarity::Negative;
     }
-    const auto is_named = [&](const ir::PlainInline& piece) {
+    const auto is_named = [&](const ir::LeafInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
         return code != nullptr && predicate_subject(code->code.text, bindings) == normalized;
     };
@@ -1269,7 +1190,7 @@ find_subject(const ir::Paragraph& input, const std::string& subject, const Bindi
     // `false` further along that must not be misread as this one's.
     constexpr std::ptrdiff_t window          = 3;
     const auto               window_end      = std::ranges::next(match, window + 1, paragraph.end());
-    const auto               is_bool_literal = [](const ir::PlainInline& piece) {
+    const auto               is_bool_literal = [](const ir::LeafInline& piece) {
         const auto* code = std::get_if<ir::CodeInline>(&piece);
         return code != nullptr && (code->code.text == "true" || code->code.text == "false");
     };
@@ -1668,49 +1589,6 @@ bool every_signature_is_noexcept(const std::vector<ir::CodeText>& signatures) {
     });
 }
 
-// The text of a paragraph, with every inline flattened to what it names.
-// Only ever compared against "Nothing" below, so the markup distinctions the
-// backends draw between these do not matter here.
-// Seven alternatives, so a named visitor; the changed-run case dispatches the
-// non-recursive `PlainInline` with this same visitor, as InlineHasContent
-// does, and flattens the run's text into the paragraph's.
-struct InlineText {
-    std::string operator()(const ir::TextInline& v) const { return v.text; }
-    std::string operator()(const ir::CodeInline& v) const { return v.code.text; }
-    std::string operator()(const ir::RefInline& v) const { return v.stable_name; }
-    std::string operator()(const ir::ConceptRef& v) const { return v.name; }
-    std::string operator()(const ir::PlaceholderInline& v) const { return v.text; }
-    std::string operator()(const ir::OldConceptRef& v) const { return v.name; }
-    std::string operator()(const ir::TableRef& v) const { return v.stable_name; }
-    std::string operator()(const ir::RawInline& v) const { return v.latex; }
-    std::string operator()(const ir::TermInline& v) const {
-        return v.content | std::views::transform([](const ir::TermPiece& piece) {
-                   return std::visit([](const auto& p) { return InlineText{}(p); }, piece);
-               }) |
-               std::views::join | std::ranges::to<std::string>();
-    }
-    std::string operator()(const ir::PhraseInline& v) const { return std::string(ir::phrase_name(v.phrase)); }
-    std::string operator()(const ir::FootnoteInline& v) const {
-        return v.content | std::views::transform([](const ir::FootnotePiece& piece) {
-                   return std::visit([](const auto& p) { return InlineText{}(p); }, piece);
-               }) |
-               std::views::join | std::ranges::to<std::string>();
-    }
-    std::string operator()(const ir::ChangedInline& run) const {
-        return foundation::mconcat_map(
-            run.inlines,
-            [](const ir::PlainInline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
-            foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
-    }
-};
-
-std::string paragraph_text(const ir::Paragraph& paragraph) {
-    return foundation::mconcat_map(
-        paragraph,
-        [](const ir::Inline& piece) { return std::visit(overloaded{InlineText{}}, piece); },
-        foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
-}
-
 // Does this *Throws:* element say the function throws nothing? "Throws:
 // Nothing." is the draft's spelling of a no-throw guarantee, and it is the
 // one authored *Throws:* that does not contradict a `noexcept` signature.
@@ -1724,7 +1602,7 @@ bool reads_as_nothing(const ir::DescriptionElement& element) {
         return false;
     const std::string joined = foundation::mconcat_map(
         ir::body_paragraphs(element.body, false),
-        [](const ir::Paragraph* p) { return paragraph_text(*p); },
+        [](const ir::Paragraph* p) { return ir::paragraph_text(*p); },
         foundation::monoid{[](std::string a, const std::string& b) { return a += b; }, std::string{}});
     // Trailing punctuation and whitespace come off together: "Nothing.",
     // "Nothing" and " Nothing. " are the same claim.

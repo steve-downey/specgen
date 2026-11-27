@@ -31,19 +31,6 @@ const ir::Section* find_section(const std::vector<ir::Node>& nodes, std::string_
     return nullptr;
 }
 
-std::string paragraph_text(const ir::Paragraph& para) {
-    std::string out;
-    for (const ir::Inline& in : para) {
-        if (const auto* text = std::get_if<ir::TextInline>(&in))
-            out += text->text;
-        else if (const auto* code = std::get_if<ir::CodeInline>(&in))
-            out += code->code.text;
-        else if (const auto* concept_ref = std::get_if<ir::ConceptRef>(&in))
-            out += concept_ref->name;
-    }
-    return out;
-}
-
 // A section's own children as their variant indexes, which is how "same node
 // kinds, same order" is asked of two sections without naming either's
 // contents.

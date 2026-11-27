@@ -30,17 +30,6 @@ namespace {
 
 const std::string kCorpusHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec_class_description.hpp";
 
-std::string paragraph_text(const ir::Paragraph& para) {
-    std::string out;
-    for (const ir::Inline& piece : para) {
-        if (const auto* text = std::get_if<ir::TextInline>(&piece))
-            out += text->text;
-        else if (const auto* code = std::get_if<ir::CodeInline>(&piece))
-            out += code->code.text;
-    }
-    return out;
-}
-
 // The description-only item that follows the synopsis named @p class_name:
 // the next node after it that is a SpecItem with no signatures.
 const ir::SpecItem* class_description(const ir::Document& document, std::string_view class_name) {

@@ -289,6 +289,27 @@ TEST_CASE("diff - a reworded paragraph is marked word by word, code inlines whol
     CHECK(std::get<TextInline>(added.inlines[0]).text == "armed.");
 }
 
+TEST_CASE("diff - a word and a table reference of one spelling are not the same token for pairing") {
+    // Issue #453: the similarity keys for the two kinds had one prefix, so a
+    // paragraph that is a table reference paired with one that is the word.
+    Document   before     = gadget();
+    Document   after      = gadget();
+    const auto reset_body = [](Document& d) -> DescriptionBody& {
+        return std::get<SpecItem>(std::get<Section>(d.nodes[1]).children[1]).descr.elements[0].body;
+    };
+    // A second paragraph in each, since a lone block pairs with a lone block
+    // of its kind whatever the two say.
+    reset_body(before).push_back(BodyParagraph{{TableRef{"gadget.states"}}});
+    reset_body(after).push_back(BodyParagraph{{TextInline{"gadget.states"}}});
+
+    const Document out  = diff::compare(before, after);
+    const auto&    body = std::get<SpecItem>(std::get<Section>(out.nodes[0]).children[1]).descr.elements[0].body;
+    REQUIRE(body.size() == 3);
+    CHECK(block_change(body[0]) == Change::Same);
+    CHECK(block_change(body[1]) == Change::Removed);
+    CHECK(block_change(body[2]) == Change::Added);
+}
+
 TEST_CASE("diff - an added element, a removed section, and an added paragraph in a kept element") {
     Document before  = gadget();
     Document after   = gadget();

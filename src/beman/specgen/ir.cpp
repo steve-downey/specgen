@@ -494,6 +494,78 @@ struct TypesettingRemover {
 
 PlainInline without_typesetting(PlainInline piece) { return std::visit(TypesettingRemover{}, std::move(piece)); }
 
+namespace {
+
+// `leaf_inlines`' dispatch over every inline kind: nine are leaves and come
+// back as they are, and the three that hold inlines give their contents'
+// leaves. A footnote's pieces and a run's contents are different,
+// non-recursive variants visited with this same visitor, so a term in a
+// footnote in a run comes apart too. A new inline kind does not compile here
+// until it is given a case, which is where it is said to be a leaf or not.
+struct Leaves {
+    using Result = std::vector<LeafInline>;
+
+    Result operator()(const TextInline& v) const { return {v}; }
+    Result operator()(const CodeInline& v) const { return {v}; }
+    Result operator()(const RefInline& v) const { return {v}; }
+    Result operator()(const ConceptRef& v) const { return {v}; }
+    Result operator()(const PlaceholderInline& v) const { return {v}; }
+    Result operator()(const OldConceptRef& v) const { return {v}; }
+    Result operator()(const TableRef& v) const { return {v}; }
+    Result operator()(const RawInline& v) const { return {v}; }
+    Result operator()(const PhraseInline& v) const { return {v}; }
+    // A term's words and code.
+    Result operator()(const TermInline& v) const {
+        return v.content | std::views::transform([](const TermPiece& piece) {
+                   return std::visit([](const auto& p) -> LeafInline { return p; }, piece);
+               }) |
+               std::ranges::to<Result>();
+    }
+    // A footnote's pieces, a term among them taken apart in its turn.
+    Result operator()(const FootnoteInline& v) const {
+        return v.content |
+               std::views::transform([this](const FootnotePiece& piece) { return std::visit(*this, piece); }) |
+               std::views::join | std::ranges::to<Result>();
+    }
+    // A changed run's contents: marked or not, they are prose of the paragraph.
+    Result operator()(const ChangedInline& v) const {
+        return v.inlines |
+               std::views::transform([this](const PlainInline& piece) { return std::visit(*this, piece); }) |
+               std::views::join | std::ranges::to<Result>();
+    }
+};
+
+// `inline_text`'s dispatch over the leaf kinds.
+struct LeafText {
+    std::string operator()(const TextInline& v) const { return v.text; }
+    std::string operator()(const CodeInline& v) const { return v.code.text; }
+    std::string operator()(const RefInline& v) const { return v.stable_name; }
+    std::string operator()(const ConceptRef& v) const { return v.name; }
+    std::string operator()(const PlaceholderInline& v) const { return v.text; }
+    std::string operator()(const OldConceptRef& v) const { return v.name; }
+    std::string operator()(const TableRef& v) const { return v.stable_name; }
+    std::string operator()(const RawInline& v) const { return v.latex; }
+    std::string operator()(const PhraseInline& v) const { return std::string(phrase_words(v.phrase)); }
+};
+
+std::string leaves_text(const std::vector<LeafInline>& leaves) {
+    return leaves | std::views::transform([](const LeafInline& leaf) { return inline_text(leaf); }) |
+           std::views::join | std::ranges::to<std::string>();
+}
+
+} // namespace
+
+std::vector<LeafInline> leaf_inlines(const PlainInline& piece) { return std::visit(Leaves{}, piece); }
+std::vector<LeafInline> leaf_inlines(const Inline& piece) { return std::visit(Leaves{}, piece); }
+std::vector<LeafInline> leaf_inlines(const Paragraph& paragraph) {
+    return paragraph | std::views::transform([](const Inline& piece) { return leaf_inlines(piece); }) |
+           std::views::join | std::ranges::to<std::vector>();
+}
+
+std::string inline_text(const LeafInline& leaf) { return std::visit(LeafText{}, leaf); }
+std::string inline_text(const PlainInline& piece) { return leaves_text(leaf_inlines(piece)); }
+std::string paragraph_text(const Paragraph& paragraph) { return leaves_text(leaf_inlines(paragraph)); }
+
 bool has_description(const ItemDescr& d) { return !d.leading.empty() || !d.elements.empty(); }
 
 void canonicalize(ItemDescr& d) {

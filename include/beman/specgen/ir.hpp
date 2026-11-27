@@ -498,6 +498,38 @@ inline PlainInline plain_inline(const FootnotePiece& piece) {
 }
 using Paragraph = std::vector<Inline>;
 
+// The inline kinds that hold no other inline. A term, a footnote and a changed
+// run are the three that do, and what they hold is prose of the paragraph they
+// stand in.
+using LeafInline = std::variant<TextInline,
+                                CodeInline,
+                                RefInline,
+                                ConceptRef,
+                                PlaceholderInline,
+                                OldConceptRef,
+                                TableRef,
+                                RawInline,
+                                PhraseInline>;
+
+// The leaves of an inline, or of a paragraph, in reading order: a term's
+// pieces, a footnote's and a changed run's in place of each, all the way
+// down. A reader that wants "every code inline of this paragraph", or its
+// words, asks here, so that a kind which holds other inlines is taken apart
+// in one place and nothing that reads prose has to know which kinds do.
+std::vector<LeafInline> leaf_inlines(const PlainInline&);
+std::vector<LeafInline> leaf_inlines(const Inline&);
+std::vector<LeafInline> leaf_inlines(const Paragraph&);
+
+// What an inline says, as plain text with the markup off: a text's words, a
+// code inline's code, a reference's stable name, a concept's or a named
+// requirement's name, a placeholder's text, raw LaTeX as written, and the
+// words a phrase prints (`phrase_words`). An inline that holds others says
+// what they say, one after another. For comparing and for asking whether
+// anything is said; a backend renders the kinds apart and does not use it.
+std::string inline_text(const LeafInline&);
+std::string inline_text(const PlainInline&);
+std::string paragraph_text(const Paragraph&);
+
 // A piece of wording with the draft's typesetting taken off: the choice
 // between a macro and its no-italic-correction twin, and the line-break
 // hints. Two pieces that differ only there say the same thing, which is how

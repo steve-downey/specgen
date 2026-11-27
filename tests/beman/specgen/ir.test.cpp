@@ -268,3 +268,47 @@ TEST_CASE("ir - let_names reads every paragraph that opens \"Let `U`\", in any s
     });
     CHECK(let_names(leading) == std::set<std::string>{"U", "V"});
 }
+
+TEST_CASE("ir - leaf_inlines takes a term, a footnote and a changed run apart, all the way down") {
+    const TermInline     term{{TextInline{"valid "}, CodeInline{{"T", {}}}}};
+    const FootnoteInline note{{TextInline{"See "}, term, RefInline{"expected"}}};
+    const Paragraph      paragraph{TextInline{"A "},
+                                   term,
+                                   ChangedInline{Change::Added, {note, CodeInline{{"x", {}}}}},
+                                   PhraseInline{Phrase::Ntbs}};
+
+    CHECK(leaf_inlines(paragraph) == std::vector<LeafInline>{TextInline{"A "},
+                                                             TextInline{"valid "},
+                                                             CodeInline{{"T", {}}},
+                                                             TextInline{"See "},
+                                                             TextInline{"valid "},
+                                                             CodeInline{{"T", {}}},
+                                                             RefInline{"expected"},
+                                                             CodeInline{{"x", {}}},
+                                                             PhraseInline{Phrase::Ntbs}});
+    // One inline's leaves, for a reader that holds a run's piece.
+    CHECK(leaf_inlines(PlainInline{note}).size() == 4);
+    CHECK(leaf_inlines(Inline{TextInline{"plain"}}) == std::vector<LeafInline>{TextInline{"plain"}});
+    CHECK(leaf_inlines(Paragraph{}).empty());
+}
+
+TEST_CASE("ir - inline_text is what each kind says, and a paragraph's text is its leaves' in order") {
+    CHECK(inline_text(LeafInline{TextInline{"words "}}) == "words ");
+    CHECK(inline_text(LeafInline{CodeInline{{"f(x)", {}}}}) == "f(x)");
+    CHECK(inline_text(LeafInline{RefInline{"expected.general"}}) == "expected.general");
+    CHECK(inline_text(LeafInline{ConceptRef{"copyable"}}) == "copyable");
+    CHECK(inline_text(LeafInline{PlaceholderInline{"noex"}}) == "noex");
+    CHECK(inline_text(LeafInline{OldConceptRef{"Destructible"}}) == "Destructible");
+    CHECK(inline_text(LeafInline{TableRef{"tab:x"}}) == "tab:x");
+    CHECK(inline_text(LeafInline{RawInline{"\\frac{1}{2}"}}) == "\\frac{1}{2}");
+    // A phrase says the words it prints, not the name the IR gives it.
+    CHECK(inline_text(LeafInline{PhraseInline{Phrase::Ntbs}}) == "NTBS");
+
+    const TermInline     term{{TextInline{"valid "}, CodeInline{{"T", {}}}}, TermRole::Definition};
+    const FootnoteInline note{{TextInline{"See "}, term}};
+    CHECK(inline_text(PlainInline{term}) == "valid T");
+    CHECK(inline_text(PlainInline{note}) == "See valid T");
+    CHECK(paragraph_text({TextInline{"A "}, ChangedInline{Change::Removed, {note}}, TextInline{"."}}) ==
+          "A See valid T.");
+    CHECK(paragraph_text({}).empty());
+}
