@@ -1212,21 +1212,17 @@ std::string predicate_subject(std::string_view text, const Bindings& bindings) {
 Bindings description_bindings(const ir::ItemDescr& description) {
     Bindings              bindings;
     std::set<std::string> ambiguous;
+    // A paragraph may bind several names, "Let `U` be `X` and `V` be `Y`."
+    // (decision let-binding-wording).
     // substrate generic algorithm: collect local declarations with duplicate-name tracking.
     for (const auto* input : ir::body_paragraphs(description.leading, false)) {
-        const auto paragraph = unmarked_paragraph(*input);
-        if (paragraph.size() != 5)
+        const auto stated = ir::let_sentence(unmarked_paragraph(*input));
+        if (!stated)
             continue;
-        const auto* let   = std::get_if<ir::TextInline>(&paragraph[0]);
-        const auto* name  = std::get_if<ir::CodeInline>(&paragraph[1]);
-        const auto* be    = std::get_if<ir::TextInline>(&paragraph[2]);
-        const auto* value = std::get_if<ir::CodeInline>(&paragraph[3]);
-        const auto* stop  = std::get_if<ir::TextInline>(&paragraph[4]);
-        if (let == nullptr || name == nullptr || be == nullptr || value == nullptr || stop == nullptr ||
-            let->text != "Let " || be->text != " be " || stop->text != ".")
-            continue;
-        if (!bindings.emplace(name->code.text, value->code.text).second)
-            ambiguous.insert(name->code.text);
+        std::ranges::for_each(*stated, [&](const auto& binding) {
+            if (!bindings.emplace(binding.first, binding.second).second)
+                ambiguous.insert(binding.first);
+        });
     }
     std::erase_if(bindings, [&ambiguous](const auto& entry) { return ambiguous.contains(entry.first); });
     return bindings;
@@ -1477,8 +1473,13 @@ Diagnostics check_missing_pair(const ir::DescriptionElement& derived,
 // authored/derived form remains readable for hand-built IR.
 // A leading alias the *Equivalent to* code keeps, under a name the
 // description's "Let" sentence binds: extraction drops one that agrees with
-// the sentence, so one still there says something else (issue #404).
+// the sentence, so one still there says something else (issue #404). A name
+// the prose introduces with a "Let" in some other shape -- "Let `U` be the
+// type `X`." -- binds nothing extraction can compare, so the alias stays and
+// the binding is stated twice; that is drift too (decision
+// let-binding-wording).
 Diagnostics check_let_alias_drift(const ir::ItemDescr& description, const Bindings& bindings) {
+    const std::set<std::string> introduced = ir::let_names(description.leading);
     return foundation::mconcat_map(
         description.elements,
         [&](const ir::DescriptionElement& element) -> Diagnostics {
@@ -1502,16 +1503,27 @@ Diagnostics check_let_alias_drift(const ir::ItemDescr& description, const Bindin
                             const std::size_t      eq   = rest.find(" = ");
                             if (eq == std::string_view::npos)
                                 return {};
-                            const auto bound = bindings.find(std::string(rest.substr(0, eq)));
-                            if (bound == bindings.end())
-                                return {};
+                            const std::string name  = std::string(rest.substr(0, eq));
+                            const auto        bound = bindings.find(name);
+                            const auto        alias = rest.substr(eq + 3, rest.rfind(';') - eq - 3);
+                            if (bound == bindings.end()) {
+                                if (!introduced.contains(name))
+                                    return {};
+                                return {{Severity::Warning,
+                                         "Effects",
+                                         std::format("the description introduces `{0}` with a \"Let\" that is not "
+                                                     "\"Let `{0}` be `X`.\", and the Equivalent to code's alias "
+                                                     "says `{1}`",
+                                                     name,
+                                                     alias)}};
+                            }
                             return {{Severity::Warning,
                                      "Effects",
                                      std::format("the description lets `{}` be `{}`, and the Equivalent to code's "
                                                  "alias says `{}`",
                                                  bound->first,
                                                  bound->second,
-                                                 rest.substr(eq + 3, rest.rfind(';') - eq - 3))}};
+                                                 alias)}};
                         },
                         diagnostics_monoid);
                 },

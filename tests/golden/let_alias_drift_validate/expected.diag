@@ -1,0 +1,2 @@
+specgen: box.ops/Effects: warning: the description introduces `U` with a "Let" that is not "Let `U` be `X`.", and the Equivalent to code's alias says `invoke_result_t<F, T&>`
+specgen: box.ops/Effects: warning: the description lets `U` be `invoke_result_t<F, const T&>`, and the Equivalent to code's alias says `invoke_result_t<F, T&>`

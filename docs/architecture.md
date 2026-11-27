@@ -886,11 +886,17 @@ from overload resolution = requires-clause. *Mandates* = ill-formed = static_ass
   in the out-of-line body; flatten each condition at top-level `&&`; concatenate
   in source order (diagnostic order = specification order). Any other statement
   ends the prologue, so later assertions remain ordinary body code. Leading body-local
-  aliases do not block the derivation; `*-equiv` extraction retains the aliases and removes
-  only the consumed run, except an alias the item's leading prose already states as
-  "Let `U` be `X`.", which goes as the run does (issue #404). An alias kept under a name a
-  "Let" binds to something else is a drift warning. No "Let" paragraph is derived from an
-  alias.
+  aliases do not block the derivation. The leading aliases the consumed run names, directly
+  or through another such alias, are introduced by one derived paragraph in source order,
+  ahead of any authored leading prose: "Let `U` be `X`.", "Let `U` be `X` and `V` be `Y`.",
+  "Let `U` be `X`, `V` be `Y`, and `W` be `Z`." (decision let-binding-wording); `X` is the
+  alias's type, rewritten as the conjuncts are. An authored normative paragraph that opens
+  "Let `U`", in any shape, introduces `U` already, and no paragraph is derived for it
+  (issue #404). `*-equiv` extraction removes the consumed run and every alias a derived
+  "Let" introduces; it also removes an alias the item's leading prose binds in exactly that
+  sentence, and retains any other alias. An alias kept under a name a "Let" introduces is a
+  drift warning: the sentence binds it to something else, or is in a shape that binds
+  nothing.
 - Consumed asserts are excluded from `\effects-equiv` extraction.
 - `static_assert` messages are stripped.
 - An authored `\mandates` replaces the derived wording. The suppressed

@@ -3113,6 +3113,45 @@ specgen_add_golden(
     INPUT "${CMAKE_CURRENT_SOURCE_DIR}/let_alias/expected.json"
 )
 
+# The leading aliases the static_asserts name get one derived "Let" paragraph
+# ahead of the Mandates -- "Let `U` be `X`.", "Let `U` be `X` and `V` be `Y`.",
+# "Let `U` be `X`, `V` be `Y`, and `W` be `Z`." -- and leave the Equivalent to
+# code; an alias only the body uses stays, and one an authored "Let"
+# introduces gets no derived paragraph (issue #404, decision
+# let-binding-wording).
+specgen_add_golden(
+    let_derived
+    MODE generate
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_let_derived.hpp"
+)
+foreach(backend IN ITEMS latex mpark org)
+    specgen_add_golden(
+        let_derived
+        MODE render
+        BACKEND ${backend}
+        INPUT "${CMAKE_CURRENT_SOURCE_DIR}/let_derived/expected.json"
+    )
+endforeach()
+
+# An authored "Let `U`" that does not state the alias exactly, in a looser
+# phrasing or with a different type, keeps the alias in the Equivalent to
+# code; the validator reports the binding stated twice as drift (issue #404,
+# decision let-binding-wording). The header carries the finding on purpose,
+# so the generate case skips the silence gate and the validate case pins it;
+# drift is a warning, so that run exits 0.
+specgen_add_golden(
+    let_alias_drift
+    MODE generate
+    NO_VALIDATE
+    INPUT "${PROJECT_SOURCE_DIR}/tests/corpus/spec_let_alias_drift.hpp"
+)
+specgen_add_golden(
+    let_alias_drift_validate
+    MODE validate
+    EXPECT_EXIT 0
+    INPUT "${CMAKE_CURRENT_SOURCE_DIR}/let_alias_drift/expected.json"
+)
+
 specgen_add_golden(
     routed_overloads
     MODE generate

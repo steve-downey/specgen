@@ -8,6 +8,12 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <map>
+#include <set>
+#include <string>
+#include <utility>
+#include <vector>
+
 using namespace beman::specgen::ir;
 
 TEST_CASE("ir - HeaderIsIdempotent") {
@@ -190,4 +196,75 @@ TEST_CASE("ir - block_change reads the mark on a block of either body") {
     CHECK(block_change(InformativeBlock{AuthoredCode{{"x;", {}}, Change::Removed}}) == Change::Removed);
     CHECK(change_name(Change::Elided) == "elided");
     CHECK(change_from_name("elided") == Change::Elided);
+}
+
+namespace {
+Inline text(std::string value) { return TextInline{.text = std::move(value)}; }
+Inline code(std::string value) { return CodeInline{.code = CodeText{.text = std::move(value), .spans = {}}}; }
+} // namespace
+
+TEST_CASE("ir - let_bindings reads only the exact \"Let `U` be `X`.\" shape") {
+    const DescriptionBody leading = beman::specgen::test::prose({
+        {text("Let "), code("U"), text(" be "), code("invoke_result_t<F>"), text(".")},
+        {text("Let "), code("V"), text(" be the type "), code("T"), text(".")},
+    });
+    CHECK(let_bindings(leading) == std::map<std::string, std::string>{{"U", "invoke_result_t<F>"}});
+}
+
+TEST_CASE("ir - let_sentence reads one, two, and three bindings in the draft's joined sentence") {
+    using Bindings = std::vector<std::pair<std::string, std::string>>;
+    const Paragraph one{text("Let "), code("U"), text(" be "), code("X"), text(".")};
+    const Paragraph two{text("Let "),
+                        code("U"),
+                        text(" be "),
+                        code("X"),
+                        text(" and "),
+                        code("V"),
+                        text(" be "),
+                        code("Y"),
+                        text(".")};
+    const Paragraph three{text("Let "),
+                          code("U"),
+                          text(" be "),
+                          code("X"),
+                          text(", "),
+                          code("V"),
+                          text(" be "),
+                          code("Y"),
+                          text(", and "),
+                          code("W"),
+                          text(" be "),
+                          code("Z"),
+                          text(".")};
+    CHECK(let_sentence(one) == Bindings{{"U", "X"}});
+    CHECK(let_sentence(two) == Bindings{{"U", "X"}, {"V", "Y"}});
+    CHECK(let_sentence(three) == Bindings{{"U", "X"}, {"V", "Y"}, {"W", "Z"}});
+
+    // Two bindings take " and ", not ", and"; three take ", " then ", and ".
+    const Paragraph comma_two{text("Let "),
+                              code("U"),
+                              text(" be "),
+                              code("X"),
+                              text(", and "),
+                              code("V"),
+                              text(" be "),
+                              code("Y"),
+                              text(".")};
+    CHECK_FALSE(let_sentence(comma_two).has_value());
+    const Paragraph loose{text("Let "), code("U"), text(" be the type "), code("X"), text(".")};
+    CHECK_FALSE(let_sentence(loose).has_value());
+
+    const DescriptionBody leading = beman::specgen::test::prose({two});
+    CHECK(let_bindings(leading) == std::map<std::string, std::string>{{"U", "X"}, {"V", "Y"}});
+    CHECK(let_names(leading) == std::set<std::string>{"U", "V"});
+}
+
+TEST_CASE("ir - let_names reads every paragraph that opens \"Let `U`\", in any shape") {
+    const DescriptionBody leading = beman::specgen::test::prose({
+        {text("Let "), code("U"), text(" be "), code("invoke_result_t<F>"), text(".")},
+        {text("Let "), code("V"), text(" be the type "), code("T"), text(".")},
+        {code("W"), text(" names the result.")},
+        {text("Let the result be "), code("X"), text(".")},
+    });
+    CHECK(let_names(leading) == std::set<std::string>{"U", "V"});
 }

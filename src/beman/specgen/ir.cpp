@@ -14,6 +14,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -362,29 +363,33 @@ std::vector<const Paragraph*> body_paragraphs(const DescriptionBody& body, bool 
            std::views::join | std::ranges::to<std::vector>();
 }
 std::map<std::string, std::string> let_bindings(const DescriptionBody& leading) {
-    // The "Let `U` be `X`." shape, read from one normative paragraph.
-    const auto binding = [](const Paragraph* paragraph) -> std::optional<std::pair<std::string, std::string>> {
-        if (paragraph->size() != 5)
-            return std::nullopt;
-        const auto* let   = std::get_if<TextInline>(&(*paragraph)[0]);
-        const auto* name  = std::get_if<CodeInline>(&(*paragraph)[1]);
-        const auto* be    = std::get_if<TextInline>(&(*paragraph)[2]);
-        const auto* value = std::get_if<CodeInline>(&(*paragraph)[3]);
-        const auto* stop  = std::get_if<TextInline>(&(*paragraph)[4]);
-        if (let == nullptr || name == nullptr || be == nullptr || value == nullptr || stop == nullptr ||
-            let->text != "Let " || be->text != " be " || stop->text != ".")
-            return std::nullopt;
-        return std::pair{name->code.text, value->code.text};
-    };
-    const auto found = body_paragraphs(leading, false) | std::views::transform(binding) |
-                       std::views::filter([](const auto& b) { return b.has_value(); }) |
-                       std::views::transform([](const auto& b) { return *b; }) | std::ranges::to<std::vector>();
+    const auto found = body_paragraphs(leading, false) |
+                       std::views::transform([](const Paragraph* paragraph) { return let_sentence(*paragraph); }) |
+                       std::views::filter([](const auto& bindings) { return bindings.has_value(); }) |
+                       std::views::transform([](const auto& bindings) { return *bindings; }) | std::views::join |
+                       std::ranges::to<std::vector>();
     std::map<std::string, std::string> out;
     std::ranges::for_each(found, [&](const auto& b) {
         if (std::ranges::count(found, b.first, &std::pair<std::string, std::string>::first) == 1)
             out.insert(b);
     });
     return out;
+}
+
+std::set<std::string> let_names(const DescriptionBody& leading) {
+    const auto introduced = [](const Paragraph* paragraph) -> std::vector<std::string> {
+        if (const auto bindings = let_sentence(*paragraph))
+            return *bindings | std::views::keys | std::ranges::to<std::vector<std::string>>();
+        if (paragraph->size() < 2)
+            return {};
+        const auto* let  = std::get_if<TextInline>(&(*paragraph)[0]);
+        const auto* name = std::get_if<CodeInline>(&(*paragraph)[1]);
+        if (let == nullptr || name == nullptr || let->text != "Let ")
+            return {};
+        return {name->code.text};
+    };
+    return body_paragraphs(leading, false) | std::views::transform(introduced) | std::views::join |
+           std::ranges::to<std::set>();
 }
 
 std::vector<const CodeText*> body_code(const DescriptionBody& body, bool include_informative) {
