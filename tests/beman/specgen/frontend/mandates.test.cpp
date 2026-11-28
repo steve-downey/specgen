@@ -33,19 +33,6 @@ const std::string kCorpusHeader = std::string(BEMAN_SPECGEN_CORPUS_DIR) + "/spec
 
 bool contains(const std::string& haystack, const char* needle) { return haystack.find(needle) != std::string::npos; }
 
-std::string paragraph_text(const ir::Paragraph& para) {
-    std::string out;
-    for (const ir::Inline& in : para) {
-        if (const auto* text = std::get_if<ir::TextInline>(&in))
-            out += text->text;
-        else if (const auto* code = std::get_if<ir::CodeInline>(&in))
-            out += code->code.text;
-        else if (const auto* concept_ref = std::get_if<ir::ConceptRef>(&in))
-            out += concept_ref->name;
-    }
-    return out;
-}
-
 } // namespace
 
 TEST_CASE("build_document - class-scope static_asserts become adjacent general wording, not synopsis code") {

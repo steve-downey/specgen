@@ -552,6 +552,61 @@ TEST_CASE("validate - leaks are reported in backticked prose and in itemized con
     CHECK(diags.at(1).context == "widget.mod/remarks");
 }
 
+TEST_CASE("validate - code in a term, in a footnote and in a changed run is a leakage site") {
+    // Issue #451: a name the wording may not use is no more allowed inside
+    // `\term{...}` or a footnote than beside it, at any depth.
+    const auto diags_for = [](ir::Inline holder) {
+        ir::DescriptionElement ensures;
+        ensures.kind = ir::ElementKind::Ensures;
+        ensures.body.push_back(ir::BodyParagraph{ir::Paragraph{std::move(holder), ir::TextInline{" is released"}}});
+        ir::SpecItem item;
+        item.decl.signatures.push_back({"void reset();", {}});
+        item.descr.elements = {std::move(ensures)};
+        ir::Document doc;
+        doc.nodes.push_back(synopsis_with("widget", {{"scratch", ir::Disposition::Omitted, ""}}));
+        doc.nodes.push_back(ir::Section{"widget.mod", "Modifiers", {ir::Node{std::move(item)}}});
+        return validate(doc);
+    };
+    const ir::CodeInline     leak{{"scratch", {}}};
+    const ir::TermInline     term{{ir::TextInline{"the "}, leak}};
+    const ir::FootnoteInline note{{ir::TextInline{"That is, "}, leak}};
+    const ir::FootnoteInline note_of_term{{term}};
+
+    const auto reports_scratch = [&](ir::Inline holder) {
+        const Diagnostics diags = diags_for(std::move(holder));
+        return diags.size() == 1 && diags.front().context == "widget.mod/ensures" &&
+               diags.front().message.contains("`scratch` is used in wording");
+    };
+    CHECK(reports_scratch(leak));
+    CHECK(reports_scratch(term));
+    CHECK(reports_scratch(note));
+    CHECK(reports_scratch(note_of_term));
+    CHECK(reports_scratch(ir::ChangedInline{ir::Change::Added, {leak}}));
+    CHECK(reports_scratch(ir::ChangedInline{ir::Change::Added, {term}}));
+    CHECK(reports_scratch(ir::ChangedInline{ir::Change::Added, {note_of_term}}));
+    // Nothing is invented: the same shapes around a name that may be used.
+    CHECK(diags_for(ir::TermInline{{ir::CodeInline{{"reset", {}}}}}).empty());
+}
+
+TEST_CASE("validate - a span in a term's or a footnote's code is checked like any other") {
+    const auto diags_for = [](ir::Inline holder) {
+        ir::SpecItem item;
+        item.decl.signatures.push_back({"void reset();", {}});
+        ir::DescriptionElement effects;
+        effects.kind = ir::ElementKind::Effects;
+        effects.body.push_back(ir::BodyParagraph{ir::Paragraph{std::move(holder)}});
+        item.descr.elements = {std::move(effects)};
+        ir::Document doc;
+        doc.nodes.push_back(ir::Section{"widget.mod", "Modifiers", {ir::Node{std::move(item)}}});
+        return validate(doc);
+    };
+    // An out-of-range span: [2, 9) over four characters.
+    const ir::CodeInline bad{{"abcd", {{2, 9, ir::SpanKind::Placeholder, "x"}}}};
+    CHECK(diags_for(bad).size() == 1);
+    CHECK(diags_for(ir::TermInline{{bad}}).size() == 1);
+    CHECK(diags_for(ir::FootnoteInline{{bad}}).size() == 1);
+}
+
 TEST_CASE("validate - every two-dimensional table field is a leakage site") {
     ir::DescriptionElement effects;
     effects.kind = ir::ElementKind::Effects;

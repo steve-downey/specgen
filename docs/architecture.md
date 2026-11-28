@@ -1136,7 +1136,14 @@ have no independent item description.
   `DescriptionElement`, and on every block of a description body (`block_change` reads it off
   either body variant); a mark on a node covers everything beneath it and marks never nest.
   Prose carries a `ChangedInline`, a marked run of `PlainInline`s (the four unmarked inline
-  kinds, a separate non-recursive variant), so a `\tcode` is marked whole or not at all. Code
+  kinds, a separate non-recursive variant), so a `\tcode` is marked whole or not at all.
+  A run, a term and a footnote are the three inline kinds that hold other inlines, and what
+  they hold is prose of the paragraph they stand in. A reader that wants a paragraph's code
+  or its words, whatever holds them, takes its leaves (`ir::leaf_inlines`, a vector of
+  `LeafInline`, the nine kinds that hold nothing), and `ir::inline_text` and
+  `ir::paragraph_text` are what an inline and a paragraph say with the markup off. The
+  validator's prose checks and the differ's similarity key read through these, so a new kind
+  is said to be a leaf or not in one place. Code
   carries a `ChangeRun` table beside the span table rather than two more `SpanKind`s, because a
   run contains its spans whole; a run never crosses a line end, the draft's `@...@` escape
   being line-local. Every mark serializes under a key the schema omits at `Same` (and
@@ -1465,6 +1472,8 @@ Warning stop the render as an Error does, and a Note never fails a run.
    undocumented one is an implementation helper (§3.3), so neither has a roster entry
    (issue #141).
 2. **Leakage checker**: ordered-body paragraph and code collectors cover every body block.
+   A paragraph's code is read off its leaves (`ir::leaf_inlines`, §7), so code inside a term,
+   a footnote or a changed run is checked with the rest (issue #451).
    Every table is structurally checked, including repeated tables in same-kind elements.
    Every name token in rendered output must resolve to a std-visible
    documented entity, an expos-set member, a template parameter, or a local of the extracted
@@ -1699,7 +1708,8 @@ The build assembles the tool from these components, each following the shared CM
   `Document`, the coverage roster (`Disposition`, `MemberKind`, `SynopsisEntry`), the
   validator channels (`paper_entities`, `foreign_namespaces`, `foreign_declarations`,
   `unextracted_uses`), the change marks (`Change`, `ChangeRun`, `ChangedInline`,
-  `PlainInline`, `change_of`, `with_change`, `all_marked`), and
+  `PlainInline`, `change_of`, `with_change`, `all_marked`), the reading projections of
+  prose (`LeafInline`, `leaf_inlines`, `inline_text`, `paragraph_text`), and
   `canonicalize()`.
 - **IR serialization** — `include/beman/specgen/ir_json.hpp`, `src/beman/specgen/ir_json.cpp`.
   JSON round trip: `emit_json` (returns a `std::string`) and `parse_document`/`parse_item`/
